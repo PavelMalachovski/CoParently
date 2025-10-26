@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { Calendar } from './components/Calendar';
 import { Header } from './components/Header';
 import { Stats } from './components/Stats';
@@ -8,6 +8,8 @@ import { useAuth } from './contexts/AuthContext';
 import { LoginPage } from './components/LoginPage';
 import { useEventsStore } from './stores/useEventsStore';
 import { useParentsStore } from './stores/useParentsStore';
+import { useToastStore } from './stores/useToastStore';
+import { ToastContainer } from './components/Toast';
 import { formatDateString } from './utils/dateUtils';
 
 export default function App() {
@@ -22,6 +24,12 @@ export default function App() {
   const initializeDefaultSchedule = useEventsStore((state) => state.initializeDefaultSchedule);
 
   const parents = useParentsStore((state) => state.parents);
+
+  // Toast store
+  const toasts = useToastStore((state) => state.toasts);
+  const removeToast = useToastStore((state) => state.removeToast);
+  const showSuccess = useToastStore((state) => state.success);
+  const showError = useToastStore((state) => state.error);
 
   // Initialize default schedule on first load
   useEffect(() => {
@@ -39,25 +47,37 @@ export default function App() {
     goToToday,
   } = useCalendar(currentDate, setCurrentDate);
 
-  const handleDayClick = (date: Date) => {
+  const handleDayClick = useCallback((date: Date) => {
     setSelectedDate(date);
-  };
+  }, []);
 
-  const closeModal = () => {
+  const closeModal = useCallback(() => {
     setSelectedDate(null);
-  };
+  }, []);
 
-  const handleSaveEvent = (date: Date, parentId: string) => {
-    const dateString = formatDateString(date);
-    updateEvent(dateString, parentId);
-    closeModal();
-  };
+  const handleSaveEvent = useCallback((date: Date, parentId: string, note?: string) => {
+    try {
+      const dateString = formatDateString(date);
+      updateEvent(dateString, parentId, note);
+      setSelectedDate(null);
+      showSuccess('Schedule updated successfully!');
+    } catch (error) {
+      console.error('Error saving event:', error);
+      showError('Failed to save schedule. Please try again.');
+    }
+  }, [updateEvent, showSuccess, showError]);
 
-  const handleDeleteEvent = (date: Date) => {
-    const dateString = formatDateString(date);
-    deleteEvent(dateString);
-    closeModal();
-  };
+  const handleDeleteEvent = useCallback((date: Date) => {
+    try {
+      const dateString = formatDateString(date);
+      deleteEvent(dateString);
+      setSelectedDate(null);
+      showSuccess('Schedule removed successfully!');
+    } catch (error) {
+      console.error('Error deleting event:', error);
+      showError('Failed to remove schedule. Please try again.');
+    }
+  }, [deleteEvent, showSuccess, showError]);
 
   const selectedEvent = useMemo(() => {
     if (!selectedDate) return undefined;
@@ -71,8 +91,10 @@ export default function App() {
 
 
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-800 font-sans p-4 sm:p-6 lg:p-8">
-      <div className="max-w-7xl mx-auto">
+    <>
+      <ToastContainer toasts={toasts} onClose={removeToast} />
+      <div className="min-h-screen bg-gray-50 text-gray-800 font-sans p-4 sm:p-6 lg:p-8">
+        <div className="max-w-7xl mx-auto">
         <Header
           month={currentMonthName}
           year={currentYear}
@@ -112,6 +134,7 @@ export default function App() {
           onDelete={handleDeleteEvent}
         />
       )}
-    </div>
+      </div>
+    </>
   );
 }

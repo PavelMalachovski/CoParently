@@ -1,41 +1,42 @@
 import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
+import { persist, createJSONStorage, combine } from 'zustand/middleware';
 import { addDays, differenceInDays } from 'date-fns';
 import type { CalendarEvent } from '../types';
 import { formatDateString, getWeekNumber, addMonthsToDate } from '../utils/dateUtils';
 
-interface EventsState {
-  events: CalendarEvent[];
-  addEvent: (event: CalendarEvent) => void;
-  updateEvent: (date: string, parentId: string, note?: string) => void;
-  deleteEvent: (date: string) => void;
-  clearAllEvents: () => void;
-  generateSchedule: (startDate: Date, pattern: 'week-on-week-off' | '2-2-3' | 'every-other-weekend', parent1Id: string, parent2Id: string, months: number) => void;
-  initializeDefaultSchedule: () => void;
-}
-
-export const useEventsStore = create<EventsState>()(
+export const useEventsStore = create(
   persist(
-    (set, get) => ({
-      events: [],
+    combine(
+      // Initial state
+      { events: [] as CalendarEvent[] },
+      // Actions
+      (set, get) => ({
+        addEvent: (event: CalendarEvent) => set((state) => ({
+          events: [...state.events, event]
+        })),
 
-      addEvent: (event) => set((state) => ({
-        events: [...state.events, event]
-      })),
+        updateEvent: (date: string, parentId: string, note?: string) => {
+          set((state) => {
+            const existingIndex = state.events.findIndex(e => e.date === date);
+            if (existingIndex > -1) {
+              // Update existing event
+              const updatedEvents = [...state.events];
+              updatedEvents[existingIndex] = { date, parentId, note };
+              return { events: updatedEvents };
+            } else {
+              // Add new event
+              return { events: [...state.events, { date, parentId, note }] };
+            }
+          });
+        },
 
-      updateEvent: (date, parentId, note) => set((state) => ({
-        events: state.events.map(e =>
-          e.date === date ? { date, parentId, note } : e
-        )
-      })),
+        deleteEvent: (date: string) => set((state) => ({
+          events: state.events.filter(e => e.date !== date)
+        })),
 
-      deleteEvent: (date) => set((state) => ({
-        events: state.events.filter(e => e.date !== date)
-      })),
+        clearAllEvents: () => set({ events: [] }),
 
-      clearAllEvents: () => set({ events: [] }),
-
-      generateSchedule: (startDate, pattern, parent1Id, parent2Id, months) => {
+        generateSchedule: (startDate: Date, pattern: 'week-on-week-off' | '2-2-3' | 'every-other-weekend', parent1Id: string, parent2Id: string, months: number) => {
         const events: CalendarEvent[] = [];
         const endDate = addMonthsToDate(startDate, months);
 
@@ -104,9 +105,10 @@ export const useEventsStore = create<EventsState>()(
           }
         }
 
-        set({ events });
-      }
-    }),
+          set({ events });
+        }
+      })
+    ),
     {
       name: 'coparently-events',
       storage: createJSONStorage(() => localStorage),
