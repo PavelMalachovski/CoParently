@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { Calendar } from './components/Calendar';
 import { Header } from './components/Header';
@@ -6,6 +5,8 @@ import { Stats } from './components/Stats';
 import { EventModal } from './components/EventModal';
 import { useCalendar } from './hooks/useCalendar';
 import type { CalendarEvent, Parent } from './types';
+import { useAuth } from './contexts/AuthContext';
+import { LoginPage } from './components/LoginPage';
 
 // Mock Data
 const PARENTS: Parent[] = [
@@ -16,25 +17,29 @@ const PARENTS: Parent[] = [
 const generateInitialEvents = (): CalendarEvent[] => {
   const events: CalendarEvent[] = [];
   const today = new Date();
-  const year = today.getFullYear();
-  const month = today.getMonth();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  
+  const getWeekNumber = (d: Date): number => {
+    d = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+    d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay()||7));
+    const yearStart = new Date(Date.UTC(d.getUTCFullYear(),0,1));
+    const weekNo = Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1)/7);
+    return weekNo;
+  };
+  
+  // Generate for current, previous and next month for better UX when navigating
+  for (let m = -2; m <= 2; m++) {
+    const dateRef = new Date(today.getFullYear(), today.getMonth() + m, 1);
+    const year = dateRef.getFullYear();
+    const month = dateRef.getMonth();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
 
-  for (let i = 1; i <= daysInMonth; i++) {
-    const date = new Date(year, month, i);
-    // Simple alternating weekly schedule
-    if (Math.floor((date.getDate() - 1) / 7) % 2 === 0) {
-      if (date.getDay() >= 0 && date.getDay() <= 3) { // Sun-Weds with Mom
-        events.push({ date: date.toISOString().split('T')[0], parentId: 'mom' });
-      } else { // Thurs-Sat with Dad
-        events.push({ date: date.toISOString().split('T')[0], parentId: 'dad' });
-      }
-    } else {
-       if (date.getDay() >= 0 && date.getDay() <= 3) { // Sun-Weds with Dad
-        events.push({ date: date.toISOString().split('T')[0], parentId: 'dad' });
-      } else { // Thurs-Sat with Mom
-        events.push({ date: date.toISOString().split('T')[0], parentId: 'mom' });
-      }
+    for (let i = 1; i <= daysInMonth; i++) {
+        const date = new Date(year, month, i);
+        const weekNumber = getWeekNumber(date);
+        
+        // A continuous week-on, week-off schedule
+        const parentId = weekNumber % 2 === 0 ? 'mom' : 'dad';
+        events.push({ date: date.toISOString().split('T')[0], parentId });
     }
   }
   return events;
@@ -42,11 +47,15 @@ const generateInitialEvents = (): CalendarEvent[] => {
 
 
 export default function App() {
+  const { isLoggedIn } = useAuth();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [events, setEvents] = useState<CalendarEvent[]>(generateInitialEvents());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
 
+  // FIX: Destructure `days` and `getMonth` to pass to the Calendar component, centralizing calendar logic.
   const {
+    days,
+    getMonth,
     currentMonthName,
     currentYear,
     goToNextMonth,
@@ -88,6 +97,10 @@ export default function App() {
     const dateString = selectedDate.toISOString().split('T')[0];
     return events.find(e => e.date === dateString);
   }, [selectedDate, events]);
+  
+  if (!isLoggedIn) {
+    return <LoginPage />;
+  }
 
 
   return (
@@ -102,8 +115,11 @@ export default function App() {
         />
         <main className="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2 bg-white p-4 sm:p-6 rounded-2xl shadow-sm">
+            {/* FIX: Pass `days` and `getMonth` from the parent to avoid a faulty hook call in the child. */}
             <Calendar
               currentDate={currentDate}
+              days={days}
+              getMonth={getMonth}
               events={events}
               parents={PARENTS}
               onDayClick={handleDayClick}

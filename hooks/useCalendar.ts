@@ -1,17 +1,19 @@
-// FIX: Import React to bring the React namespace into scope for types like React.Dispatch.
-import React, { useState, useMemo } from 'react';
+import { useMemo } from 'react';
 
+/**
+ * A custom hook to manage calendar logic.
+ * It's a pure hook that calculates calendar data based on the state passed from its parent.
+ * @param currentDate - The currently selected date to display the calendar for.
+ * @param setCurrentDate - A function to update the current date.
+ */
 export const useCalendar = (
-  initialDate: Date, 
-  setDate?: React.Dispatch<React.SetStateAction<Date>>
+  currentDate: Date, 
+  setCurrentDate: (date: Date) => void
 ) => {
-  const [currentDate, setCurrentDate] = useState(initialDate);
-  const dateToUse = setDate ? initialDate : currentDate;
-  const dateSetter = setDate ? setDate : setCurrentDate;
 
   const days = useMemo(() => {
-    const year = dateToUse.getFullYear();
-    const month = dateToUse.getMonth();
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
 
     const firstDayOfMonth = new Date(year, month, 1);
     const lastDayOfMonth = new Date(year, month + 1, 0);
@@ -32,33 +34,33 @@ export const useCalendar = (
       calendarDays.push(new Date(year, month, i));
     }
 
-    // Add days from next month to fill the grid
-    const remainingDays = 42 - calendarDays.length; // 6 weeks * 7 days
+    // Add days from next month to fill the grid (to a total of 42 cells for 6 weeks)
+    const remainingDays = 42 - calendarDays.length;
     for (let i = 1; i <= remainingDays; i++) {
       calendarDays.push(new Date(year, month + 1, i));
     }
     
     return calendarDays;
-  }, [dateToUse]);
+  }, [currentDate]);
 
   const goToNextMonth = () => {
-    dateSetter(new Date(dateToUse.getFullYear(), dateToUse.getMonth() + 1, 1));
+    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
   };
 
   const goToPreviousMonth = () => {
-    dateSetter(new Date(dateToUse.getFullYear(), dateToUse.getMonth() - 1, 1));
+    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
   };
 
   const goToToday = () => {
-    dateSetter(new Date());
+    setCurrentDate(new Date());
   }
 
   return {
     days,
-    currentMonthName: dateToUse.toLocaleString('default', { month: 'long' }),
-    currentYear: dateToUse.getFullYear(),
-    getMonth: () => dateToUse.getMonth(),
-    getYear: () => dateToUse.getFullYear(),
+    currentMonthName: currentDate.toLocaleString('default', { month: 'long' }),
+    currentYear: currentDate.getFullYear(),
+    getMonth: () => currentDate.getMonth(),
+    getYear: () => currentDate.getFullYear(),
     goToNextMonth,
     goToPreviousMonth,
     goToToday,

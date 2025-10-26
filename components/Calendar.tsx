@@ -1,9 +1,12 @@
 import React from 'react';
-import { useCalendar } from '../hooks/useCalendar';
 import type { CalendarEvent, Parent } from '../types';
 
+// FIX: Update CalendarProps to accept `days` and `getMonth` from the parent component.
+// This resolves an error where the `useCalendar` hook was called with incorrect arguments.
 interface CalendarProps {
   currentDate: Date;
+  days: Date[];
+  getMonth: () => number;
   events: CalendarEvent[];
   parents: Parent[];
   onDayClick: (date: Date) => void;
@@ -48,9 +51,7 @@ const DayCell: React.FC<DayCellProps> = ({ day, isToday, isCurrentMonth, event, 
 };
 
 
-export const Calendar: React.FC<CalendarProps> = ({ currentDate, events, parents, onDayClick }) => {
-  const { days, getMonth, getYear } = useCalendar(currentDate);
-
+export const Calendar: React.FC<CalendarProps> = ({ currentDate, days, getMonth, events, parents, onDayClick }) => {
   const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
   // FIX: Explicitly type Maps to ensure TypeScript can correctly infer the value types.
