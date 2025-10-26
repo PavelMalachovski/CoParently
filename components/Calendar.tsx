@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import type { CalendarEvent, Parent } from '../types';
+import { formatDateString, isSameDay, isInSameMonth } from '../utils/dateUtils';
 
 // FIX: Update CalendarProps to accept `days` and `getMonth` from the parent component.
 // This resolves an error where the `useCalendar` hook was called with incorrect arguments.
@@ -54,9 +55,18 @@ const DayCell: React.FC<DayCellProps> = ({ day, isToday, isCurrentMonth, event, 
 export const Calendar: React.FC<CalendarProps> = ({ currentDate, days, getMonth, events, parents, onDayClick }) => {
   const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-  // FIX: Explicitly type Maps to ensure TypeScript can correctly infer the value types.
-  const eventsMap = new Map<string, CalendarEvent>(events.map(e => [e.date, e]));
-  const parentsMap = new Map<string, Parent>(parents.map(p => [p.id, p]));
+  // Memoize Maps for better performance
+  const eventsMap = useMemo(
+    () => new Map<string, CalendarEvent>(events.map(e => [e.date, e])),
+    [events]
+  );
+
+  const parentsMap = useMemo(
+    () => new Map<string, Parent>(parents.map(p => [p.id, p])),
+    [parents]
+  );
+
+  const today = useMemo(() => new Date(), []);
 
   return (
     <div>
@@ -65,13 +75,11 @@ export const Calendar: React.FC<CalendarProps> = ({ currentDate, days, getMonth,
       </div>
       <div className="grid grid-cols-7 gap-2">
         {days.map((day, index) => {
-          const dateString = day.toISOString().split('T')[0];
+          const dateString = formatDateString(day);
           const event = eventsMap.get(dateString);
           const parent = event ? parentsMap.get(event.parentId) : undefined;
-          const isCurrentMonth = day.getMonth() === getMonth();
-          
-          const today = new Date();
-          const isToday = day.getDate() === today.getDate() && day.getMonth() === today.getMonth() && day.getFullYear() === today.getFullYear();
+          const isCurrentMonth = isInSameMonth(day, currentDate);
+          const isToday = isSameDay(day, today);
 
           return (
             <DayCell

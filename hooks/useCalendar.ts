@@ -1,4 +1,16 @@
 import { useMemo } from 'react';
+import {
+  startOfMonth,
+  endOfMonth,
+  startOfWeek,
+  endOfWeek,
+  eachDayOfInterval,
+  format,
+  addMonths,
+  subMonths,
+  getMonth,
+  getYear
+} from 'date-fns';
 
 /**
  * A custom hook to manage calendar logic.
@@ -7,48 +19,35 @@ import { useMemo } from 'react';
  * @param setCurrentDate - A function to update the current date.
  */
 export const useCalendar = (
-  currentDate: Date, 
+  currentDate: Date,
   setCurrentDate: (date: Date) => void
 ) => {
 
   const days = useMemo(() => {
-    const year = currentDate.getFullYear();
-    const month = currentDate.getMonth();
+    const monthStart = startOfMonth(currentDate);
+    const monthEnd = endOfMonth(currentDate);
 
-    const firstDayOfMonth = new Date(year, month, 1);
-    const lastDayOfMonth = new Date(year, month + 1, 0);
+    // Get the start of the week for the first day of the month
+    const calendarStart = startOfWeek(monthStart, { weekStartsOn: 0 }); // Sunday
 
-    const firstDayOfWeek = firstDayOfMonth.getDay(); // 0 (Sun) - 6 (Sat)
-    const daysInMonth = lastDayOfMonth.getDate();
+    // Get the end of the week for the last day of the month
+    const calendarEnd = endOfWeek(monthEnd, { weekStartsOn: 0 }); // Sunday
 
-    const calendarDays: Date[] = [];
+    // Get all days in the interval
+    const calendarDays = eachDayOfInterval({
+      start: calendarStart,
+      end: calendarEnd
+    });
 
-    // Add days from previous month
-    const prevMonthLastDay = new Date(year, month, 0).getDate();
-    for (let i = firstDayOfWeek; i > 0; i--) {
-      calendarDays.push(new Date(year, month - 1, prevMonthLastDay - i + 1));
-    }
-
-    // Add days from current month
-    for (let i = 1; i <= daysInMonth; i++) {
-      calendarDays.push(new Date(year, month, i));
-    }
-
-    // Add days from next month to fill the grid (to a total of 42 cells for 6 weeks)
-    const remainingDays = 42 - calendarDays.length;
-    for (let i = 1; i <= remainingDays; i++) {
-      calendarDays.push(new Date(year, month + 1, i));
-    }
-    
     return calendarDays;
   }, [currentDate]);
 
   const goToNextMonth = () => {
-    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
+    setCurrentDate(addMonths(startOfMonth(currentDate), 1));
   };
 
   const goToPreviousMonth = () => {
-    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
+    setCurrentDate(subMonths(startOfMonth(currentDate), 1));
   };
 
   const goToToday = () => {
@@ -57,10 +56,10 @@ export const useCalendar = (
 
   return {
     days,
-    currentMonthName: currentDate.toLocaleString('default', { month: 'long' }),
-    currentYear: currentDate.getFullYear(),
-    getMonth: () => currentDate.getMonth(),
-    getYear: () => currentDate.getFullYear(),
+    currentMonthName: format(currentDate, 'MMMM'),
+    currentYear: getYear(currentDate),
+    getMonth: () => getMonth(currentDate),
+    getYear: () => getYear(currentDate),
     goToNextMonth,
     goToPreviousMonth,
     goToToday,

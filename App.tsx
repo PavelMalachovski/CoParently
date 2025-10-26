@@ -1,56 +1,32 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Calendar } from './components/Calendar';
 import { Header } from './components/Header';
 import { Stats } from './components/Stats';
 import { EventModal } from './components/EventModal';
 import { useCalendar } from './hooks/useCalendar';
-import type { CalendarEvent, Parent } from './types';
 import { useAuth } from './contexts/AuthContext';
 import { LoginPage } from './components/LoginPage';
-
-// Mock Data
-const PARENTS: Parent[] = [
-  { id: 'mom', name: 'With Mom', color: 'bg-rose-200', textColor: 'text-rose-800' },
-  { id: 'dad', name: 'With Dad', color: 'bg-sky-200', textColor: 'text-sky-800' },
-];
-
-const generateInitialEvents = (): CalendarEvent[] => {
-  const events: CalendarEvent[] = [];
-  const today = new Date();
-  
-  const getWeekNumber = (d: Date): number => {
-    d = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-    d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay()||7));
-    const yearStart = new Date(Date.UTC(d.getUTCFullYear(),0,1));
-    const weekNo = Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1)/7);
-    return weekNo;
-  };
-  
-  // Generate for current, previous and next month for better UX when navigating
-  for (let m = -2; m <= 2; m++) {
-    const dateRef = new Date(today.getFullYear(), today.getMonth() + m, 1);
-    const year = dateRef.getFullYear();
-    const month = dateRef.getMonth();
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-
-    for (let i = 1; i <= daysInMonth; i++) {
-        const date = new Date(year, month, i);
-        const weekNumber = getWeekNumber(date);
-        
-        // A continuous week-on, week-off schedule
-        const parentId = weekNumber % 2 === 0 ? 'mom' : 'dad';
-        events.push({ date: date.toISOString().split('T')[0], parentId });
-    }
-  }
-  return events;
-};
-
+import { useEventsStore } from './stores/useEventsStore';
+import { useParentsStore } from './stores/useParentsStore';
+import { formatDateString } from './utils/dateUtils';
 
 export default function App() {
   const { isLoggedIn } = useAuth();
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [events, setEvents] = useState<CalendarEvent[]>(generateInitialEvents());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+
+  // Use Zustand stores
+  const events = useEventsStore((state) => state.events);
+  const updateEvent = useEventsStore((state) => state.updateEvent);
+  const deleteEvent = useEventsStore((state) => state.deleteEvent);
+  const initializeDefaultSchedule = useEventsStore((state) => state.initializeDefaultSchedule);
+
+  const parents = useParentsStore((state) => state.parents);
+
+  // Initialize default schedule on first load
+  useEffect(() => {
+    initializeDefaultSchedule();
+  }, [initializeDefaultSchedule]);
 
   // FIX: Destructure `days` and `getMonth` to pass to the Calendar component, centralizing calendar logic.
   const {
@@ -72,32 +48,23 @@ export default function App() {
   };
 
   const handleSaveEvent = (date: Date, parentId: string) => {
-    const dateString = date.toISOString().split('T')[0];
-    setEvents(prevEvents => {
-      const existingEventIndex = prevEvents.findIndex(e => e.date === dateString);
-      if (existingEventIndex > -1) {
-        const updatedEvents = [...prevEvents];
-        updatedEvents[existingEventIndex] = { ...updatedEvents[existingEventIndex], parentId };
-        return updatedEvents;
-      } else {
-        return [...prevEvents, { date: dateString, parentId }];
-      }
-    });
+    const dateString = formatDateString(date);
+    updateEvent(dateString, parentId);
     closeModal();
   };
-  
+
   const handleDeleteEvent = (date: Date) => {
-    const dateString = date.toISOString().split('T')[0];
-    setEvents(prevEvents => prevEvents.filter(e => e.date !== dateString));
+    const dateString = formatDateString(date);
+    deleteEvent(dateString);
     closeModal();
   };
 
   const selectedEvent = useMemo(() => {
     if (!selectedDate) return undefined;
-    const dateString = selectedDate.toISOString().split('T')[0];
+    const dateString = formatDateString(selectedDate);
     return events.find(e => e.date === dateString);
   }, [selectedDate, events]);
-  
+
   if (!isLoggedIn) {
     return <LoginPage />;
   }
@@ -121,14 +88,14 @@ export default function App() {
               days={days}
               getMonth={getMonth}
               events={events}
-              parents={PARENTS}
+              parents={parents}
               onDayClick={handleDayClick}
             />
           </div>
           <div className="lg:col-span-1">
-             <Stats 
+             <Stats
                 events={events}
-                parents={PARENTS}
+                parents={parents}
                 currentDate={currentDate}
              />
           </div>
@@ -140,7 +107,7 @@ export default function App() {
           onClose={closeModal}
           date={selectedDate}
           event={selectedEvent}
-          parents={PARENTS}
+          parents={parents}
           onSave={handleSaveEvent}
           onDelete={handleDeleteEvent}
         />

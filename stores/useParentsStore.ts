@@ -11,8 +11,8 @@ interface ParentsState {
 }
 
 const defaultParents: Parent[] = [
-  { id: 'parent1', name: 'Parent 1', color: 'bg-rose-200', textColor: 'text-rose-800' },
-  { id: 'parent2', name: 'Parent 2', color: 'bg-sky-200', textColor: 'text-sky-800' },
+  { id: 'mom', name: 'With Mom', color: 'bg-rose-200', textColor: 'text-rose-800' },
+  { id: 'dad', name: 'With Dad', color: 'bg-sky-200', textColor: 'text-sky-800' },
 ];
 
 export const useParentsStore = create<ParentsState>()(
@@ -42,4 +42,5 @@ export const useParentsStore = create<ParentsState>()(
     }
   )
 );
+
 
