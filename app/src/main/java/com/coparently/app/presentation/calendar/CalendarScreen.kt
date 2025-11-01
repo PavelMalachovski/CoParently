@@ -62,6 +62,13 @@ import java.time.Month
 import java.time.YearMonth as JavaYearMonth
 
 /**
+ * Extension function to convert java.time.YearMonth to kizitonwose YearMonth.
+ */
+private fun JavaYearMonth.toKizitonwose(): YearMonth {
+    return YearMonth(this.year, this.monthValue)
+}
+
+/**
  * Main calendar screen showing monthly calendar view with events.
  * Enhanced with animations, custody indicators, and smooth transitions.
  */
@@ -74,24 +81,20 @@ fun CalendarScreen(
     eventViewModel: EventViewModel = hiltViewModel(),
     calendarViewModel: CalendarViewModel = hiltViewModel()
 ) {
-    val currentMonth = remember {
-        val now = JavaYearMonth.now()
-        YearMonth(now.year, now.month.value)
-    }
-    val startMonth = remember {
-        currentMonth.minusMonths(12)
-    }
-    val endMonth = remember {
-        currentMonth.plusMonths(12)
-    }
     val firstDayOfWeek = remember { firstDayOfWeekFromLocale() }
 
+    val nowJava = remember { JavaYearMonth.now() }
+    val startMonthJava = remember { nowJava.minusMonths(12) }
+    val endMonthJava = remember { nowJava.plusMonths(12) }
+
     val calendarState = rememberCalendarState(
-        startMonth = startMonth,
-        endMonth = endMonth,
-        firstVisibleMonth = currentMonth,
+        startMonth = startMonthJava.toKizitonwose(),
+        endMonth = endMonthJava.toKizitonwose(),
+        firstVisibleMonth = nowJava.toKizitonwose(),
         firstDayOfWeek = firstDayOfWeek
     )
+
+    val currentMonth = calendarState.firstVisibleMonth.yearMonth
 
     val events by eventViewModel.events.collectAsState()
     val custodySchedules by calendarViewModel.custodySchedules.collectAsState()

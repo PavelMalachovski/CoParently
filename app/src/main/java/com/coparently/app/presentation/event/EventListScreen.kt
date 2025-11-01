@@ -97,7 +97,7 @@ fun EventListScreen(
             }
 
             is EventUiState.Error -> {
-                val errorState = uiState
+                val errorState = uiState as EventUiState.Error
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
