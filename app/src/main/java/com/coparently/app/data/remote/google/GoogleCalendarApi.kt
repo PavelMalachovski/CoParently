@@ -1,10 +1,9 @@
 package com.coparently.app.data.remote.google
 
 import com.google.api.client.auth.oauth2.Credential
-import com.google.api.client.extensions.android.http.AndroidHttp
+import com.google.api.client.http.javanet.NetHttpTransport
 import com.google.api.client.googleapis.auth.oauth2.GoogleAuthorizationCodeFlow
 import com.google.api.client.googleapis.auth.oauth2.GoogleClientSecrets
-import com.google.api.client.http.javanet.NetHttpTransport
 import com.google.api.client.json.gson.GsonFactory
 import com.google.api.client.util.DateTime
 import com.google.api.services.calendar.Calendar
@@ -29,7 +28,7 @@ class GoogleCalendarApi @Inject constructor() {
         private val SCOPES = listOf(CalendarScopes.CALENDAR)
         private val APPLICATION_NAME = "CoParently"
         private val JSON_FACTORY = GsonFactory.getDefaultInstance()
-        private val HTTP_TRANSPORT = AndroidHttp.newCompatibleTransport()
+        private val HTTP_TRANSPORT = NetHttpTransport()
     }
 
     /**
@@ -66,7 +65,7 @@ class GoogleCalendarApi @Inject constructor() {
         val events: Events = calendar.events().list(calendarId)
             .setTimeMin(timeMinDateTime)
             .apply { timeMaxDateTime?.let { setTimeMax(it) } }
-            .setMaxResults(maxResults.toLong())
+            .setMaxResults(maxResults.toInt())
             .setOrderBy("startTime")
             .setSingleEvents(true)
             .execute()

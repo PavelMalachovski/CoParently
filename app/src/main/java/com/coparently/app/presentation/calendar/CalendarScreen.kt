@@ -57,6 +57,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Settings
 import java.time.LocalDate
+import java.time.YearMonth as JavaYearMonth
 
 /**
  * Main calendar screen showing monthly calendar view with events.
@@ -70,7 +71,10 @@ fun CalendarScreen(
     eventViewModel: EventViewModel = hiltViewModel(),
     calendarViewModel: CalendarViewModel = hiltViewModel()
 ) {
-    val currentMonth = remember { YearMonth.now() }
+    val currentMonth = remember {
+        val now = JavaYearMonth.now()
+        com.kizitonwose.calendar.core.YearMonth(now.year, now.monthValue)
+    }
     val startMonth = remember { currentMonth.minusMonths(12) }
     val endMonth = remember { currentMonth.plusMonths(12) }
     val firstDayOfWeek = remember { firstDayOfWeekFromLocale() }
@@ -86,7 +90,7 @@ fun CalendarScreen(
     val custodySchedules by calendarViewModel.custodySchedules.collectAsState()
 
     LaunchedEffect(calendarState.firstVisibleMonth) {
-        val visibleMonth = calendarState.firstVisibleMonth.value.yearMonth
+        val visibleMonth = calendarState.firstVisibleMonth.yearMonth
         val start = visibleMonth.atDay(1).atStartOfDay()
         val end = visibleMonth.atEndOfMonth().atTime(23, 59, 59)
         eventViewModel.loadEventsForDateRange(start, end)
@@ -97,7 +101,7 @@ fun CalendarScreen(
             TopAppBar(
                 title = {
                     AnimatedContent(
-                        targetState = calendarState.firstVisibleMonth.value.yearMonth,
+                        targetState = calendarState.firstVisibleMonth.yearMonth,
                         transitionSpec = {
                             fadeIn(tween(300)) togetherWith fadeOut(tween(300))
                         }
@@ -243,7 +247,7 @@ private fun CustodyIndicatorToday(custody: String) {
 }
 
 @Composable
-private fun CalendarMonthHeader(yearMonth: YearMonth) {
+private fun CalendarMonthHeader(yearMonth: com.kizitonwose.calendar.core.YearMonth) {
     AnimatedContent(
         targetState = yearMonth,
         transitionSpec = {

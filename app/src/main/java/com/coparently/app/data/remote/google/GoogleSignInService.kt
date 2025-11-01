@@ -48,9 +48,10 @@ class GoogleSignInService @Inject constructor(
      */
     suspend fun getAccessToken(account: GoogleSignInAccount): String? {
         return try {
+            val accountObj = account.account ?: return null
             val token = GoogleAuthUtil.getToken(
                 context,
-                account.account,
+                accountObj,
                 "oauth2:${CalendarScopes.CALENDAR}"
             )
             encryptedPreferences.putAccessToken(token)

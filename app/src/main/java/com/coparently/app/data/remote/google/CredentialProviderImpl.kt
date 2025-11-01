@@ -2,7 +2,7 @@ package com.coparently.app.data.remote.google
 
 import com.coparently.app.data.local.preferences.EncryptedPreferences
 import com.google.api.client.auth.oauth2.Credential
-import com.google.api.client.extensions.android.http.AndroidHttp
+import com.google.api.client.http.javanet.NetHttpTransport
 import com.google.api.client.googleapis.auth.oauth2.GoogleCredential
 import com.google.api.client.json.gson.GsonFactory
 import com.google.android.gms.auth.GoogleAuthUtil
@@ -23,11 +23,12 @@ class CredentialProviderImpl @Inject constructor(
         val account = googleSignInService.getLastSignedInAccount() ?: return null
         val accessToken = encryptedPreferences.getAccessToken() ?: return null
 
-        return GoogleCredential.Builder()
-            .setTransport(AndroidHttp.newCompatibleTransport())
+        val credential = GoogleCredential.Builder()
+            .setTransport(NetHttpTransport())
             .setJsonFactory(GsonFactory.getDefaultInstance())
-            .setAccessToken(accessToken)
             .build()
+        credential.accessToken = accessToken
+        return credential
     }
 }
 

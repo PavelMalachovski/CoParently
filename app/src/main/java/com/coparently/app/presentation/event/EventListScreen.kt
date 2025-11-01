@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -169,7 +170,9 @@ private fun SwipeableEventCard(
         ) {
             Card(
                 modifier = Modifier.fillMaxSize(),
-                containerColor = MaterialTheme.colorScheme.error
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.error
+                )
             ) {
                 Column(
                     modifier = Modifier

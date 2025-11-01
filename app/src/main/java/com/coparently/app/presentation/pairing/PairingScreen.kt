@@ -3,6 +3,7 @@ package com.coparently.app.presentation.pairing
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -43,7 +44,7 @@ fun PairingScreen(
                         style = MaterialTheme.typography.titleSmall
                     )
                     Text(
-                        text = uiState.partnerEmail!!,
+                        text = uiState.partnerEmail ?: "",
                         style = MaterialTheme.typography.bodyLarge
                     )
                     Spacer(modifier = Modifier.height(16.dp))
@@ -71,7 +72,7 @@ fun PairingScreen(
 
             if (uiState.errorMessage != null) {
                 Text(
-                    text = uiState.errorMessage!!,
+                    text = uiState.errorMessage ?: "",
                     color = MaterialTheme.colorScheme.error
                 )
                 Spacer(modifier = Modifier.height(16.dp))
