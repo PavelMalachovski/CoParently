@@ -11,9 +11,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -33,6 +35,7 @@ import com.kizitonwose.calendar.core.YearMonth
 import com.kizitonwose.calendar.core.firstDayOfWeekFromLocale
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Settings
 
 /**
  * Main calendar screen showing monthly calendar view with events.
@@ -41,6 +44,7 @@ import androidx.compose.material.icons.filled.Add
 fun CalendarScreen(
     onEventClick: (String) -> Unit,
     onAddEventClick: () -> Unit,
+    onSettingsClick: (() -> Unit)? = null,
     viewModel: EventViewModel = hiltViewModel()
 ) {
     val currentMonth = remember { YearMonth.now() }
@@ -65,15 +69,30 @@ fun CalendarScreen(
     }
 
     Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("CoParently") },
+                actions = {
+                    if (onSettingsClick != null) {
+                        IconButton(onClick = onSettingsClick) {
+                            Icon(
+                                imageVector = Icons.Default.Settings,
+                                contentDescription = "Settings"
+                            )
+                        }
+                    }
+                }
+            )
+        },
         floatingActionButton = {
             FloatingActionButton(
                 onClick = onAddEventClick,
                 containerColor = MaterialTheme.colorScheme.primary
             ) {
-                    Icon(
-                        imageVector = Icons.Default.Add,
-                        contentDescription = "Add event"
-                    )
+                Icon(
+                    imageVector = Icons.Default.Add,
+                    contentDescription = "Add event"
+                )
             }
         }
     ) { paddingValues ->

@@ -9,6 +9,7 @@ import androidx.navigation.navArgument
 import com.coparently.app.presentation.calendar.CalendarScreen
 import com.coparently.app.presentation.event.AddEditEventScreen
 import com.coparently.app.presentation.event.EventListScreen
+import com.coparently.app.presentation.settings.SettingsScreen
 
 /**
  * Navigation graph for the app.
@@ -27,6 +28,9 @@ fun NavGraph(navController: NavHostController) {
                 },
                 onAddEventClick = {
                     navController.navigate(Screen.AddEvent.route)
+                },
+                onSettingsClick = {
+                    navController.navigate(Screen.Settings.route)
                 }
             )
         }
@@ -76,6 +80,14 @@ fun NavGraph(navController: NavHostController) {
                 }
             )
         }
+
+        composable(Screen.Settings.route) {
+            SettingsScreen(
+                onNavigateUp = {
+                    navController.popBackStack()
+                }
+            )
+        }
     }
 }
 
@@ -86,6 +98,7 @@ sealed class Screen(val route: String) {
     data object Calendar : Screen("calendar")
     data object EventList : Screen("event_list")
     data object AddEvent : Screen("add_event")
+    data object Settings : Screen("settings")
 
     data object EditEvent : Screen("edit_event/{eventId}") {
         const val ARG_EVENT_ID = "eventId"
