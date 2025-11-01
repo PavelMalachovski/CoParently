@@ -17,6 +17,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -31,7 +32,6 @@ import com.coparently.app.domain.model.Event
 import com.coparently.app.presentation.theme.CoParentlyColors
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
-import kotlin.math.abs
 
 /**
  * Hourly view for day/week calendar views.
@@ -52,7 +52,8 @@ fun DayWeekView(
     }
 
     // Handle swipe to change dates
-    var totalDrag by remember { mutableFloatStateOf(0f) }
+    val totalDragState = remember { mutableFloatStateOf(0f) }
+    var totalDrag by totalDragState
 
     Box(
         modifier = Modifier
@@ -60,14 +61,15 @@ fun DayWeekView(
             .pointerInput(selectedDate) {
                 detectHorizontalDragGestures(
                     onDragEnd = {
-                        if (abs(totalDrag) > 200f) {
-                            val daysToAdd = if (totalDrag > 0) -daysCount else daysCount
+                        val dragValue = totalDrag
+                        if (kotlin.math.abs(dragValue) > 200f) {
+                            val daysToAdd = if (dragValue > 0) -daysCount else daysCount
                             onDateChange(selectedDate.plusDays(daysToAdd.toLong()))
                         }
                         totalDrag = 0f
                     }
                 ) { _, dragAmount ->
-                    totalDrag += dragAmount
+                    totalDrag = totalDrag + dragAmount
                 }
             }
     ) {
