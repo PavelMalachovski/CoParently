@@ -51,7 +51,7 @@ import com.kizitonwose.calendar.compose.HorizontalCalendar
 import com.kizitonwose.calendar.compose.rememberCalendarState
 import com.kizitonwose.calendar.core.CalendarDay
 import com.kizitonwose.calendar.core.DayPosition
-import com.kizitonwose.calendar.core.YearMonth
+import com.kizitonwose.calendar.core.YearMonth as CalendarYearMonth
 import com.kizitonwose.calendar.core.firstDayOfWeekFromLocale
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -73,10 +73,14 @@ fun CalendarScreen(
 ) {
     val currentMonth = remember {
         val now = JavaYearMonth.now()
-        com.kizitonwose.calendar.core.YearMonth(now.year, now.monthValue)
+        CalendarYearMonth(now.year, now.monthValue)
     }
-    val startMonth = remember { currentMonth.minusMonths(12) }
-    val endMonth = remember { currentMonth.plusMonths(12) }
+    val startMonth = remember {
+        currentMonth.minusMonths(12)
+    }
+    val endMonth = remember {
+        currentMonth.plusMonths(12)
+    }
     val firstDayOfWeek = remember { firstDayOfWeekFromLocale() }
 
     val calendarState = rememberCalendarState(
@@ -91,8 +95,9 @@ fun CalendarScreen(
 
     LaunchedEffect(calendarState.firstVisibleMonth) {
         val visibleMonth = calendarState.firstVisibleMonth.yearMonth
-        val start = visibleMonth.atDay(1).atStartOfDay()
-        val end = visibleMonth.atEndOfMonth().atTime(23, 59, 59)
+        val javaYearMonth = JavaYearMonth.of(visibleMonth.year, visibleMonth.month.value)
+        val start = javaYearMonth.atDay(1).atStartOfDay()
+        val end = javaYearMonth.atEndOfMonth().atTime(23, 59, 59)
         eventViewModel.loadEventsForDateRange(start, end)
     }
 
@@ -251,15 +256,15 @@ private fun CalendarMonthHeader(yearMonth: com.kizitonwose.calendar.core.YearMon
     AnimatedContent(
         targetState = yearMonth,
         transitionSpec = {
-            fadeIn(tween(300)) + slideInVertically(
+            (fadeIn(tween(300)) + slideInVertically(
                 animationSpec = tween(300),
-                initialOffsetY = { -it }
-            ) togetherWith fadeOut(tween(300)) + slideOutVertically(
+                initialOffsetY = { fullHeight: Int -> -fullHeight }
+            )) togetherWith (fadeOut(tween(300)) + slideOutVertically(
                 animationSpec = tween(300),
-                targetOffsetY = { it }
-            )
+                targetOffsetY = { fullHeight: Int -> fullHeight }
+            ))
         }
-    ) { month ->
+    ) { month: com.kizitonwose.calendar.core.YearMonth ->
         Text(
             text = "${month.month.name} ${month.year}",
             style = MaterialTheme.typography.headlineMedium,

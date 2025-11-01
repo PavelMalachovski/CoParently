@@ -89,7 +89,7 @@ class SyncViewModel @Inject constructor(
             syncRepository.syncFromGoogle().collect { result ->
                 when (result) {
                     is SyncResult.Progress -> {
-                        _syncState.value = SyncState.Syncing("Syncing...")(result.message)
+                        _syncState.value = SyncState.Syncing(result.message)
                     }
                     is SyncResult.Success -> {
                         _syncState.value = SyncState.Success(result.message)
@@ -115,7 +115,7 @@ class SyncViewModel @Inject constructor(
             syncRepository.syncToGoogle(event).collect { result ->
                 when (result) {
                     is SyncResult.Progress -> {
-                        _syncState.value = SyncState.Syncing("Syncing...")(result.message)
+                        _syncState.value = SyncState.Syncing(result.message)
                     }
                     is SyncResult.Success -> {
                         _syncState.value = SyncState.Success(result.message)
