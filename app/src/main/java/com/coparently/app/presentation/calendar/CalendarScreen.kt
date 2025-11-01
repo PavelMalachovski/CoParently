@@ -52,21 +52,14 @@ import com.kizitonwose.calendar.compose.HorizontalCalendar
 import com.kizitonwose.calendar.compose.rememberCalendarState
 import com.kizitonwose.calendar.core.CalendarDay
 import com.kizitonwose.calendar.core.DayPosition
-import com.kizitonwose.calendar.core.YearMonth
 import com.kizitonwose.calendar.core.firstDayOfWeekFromLocale
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Settings
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.Month
-import java.time.YearMonth as JavaYearMonth
-
-/**
- * Extension function to convert java.time.YearMonth to kizitonwose YearMonth.
- */
-private fun JavaYearMonth.toKizitonwose(): YearMonth {
-    return YearMonth(this.year, this.monthValue)
-}
+import java.time.YearMonth
 
 /**
  * Main calendar screen showing monthly calendar view with events.
@@ -83,14 +76,14 @@ fun CalendarScreen(
 ) {
     val firstDayOfWeek = remember { firstDayOfWeekFromLocale() }
 
-    val nowJava = remember { JavaYearMonth.now() }
-    val startMonthJava = remember { nowJava.minusMonths(12) }
-    val endMonthJava = remember { nowJava.plusMonths(12) }
+    val now = remember { YearMonth.now() }
+    val startMonth = remember { now.minusMonths(12) }
+    val endMonth = remember { now.plusMonths(12) }
 
     val calendarState = rememberCalendarState(
-        startMonth = startMonthJava.toKizitonwose(),
-        endMonth = endMonthJava.toKizitonwose(),
-        firstVisibleMonth = nowJava.toKizitonwose(),
+        startMonth = startMonth,
+        endMonth = endMonth,
+        firstVisibleMonth = now,
         firstDayOfWeek = firstDayOfWeek
     )
 
@@ -101,9 +94,8 @@ fun CalendarScreen(
 
     LaunchedEffect(calendarState.firstVisibleMonth) {
         val visibleMonth = calendarState.firstVisibleMonth.yearMonth
-        val javaYearMonth = JavaYearMonth.of(visibleMonth.year, visibleMonth.month.value)
-        val start = javaYearMonth.atDay(1).atStartOfDay()
-        val end = javaYearMonth.atEndOfMonth().atTime(23, 59, 59)
+        val start = visibleMonth.atDay(1).atStartOfDay()
+        val end = visibleMonth.atEndOfMonth().atTime(23, 59, 59)
         eventViewModel.loadEventsForDateRange(start, end)
     }
 
