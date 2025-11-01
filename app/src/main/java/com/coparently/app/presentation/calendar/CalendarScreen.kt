@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -286,7 +287,12 @@ fun CalendarScreen(
                             events = events,
                             custodySchedules = custodySchedules,
                             onDateChange = { calendarViewModel.setSelectedDate(it) },
-                            onEventClick = onEventClick
+                            onEventClick = onEventClick,
+                            onAddEventClick = { date, hour ->
+                                // Navigate to add event screen with preselected date and time
+                                // For now, just call onAddEventClick
+                                onAddEventClick()
+                            }
                         )
                     }
                     CalendarViewMode.THREE_DAYS -> {
@@ -296,7 +302,10 @@ fun CalendarScreen(
                             events = events,
                             custodySchedules = custodySchedules,
                             onDateChange = { calendarViewModel.setSelectedDate(it) },
-                            onEventClick = onEventClick
+                            onEventClick = onEventClick,
+                            onAddEventClick = { date, hour ->
+                                onAddEventClick()
+                            }
                         )
                     }
                     CalendarViewMode.WEEK -> {
@@ -306,23 +315,48 @@ fun CalendarScreen(
                             events = events,
                             custodySchedules = custodySchedules,
                             onDateChange = { calendarViewModel.setSelectedDate(it) },
-                            onEventClick = onEventClick
+                            onEventClick = onEventClick,
+                            onAddEventClick = { date, hour ->
+                                onAddEventClick()
+                            }
                         )
                     }
                     CalendarViewMode.MONTH -> {
+                        val visibleMonthYear = YearMonth.from(selectedDate)
+                        var lastShownMonth by remember(visibleMonthYear) { mutableStateOf<YearMonth?>(null) }
+
                         VerticalCalendar(
                             state = calendarState,
                             modifier = Modifier.fillMaxSize(),
                             monthHeader = { month ->
-                                CalendarMonthHeader(month.yearMonth)
+                                // Show header only once per month
+                                val monthYearMonth = month.yearMonth
+
+                                // Show header only if it's the visible month and hasn't been shown yet
+                                if (monthYearMonth == visibleMonthYear && lastShownMonth != monthYearMonth) {
+                                    lastShownMonth = monthYearMonth
+                                    CalendarMonthHeader(monthYearMonth)
+                                } else {
+                                    // Return empty box with minimal height to maintain layout
+                                    Box(modifier = Modifier.height(0.dp))
+                                }
                             },
                             dayContent = { day ->
+                                // Show all days, but style differently for out-of-month days
                                 CalendarDayContent(
                                     day = day,
-                                    events = events.filter { event ->
-                                        event.startDateTime.toLocalDate() == day.date
+                                    events = if (day.position == DayPosition.MonthDate) {
+                                        events.filter { event ->
+                                            event.startDateTime.toLocalDate() == day.date
+                                        }
+                                    } else {
+                                        emptyList()
                                     },
-                                    custodySchedules = custodySchedules,
+                                    custodySchedules = if (day.position == DayPosition.MonthDate) {
+                                        custodySchedules
+                                    } else {
+                                        emptyList()
+                                    },
                                     onClick = { clickedDay ->
                                         calendarViewModel.setSelectedDate(clickedDay.date)
                                         if (viewMode != CalendarViewMode.DAY) {
