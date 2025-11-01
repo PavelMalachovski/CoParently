@@ -23,7 +23,8 @@ import com.coparently.app.data.local.entity.UserEntity
         CustodyScheduleEntity::class
     ],
     version = 2,
-    exportSchema = true
+    exportSchema = true,
+    autoMigrations = []
 )
 @TypeConverters(Converters::class)
 abstract class CoParentlyDatabase : RoomDatabase() {

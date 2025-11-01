@@ -1,9 +1,9 @@
 package com.coparently.app.presentation
 
-import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -11,9 +11,6 @@ import androidx.compose.ui.Modifier
 import androidx.navigation.compose.rememberNavController
 import com.coparently.app.presentation.navigation.NavGraph
 import com.coparently.app.presentation.theme.CoParentlyTheme
-import com.google.android.gms.auth.api.signin.GoogleSignIn
-import com.google.android.gms.auth.api.signin.GoogleSignInAccount
-import com.google.android.gms.common.api.ApiException
 import dagger.hilt.android.AndroidEntryPoint
 
 /**
@@ -23,8 +20,12 @@ import dagger.hilt.android.AndroidEntryPoint
  */
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
-    companion object {
-        const val RC_SIGN_IN = 9001
+    // Use Activity Result API instead of deprecated onActivityResult
+    private val signInResultLauncher = registerForActivityResult(
+        ActivityResultContracts.StartIntentSenderForResult()
+    ) { result ->
+        // Result handling moved to SettingsScreen via Activity Result API
+        // This launcher is kept for backward compatibility if needed
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -38,23 +39,6 @@ class MainActivity : ComponentActivity() {
                     val navController = rememberNavController()
                     NavGraph(navController = navController)
                 }
-            }
-        }
-    }
-
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-
-        // Result returned from launching the Intent from GoogleSignInClient.getSignInIntent(...)
-        if (requestCode == RC_SIGN_IN) {
-            val task = GoogleSignIn.getSignedInAccountFromIntent(data)
-            try {
-                // Google Sign-In was successful, authenticate with the account
-                val account = task.getResult(ApiException::class.java)
-                // Handle sign-in result - this will be handled by SettingsScreen
-            } catch (e: ApiException) {
-                // Google Sign-In failed, handle error
-                // Error will be handled by SettingsScreen
             }
         }
     }

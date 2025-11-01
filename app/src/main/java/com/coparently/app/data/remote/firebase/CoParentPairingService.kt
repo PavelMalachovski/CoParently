@@ -134,10 +134,12 @@ class CoParentPairingService @Inject constructor(
     /**
      * Sends a pairing notification via FCM.
      */
+    @Suppress("UNUSED_PARAMETER")
     private suspend fun sendPairingNotification(toUserId: String, acceptedByUserId: String) {
         // This would typically be handled by Cloud Functions
         // For now, we just log the action
         // In production, you'd use Cloud Functions to send the actual FCM message
+        // Parameters are kept for future implementation
     }
 
     /**

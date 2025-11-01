@@ -9,11 +9,12 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.time.LocalDate
 import javax.inject.Inject
 
 /**
  * ViewModel for calendar screen.
- * Handles custody schedule data.
+ * Handles custody schedule data and view mode.
  */
 @HiltViewModel
 class CalendarViewModel @Inject constructor(
@@ -22,6 +23,12 @@ class CalendarViewModel @Inject constructor(
 
     private val _custodySchedules = MutableStateFlow<List<CustodyScheduleEntity>>(emptyList())
     val custodySchedules: StateFlow<List<CustodyScheduleEntity>> = _custodySchedules.asStateFlow()
+
+    private val _viewMode = MutableStateFlow<CalendarViewMode>(CalendarViewMode.MONTH)
+    val viewMode: StateFlow<CalendarViewMode> = _viewMode.asStateFlow()
+
+    private val _selectedDate = MutableStateFlow<LocalDate>(LocalDate.now())
+    val selectedDate: StateFlow<LocalDate> = _selectedDate.asStateFlow()
 
     init {
         loadCustodySchedules()
@@ -36,6 +43,20 @@ class CalendarViewModel @Inject constructor(
                 _custodySchedules.value = schedules
             }
         }
+    }
+
+    /**
+     * Sets the calendar view mode.
+     */
+    fun setViewMode(mode: CalendarViewMode) {
+        _viewMode.value = mode
+    }
+
+    /**
+     * Sets the selected date.
+     */
+    fun setSelectedDate(date: LocalDate) {
+        _selectedDate.value = date
     }
 }
 

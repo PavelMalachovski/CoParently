@@ -37,7 +37,7 @@ import com.coparently.app.domain.model.Event
 import com.coparently.app.presentation.theme.CoParentlyColors
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import kotlin.math.roundToInt
 
@@ -62,7 +62,7 @@ fun EventListScreen(
                 navigationIcon = {
                     IconButton(onClick = onNavigateUp) {
                         Icon(
-                            imageVector = Icons.Default.ArrowBack,
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back"
                         )
                     }
@@ -207,7 +207,7 @@ private fun SwipeableEventCard(
                             }
                             offsetX = 0f
                         }
-                    ) { change, dragAmount ->
+                    ) { _, dragAmount ->
                         // Allow swipe left (negative drag)
                         val newOffset = (offsetX + dragAmount).coerceAtMost(0f)
                         offsetX = newOffset

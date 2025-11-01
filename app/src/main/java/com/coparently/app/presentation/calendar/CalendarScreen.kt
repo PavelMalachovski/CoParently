@@ -30,12 +30,17 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.rememberDatePickerState
+import androidx.compose.material3.Button
+import androidx.compose.material3.DatePickerDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -48,7 +53,7 @@ import com.coparently.app.R
 import com.coparently.app.data.local.entity.CustodyScheduleEntity
 import com.coparently.app.presentation.event.EventViewModel
 import com.coparently.app.presentation.theme.CoParentlyColors
-import com.kizitonwose.calendar.compose.HorizontalCalendar
+import com.kizitonwose.calendar.compose.VerticalCalendar
 import com.kizitonwose.calendar.compose.rememberCalendarState
 import com.kizitonwose.calendar.core.CalendarDay
 import com.kizitonwose.calendar.core.DayPosition
@@ -56,26 +61,34 @@ import com.kizitonwose.calendar.core.firstDayOfWeekFromLocale
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import java.time.LocalDate
 import java.time.LocalDateTime
-import java.time.Month
 import java.time.YearMonth
+import java.time.ZoneId
+import kotlinx.coroutines.launch
 
 /**
- * Main calendar screen showing monthly calendar view with events.
- * Enhanced with animations, custody indicators, and smooth transitions.
+ * Main calendar screen showing calendar view with events.
+ * Supports multiple view modes: Day, 3 Days, Week, Month.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CalendarScreen(
-    onEventClick: (String) -> Unit,
+    onEventClick: (String) -> Unit = {},
     onAddEventClick: () -> Unit,
     onSettingsClick: (() -> Unit)? = null,
     eventViewModel: EventViewModel = hiltViewModel(),
     calendarViewModel: CalendarViewModel = hiltViewModel()
 ) {
-    val firstDayOfWeek = remember { firstDayOfWeekFromLocale() }
+    val events by eventViewModel.events.collectAsState()
+    val custodySchedules by calendarViewModel.custodySchedules.collectAsState()
+    val viewMode by calendarViewModel.viewMode.collectAsState()
+    val selectedDate by calendarViewModel.selectedDate.collectAsState()
 
+    val firstDayOfWeek = remember { firstDayOfWeekFromLocale() }
     val now = remember { YearMonth.now() }
     val startMonth = remember { now.minusMonths(12) }
     val endMonth = remember { now.plusMonths(12) }
@@ -83,20 +96,70 @@ fun CalendarScreen(
     val calendarState = rememberCalendarState(
         startMonth = startMonth,
         endMonth = endMonth,
-        firstVisibleMonth = now,
+        firstVisibleMonth = YearMonth.from(selectedDate),
         firstDayOfWeek = firstDayOfWeek
     )
 
-    val currentMonth = calendarState.firstVisibleMonth.yearMonth
+    var showDatePicker by remember { mutableStateOf(false) }
+    val currentYearMonth = calendarState.firstVisibleMonth.yearMonth
+    val datePickerState = rememberDatePickerState(
+        initialSelectedDateMillis = currentYearMonth.atDay(1).atStartOfDay(ZoneId.systemDefault())
+            .toInstant().toEpochMilli(),
+        yearRange = IntRange(now.year - 5, now.year + 5)
+    )
+    val scope = rememberCoroutineScope()
 
-    val events by eventViewModel.events.collectAsState()
-    val custodySchedules by calendarViewModel.custodySchedules.collectAsState()
+    // Load events based on view mode
+    LaunchedEffect(viewMode, selectedDate) {
+        val start = when (viewMode) {
+            CalendarViewMode.DAY -> selectedDate.atStartOfDay()
+            CalendarViewMode.THREE_DAYS -> selectedDate.atStartOfDay()
+            CalendarViewMode.WEEK -> {
+                // Calculate first day of week (Monday = 1, Sunday = 7)
+                val dayOfWeek = selectedDate.dayOfWeek.value
+                val daysToSubtract = (dayOfWeek - 1).toLong()
+                val firstDay = selectedDate.minusDays(daysToSubtract)
+                firstDay.atStartOfDay()
+            }
+            CalendarViewMode.MONTH -> {
+                val visibleMonth = YearMonth.from(selectedDate)
+                visibleMonth.atDay(1).atStartOfDay()
+            }
+        }
 
-    LaunchedEffect(calendarState.firstVisibleMonth) {
-        val visibleMonth = calendarState.firstVisibleMonth.yearMonth
-        val start = visibleMonth.atDay(1).atStartOfDay()
-        val end = visibleMonth.atEndOfMonth().atTime(23, 59, 59)
+        val end = when (viewMode) {
+            CalendarViewMode.DAY -> selectedDate.atTime(23, 59, 59)
+            CalendarViewMode.THREE_DAYS -> selectedDate.plusDays(2).atTime(23, 59, 59)
+            CalendarViewMode.WEEK -> {
+                val dayOfWeek = selectedDate.dayOfWeek.value
+                val daysToAdd = (7 - dayOfWeek).toLong()
+                val lastDay = selectedDate.plusDays(daysToAdd)
+                lastDay.atTime(23, 59, 59)
+            }
+            CalendarViewMode.MONTH -> {
+                val visibleMonth = YearMonth.from(selectedDate)
+                visibleMonth.atEndOfMonth().atTime(23, 59, 59)
+            }
+        }
+
         eventViewModel.loadEventsForDateRange(start, end)
+    }
+
+    // Update calendar state when selected date changes (for month view)
+    LaunchedEffect(selectedDate, viewMode) {
+        if (viewMode == CalendarViewMode.MONTH) {
+            val newMonth = YearMonth.from(selectedDate)
+            val currentMonth = calendarState.firstVisibleMonth.yearMonth
+            if (newMonth != currentMonth) {
+                scope.launch {
+                    try {
+                        calendarState.animateScrollToMonth(newMonth)
+                    } catch (e: Exception) {
+                        // Handle scroll error gracefully
+                    }
+                }
+            }
+        }
     }
 
     Scaffold(
@@ -104,12 +167,29 @@ fun CalendarScreen(
             TopAppBar(
                 title = {
                     AnimatedContent(
-                        targetState = calendarState.firstVisibleMonth.yearMonth,
+                        targetState = when (viewMode) {
+                            CalendarViewMode.MONTH -> calendarState.firstVisibleMonth.yearMonth.toString()
+                            else -> selectedDate.toString()
+                        },
                         transitionSpec = {
                             fadeIn(tween(300)) togetherWith fadeOut(tween(300))
                         }
-                    ) { month ->
-                        Text(stringResource(R.string.calendar_title))
+                    ) { dateText ->
+                        Text(
+                            text = when (viewMode) {
+                                CalendarViewMode.DAY -> selectedDate.format(java.time.format.DateTimeFormatter.ofPattern("EEEE, MMMM d, yyyy"))
+                                CalendarViewMode.THREE_DAYS -> "${selectedDate.format(java.time.format.DateTimeFormatter.ofPattern("MMM d"))} - ${selectedDate.plusDays(2).format(java.time.format.DateTimeFormatter.ofPattern("MMM d"))}"
+                                CalendarViewMode.WEEK -> {
+                                    val dayOfWeek = selectedDate.dayOfWeek.value
+                                    val daysToSubtract = (dayOfWeek - 1).toLong()
+                                    val firstDay = selectedDate.minusDays(daysToSubtract)
+                                    val lastDay = firstDay.plusDays(6)
+                                    "${firstDay.format(java.time.format.DateTimeFormatter.ofPattern("MMM d"))} - ${lastDay.format(java.time.format.DateTimeFormatter.ofPattern("MMM d"))}"
+                                }
+                                CalendarViewMode.MONTH -> "${YearMonth.from(selectedDate).month.name.lowercase().replaceFirstChar { it.uppercase() }} ${YearMonth.from(selectedDate).year}"
+                            },
+                            modifier = Modifier.clickable { showDatePicker = true }
+                        )
                     }
                 },
                 actions = {
@@ -141,8 +221,34 @@ fun CalendarScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            // Today's custody indicator
-            if (custodySchedules.isNotEmpty()) {
+            // View mode selector
+            SingleChoiceSegmentedButtonRow(
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+            ) {
+                CalendarViewMode.values().forEach { mode ->
+                    SegmentedButton(
+                        selected = viewMode == mode,
+                        onClick = { calendarViewModel.setViewMode(mode) },
+                        shape = SegmentedButtonDefaults.itemShape(
+                            index = CalendarViewMode.values().indexOf(mode),
+                            count = CalendarViewMode.values().size
+                        )
+                    ) {
+                        Text(
+                            text = when (mode) {
+                                CalendarViewMode.DAY -> "Day"
+                                CalendarViewMode.THREE_DAYS -> "3 Days"
+                                CalendarViewMode.WEEK -> "Week"
+                                CalendarViewMode.MONTH -> "Month"
+                            },
+                            style = MaterialTheme.typography.labelSmall
+                        )
+                    }
+                }
+            }
+
+            // Today's custody indicator (only for month view)
+            if (viewMode == CalendarViewMode.MONTH && custodySchedules.isNotEmpty()) {
                 val today = LocalDate.now()
                 val todayCustody = CustodyHelper.getCustodyForDate(today, custodySchedules)
                 if (todayCustody != null) {
@@ -164,24 +270,115 @@ fun CalendarScreen(
                 }
             }
 
-            HorizontalCalendar(
-                state = calendarState,
-                modifier = Modifier.weight(1f),
-                monthHeader = { month ->
-                    CalendarMonthHeader(month.yearMonth)
+            // Calendar content based on view mode
+            AnimatedContent(
+                targetState = viewMode,
+                transitionSpec = {
+                    fadeIn(tween(300)) togetherWith fadeOut(tween(300))
                 },
-                dayContent = { day ->
-                    CalendarDayContent(
-                        day = day,
-                        events = events.filter { event ->
-                            event.startDateTime.toLocalDate() == day.date
-                        },
-                        custodySchedules = custodySchedules,
-                        onClick = { clickedDay ->
-                            // Handle day click - show events or navigate
-                        }
-                    )
+                modifier = Modifier.weight(1f)
+            ) { mode ->
+                when (mode) {
+                    CalendarViewMode.DAY -> {
+                        DayWeekView(
+                            selectedDate = selectedDate,
+                            daysCount = 1,
+                            events = events,
+                            custodySchedules = custodySchedules,
+                            onDateChange = { calendarViewModel.setSelectedDate(it) },
+                            onEventClick = onEventClick
+                        )
+                    }
+                    CalendarViewMode.THREE_DAYS -> {
+                        DayWeekView(
+                            selectedDate = selectedDate,
+                            daysCount = 3,
+                            events = events,
+                            custodySchedules = custodySchedules,
+                            onDateChange = { calendarViewModel.setSelectedDate(it) },
+                            onEventClick = onEventClick
+                        )
+                    }
+                    CalendarViewMode.WEEK -> {
+                        DayWeekView(
+                            selectedDate = selectedDate,
+                            daysCount = 7,
+                            events = events,
+                            custodySchedules = custodySchedules,
+                            onDateChange = { calendarViewModel.setSelectedDate(it) },
+                            onEventClick = onEventClick
+                        )
+                    }
+                    CalendarViewMode.MONTH -> {
+                        VerticalCalendar(
+                            state = calendarState,
+                            modifier = Modifier.fillMaxSize(),
+                            monthHeader = { month ->
+                                CalendarMonthHeader(month.yearMonth)
+                            },
+                            dayContent = { day ->
+                                CalendarDayContent(
+                                    day = day,
+                                    events = events.filter { event ->
+                                        event.startDateTime.toLocalDate() == day.date
+                                    },
+                                    custodySchedules = custodySchedules,
+                                    onClick = { clickedDay ->
+                                        calendarViewModel.setSelectedDate(clickedDay.date)
+                                        if (viewMode != CalendarViewMode.DAY) {
+                                            calendarViewModel.setViewMode(CalendarViewMode.DAY)
+                                        }
+                                    }
+                                )
+                            }
+                        )
+                    }
                 }
+            }
+        }
+    }
+
+    // Date picker dialog for selecting month and year
+    if (showDatePicker) {
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        datePickerState.selectedDateMillis?.let { millis ->
+                            val selectedDate = LocalDate.ofInstant(
+                                java.time.Instant.ofEpochMilli(millis),
+                                ZoneId.systemDefault()
+                            )
+                            val selectedYearMonth = YearMonth.from(selectedDate)
+
+                            calendarViewModel.setSelectedDate(selectedDate)
+                            if (viewMode != CalendarViewMode.MONTH) {
+                                calendarViewModel.setViewMode(CalendarViewMode.MONTH)
+                            } else {
+                                scope.launch {
+                                    calendarState.animateScrollToMonth(selectedYearMonth)
+                                }
+                            }
+                        }
+                        showDatePicker = false
+                    }
+                ) {
+                    Text("OK")
+                }
+            },
+            dismissButton = {
+                Button(onClick = { showDatePicker = false }) {
+                    Text("Cancel")
+                }
+            },
+            colors = DatePickerDefaults.colors()
+        ) {
+            androidx.compose.material3.DatePicker(
+                state = datePickerState,
+                title = null,
+                headline = null,
+                showModeToggle = true
             )
         }
     }
@@ -262,12 +459,8 @@ private fun CalendarMonthHeader(yearMonth: YearMonth) {
                 targetOffsetY = { fullHeight: Int -> fullHeight }
             ))
         }
-    ) { month: YearMonth ->
-        Text(
-            text = "${month.month.name} ${month.year}",
-            style = MaterialTheme.typography.headlineMedium,
-            modifier = Modifier.padding(16.dp)
-        )
+    ) { _: YearMonth ->
+        // Month header is now in TopAppBar title
     }
 }
 

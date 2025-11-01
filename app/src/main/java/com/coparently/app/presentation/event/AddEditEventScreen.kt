@@ -28,7 +28,7 @@ import kotlinx.coroutines.launch
 import java.time.LocalDateTime
 import java.util.UUID
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 
 /**
  * Screen for adding or editing an event.
@@ -72,7 +72,7 @@ fun AddEditEventScreen(
                 navigationIcon = {
                     IconButton(onClick = onCancel) {
                         androidx.compose.material3.Icon(
-                            imageVector = Icons.Default.ArrowBack,
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Cancel"
                         )
                     }

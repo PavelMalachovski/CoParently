@@ -73,12 +73,14 @@ class FirestoreUserDataSource @Inject constructor(
     /**
      * Creates an invitation.
      */
+    @Suppress("UNUSED_PARAMETER")
     suspend fun createInvitation(
         invitationId: String,
         fromUserId: String,
         toEmail: String,
         invitationData: Map<String, Any?>
     ): Result<Unit> {
+        // Parameters are already included in invitationData
         return try {
             firestore.collection(invitationsCollection)
                 .document(invitationId)

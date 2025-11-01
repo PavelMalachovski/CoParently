@@ -58,7 +58,9 @@ class CoParentlyMessagingService : FirebaseMessagingService() {
     /**
      * Shows a notification to the user.
      */
+    @Suppress("UNUSED_PARAMETER")
     private fun showNotification(title: String, body: String, type: String?) {
+        // type parameter reserved for future use
         val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
         val intent = packageManager.getLaunchIntentForPackage(packageName)

@@ -5,8 +5,6 @@ import com.google.api.client.auth.oauth2.Credential
 import com.google.api.client.http.javanet.NetHttpTransport
 import com.google.api.client.googleapis.auth.oauth2.GoogleCredential
 import com.google.api.client.json.gson.GsonFactory
-import com.google.android.gms.auth.GoogleAuthUtil
-import com.google.android.gms.auth.api.signin.GoogleSignInAccount
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -19,16 +17,20 @@ class CredentialProviderImpl @Inject constructor(
     private val encryptedPreferences: EncryptedPreferences
 ) : CredentialProvider {
 
+    @Suppress("DEPRECATION")
     override fun getCredential(): Credential? {
-        val account = googleSignInService.getLastSignedInAccount() ?: return null
+        googleSignInService.getLastSignedInAccount() ?: return null
         val accessToken = encryptedPreferences.getAccessToken() ?: return null
 
-        val credential = GoogleCredential.Builder()
+        // GoogleCredential is deprecated but still the recommended way for google-api-client
+        // There's no direct replacement in the current version of the library
+        return GoogleCredential.Builder()
             .setTransport(NetHttpTransport())
             .setJsonFactory(GsonFactory.getDefaultInstance())
             .build()
-        credential.accessToken = accessToken
-        return credential
+            .apply {
+                setAccessToken(accessToken)
+            }
     }
 }
 

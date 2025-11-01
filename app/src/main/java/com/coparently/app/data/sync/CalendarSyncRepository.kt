@@ -70,7 +70,7 @@ class CalendarSyncRepository @Inject constructor(
             val credential = credentialProvider.getCredential()
                 ?: throw IllegalStateException("Not authenticated")
 
-            val googleEvent = googleCalendarApi.createEvent(
+            googleCalendarApi.createEvent(
                 credential = credential,
                 title = event.title,
                 description = event.description,
@@ -78,10 +78,7 @@ class CalendarSyncRepository @Inject constructor(
                 endDateTime = event.endDateTime
             )
 
-            // Update local event with Google Calendar event ID
-            val updatedEvent = event.copy(
-                // Store googleEventId in a separate field if needed
-            )
+            // Event synced successfully
 
             emit(SyncResult.Success("Event synced to Google Calendar"))
         } catch (e: Exception) {
