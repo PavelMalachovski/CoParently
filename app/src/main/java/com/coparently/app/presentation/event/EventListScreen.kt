@@ -97,13 +97,14 @@ fun EventListScreen(
             }
 
             is EventUiState.Error -> {
+                val errorState = uiState
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(paddingValues)
                 ) {
                     Text(
-                        text = "Error: ${uiState.message}",
+                        text = "Error: ${errorState.message}",
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.error,
                         modifier = Modifier.padding(16.dp)

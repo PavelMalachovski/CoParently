@@ -58,6 +58,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Settings
 import java.time.LocalDate
+import java.time.Month
 import java.time.YearMonth as JavaYearMonth
 
 /**
@@ -78,14 +79,10 @@ fun CalendarScreen(
         YearMonth(now.year, now.monthValue)
     }
     val startMonth = remember {
-        val javaYearMonth = JavaYearMonth.of(currentMonth.year, currentMonth.month.value)
-        val startJava = javaYearMonth.minusMonths(12)
-        YearMonth(startJava.year, startJava.monthValue)
+        currentMonth.minusMonths(12)
     }
     val endMonth = remember {
-        val javaYearMonth = JavaYearMonth.of(currentMonth.year, currentMonth.month.value)
-        val endJava = javaYearMonth.plusMonths(12)
-        YearMonth(endJava.year, endJava.monthValue)
+        currentMonth.plusMonths(12)
     }
     val firstDayOfWeek = remember { firstDayOfWeekFromLocale() }
 
