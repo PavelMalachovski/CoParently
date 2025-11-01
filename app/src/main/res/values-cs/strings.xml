@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- App name -->
+    <string name="app_name">CoParently</string>
+
+    <!-- Calendar Screen -->
+    <string name="calendar_title">CoParently</string>
+    <string name="calendar_settings">Nastavení</string>
+    <string name="calendar_add_event">Přidat událost</string>
+
+    <!-- Event Screens -->
+    <string name="events_title">Události</string>
+    <string name="events_loading">Načítání…</string>
+    <string name="events_error">Chyba: %1$s</string>
+    <string name="events_empty">Zatím žádné události</string>
+    <string name="event_add">Přidat událost</string>
+    <string name="event_edit">Upravit událost</string>
+    <string name="event_title">Název</string>
+    <string name="event_description">Popis</string>
+    <string name="event_save">Uložit</string>
+    <string name="event_update">Aktualizovat</string>
+    <string name="event_cancel">Zrušit</string>
+    <string name="event_date">Datum: %1$s</string>
+    <string name="event_parent">Rodič: %1$s</string>
+    <string name="event_parent_mom">Máma</string>
+    <string name="event_parent_dad">Táta</string>
+
+    <!-- Auth Screen -->
+    <string name="auth_sign_in">Přihlásit se</string>
+    <string name="auth_create_account">Vytvořit účet</string>
+    <string name="auth_email">E-mail</string>
+    <string name="auth_password">Heslo</string>
+    <string name="auth_sign_up_prompt">Nemáte účet? Zaregistrujte se</string>
+    <string name="auth_sign_in_prompt">Již máte účet? Přihlaste se</string>
+    <string name="auth_forgot_password">Zapomenuté heslo?</string>
+    <string name="auth_fill_all_fields">Vyplňte prosím všechna pole</string>
+    <string name="auth_sign_in_failed">Přihlášení selhalo</string>
+    <string name="auth_sign_up_failed">Registrace selhala</string>
+
+    <!-- Settings Screen -->
+    <string name="settings_title">Nastavení</string>
+    <string name="settings_back">Zpět</string>
+    <string name="settings_google_calendar_sync">Synchronizace s Google kalendářem</string>
+    <string name="settings_enable_sync">Povolit synchronizaci</string>
+    <string name="settings_signed_in_google">Přihlášeno k Google</string>
+    <string name="settings_not_signed_in">Nepřihlášeno</string>
+    <string name="settings_sync_from_google">Synchronizovat z Google kalendáře</string>
+    <string name="settings_sign_out">Odhlásit se</string>
+    <string name="settings_syncing">Synchronizace…</string>
+
+    <!-- Pairing Screen -->
+    <string name="pairing_title">Párování spolurodičů</string>
+    <string name="pairing_paired_with">Spárováno s</string>
+    <string name="pairing_unpair">Zrušit párování</string>
+    <string name="pairing_partner_email">E-mail partnera</string>
+    <string name="pairing_send_invitation">Odeslat pozvánku</string>
+    <string name="pairing_pending_invitations">Čekající pozvánky</string>
+    <string name="pairing_accept">Přijmout</string>
+    <string name="pairing_reject">Odmítnout</string>
+    <string name="pairing_enter_email">Zadejte prosím e-mail</string>
+    <string name="pairing_failed_send">Odeslání pozvánky selhalo</string>
+    <string name="pairing_unknown">Neznámé</string>
+
+    <!-- Custody -->
+    <string name="custody_with_mom">U mámy</string>
+    <string name="custody_with_dad">U táty</string>
+    <string name="custody_today">Dnes: %1$s</string>
+
+    <!-- Common -->
+    <string name="common_back">Zpět</string>
+    <string name="common_loading">Načítání…</string>
+    <string name="common_error">Chyba</string>
+    <string name="common_unknown">Neznámé</string>
+</resources>
+

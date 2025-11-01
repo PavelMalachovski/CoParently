@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- App name -->
+    <string name="app_name">CoParently</string>
+
+    <!-- Calendar Screen -->
+    <string name="calendar_title">CoParently</string>
+    <string name="calendar_settings">Настройки</string>
+    <string name="calendar_add_event">Добавить событие</string>
+
+    <!-- Event Screens -->
+    <string name="events_title">События</string>
+    <string name="events_loading">Загрузка…</string>
+    <string name="events_error">Ошибка: %1$s</string>
+    <string name="events_empty">Пока нет событий</string>
+    <string name="event_add">Добавить событие</string>
+    <string name="event_edit">Редактировать событие</string>
+    <string name="event_title">Название</string>
+    <string name="event_description">Описание</string>
+    <string name="event_save">Сохранить</string>
+    <string name="event_update">Обновить</string>
+    <string name="event_cancel">Отмена</string>
+    <string name="event_date">Дата: %1$s</string>
+    <string name="event_parent">Родитель: %1$s</string>
+    <string name="event_parent_mom">Мама</string>
+    <string name="event_parent_dad">Папа</string>
+
+    <!-- Auth Screen -->
+    <string name="auth_sign_in">Войти</string>
+    <string name="auth_create_account">Создать аккаунт</string>
+    <string name="auth_email">Email</string>
+    <string name="auth_password">Пароль</string>
+    <string name="auth_sign_up_prompt">Нет аккаунта? Зарегистрируйтесь</string>
+    <string name="auth_sign_in_prompt">Уже есть аккаунт? Войдите</string>
+    <string name="auth_forgot_password">Забыли пароль?</string>
+    <string name="auth_fill_all_fields">Пожалуйста, заполните все поля</string>
+    <string name="auth_sign_in_failed">Вход не выполнен</string>
+    <string name="auth_sign_up_failed">Регистрация не выполнена</string>
+
+    <!-- Settings Screen -->
+    <string name="settings_title">Настройки</string>
+    <string name="settings_back">Назад</string>
+    <string name="settings_google_calendar_sync">Синхронизация с Google Calendar</string>
+    <string name="settings_enable_sync">Включить синхронизацию</string>
+    <string name="settings_signed_in_google">Вошли в Google</string>
+    <string name="settings_not_signed_in">Не вошли</string>
+    <string name="settings_sync_from_google">Синхронизировать из Google Calendar</string>
+    <string name="settings_sign_out">Выйти</string>
+    <string name="settings_syncing">Синхронизация…</string>
+
+    <!-- Pairing Screen -->
+    <string name="pairing_title">Связь родителей</string>
+    <string name="pairing_paired_with">Связаны с</string>
+    <string name="pairing_unpair">Разорвать связь</string>
+    <string name="pairing_partner_email">Email партнёра</string>
+    <string name="pairing_send_invitation">Отправить приглашение</string>
+    <string name="pairing_pending_invitations">Ожидающие приглашения</string>
+    <string name="pairing_accept">Принять</string>
+    <string name="pairing_reject">Отклонить</string>
+    <string name="pairing_enter_email">Пожалуйста, введите email</string>
+    <string name="pairing_failed_send">Не удалось отправить приглашение</string>
+    <string name="pairing_unknown">Неизвестно</string>
+
+    <!-- Custody -->
+    <string name="custody_with_mom">У мамы</string>
+    <string name="custody_with_dad">У папы</string>
+    <string name="custody_today">Сегодня: %1$s</string>
+
+    <!-- Common -->
+    <string name="common_back">Назад</string>
+    <string name="common_loading">Загрузка…</string>
+    <string name="common_error">Ошибка</string>
+    <string name="common_unknown">Неизвестно</string>
+</resources>
+
