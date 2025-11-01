@@ -104,7 +104,8 @@ fun SettingsScreen(
                     )
 
                     // Sync status
-                    when (syncState) {
+                    val currentSyncState = syncState
+                    when (currentSyncState) {
                         is SyncState.Syncing -> {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically
@@ -114,22 +115,22 @@ fun SettingsScreen(
                                     strokeWidth = 2.dp
                                 )
                                 Text(
-                                    text = syncState.message,
+                                    text = currentSyncState.message,
                                     style = MaterialTheme.typography.bodySmall,
                                     modifier = Modifier.padding(start = 8.dp)
                                 )
                             }
                         }
-                        is com.coparently.app.presentation.sync.SyncState.Success -> {
+                        is SyncState.Success -> {
                             Text(
-                                text = "✓ ${syncState.message}",
+                                text = "✓ ${currentSyncState.message}",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.primary
                             )
                         }
-                        is com.coparently.app.presentation.sync.SyncState.Error -> {
+                        is SyncState.Error -> {
                             Text(
-                                text = "✗ ${syncState.message}",
+                                text = "✗ ${currentSyncState.message}",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.error
                             )
