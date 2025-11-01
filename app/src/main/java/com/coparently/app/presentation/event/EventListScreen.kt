@@ -1,5 +1,6 @@
 package com.coparently.app.presentation.event
 
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -43,6 +44,7 @@ import kotlin.math.roundToInt
 /**
  * Screen displaying a list of all events.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EventListScreen(
     onEventClick: (String) -> Unit,
@@ -95,15 +97,13 @@ fun EventListScreen(
             }
 
             is EventUiState.Error -> {
-                val errorState = uiState
-                val errorMessage = errorState.message
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(paddingValues)
                 ) {
                     Text(
-                        text = "Error: $errorMessage",
+                        text = "Error: ${uiState.message}",
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.error,
                         modifier = Modifier.padding(16.dp)

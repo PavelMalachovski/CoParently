@@ -1,5 +1,6 @@
 package com.coparently.app.presentation.settings
 
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -30,6 +31,7 @@ import com.coparently.app.presentation.sync.SyncViewModel
 /**
  * Settings screen for managing Google Calendar sync.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     onNavigateUp: () -> Unit,

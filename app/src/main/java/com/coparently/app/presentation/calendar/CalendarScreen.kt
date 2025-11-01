@@ -1,5 +1,6 @@
 package com.coparently.app.presentation.calendar
 
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -51,6 +52,7 @@ import com.kizitonwose.calendar.compose.HorizontalCalendar
 import com.kizitonwose.calendar.compose.rememberCalendarState
 import com.kizitonwose.calendar.core.CalendarDay
 import com.kizitonwose.calendar.core.DayPosition
+import com.kizitonwose.calendar.core.YearMonth
 import com.kizitonwose.calendar.core.firstDayOfWeekFromLocale
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -62,6 +64,7 @@ import java.time.YearMonth as JavaYearMonth
  * Main calendar screen showing monthly calendar view with events.
  * Enhanced with animations, custody indicators, and smooth transitions.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CalendarScreen(
     onEventClick: (String) -> Unit,
@@ -72,17 +75,17 @@ fun CalendarScreen(
 ) {
     val currentMonth = remember {
         val now = JavaYearMonth.now()
-        com.kizitonwose.calendar.core.YearMonth(now.year, now.monthValue)
+        YearMonth(now.year, now.monthValue)
     }
     val startMonth = remember {
         val javaYearMonth = JavaYearMonth.of(currentMonth.year, currentMonth.month.value)
         val startJava = javaYearMonth.minusMonths(12)
-        com.kizitonwose.calendar.core.YearMonth(startJava.year, startJava.monthValue)
+        YearMonth(startJava.year, startJava.monthValue)
     }
     val endMonth = remember {
         val javaYearMonth = JavaYearMonth.of(currentMonth.year, currentMonth.month.value)
         val endJava = javaYearMonth.plusMonths(12)
-        com.kizitonwose.calendar.core.YearMonth(endJava.year, endJava.monthValue)
+        YearMonth(endJava.year, endJava.monthValue)
     }
     val firstDayOfWeek = remember { firstDayOfWeekFromLocale() }
 
@@ -255,7 +258,7 @@ private fun CustodyIndicatorToday(custody: String) {
 }
 
 @Composable
-private fun CalendarMonthHeader(yearMonth: com.kizitonwose.calendar.core.YearMonth) {
+private fun CalendarMonthHeader(yearMonth: YearMonth) {
     AnimatedContent(
         targetState = yearMonth,
         transitionSpec = {
@@ -267,7 +270,7 @@ private fun CalendarMonthHeader(yearMonth: com.kizitonwose.calendar.core.YearMon
                 targetOffsetY = { fullHeight: Int -> fullHeight }
             ))
         }
-    ) { month: com.kizitonwose.calendar.core.YearMonth ->
+    ) { month: YearMonth ->
         Text(
             text = "${month.month.name} ${month.year}",
             style = MaterialTheme.typography.headlineMedium,
