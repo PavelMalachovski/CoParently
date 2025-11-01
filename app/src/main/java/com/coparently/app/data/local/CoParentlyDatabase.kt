@@ -22,7 +22,7 @@ import com.coparently.app.data.local.entity.UserEntity
         UserEntity::class,
         CustodyScheduleEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = true
 )
 @TypeConverters(Converters::class)

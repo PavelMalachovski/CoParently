@@ -18,6 +18,8 @@ import java.time.LocalDateTime
  * @property recurrencePattern Pattern for recurring events (e.g., "daily", "weekly", "monthly")
  * @property createdAt Timestamp when the event was created
  * @property updatedAt Timestamp when the event was last updated
+ * @property syncedToFirestore Whether the event has been synced to Firestore
+ * @property createdByFirebaseUid Firebase UID of the user who created this event
  */
 @Entity(tableName = "events")
 data class EventEntity(
@@ -32,6 +34,8 @@ data class EventEntity(
     val isRecurring: Boolean = false,
     val recurrencePattern: String? = null,
     val createdAt: LocalDateTime,
-    val updatedAt: LocalDateTime
+    val updatedAt: LocalDateTime,
+    val syncedToFirestore: Boolean = false,
+    val createdByFirebaseUid: String? = null
 )
 

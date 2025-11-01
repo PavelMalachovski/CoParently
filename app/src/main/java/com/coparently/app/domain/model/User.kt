@@ -12,6 +12,8 @@ package com.coparently.app.domain.model
  * @property profilePhotoUrl Optional URL for profile photo
  * @property googleCalendarSyncEnabled Whether Google Calendar sync is enabled
  * @property googleCalendarId Optional ID of the Google Calendar for sync
+ * @property partnerId Optional ID of the co-parent partner (Firebase UID)
+ * @property fcmToken Firebase Cloud Messaging token for push notifications
  */
 data class User(
     val id: String,
@@ -21,6 +23,8 @@ data class User(
     val colorCode: String, // Hex color code (e.g., "#FF4081" for pink, "#2196F3" for blue)
     val profilePhotoUrl: String? = null,
     val googleCalendarSyncEnabled: Boolean = false,
-    val googleCalendarId: String? = null
+    val googleCalendarId: String? = null,
+    val partnerId: String? = null,
+    val fcmToken: String? = null
 )
 

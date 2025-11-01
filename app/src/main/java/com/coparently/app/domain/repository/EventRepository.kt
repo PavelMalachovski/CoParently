@@ -53,5 +53,10 @@ interface EventRepository {
      * Deletes an event by ID.
      */
     suspend fun deleteEventById(id: String)
+
+    /**
+     * Syncs events with Firestore.
+     */
+    suspend fun syncWithFirestore()
 }
 
