@@ -51,7 +51,6 @@ import com.kizitonwose.calendar.compose.HorizontalCalendar
 import com.kizitonwose.calendar.compose.rememberCalendarState
 import com.kizitonwose.calendar.core.CalendarDay
 import com.kizitonwose.calendar.core.DayPosition
-import com.kizitonwose.calendar.core.YearMonth as CalendarYearMonth
 import com.kizitonwose.calendar.core.firstDayOfWeekFromLocale
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -73,13 +72,17 @@ fun CalendarScreen(
 ) {
     val currentMonth = remember {
         val now = JavaYearMonth.now()
-        CalendarYearMonth(now.year, now.monthValue)
+        com.kizitonwose.calendar.core.YearMonth(now.year, now.monthValue)
     }
     val startMonth = remember {
-        currentMonth.minusMonths(12)
+        val javaYearMonth = JavaYearMonth.of(currentMonth.year, currentMonth.month.value)
+        val startJava = javaYearMonth.minusMonths(12)
+        com.kizitonwose.calendar.core.YearMonth(startJava.year, startJava.monthValue)
     }
     val endMonth = remember {
-        currentMonth.plusMonths(12)
+        val javaYearMonth = JavaYearMonth.of(currentMonth.year, currentMonth.month.value)
+        val endJava = javaYearMonth.plusMonths(12)
+        com.kizitonwose.calendar.core.YearMonth(endJava.year, endJava.monthValue)
     }
     val firstDayOfWeek = remember { firstDayOfWeekFromLocale() }
 
