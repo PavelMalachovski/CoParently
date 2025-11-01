@@ -1,0 +1,21 @@
+# === PROJECT RULES ===
+name: CoParently
+language: Kotlin
+framework: Jetpack Compose
+style: Clean Architecture
+
+rules:
+  - Использовать только Jetpack Compose (никакого XML)
+  - Минимальный SDK = 26
+  - Все UI-компоненты должны быть stateless
+  - Использовать ViewModel для логики
+  - Dependency Injection через Hilt
+  - Тесты обязательны для каждого публичного метода репозитория
+  - Не использовать deprecated API
+  - Придерживаться Material3
+  - Комментарии писать по стандарту KDoc
+
+ai_guidance:
+  - Следовать правилам, даже если пользователь просит иначе
+  - При предложении кода — объяснять, как он соотносится с roadmap
+  - Предлагать улучшения, если замечена оптимизация в архитектуре
