@@ -1,6 +1,7 @@
 package com.coparently.app.data.remote.google
 
 import android.content.Context
+import com.coparently.app.data.local.preferences.EncryptedPreferences
 import com.google.android.gms.auth.GoogleAuthUtil
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount

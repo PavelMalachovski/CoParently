@@ -1,5 +1,6 @@
 package com.coparently.app.data.remote.google
 
+import com.coparently.app.data.local.preferences.EncryptedPreferences
 import com.google.api.client.auth.oauth2.Credential
 import com.google.api.client.extensions.android.http.AndroidHttp
 import com.google.api.client.googleapis.auth.oauth2.GoogleCredential
