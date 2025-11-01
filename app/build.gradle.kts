@@ -103,7 +103,7 @@ dependencies {
 
     // Google Calendar API
     implementation("com.google.api-client:google-api-client-android:2.2.0")
-    implementation("com.google.apis:google-api-services-calendar:v3-rev20231120-2.0.0")
+    implementation("com.google.apis:google-api-services-calendar:v3-rev20231123-2.0.0")
 
     // Encrypted SharedPreferences
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
