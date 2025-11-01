@@ -76,7 +76,7 @@ fun CalendarScreen(
 ) {
     val currentMonth = remember {
         val now = JavaYearMonth.now()
-        YearMonth(now.year, now.monthValue)
+        YearMonth.of(now.year, now.month)
     }
     val startMonth = remember {
         currentMonth.minusMonths(12)
