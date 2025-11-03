@@ -39,9 +39,15 @@
 5. На шаге **Scopes** добавьте:
    - `https://www.googleapis.com/auth/calendar` (Google Calendar API)
 6. Нажмите **SAVE AND CONTINUE**
-7. На шаге **Test users** добавьте тестовый email (если нужно)
+7. На шаге **Test users** добавьте тестовые email адреса:
+   - **Важно**: Добавьте свой email и email всех, кто будет тестировать приложение
+   - Только эти пользователи смогут войти через Google Sign-In
+   - Можно добавить до 100 тестовых пользователей
+   - Пример: `your-email@gmail.com`, `tester@gmail.com`
 8. Нажмите **SAVE AND CONTINUE**
 9. Нажмите **BACK TO DASHBOARD**
+
+**Примечание:** После настройки приложение будет в режиме **Testing**. Это означает, что только добавленные тестовые пользователи смогут войти. Для доступа всех пользователей нужно опубликовать приложение (см. раздел "Публикация приложения" ниже).
 
 ### 2.3. Создание OAuth Client ID для Android
 
@@ -175,16 +181,54 @@
    - ✅ "Signed in to Google"
    - ✅ Кнопка "Sync from Google Calendar" станет активной
 
+## Важно: Режим тестирования OAuth
+
+После настройки OAuth consent screen приложение будет в режиме **Testing**. Это означает:
+
+- ✅ OAuth consent screen настроен правильно
+- ⚠️ Только пользователи, добавленные в **Test users**, могут войти
+- ⚠️ Обычные пользователи увидят сообщение: "App is currently being tested"
+
+### Быстрое решение: Добавление тестовых пользователей
+
+Если вы видите ошибку о том, что приложение в режиме тестирования:
+
+1. Перейдите в **OAuth consent screen** → **Test users**
+2. Нажмите **+ ADD USERS**
+3. Добавьте email адреса пользователей, которым нужен доступ
+4. Сохраните
+
+**Подробная инструкция:** См. [quick-fix-test-users.md](./quick-fix-test-users.md)
+
+### Публикация приложения для всех пользователей
+
+Для доступа всех пользователей (production):
+
+1. В **OAuth consent screen** прокрутите вниз
+2. Нажмите **PUBLISH APP**
+3. Подтвердите публикацию
+4. Дождитесь верификации Google (1-7 дней)
+
+**Подробная инструкция:** См. [google-oauth-testing-mode.md](./google-oauth-testing-mode.md)
+
 ## Решение проблем
 
-### Проблема: "Sign-in failed"
+### Проблема: "Sign-in failed" или "App is currently being tested"
+
+**Если видите сообщение "App is currently being tested":**
+
+1. ✅ Это нормально - приложение в режиме Testing
+2. ✅ Добавьте свой email в **Test users** в OAuth consent screen
+3. ✅ Убедитесь, что используете тот же Google аккаунт, который добавлен
+4. ✅ Подождите несколько минут после добавления
 
 **Проверьте:**
 1. ✅ SHA-1 в Google Cloud Console совпадает с SHA-1 приложения
 2. ✅ Package name точно совпадает (`com.coparently.app`)
 3. ✅ Google Calendar API включена
 4. ✅ OAuth consent screen настроен
-5. ✅ В `google-services.json` есть `oauth_client` записи
+5. ✅ Ваш email добавлен в **Test users**
+6. ✅ В `google-services.json` есть `oauth_client` записи
 
 ### Проблема: "Failed to get access token"
 

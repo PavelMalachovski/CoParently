@@ -59,20 +59,28 @@ class SyncViewModel @Inject constructor(
     fun handleSignInResult(account: GoogleSignInAccount?, errorMessage: String? = null) {
         viewModelScope.launch {
             if (account != null) {
+                // Check if calendar scope is granted
+                if (!googleSignInService.hasCalendarScope(account)) {
+                    _syncState.value = SyncState.Error(
+                        "Calendar permission not granted. Please grant permission to access Google Calendar."
+                    )
+                    _isSignedIn.value = true // User is signed in, but needs to grant scope
+                    return@launch
+                }
+
                 try {
-                    val token = googleSignInService.getAccessToken(account)
+                    val (token, tokenError) = googleSignInService.getAccessToken(account)
                     if (token != null) {
                         _isSignedIn.value = true
                         encryptedPreferences.putSyncEnabled(true)
                         _isSyncEnabled.value = true
                         _syncState.value = SyncState.SignedIn
                     } else {
-                        val detailedError = when {
-                            errorMessage != null -> errorMessage
-                            else -> "Failed to get access token. " +
-                                    "Make sure Google Calendar API is enabled in Google Cloud Console " +
-                                    "and OAuth 2.0 Client ID is configured. Please try again."
-                        }
+                        // Use specific error message from getAccessToken if available
+                        val detailedError = tokenError ?: errorMessage ?:
+                            "Failed to get access token. " +
+                            "Make sure Google Calendar API is enabled in Google Cloud Console " +
+                            "and OAuth 2.0 Client ID is configured. Please try again."
                         _syncState.value = SyncState.Error(detailedError)
                     }
                 } catch (e: Exception) {
@@ -165,12 +173,39 @@ class SyncViewModel @Inject constructor(
     fun getSignInIntent() = googleSignInService.googleSignInClient.signInIntent
 
     /**
+     * Checks if calendar scope is granted for the current account.
+     */
+    fun hasCalendarScope(): Boolean {
+        val account = googleSignInService.getLastSignedInAccount()
+        return account != null && googleSignInService.hasCalendarScope(account)
+    }
+
+    /**
+     * Gets sign-in intent to re-authenticate with calendar scope.
+     * Use this to request calendar permission by signing in again.
+     */
+    fun getSignInIntentWithScope() = googleSignInService.getSignInIntentWithScope()
+
+    /**
      * Signs out from Google.
      */
     fun signOut() {
         viewModelScope.launch {
             googleSignInService.signOut()
             encryptedPreferences.putSyncEnabled(false)
+            _isSignedIn.value = false
+            _isSyncEnabled.value = false
+            _syncState.value = SyncState.Idle
+        }
+    }
+
+    /**
+     * Signs out and prepares for re-sign in with scope.
+     * Used when calendar permission is not granted.
+     */
+    fun signOutForScope() {
+        viewModelScope.launch {
+            googleSignInService.signOut()
             _isSignedIn.value = false
             _isSyncEnabled.value = false
             _syncState.value = SyncState.Idle

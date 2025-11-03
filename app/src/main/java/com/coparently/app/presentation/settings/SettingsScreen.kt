@@ -70,6 +70,7 @@ fun SettingsScreen(
         }
     }
 
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -180,12 +181,31 @@ fun SettingsScreen(
                             Text("Sign in with Google")
                         }
                     } else {
+                        // Check if we need to request calendar permission
+                        val needsCalendarPermission = isSignedIn && !viewModel.hasCalendarScope()
+
+                        if (needsCalendarPermission) {
+                            Button(
+                                onClick = {
+                                    // Request permission by re-signing in with scope
+                                    // Google will prompt for calendar permission
+                                    val signInIntent = viewModel.getSignInIntentWithScope()
+                                    signInLauncher.launch(signInIntent)
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 16.dp)
+                            ) {
+                                Text("Grant Calendar Permission")
+                            }
+                        }
+
                         Button(
                             onClick = { viewModel.syncFromGoogle() },
-                            enabled = isSyncEnabled,
+                            enabled = isSyncEnabled && !needsCalendarPermission,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(top = 16.dp)
+                                .padding(top = if (needsCalendarPermission) 8.dp else 16.dp)
                         ) {
                             Text("Sync from Google Calendar")
                         }

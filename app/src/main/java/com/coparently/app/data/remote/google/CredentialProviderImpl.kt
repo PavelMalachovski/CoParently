@@ -8,6 +8,8 @@ import com.google.api.client.http.HttpRequest
 import com.google.api.client.http.HttpRequestInitializer
 import com.google.android.gms.auth.GoogleAuthUtil
 import com.google.api.services.calendar.CalendarScopes
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -50,19 +52,23 @@ class CredentialProviderImpl @Inject constructor(
     /**
      * Refreshes the access token and updates stored token.
      * Call this before API calls if token might be expired.
+     * Note: This is a blocking call and should be used in suspend function with Dispatchers.IO.
      */
-    fun refreshAccessToken(): String? {
+    suspend fun refreshAccessToken(): String? {
         return try {
             val account = googleSignInService.getLastSignedInAccount() ?: return null
             val accountObj = account.account ?: return null
-            val newToken = GoogleAuthUtil.getToken(
-                context,
-                accountObj,
-                "oauth2:${CalendarScopes.CALENDAR}"
-            )
+            val newToken = withContext(Dispatchers.IO) {
+                GoogleAuthUtil.getToken(
+                    context,
+                    accountObj,
+                    "oauth2:${CalendarScopes.CALENDAR}"
+                )
+            }
             encryptedPreferences.putAccessToken(newToken)
             newToken
         } catch (e: Exception) {
+            android.util.Log.e("CredentialProvider", "Error refreshing token: ${e.message}", e)
             e.printStackTrace()
             null
         }
