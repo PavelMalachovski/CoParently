@@ -35,7 +35,9 @@ class CalendarSyncRepository @Inject constructor(
             emit(SyncResult.Progress("Starting sync from Google Calendar..."))
 
             val credential = credentialProvider.getCredential()
-                ?: throw IllegalStateException("Not authenticated")
+                ?: throw IllegalStateException("Not authenticated. Please sign in to Google.")
+
+            emit(SyncResult.Progress("Fetching events from Google Calendar..."))
 
             val googleEvents = googleCalendarApi.listEvents(
                 credential = credential,
@@ -52,11 +54,17 @@ class CalendarSyncRepository @Inject constructor(
                 eventsToInsert.add(eventEntity)
             }
 
-            eventDao.insertEvents(eventsToInsert)
+            if (eventsToInsert.isNotEmpty()) {
+                eventDao.insertEvents(eventsToInsert)
+            }
 
             emit(SyncResult.Success("Synced ${eventsToInsert.size} events from Google Calendar"))
+        } catch (e: IllegalStateException) {
+            emit(SyncResult.Error(e.message ?: "Authentication error. Please sign in again."))
+        } catch (e: java.io.IOException) {
+            emit(SyncResult.Error("Network error: ${e.message ?: "Unable to connect to Google Calendar"}"))
         } catch (e: Exception) {
-            emit(SyncResult.Error(e.message ?: "Unknown error during sync"))
+            emit(SyncResult.Error("Error during sync: ${e.message ?: "Unknown error"}"))
         }
     }
 
@@ -68,7 +76,7 @@ class CalendarSyncRepository @Inject constructor(
             emit(SyncResult.Progress("Syncing event to Google Calendar..."))
 
             val credential = credentialProvider.getCredential()
-                ?: throw IllegalStateException("Not authenticated")
+                ?: throw IllegalStateException("Not authenticated. Please sign in to Google.")
 
             googleCalendarApi.createEvent(
                 credential = credential,
@@ -78,11 +86,13 @@ class CalendarSyncRepository @Inject constructor(
                 endDateTime = event.endDateTime
             )
 
-            // Event synced successfully
-
-            emit(SyncResult.Success("Event synced to Google Calendar"))
+            emit(SyncResult.Success("Event '${event.title}' synced to Google Calendar"))
+        } catch (e: IllegalStateException) {
+            emit(SyncResult.Error(e.message ?: "Authentication error. Please sign in again."))
+        } catch (e: java.io.IOException) {
+            emit(SyncResult.Error("Network error: ${e.message ?: "Unable to connect to Google Calendar"}"))
         } catch (e: Exception) {
-            emit(SyncResult.Error(e.message ?: "Unknown error during sync"))
+            emit(SyncResult.Error("Error during sync: ${e.message ?: "Unknown error"}"))
         }
     }
 

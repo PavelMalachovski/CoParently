@@ -45,18 +45,28 @@ class GoogleSignInService @Inject constructor(
 
     /**
      * Gets access token for the signed-in account.
+     * Note: GoogleAuthUtil.getToken() is a blocking call, but it's wrapped in suspend for compatibility.
      */
     suspend fun getAccessToken(account: GoogleSignInAccount): String? {
         return try {
             val accountObj = account.account ?: return null
+
+            // Get token - GoogleAuthUtil will handle scope request if needed
             val token = GoogleAuthUtil.getToken(
                 context,
                 accountObj,
                 "oauth2:${CalendarScopes.CALENDAR}"
             )
-            encryptedPreferences.putAccessToken(token)
-            token
+
+            if (token.isNotBlank()) {
+                encryptedPreferences.putAccessToken(token)
+                token
+            } else {
+                null
+            }
         } catch (e: Exception) {
+            // Log error for debugging (can be replaced with proper logging library)
+            e.printStackTrace()
             null
         }
     }

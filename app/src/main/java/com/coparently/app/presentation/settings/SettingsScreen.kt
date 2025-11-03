@@ -1,9 +1,12 @@
 package com.coparently.app.presentation.settings
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
@@ -25,6 +28,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.auth.api.signin.GoogleSignInAccount
 import com.coparently.app.presentation.sync.SyncState
 import com.coparently.app.presentation.sync.SyncViewModel
 
@@ -37,12 +42,21 @@ fun SettingsScreen(
     onNavigateUp: () -> Unit,
     viewModel: SyncViewModel = hiltViewModel()
 ) {
-    // Note: Google Sign-In Intent should be launched from Activity
-    // This requires integration with Activity context
-    // For now, we show the UI components
     val isSignedIn by viewModel.isSignedIn.collectAsState()
     val isSyncEnabled by viewModel.isSyncEnabled.collectAsState()
     val syncState by viewModel.syncState.collectAsState()
+
+    // Launcher for Google Sign-In
+    val signInLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
+        task.addOnSuccessListener { account ->
+            viewModel.handleSignInResult(account)
+        }.addOnFailureListener {
+            viewModel.handleSignInResult(null)
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -141,21 +155,33 @@ fun SettingsScreen(
                     }
 
                     // Action buttons
-                    Button(
-                        onClick = { viewModel.syncFromGoogle() },
-                        enabled = isSignedIn && isSyncEnabled,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(top = 16.dp)
-                    ) {
-                        Text("Sync from Google Calendar")
-                    }
+                    if (!isSignedIn) {
+                        Button(
+                            onClick = {
+                                val signInIntent = viewModel.getSignInIntent()
+                                signInLauncher.launch(signInIntent)
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 16.dp)
+                        ) {
+                            Text("Sign in with Google")
+                        }
+                    } else {
+                        Button(
+                            onClick = { viewModel.syncFromGoogle() },
+                            enabled = isSyncEnabled,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 16.dp)
+                        ) {
+                            Text("Sync from Google Calendar")
+                        }
 
-                    if (isSignedIn) {
                         Button(
                             onClick = { viewModel.signOut() },
                             modifier = Modifier
-                                .fillMaxSize()
+                                .fillMaxWidth()
                                 .padding(top = 8.dp)
                         ) {
                             Text("Sign Out")

@@ -342,28 +342,30 @@ fun CalendarScreen(
                                 }
                             },
                             dayContent = { day ->
-                                // Show all days, but style differently for out-of-month days
-                                CalendarDayContent(
-                                    day = day,
-                                    events = if (day.position == DayPosition.MonthDate) {
-                                        events.filter { event ->
+                                // Only show days that belong to the visible month to prevent duplicates
+                                val dayMonth = YearMonth.from(day.date)
+                                val isMonthDate = day.position == DayPosition.MonthDate
+                                val isVisibleMonth = dayMonth == visibleMonthYear
+
+                                // Only render days from the visible month (this prevents duplicate weeks)
+                                if (isMonthDate && isVisibleMonth) {
+                                    CalendarDayContent(
+                                        day = day,
+                                        events = events.filter { event ->
                                             event.startDateTime.toLocalDate() == day.date
+                                        },
+                                        custodySchedules = custodySchedules,
+                                        onClick = { clickedDay ->
+                                            calendarViewModel.setSelectedDate(clickedDay.date)
+                                            if (viewMode != CalendarViewMode.DAY) {
+                                                calendarViewModel.setViewMode(CalendarViewMode.DAY)
+                                            }
                                         }
-                                    } else {
-                                        emptyList()
-                                    },
-                                    custodySchedules = if (day.position == DayPosition.MonthDate) {
-                                        custodySchedules
-                                    } else {
-                                        emptyList()
-                                    },
-                                    onClick = { clickedDay ->
-                                        calendarViewModel.setSelectedDate(clickedDay.date)
-                                        if (viewMode != CalendarViewMode.DAY) {
-                                            calendarViewModel.setViewMode(CalendarViewMode.DAY)
-                                        }
-                                    }
-                                )
+                                    )
+                                } else {
+                                    // Empty box for out-of-month days to maintain grid structure
+                                    Box {}
+                                }
                             }
                         )
                     }

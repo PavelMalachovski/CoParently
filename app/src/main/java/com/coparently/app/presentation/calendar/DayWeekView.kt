@@ -128,7 +128,7 @@ fun DayWeekView(
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            text = date.dayOfMonth.toString(),
+                            text = date.format(DateTimeFormatter.ofPattern("MMM d")),
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
                             color = if (isToday) MaterialTheme.colorScheme.primary

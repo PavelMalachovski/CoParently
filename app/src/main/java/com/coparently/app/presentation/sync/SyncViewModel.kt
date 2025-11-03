@@ -145,6 +145,11 @@ class SyncViewModel @Inject constructor(
     }
 
     /**
+     * Gets Google Sign-In Intent for launching sign-in flow.
+     */
+    fun getSignInIntent() = googleSignInService.googleSignInClient.signInIntent
+
+    /**
      * Signs out from Google.
      */
     fun signOut() {
