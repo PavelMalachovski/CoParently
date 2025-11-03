@@ -50,11 +50,23 @@ fun SettingsScreen(
     val signInLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) { result ->
-        val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
-        task.addOnSuccessListener { account ->
-            viewModel.handleSignInResult(account)
-        }.addOnFailureListener {
-            viewModel.handleSignInResult(null)
+        if (result.resultCode == android.app.Activity.RESULT_OK && result.data != null) {
+            try {
+                val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
+                task.addOnSuccessListener { account ->
+                    viewModel.handleSignInResult(account)
+                }.addOnFailureListener { exception ->
+                    // Log error for debugging
+                    exception.printStackTrace()
+                    viewModel.handleSignInResult(null, exception.message ?: "Sign-in failed")
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                viewModel.handleSignInResult(null, e.message ?: "Error processing sign-in result")
+            }
+        } else {
+            // User cancelled or error occurred
+            viewModel.handleSignInResult(null, "Sign-in cancelled or failed")
         }
     }
 

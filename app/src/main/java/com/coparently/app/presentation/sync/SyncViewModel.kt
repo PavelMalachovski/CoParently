@@ -56,20 +56,35 @@ class SyncViewModel @Inject constructor(
     /**
      * Handles Google Sign-In result.
      */
-    fun handleSignInResult(account: GoogleSignInAccount?) {
+    fun handleSignInResult(account: GoogleSignInAccount?, errorMessage: String? = null) {
         viewModelScope.launch {
             if (account != null) {
-                val token = googleSignInService.getAccessToken(account)
-                if (token != null) {
-                    _isSignedIn.value = true
-                    encryptedPreferences.putSyncEnabled(true)
-                    _isSyncEnabled.value = true
-                    _syncState.value = SyncState.SignedIn
-                } else {
-                    _syncState.value = SyncState.Error("Failed to get access token")
+                try {
+                    val token = googleSignInService.getAccessToken(account)
+                    if (token != null) {
+                        _isSignedIn.value = true
+                        encryptedPreferences.putSyncEnabled(true)
+                        _isSyncEnabled.value = true
+                        _syncState.value = SyncState.SignedIn
+                    } else {
+                        val detailedError = when {
+                            errorMessage != null -> errorMessage
+                            else -> "Failed to get access token. " +
+                                    "Make sure Google Calendar API is enabled in Google Cloud Console " +
+                                    "and OAuth 2.0 Client ID is configured. Please try again."
+                        }
+                        _syncState.value = SyncState.Error(detailedError)
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    _syncState.value = SyncState.Error(
+                        "Error getting access token: ${e.message ?: "Unknown error"}"
+                    )
                 }
             } else {
-                _syncState.value = SyncState.Error("Sign-in failed")
+                _syncState.value = SyncState.Error(
+                    errorMessage ?: "Sign-in failed. Please try again."
+                )
             }
         }
     }

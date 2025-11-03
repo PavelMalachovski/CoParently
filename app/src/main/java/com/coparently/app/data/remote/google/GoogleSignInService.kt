@@ -51,21 +51,48 @@ class GoogleSignInService @Inject constructor(
         return try {
             val accountObj = account.account ?: return null
 
+            // Check if account has granted the calendar scope
+            val grantedScopes = account.grantedScopes
+            val hasCalendarScope = grantedScopes.any { scope ->
+                scope.toString().contains(CalendarScopes.CALENDAR, ignoreCase = true)
+            }
+
+            if (!hasCalendarScope) {
+                // Scope not granted - this might be the issue
+                android.util.Log.w("GoogleSignIn", "Calendar scope not granted. Granted scopes: $grantedScopes")
+            }
+
             // Get token - GoogleAuthUtil will handle scope request if needed
+            val scopeString = "oauth2:${CalendarScopes.CALENDAR}"
+            android.util.Log.d("GoogleSignIn", "Requesting token with scope: $scopeString")
+
             val token = GoogleAuthUtil.getToken(
                 context,
                 accountObj,
-                "oauth2:${CalendarScopes.CALENDAR}"
+                scopeString
             )
 
             if (token.isNotBlank()) {
                 encryptedPreferences.putAccessToken(token)
+                android.util.Log.d("GoogleSignIn", "Token obtained successfully")
                 token
             } else {
+                android.util.Log.e("GoogleSignIn", "Token is blank")
                 null
             }
+        } catch (e: com.google.android.gms.auth.UserRecoverableAuthException) {
+            // User needs to grant permission
+            android.util.Log.e("GoogleSignIn", "UserRecoverableAuthException: ${e.message}", e)
+            e.printStackTrace()
+            null
+        } catch (e: com.google.android.gms.auth.GoogleAuthException) {
+            // Auth error
+            android.util.Log.e("GoogleSignIn", "GoogleAuthException: ${e.message}", e)
+            e.printStackTrace()
+            null
         } catch (e: Exception) {
-            // Log error for debugging (can be replaced with proper logging library)
+            // Log error for debugging
+            android.util.Log.e("GoogleSignIn", "Exception getting token: ${e.javaClass.simpleName}: ${e.message}", e)
             e.printStackTrace()
             null
         }
