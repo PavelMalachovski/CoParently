@@ -1,5 +1,7 @@
 package com.coparently.app.presentation.settings
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -13,8 +15,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.coparently.app.presentation.sync.GoogleCalendarSyncState
 import com.coparently.app.presentation.sync.SyncStatusIndicator
 import com.coparently.app.presentation.sync.SyncViewModel
+import com.google.android.gms.auth.api.signin.GoogleSignIn
 
 /**
  * Settings screen for managing app settings and synchronization.
@@ -27,7 +31,28 @@ fun SettingsScreen(
     onNavigateToPairing: (() -> Unit)? = null,
     viewModel: SyncViewModel = hiltViewModel()
 ) {
+    val isSignedIn by viewModel.isSignedIn.collectAsState()
+    val isSyncEnabled by viewModel.isSyncEnabled.collectAsState()
+    val googleSyncState by viewModel.syncState.collectAsState()
     val firestoreSyncStatus by viewModel.firestoreSyncStatus.collectAsState()
+
+    // Launcher for Google Sign-In
+    val signInLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == android.app.Activity.RESULT_OK && result.data != null) {
+            try {
+                val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
+                task.addOnSuccessListener { account ->
+                    viewModel.handleSignInResult(account)
+                }.addOnFailureListener { exception ->
+                    exception.printStackTrace()
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -64,10 +89,10 @@ fun SettingsScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "Firestore Sync",
+                            text = "Co-Parent Sync",
                             style = MaterialTheme.typography.titleLarge
                         )
-                        IconButton(onClick = { viewModel.performSync() }) {
+                        IconButton(onClick = { viewModel.performFirestoreSync() }) {
                             Icon(Icons.Default.Refresh, contentDescription = "Sync")
                         }
                     }
@@ -86,6 +111,139 @@ fun SettingsScreen(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                }
+            }
+
+            // Google Calendar Sync
+            Card(
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp)
+                ) {
+                    Text(
+                        text = "Google Calendar Sync",
+                        style = MaterialTheme.typography.titleLarge,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+
+                    // Sync enabled toggle
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Enable Sync",
+                            style = MaterialTheme.typography.bodyLarge,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Switch(
+                            checked = isSyncEnabled,
+                            onCheckedChange = { enabled ->
+                                viewModel.toggleSync(enabled)
+                            },
+                            enabled = isSignedIn || !isSyncEnabled
+                        )
+                    }
+
+                    // Sign-in status
+                    Text(
+                        text = if (isSignedIn) "Signed in to Google" else "Not signed in",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = if (isSignedIn) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        modifier = Modifier.padding(vertical = 8.dp)
+                    )
+
+                    // Sync status
+                    when (val state = googleSyncState) {
+                        is GoogleCalendarSyncState.Syncing -> {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(vertical = 4.dp)
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    strokeWidth = 2.dp
+                                )
+                                Text(
+                                    text = state.message,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    modifier = Modifier.padding(start = 8.dp)
+                                )
+                            }
+                        }
+                        is GoogleCalendarSyncState.Success -> {
+                            Text(
+                                text = "✓ ${state.message}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(vertical = 4.dp)
+                            )
+                        }
+                        is GoogleCalendarSyncState.Error -> {
+                            Text(
+                                text = "✗ ${state.message}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.padding(vertical = 4.dp)
+                            )
+                        }
+                        else -> {}
+                    }
+
+                    // Action buttons
+                    if (!isSignedIn) {
+                        Button(
+                            onClick = {
+                                val signInIntent = viewModel.getSignInIntent()
+                                signInLauncher.launch(signInIntent)
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 16.dp)
+                        ) {
+                            Text("Sign in with Google")
+                        }
+                    } else {
+                        // Check if we need to request calendar permission
+                        val needsCalendarPermission = isSignedIn && !viewModel.hasCalendarScope()
+
+                        if (needsCalendarPermission) {
+                            Button(
+                                onClick = {
+                                    val signInIntent = viewModel.getSignInIntentWithScope()
+                                    signInLauncher.launch(signInIntent)
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 16.dp)
+                            ) {
+                                Text("Grant Calendar Permission")
+                            }
+                        }
+
+                        Button(
+                            onClick = { viewModel.syncFromGoogle() },
+                            enabled = isSyncEnabled && !needsCalendarPermission,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = if (needsCalendarPermission) 8.dp else 16.dp)
+                        ) {
+                            Text("Sync from Google Calendar")
+                        }
+
+                        Button(
+                            onClick = { viewModel.signOut() },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 8.dp)
+                        ) {
+                            Text("Sign Out")
+                        }
+                    }
                 }
             }
 
