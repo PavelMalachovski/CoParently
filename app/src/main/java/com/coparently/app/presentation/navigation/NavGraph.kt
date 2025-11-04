@@ -7,8 +7,10 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import com.coparently.app.presentation.calendar.CalendarScreen
+import com.coparently.app.presentation.childinfo.ChildInfoScreen
 import com.coparently.app.presentation.event.AddEditEventScreen
 import com.coparently.app.presentation.event.EventListScreen
+import com.coparently.app.presentation.pairing.PairingScreen
 import com.coparently.app.presentation.settings.SettingsScreen
 
 /**
@@ -85,6 +87,33 @@ fun NavGraph(navController: NavHostController) {
             SettingsScreen(
                 onNavigateUp = {
                     navController.popBackStack()
+                },
+                onNavigateToChildInfo = {
+                    navController.navigate(Screen.ChildInfo.route)
+                },
+                onNavigateToPairing = {
+                    navController.navigate(Screen.Pairing.route)
+                }
+            )
+        }
+
+        composable(Screen.ChildInfo.route) {
+            ChildInfoScreen(
+                onNavigateBack = {
+                    navController.popBackStack()
+                },
+                onEditClick = { childInfoId ->
+                    // Future: navigate to edit screen
+                    // For now, just navigate back
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        composable(Screen.Pairing.route) {
+            PairingScreen(
+                onNavigateBack = {
+                    navController.popBackStack()
                 }
             )
         }
@@ -99,6 +128,8 @@ sealed class Screen(val route: String) {
     data object EventList : Screen("event_list")
     data object AddEvent : Screen("add_event")
     data object Settings : Screen("settings")
+    data object ChildInfo : Screen("child_info")
+    data object Pairing : Screen("pairing")
 
     data object EditEvent : Screen("edit_event/{eventId}") {
         const val ARG_EVENT_ID = "eventId"

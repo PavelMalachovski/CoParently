@@ -20,6 +20,9 @@ import java.time.LocalDateTime
  * @property updatedAt Timestamp when the event was last updated
  * @property syncedToFirestore Whether the event has been synced to Firestore
  * @property createdByFirebaseUid Firebase UID of the user who created this event
+ * @property sharedWithJson JSON string of Firebase UIDs that this event is shared with
+ * @property lastModifiedBy Firebase UID of the user who last modified this event
+ * @property permissions Permission level for the event (read_only, read_write)
  */
 @Entity(tableName = "events")
 data class EventEntity(
@@ -36,6 +39,9 @@ data class EventEntity(
     val createdAt: LocalDateTime,
     val updatedAt: LocalDateTime,
     val syncedToFirestore: Boolean = false,
-    val createdByFirebaseUid: String? = null
+    val createdByFirebaseUid: String? = null,
+    val sharedWithJson: String = "[]", // JSON array of Firebase UIDs
+    val lastModifiedBy: String? = null,
+    val permissions: String = "read_write"
 )
 

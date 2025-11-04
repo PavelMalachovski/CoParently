@@ -3,9 +3,11 @@ package com.coparently.app.data.local
 import androidx.room.Database
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
+import com.coparently.app.data.local.dao.ChildInfoDao
 import com.coparently.app.data.local.dao.CustodyScheduleDao
 import com.coparently.app.data.local.dao.EventDao
 import com.coparently.app.data.local.dao.UserDao
+import com.coparently.app.data.local.entity.ChildInfoEntity
 import com.coparently.app.data.local.entity.CustodyScheduleEntity
 import com.coparently.app.data.local.entity.EventEntity
 import com.coparently.app.data.local.entity.UserEntity
@@ -20,9 +22,10 @@ import com.coparently.app.data.local.entity.UserEntity
     entities = [
         EventEntity::class,
         UserEntity::class,
-        CustodyScheduleEntity::class
+        CustodyScheduleEntity::class,
+        ChildInfoEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = true,
     autoMigrations = []
 )
@@ -42,5 +45,10 @@ abstract class CoParentlyDatabase : RoomDatabase() {
      * Provides access to CustodyScheduleDao.
      */
     abstract fun custodyScheduleDao(): CustodyScheduleDao
+
+    /**
+     * Provides access to ChildInfoDao.
+     */
+    abstract fun childInfoDao(): ChildInfoDao
 }
 

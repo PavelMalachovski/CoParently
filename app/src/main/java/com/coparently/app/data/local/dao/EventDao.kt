@@ -75,5 +75,17 @@ interface EventDao {
      */
     @Query("DELETE FROM events WHERE id = :id")
     suspend fun deleteEventById(id: String)
+
+    /**
+     * Gets all events that have not been synced to Firestore.
+     */
+    @Query("SELECT * FROM events WHERE syncedToFirestore = 0")
+    suspend fun getUnsyncedEvents(): List<EventEntity>
+
+    /**
+     * Marks an event as synced to Firestore.
+     */
+    @Query("UPDATE events SET syncedToFirestore = 1 WHERE id = :id")
+    suspend fun markAsSynced(id: String)
 }
 

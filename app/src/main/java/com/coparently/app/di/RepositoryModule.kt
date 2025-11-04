@@ -1,6 +1,8 @@
 package com.coparently.app.di
 
+import com.coparently.app.data.repository.ChildInfoRepositoryImpl
 import com.coparently.app.data.repository.EventRepositoryImpl
+import com.coparently.app.domain.repository.ChildInfoRepository
 import com.coparently.app.domain.repository.EventRepository
 import dagger.Binds
 import dagger.Module
@@ -23,5 +25,14 @@ abstract class RepositoryModule {
     abstract fun bindEventRepository(
         eventRepositoryImpl: EventRepositoryImpl
     ): EventRepository
+
+    /**
+     * Provides ChildInfoRepository implementation.
+     */
+    @Binds
+    @Singleton
+    abstract fun bindChildInfoRepository(
+        childInfoRepositoryImpl: ChildInfoRepositoryImpl
+    ): ChildInfoRepository
 }
 

@@ -3,6 +3,7 @@ package com.coparently.app.di
 import android.content.Context
 import androidx.room.Room
 import com.coparently.app.data.local.CoParentlyDatabase
+import com.coparently.app.data.local.dao.ChildInfoDao
 import com.coparently.app.data.local.dao.CustodyScheduleDao
 import com.coparently.app.data.local.dao.EventDao
 import com.coparently.app.data.local.dao.UserDao
@@ -59,6 +60,14 @@ object DatabaseModule {
     @Provides
     fun provideCustodyScheduleDao(database: CoParentlyDatabase): CustodyScheduleDao {
         return database.custodyScheduleDao()
+    }
+
+    /**
+     * Provides ChildInfoDao.
+     */
+    @Provides
+    fun provideChildInfoDao(database: CoParentlyDatabase): ChildInfoDao {
+        return database.childInfoDao()
     }
 }
 

@@ -15,7 +15,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
  */
 @Composable
 fun PairingScreen(
-    onPairSuccess: () -> Unit,
+    onNavigateBack: () -> Unit,
     viewModel: PairingViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -82,7 +82,7 @@ fun PairingScreen(
                 CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
             } else {
                 Button(
-                    onClick = { viewModel.sendInvitation(onPairSuccess) },
+                    onClick = { viewModel.sendInvitation(onNavigateBack) },
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text("Send Invitation")
