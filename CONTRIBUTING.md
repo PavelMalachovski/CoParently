@@ -202,7 +202,7 @@ Text(
 ```kotlin
 /**
  * Generates weeks for the month view.
- * 
+ *
  * @param yearMonth The month to display
  * @param firstDayOfWeek First day of the week (Monday or Sunday)
  * @param weeksToShow Number of weeks to display (default 7)
@@ -371,10 +371,10 @@ fun `generateWeeksForMonth returns exactly 7 weeks`() {
     // Given
     val yearMonth = YearMonth.of(2025, 11)
     val firstDayOfWeek = DayOfWeek.MONDAY
-    
+
     // When
     val weeks = generateWeeksForMonth(yearMonth, firstDayOfWeek)
-    
+
     // Then
     assertEquals(7, weeks.size)
     weeks.forEach { week ->
@@ -396,7 +396,7 @@ fun calendarDisplaysCurrentMonth() {
             )
         }
     }
-    
+
     // Verify current month is displayed
     val currentMonth = YearMonth.now()
         .format(DateTimeFormatter.ofPattern("MMMM yyyy"))

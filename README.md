@@ -110,11 +110,11 @@ app/
 
 ### Архитектурные принципы
 
-✅ **Clean Architecture** — четкое разделение слоёв  
-✅ **SOLID принципы** — расширяемый и поддерживаемый код  
-✅ **Stateless UI** — все Compose компоненты не хранят состояние  
-✅ **Single Source of Truth** — ViewModel как единственный источник истины  
-✅ **Unidirectional Data Flow** — предсказуемый поток данных  
+✅ **Clean Architecture** — четкое разделение слоёв
+✅ **SOLID принципы** — расширяемый и поддерживаемый код
+✅ **Stateless UI** — все Compose компоненты не хранят состояние
+✅ **Single Source of Truth** — ViewModel как единственный источник истины
+✅ **Unidirectional Data Flow** — предсказуемый поток данных
 
 ---
 
@@ -165,7 +165,7 @@ studio .
 ./gradlew clean assembleDebug
 ```
 
-APK будет находиться в:  
+APK будет находиться в:
 `app/build/outputs/apk/debug/app-debug.apk`
 
 ### Release сборка
