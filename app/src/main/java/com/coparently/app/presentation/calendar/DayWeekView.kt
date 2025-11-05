@@ -1,5 +1,12 @@
 package com.coparently.app.presentation.calendar
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -7,26 +14,35 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -36,6 +52,8 @@ import com.coparently.app.domain.model.Event
 import com.coparently.app.presentation.theme.CoParentlyColors
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import java.time.temporal.WeekFields
+import java.util.Locale
 
 /**
  * Hourly view for day/week calendar views.
@@ -60,9 +78,15 @@ fun DayWeekView(
     val totalDragState = remember { mutableFloatStateOf(0f) }
     var totalDrag by totalDragState
 
+    // Save scroll state to preserve position when dates change
+    // Using single scrollState shared across all dates preserves scroll position
+    // The key is that scrollState is created once and reused across AnimatedContent transitions
     val scrollState = rememberLazyListState(
         initialFirstVisibleItemIndex = 6 // Start at 6 AM for better UX
     )
+
+    // State for swipe direction
+    var swipeDirection by remember { mutableStateOf(0) } // -1 for left, 1 for right
 
     Column(
         modifier = Modifier
@@ -72,6 +96,7 @@ fun DayWeekView(
                     onDragEnd = {
                         val dragValue = totalDrag
                         if (kotlin.math.abs(dragValue) > 200f) {
+                            swipeDirection = if (dragValue > 0) -1 else 1
                             val daysToAdd = if (dragValue > 0) -daysCount else daysCount
                             onDateChange(selectedDate.plusDays(daysToAdd.toLong()))
                         }
@@ -82,150 +107,205 @@ fun DayWeekView(
                 }
             }
     ) {
-        // Fixed header row
+        // Fixed header row with modern design - 1.5x larger
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(40.dp)
-                .background(MaterialTheme.colorScheme.surfaceVariant),
-            horizontalArrangement = Arrangement.spacedBy(1.dp)
+                .height(90.dp)
+                .background(MaterialTheme.colorScheme.surface)
+                .padding(horizontal = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(
-                modifier = Modifier
-                    .width(60.dp)
-                    .fillMaxHeight()
-                    .padding(4.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "Time",
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Bold
-                )
+            // Week number for 3 days and week views (moved to the left)
+            if (daysCount >= 3) {
+                val weekFields = WeekFields.of(Locale.getDefault())
+                val weekNumber = selectedDate.get(weekFields.weekOfWeekBasedYear())
+
+                Box(
+                    modifier = Modifier
+                        .width(32.dp)
+                        .fillMaxHeight()
+                        .padding(end = 4.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = weekNumber.toString(),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Normal,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                    )
+                }
             }
+
+            // Time column space
+            Spacer(modifier = Modifier.width(if (daysCount >= 3) 20.dp else 52.dp))
+
             dates.forEach { date ->
                 val isToday = date == LocalDate.now()
-                val custody = CustodyHelper.getCustodyForDate(date, custodySchedules)
-                val backgroundColor = when {
-                    isToday -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.1f)
-                    custody == "mom" -> CoParentlyColors.MomPink.copy(alpha = 0.05f)
-                    custody == "dad" -> CoParentlyColors.DadBlue.copy(alpha = 0.05f)
-                    else -> MaterialTheme.colorScheme.surface
-                }
 
                 Box(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxHeight()
-                        .background(backgroundColor)
-                        .padding(4.dp),
+                        .background(
+                            color = if (isToday) {
+                                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f)
+                            } else {
+                                Color.Transparent
+                            },
+                            shape = RoundedCornerShape(8.dp)
+                        )
+                        .padding(6.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center,
+                        modifier = Modifier.padding(vertical = 4.dp)
+                    ) {
                         Text(
                             text = date.format(DateTimeFormatter.ofPattern("EEE")),
                             style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.Normal,
+                            fontSize = 9.sp,
+                            color = if (isToday) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            }
                         )
                         Text(
-                            text = date.format(DateTimeFormatter.ofPattern("MMM d")),
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
-                            color = if (isToday) MaterialTheme.colorScheme.primary
-                                   else MaterialTheme.colorScheme.onSurface
+                            text = date.dayOfMonth.toString(),
+                            style = MaterialTheme.typography.titleLarge,
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isToday) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurface
+                            }
                         )
                     }
                 }
             }
         }
 
-        // Scrollable content - use single LazyColumn with Row items for synchronization
-        LazyColumn(
-            state = scrollState,
-            modifier = Modifier
-                .fillMaxSize()
-                .weight(1f)
-        ) {
-            items(hours.size) { hourIndex ->
-                val hour = hours[hourIndex]
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(1.dp)
+        // Scrollable content with animation - time stays in place
+        // Use single scrollState shared across all dates to preserve scroll position
+        Box(modifier = Modifier.weight(1f)) {
+            AnimatedContent(
+                targetState = selectedDate,
+                transitionSpec = {
+                    val direction = swipeDirection
+                    (slideInHorizontally(
+                        animationSpec = tween(300),
+                        initialOffsetX = { fullWidth -> fullWidth * direction }
+                    ) + fadeIn(animationSpec = tween(300))) togetherWith
+                    (slideOutHorizontally(
+                        animationSpec = tween(300),
+                        targetOffsetX = { fullWidth -> -fullWidth * direction }
+                    ) + fadeOut(animationSpec = tween(300)))
+                },
+                modifier = Modifier.fillMaxSize()
+            ) { currentDate ->
+                // LazyColumn uses the same scrollState for all dates, preserving scroll position
+                LazyColumn(
+                    state = scrollState,
+                    modifier = Modifier.fillMaxSize()
                 ) {
-                    // Hour label
-                    Box(
+                items(hours.size) { hourIndex ->
+                    val hour = hours[hourIndex]
+                    Row(
                         modifier = Modifier
-                            .width(60.dp)
-                            .height(60.dp)
-                            .background(MaterialTheme.colorScheme.surfaceVariant)
-                            .padding(4.dp),
-                        contentAlignment = Alignment.TopCenter
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        Text(
-                            text = String.format("%02d:00", hour),
-                            style = MaterialTheme.typography.bodySmall,
-                            fontSize = 10.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-
-                    // Day columns for this hour
-                    dates.forEach { date ->
-                        val dateEvents = events.filter {
-                            it.startDateTime.toLocalDate() == date &&
-                            it.startDateTime.hour == hour
-                        }
-                        val isToday = date == LocalDate.now()
-                        val custody = CustodyHelper.getCustodyForDate(date, custodySchedules)
-                        val backgroundColor = when {
-                            isToday -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.1f)
-                            custody == "mom" -> CoParentlyColors.MomPink.copy(alpha = 0.05f)
-                            custody == "dad" -> CoParentlyColors.DadBlue.copy(alpha = 0.05f)
-                            else -> MaterialTheme.colorScheme.surface
-                        }
-
+                        // Hour label
                         Box(
                             modifier = Modifier
-                                .weight(1f)
+                                .width(52.dp)
                                 .height(60.dp)
-                                .padding(horizontal = 2.dp, vertical = 1.dp)
-                                .background(
-                                    color = backgroundColor,
-                                    shape = RoundedCornerShape(4.dp)
-                                )
-                                .clickable {
-                                    if (dateEvents.isNotEmpty()) {
-                                        onEventClick(dateEvents.first().id)
-                                    } else {
-                                        onAddEventClick(date, hour)
-                                    }
-                                },
-                            contentAlignment = Alignment.Center
+                                .padding(top = 4.dp),
+                            contentAlignment = Alignment.TopCenter
                         ) {
-                            if (dateEvents.isNotEmpty()) {
-                                Column(
-                                    modifier = Modifier.padding(4.dp),
-                                    horizontalAlignment = Alignment.Start
-                                ) {
-                                    dateEvents.take(2).forEach { event ->
-                                        EventChip(
-                                            event = event,
-                                            custody = custody,
-                                            onClick = { onEventClick(event.id) }
-                                        )
-                                    }
-                                    if (dateEvents.size > 2) {
-                                        Text(
-                                            text = "+${dateEvents.size - 2}",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.primary
-                                        )
+                            Text(
+                                text = String.format("%02d:00", hour),
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+
+                        // Day columns for this hour - use currentDate for dates
+                        val currentDates = remember(currentDate, daysCount) {
+                            (0 until daysCount).map { currentDate.plusDays(it.toLong()) }
+                        }
+
+                        currentDates.forEach { date ->
+                            val dateEvents = events.filter {
+                                it.startDateTime.toLocalDate() == date &&
+                                it.startDateTime.hour == hour
+                            }
+                            val isToday = date == LocalDate.now()
+                            val custody = CustodyHelper.getCustodyForDate(date, custodySchedules)
+                            val backgroundColor = when {
+                                dateEvents.isNotEmpty() -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                                isToday -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.05f)
+                                custody == "mom" -> CoParentlyColors.MomPink.copy(alpha = 0.03f)
+                                custody == "dad" -> CoParentlyColors.DadBlue.copy(alpha = 0.03f)
+                                else -> MaterialTheme.colorScheme.surface
+                            }
+
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(60.dp)
+                                    .background(
+                                        color = backgroundColor,
+                                        shape = RoundedCornerShape(8.dp)
+                                    )
+                                    .clickable {
+                                        if (dateEvents.isNotEmpty()) {
+                                            onEventClick(dateEvents.first().id)
+                                        } else {
+                                            onAddEventClick(date, hour)
+                                        }
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (dateEvents.isNotEmpty()) {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .padding(6.dp),
+                                        horizontalAlignment = Alignment.Start,
+                                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        dateEvents.take(2).forEach { event ->
+                                            EventChip(
+                                                event = event,
+                                                onClick = { onEventClick(event.id) }
+                                            )
+                                        }
+                                        if (dateEvents.size > 2) {
+                                            Text(
+                                                text = "+${dateEvents.size - 2}",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.primary,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
                                     }
                                 }
                             }
                         }
                     }
                 }
+            }
             }
         }
     }
@@ -235,18 +315,17 @@ fun DayWeekView(
 @Composable
 private fun EventChip(
     event: Event,
-    custody: String?,
     onClick: () -> Unit
 ) {
     val backgroundColor = when (event.parentOwner) {
-        "mom" -> CoParentlyColors.MomPink.copy(alpha = 0.7f)
-        "dad" -> CoParentlyColors.DadBlue.copy(alpha = 0.7f)
+        "mom" -> CoParentlyColors.MomPink.copy(alpha = 0.9f)
+        "dad" -> CoParentlyColors.DadBlue.copy(alpha = 0.9f)
         else -> MaterialTheme.colorScheme.tertiaryContainer
     }
 
     val textColor = when (event.parentOwner) {
-        "mom" -> CoParentlyColors.MomPinkDark
-        "dad" -> CoParentlyColors.DadBlueDark
+        "mom" -> Color.White
+        "dad" -> Color.White
         else -> MaterialTheme.colorScheme.onTertiaryContainer
     }
 
@@ -255,17 +334,18 @@ private fun EventChip(
             .fillMaxWidth()
             .background(
                 color = backgroundColor,
-                shape = RoundedCornerShape(4.dp)
+                shape = RoundedCornerShape(6.dp)
             )
-            .padding(horizontal = 4.dp, vertical = 2.dp)
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center
+            .clickable(onClick = onClick)
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+        contentAlignment = Alignment.CenterStart
     ) {
         Text(
             text = event.title,
             style = MaterialTheme.typography.labelSmall,
             color = textColor,
-            maxLines = 1
+            maxLines = 1,
+            fontWeight = FontWeight.Medium
         )
     }
 }

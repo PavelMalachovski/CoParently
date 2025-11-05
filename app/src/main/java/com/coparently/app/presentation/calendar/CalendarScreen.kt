@@ -38,6 +38,7 @@ import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.Button
 import androidx.compose.material3.DatePickerDefaults
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -51,9 +52,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.coparently.app.R
 import com.coparently.app.data.local.entity.CustodyScheduleEntity
@@ -69,9 +72,6 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.YearMonth
@@ -175,105 +175,36 @@ fun CalendarScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        // Previous navigation button
-                        IconButton(
-                            onClick = {
-                                when (viewMode) {
-                                    CalendarViewMode.DAY -> calendarViewModel.setSelectedDate(selectedDate.minusDays(1))
-                                    CalendarViewMode.THREE_DAYS -> calendarViewModel.setSelectedDate(selectedDate.minusDays(3))
-                                    CalendarViewMode.WEEK -> calendarViewModel.setSelectedDate(selectedDate.minusWeeks(1))
-                                    CalendarViewMode.MONTH -> calendarViewModel.setSelectedDate(selectedDate.minusMonths(1))
-                                }
-                            }
-                        ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
-                                contentDescription = "Previous",
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                        }
-
-                        // Date text with animation
-                        AnimatedContent(
-                            targetState = when (viewMode) {
-                                CalendarViewMode.MONTH -> calendarState.firstVisibleMonth.yearMonth.toString()
-                                else -> selectedDate.toString()
-                            },
-                            transitionSpec = {
-                                (slideInHorizontally { width ->
-                                    if (targetState > initialState) width else -width
-                                } + fadeIn()) togetherWith
-                                (slideOutHorizontally { width ->
-                                    if (targetState > initialState) -width else width
-                                } + fadeOut())
-                            },
-                            modifier = Modifier.weight(1f)
-                        ) { _ ->
-                            Text(
-                                text = when (viewMode) {
-                                    CalendarViewMode.DAY -> selectedDate.format(java.time.format.DateTimeFormatter.ofPattern("EEE, MMM d, yyyy"))
-                                    CalendarViewMode.THREE_DAYS -> {
-                                        val lastDay = selectedDate.plusDays(2)
-                                        val formatter = java.time.format.DateTimeFormatter.ofPattern("MMM d")
-                                        if (selectedDate.month == lastDay.month) {
-                                            "${selectedDate.dayOfMonth} - ${lastDay.format(formatter)}"
-                                        } else {
-                                            "${selectedDate.format(formatter)} - ${lastDay.format(formatter)}"
-                                        }
-                                    }
-                                    CalendarViewMode.WEEK -> {
-                                        val dayOfWeek = selectedDate.dayOfWeek.value
-                                        val daysToSubtract = (dayOfWeek - 1).toLong()
-                                        val firstDay = selectedDate.minusDays(daysToSubtract)
-                                        val lastDay = firstDay.plusDays(6)
-                                        val formatter = java.time.format.DateTimeFormatter.ofPattern("MMM d")
-                                        if (firstDay.month == lastDay.month) {
-                                            "${firstDay.dayOfMonth} - ${lastDay.format(formatter)}"
-                                        } else {
-                                            "${firstDay.format(formatter)} - ${lastDay.format(formatter)}"
-                                        }
-                                    }
-                                    CalendarViewMode.MONTH -> "${YearMonth.from(selectedDate).month.name.lowercase().replaceFirstChar { it.uppercase() }} ${YearMonth.from(selectedDate).year}"
-                                },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { showDatePicker = true },
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                textAlign = TextAlign.Center
-                            )
-                        }
-
-                        // Next navigation button
-                        IconButton(
-                            onClick = {
-                                when (viewMode) {
-                                    CalendarViewMode.DAY -> calendarViewModel.setSelectedDate(selectedDate.plusDays(1))
-                                    CalendarViewMode.THREE_DAYS -> calendarViewModel.setSelectedDate(selectedDate.plusDays(3))
-                                    CalendarViewMode.WEEK -> calendarViewModel.setSelectedDate(selectedDate.plusWeeks(1))
-                                    CalendarViewMode.MONTH -> calendarViewModel.setSelectedDate(selectedDate.plusMonths(1))
-                                }
-                            }
-                        ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                                contentDescription = "Next",
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                    }
+                    Text(
+                        text = "${YearMonth.from(selectedDate).month.getDisplayName(java.time.format.TextStyle.SHORT, java.util.Locale.getDefault()).take(3).uppercase()} ${YearMonth.from(selectedDate).year}",
+                        style = MaterialTheme.typography.headlineMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 },
                 actions = {
+                    // Today button
+                    androidx.compose.material3.TextButton(
+                        onClick = {
+                            calendarViewModel.setSelectedDate(LocalDate.now())
+                        },
+                        modifier = Modifier.padding(horizontal = 4.dp)
+                    ) {
+                        Text(
+                            text = LocalDate.now().dayOfMonth.toString(),
+                            style = MaterialTheme.typography.titleLarge,
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+
                     if (onSettingsClick != null) {
                         IconButton(onClick = onSettingsClick) {
                             Icon(
                                 imageVector = Icons.Default.Settings,
-                                contentDescription = stringResource(R.string.calendar_settings)
+                                contentDescription = stringResource(R.string.calendar_settings),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
@@ -283,11 +214,14 @@ fun CalendarScreen(
         floatingActionButton = {
             FloatingActionButton(
                 onClick = onAddEventClick,
-                containerColor = MaterialTheme.colorScheme.primary
+                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                shape = RoundedCornerShape(16.dp)
             ) {
                 Icon(
                     imageVector = Icons.Default.Add,
-                    contentDescription = stringResource(R.string.calendar_add_event)
+                    contentDescription = stringResource(R.string.calendar_add_event),
+                    modifier = Modifier.size(28.dp)
                 )
             }
         }
@@ -297,18 +231,34 @@ fun CalendarScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            // View mode selector
-            SingleChoiceSegmentedButtonRow(
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+            // View mode selector with modern styling
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 12.dp)
+                    .background(
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        shape = RoundedCornerShape(50.dp)
+                    )
+                    .padding(4.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly
             ) {
                 CalendarViewMode.values().forEach { mode ->
-                    SegmentedButton(
-                        selected = viewMode == mode,
-                        onClick = { calendarViewModel.setViewMode(mode) },
-                        shape = SegmentedButtonDefaults.itemShape(
-                            index = CalendarViewMode.values().indexOf(mode),
-                            count = CalendarViewMode.values().size
-                        )
+                    val isSelected = viewMode == mode
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(40.dp)
+                            .background(
+                                color = if (isSelected) {
+                                    MaterialTheme.colorScheme.primaryContainer
+                                } else {
+                                    Color.Transparent
+                                },
+                                shape = RoundedCornerShape(50.dp)
+                            )
+                            .clickable { calendarViewModel.setViewMode(mode) },
+                        contentAlignment = Alignment.Center
                     ) {
                         Text(
                             text = when (mode) {
@@ -317,7 +267,13 @@ fun CalendarScreen(
                                 CalendarViewMode.WEEK -> "Week"
                                 CalendarViewMode.MONTH -> "Month"
                             },
-                            style = MaterialTheme.typography.labelSmall
+                            style = MaterialTheme.typography.labelLarge,
+                            color = if (isSelected) {
+                                MaterialTheme.colorScheme.onPrimaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                         )
                     }
                 }
@@ -409,6 +365,9 @@ fun CalendarScreen(
                             },
                             onMonthChange = { newMonth ->
                                 calendarViewModel.setSelectedDate(newMonth.atDay(1))
+                            },
+                            onDateChange = { newDate ->
+                                calendarViewModel.setSelectedDate(newDate)
                             }
                         )
                     }

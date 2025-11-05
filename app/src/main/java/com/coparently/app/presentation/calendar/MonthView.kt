@@ -1,8 +1,15 @@
 package com.coparently.app.presentation.calendar
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,8 +21,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -23,6 +28,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -47,7 +53,7 @@ import java.util.Locale
 /**
  * Enhanced month view with week numbers and modern UX.
  * Shows calendar in month grid with week numbers on the left.
- * Supports horizontal swipe gestures to navigate between months.
+ * Supports vertical swipe gestures to navigate between weeks.
  */
 @Composable
 fun MonthView(
@@ -55,35 +61,48 @@ fun MonthView(
     events: List<Event>,
     custodySchedules: List<CustodyScheduleEntity>,
     onDayClick: (LocalDate) -> Unit,
-    onMonthChange: (YearMonth) -> Unit
+    onMonthChange: (YearMonth) -> Unit,
+    onDateChange: ((LocalDate) -> Unit)? = null
 ) {
     val weekFields = remember { WeekFields.of(Locale.getDefault()) }
     val firstDayOfWeek = remember { weekFields.firstDayOfWeek }
 
-    // Get all days to display in the month view - now showing 7 weeks
-    val weeks = remember(selectedMonth) {
-        generateWeeksForMonth(selectedMonth, firstDayOfWeek, weeksToShow = 7)
-    }
-
     // Swipe gesture state
     var dragOffset by remember { mutableFloatStateOf(0f) }
+    var swipeDirection by remember { mutableStateOf(0) } // -1 for down, 1 for up
 
-    Column(
+    // Use selectedMonth as reference for current date
+    val currentDate = selectedMonth.atDay(15)
+
+    Box(
         modifier = Modifier
             .fillMaxSize()
             .padding(horizontal = 8.dp)
             .pointerInput(selectedMonth) {
-                detectHorizontalDragGestures(
+                detectVerticalDragGestures(
                     onDragEnd = {
-                        val swipeThreshold = 100f
-                        when {
-                            dragOffset > swipeThreshold -> {
-                                // Swipe right - previous month
-                                onMonthChange(selectedMonth.minusMonths(1))
+                        val swipeThreshold = 150f
+                        if (kotlin.math.abs(dragOffset) > swipeThreshold) {
+                            val newDate = when {
+                                dragOffset > swipeThreshold -> {
+                                    // Swipe down - previous week (go back)
+                                    swipeDirection = -1
+                                    currentDate.minusWeeks(1)
+                                }
+                                dragOffset < -swipeThreshold -> {
+                                    // Swipe up - next week (go forward)
+                                    swipeDirection = 1
+                                    currentDate.plusWeeks(1)
+                                }
+                                else -> currentDate
                             }
-                            dragOffset < -swipeThreshold -> {
-                                // Swipe left - next month
-                                onMonthChange(selectedMonth.plusMonths(1))
+
+                            if (newDate != currentDate) {
+                                if (onDateChange != null) {
+                                    onDateChange(newDate)
+                                } else {
+                                    onMonthChange(YearMonth.from(newDate))
+                                }
                             }
                         }
                         dragOffset = 0f
@@ -96,50 +115,73 @@ fun MonthView(
                 }
             }
     ) {
-        // Weekday header
+        // Weekday header (fixed, not animated)
         WeekdayHeader(firstDayOfWeek)
 
-        // Calendar grid with week numbers
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            items(weeks) { week ->
-                WeekRow(
-                    week = week,
-                    selectedMonth = selectedMonth,
-                    events = events,
-                    custodySchedules = custodySchedules,
-                    weekFields = weekFields,
-                    onDayClick = onDayClick
-                )
+        // Animated calendar content
+        AnimatedContent(
+            targetState = selectedMonth,
+            transitionSpec = {
+                val direction = swipeDirection
+                (slideInVertically(
+                    animationSpec = tween(300),
+                    initialOffsetY = { fullHeight -> fullHeight * direction }
+                ) + fadeIn(animationSpec = tween(300))) togetherWith
+                (slideOutVertically(
+                    animationSpec = tween(300),
+                    targetOffsetY = { fullHeight -> -fullHeight * direction }
+                ) + fadeOut(animationSpec = tween(300)))
+            },
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(top = 60.dp) // Space for header
+        ) { month ->
+            // Calendar grid with week numbers
+            val monthWeeks = remember(month) {
+                generateWeeksForMonth(month, firstDayOfWeek, weeksToShow = 7)
+            }
+
+            Column(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                monthWeeks.forEach { week ->
+                    WeekRow(
+                        week = week,
+                        selectedMonth = month,
+                        events = events,
+                        custodySchedules = custodySchedules,
+                        weekFields = weekFields,
+                        onDayClick = onDayClick
+                    )
+                }
             }
         }
     }
 }
 
 /**
- * Weekday header row (Mon, Tue, Wed, etc.)
+ * Weekday header row (Mon, Tue, Wed, etc.) - 1.5x larger
  */
 @Composable
 private fun WeekdayHeader(firstDayOfWeek: DayOfWeek) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 8.dp),
+            .padding(vertical = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(0.dp)
     ) {
         // Week number column header
         Box(
             modifier = Modifier
                 .width(32.dp)
-                .height(32.dp),
+                .height(48.dp),
             contentAlignment = Alignment.Center
         ) {
             Text(
                 text = "",
                 style = MaterialTheme.typography.labelSmall,
-                fontSize = 10.sp,
+                fontSize = 15.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
@@ -159,7 +201,7 @@ private fun WeekdayHeader(firstDayOfWeek: DayOfWeek) {
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .height(32.dp),
+                    .height(48.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
@@ -168,8 +210,8 @@ private fun WeekdayHeader(firstDayOfWeek: DayOfWeek) {
                         Locale.getDefault()
                     ),
                     style = MaterialTheme.typography.labelSmall,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 8.sp,
+                    fontWeight = FontWeight.Normal,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
