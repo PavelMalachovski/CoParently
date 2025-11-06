@@ -70,9 +70,6 @@ fun DayWeekView(
     onAddEventClick: (LocalDate, Int) -> Unit = { _, _ -> }
 ) {
     val hours = (0..23).toList()
-    val dates = remember(selectedDate, daysCount) {
-        (0 until daysCount).map { selectedDate.plusDays(it.toLong()) }
-    }
 
     // Handle swipe to change dates
     val totalDragState = remember { mutableFloatStateOf(0f) }
@@ -108,144 +105,190 @@ fun DayWeekView(
             }
     ) {
         // Fixed header row with modern design - 1.5x larger
-        Row(
+        // Animated header with same animation as hour columns
+        AnimatedContent(
+            targetState = selectedDate,
+            transitionSpec = {
+                val direction = swipeDirection
+                (slideInHorizontally(
+                    animationSpec = tween(300),
+                    initialOffsetX = { fullWidth -> fullWidth * direction }
+                ) + fadeIn(animationSpec = tween(300))) togetherWith
+                (slideOutHorizontally(
+                    animationSpec = tween(300),
+                    targetOffsetX = { fullWidth -> -fullWidth * direction }
+                ) + fadeOut(animationSpec = tween(300)))
+            },
             modifier = Modifier
                 .fillMaxWidth()
                 .height(90.dp)
-                .background(MaterialTheme.colorScheme.surface)
-                .padding(horizontal = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Week number for 3 days and week views (moved to the left)
-            if (daysCount >= 3) {
-                val weekFields = WeekFields.of(Locale.getDefault())
-                val weekNumber = selectedDate.get(weekFields.weekOfWeekBasedYear())
-
-                Box(
-                    modifier = Modifier
-                        .width(32.dp)
-                        .fillMaxHeight()
-                        .padding(end = 4.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = weekNumber.toString(),
-                        style = MaterialTheme.typography.labelSmall,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Normal,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                    )
+        ) { currentDate ->
+            val currentDates = remember(currentDate, daysCount) {
+                val startDate = if (daysCount == 7) {
+                    // For week view, start from Monday of the week containing currentDate
+                    val weekFields = WeekFields.of(Locale.getDefault())
+                    val dayOfWeek = currentDate.dayOfWeek
+                    val daysFromMonday = (dayOfWeek.value - weekFields.firstDayOfWeek.value + 7) % 7
+                    currentDate.minusDays(daysFromMonday.toLong())
+                } else {
+                    // For day and 3-day views, start from currentDate
+                    currentDate
                 }
+                (0 until daysCount).map { startDate.plusDays(it.toLong()) }
             }
 
-            // Time column space
-            Spacer(modifier = Modifier.width(if (daysCount >= 3) 20.dp else 52.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(90.dp)
+                    .background(MaterialTheme.colorScheme.surface)
+                    .padding(horizontal = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Week number for 3 days and week views (moved to the left)
+                if (daysCount >= 3) {
+                    val weekFields = WeekFields.of(Locale.getDefault())
+                    val weekNumber = currentDate.get(weekFields.weekOfWeekBasedYear())
 
-            dates.forEach { date ->
-                val isToday = date == LocalDate.now()
-
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxHeight()
-                        .background(
-                            color = if (isToday) {
-                                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f)
-                            } else {
-                                Color.Transparent
-                            },
-                            shape = RoundedCornerShape(8.dp)
-                        )
-                        .padding(6.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center,
-                        modifier = Modifier.padding(vertical = 4.dp)
+                    Box(
+                        modifier = Modifier
+                            .width(32.dp)
+                            .fillMaxHeight()
+                            .padding(end = 4.dp),
+                        contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = date.format(DateTimeFormatter.ofPattern("EEE")),
+                            text = weekNumber.toString(),
                             style = MaterialTheme.typography.labelSmall,
+                            fontSize = 11.sp,
                             fontWeight = FontWeight.Normal,
-                            fontSize = 9.sp,
-                            color = if (isToday) {
-                                MaterialTheme.colorScheme.primary
-                            } else {
-                                MaterialTheme.colorScheme.onSurfaceVariant
-                            }
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                         )
-                        Text(
-                            text = date.dayOfMonth.toString(),
-                            style = MaterialTheme.typography.titleLarge,
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = if (isToday) {
-                                MaterialTheme.colorScheme.primary
-                            } else {
-                                MaterialTheme.colorScheme.onSurface
-                            }
-                        )
+                    }
+                }
+
+                // Time column space
+                Spacer(modifier = Modifier.width(if (daysCount >= 3) 20.dp else 52.dp))
+
+                currentDates.forEach { date ->
+                    val isToday = date == LocalDate.now()
+
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .background(
+                                color = if (isToday) {
+                                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f)
+                                } else {
+                                    Color.Transparent
+                                },
+                                shape = RoundedCornerShape(8.dp)
+                            )
+                            .padding(6.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center,
+                            modifier = Modifier.padding(vertical = 4.dp)
+                        ) {
+                            Text(
+                                text = date.format(DateTimeFormatter.ofPattern("EEE")),
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Normal,
+                                fontSize = 9.sp,
+                                color = if (isToday) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                }
+                            )
+                            Text(
+                                text = date.dayOfMonth.toString(),
+                                style = MaterialTheme.typography.titleLarge,
+                                fontSize = 20.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isToday) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurface
+                                }
+                            )
+                        }
                     }
                 }
             }
         }
 
-        // Scrollable content with animation - time stays in place
+        // Scrollable content - time stays in place, only days animate
         // Use single scrollState shared across all dates to preserve scroll position
-        Box(modifier = Modifier.weight(1f)) {
-            AnimatedContent(
-                targetState = selectedDate,
-                transitionSpec = {
-                    val direction = swipeDirection
-                    (slideInHorizontally(
-                        animationSpec = tween(300),
-                        initialOffsetX = { fullWidth -> fullWidth * direction }
-                    ) + fadeIn(animationSpec = tween(300))) togetherWith
-                    (slideOutHorizontally(
-                        animationSpec = tween(300),
-                        targetOffsetX = { fullWidth -> -fullWidth * direction }
-                    ) + fadeOut(animationSpec = tween(300)))
-                },
-                modifier = Modifier.fillMaxSize()
-            ) { currentDate ->
-                // LazyColumn uses the same scrollState for all dates, preserving scroll position
-                LazyColumn(
-                    state = scrollState,
-                    modifier = Modifier.fillMaxSize()
+        LazyColumn(
+            state = scrollState,
+            modifier = Modifier.weight(1f)
+        ) {
+            items(hours.size) { hourIndex ->
+                val hour = hours[hourIndex]
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                items(hours.size) { hourIndex ->
-                    val hour = hours[hourIndex]
-                    Row(
+                    // Hour label - static, outside AnimatedContent
+                    Box(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            .width(52.dp)
+                            .height(60.dp)
+                            .padding(top = 4.dp),
+                        contentAlignment = Alignment.TopCenter
                     ) {
-                        // Hour label
-                        Box(
-                            modifier = Modifier
-                                .width(52.dp)
-                                .height(60.dp)
-                                .padding(top = 4.dp),
-                            contentAlignment = Alignment.TopCenter
-                        ) {
-                            Text(
-                                text = String.format("%02d:00", hour),
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontSize = 11.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                fontWeight = FontWeight.Medium
-                            )
-                        }
+                        Text(
+                            text = String.format("%02d:00", hour),
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
 
-                        // Day columns for this hour - use currentDate for dates
+                    // Day columns - animated, inside AnimatedContent
+                    AnimatedContent(
+                        targetState = selectedDate,
+                        transitionSpec = {
+                            val direction = swipeDirection
+                            (slideInHorizontally(
+                                animationSpec = tween(300),
+                                initialOffsetX = { fullWidth -> fullWidth * direction }
+                            ) + fadeIn(animationSpec = tween(300))) togetherWith
+                            (slideOutHorizontally(
+                                animationSpec = tween(300),
+                                targetOffsetX = { fullWidth -> -fullWidth * direction }
+                            ) + fadeOut(animationSpec = tween(300)))
+                        },
+                        modifier = Modifier.weight(1f)
+                    ) { currentDate ->
+                        // Day columns for this hour - use same logic as dates array
                         val currentDates = remember(currentDate, daysCount) {
-                            (0 until daysCount).map { currentDate.plusDays(it.toLong()) }
+                            val startDate = if (daysCount == 7) {
+                                // For week view, start from Monday of the week containing currentDate
+                                val weekFields = WeekFields.of(Locale.getDefault())
+                                val dayOfWeek = currentDate.dayOfWeek
+                                val daysFromMonday = (dayOfWeek.value - weekFields.firstDayOfWeek.value + 7) % 7
+                                currentDate.minusDays(daysFromMonday.toLong())
+                            } else {
+                                // For day and 3-day views, start from currentDate
+                                currentDate
+                            }
+                            (0 until daysCount).map { startDate.plusDays(it.toLong()) }
                         }
 
-                        currentDates.forEach { date ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            currentDates.forEach { date ->
                             val dateEvents = events.filter {
                                 it.startDateTime.toLocalDate() == date &&
                                 it.startDateTime.hour == hour
@@ -303,9 +346,9 @@ fun DayWeekView(
                                 }
                             }
                         }
+                        }
                     }
                 }
-            }
             }
         }
     }

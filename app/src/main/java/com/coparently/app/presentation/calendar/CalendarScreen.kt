@@ -357,6 +357,7 @@ fun CalendarScreen(
 
                         MonthView(
                             selectedMonth = visibleMonthYear,
+                            selectedDate = selectedDate,
                             events = events,
                             custodySchedules = custodySchedules,
                             onDayClick = { clickedDate ->

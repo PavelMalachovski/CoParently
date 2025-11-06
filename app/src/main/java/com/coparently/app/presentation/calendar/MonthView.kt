@@ -9,6 +9,8 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -26,6 +28,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -34,6 +37,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.composed
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -58,6 +62,7 @@ import java.util.Locale
 @Composable
 fun MonthView(
     selectedMonth: YearMonth,
+    selectedDate: LocalDate? = null,
     events: List<Event>,
     custodySchedules: List<CustodyScheduleEntity>,
     onDayClick: (LocalDate) -> Unit,
@@ -67,93 +72,114 @@ fun MonthView(
     val weekFields = remember { WeekFields.of(Locale.getDefault()) }
     val firstDayOfWeek = remember { weekFields.firstDayOfWeek }
 
-    // Swipe gesture state
-    var dragOffset by remember { mutableFloatStateOf(0f) }
+    // Calculate current week start from selectedDate or selectedMonth
+    // This is used as targetState for AnimatedContent, just like selectedDate in DayWeekView
+    val currentWeekStart = remember(selectedDate, selectedMonth) {
+        val referenceDate = selectedDate ?: selectedMonth.atDay(1)
+        // Find the first day of the week containing the reference date
+        var date = referenceDate
+        while (date.dayOfWeek != firstDayOfWeek) {
+            date = date.minusDays(1)
+        }
+        date
+    }
+
+    // Handle swipe to change weeks - exactly same logic as DayWeekView
+    val totalDragState = remember { mutableFloatStateOf(0f) }
+    var totalDrag by totalDragState
+
+    // State for swipe direction - same as DayWeekView
     var swipeDirection by remember { mutableStateOf(0) } // -1 for down, 1 for up
+    var isSwipeInProgress by remember { mutableStateOf(false) }
 
-    // Use selectedMonth as reference for current date
-    val currentDate = selectedMonth.atDay(15)
-
-    Box(
+    Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(horizontal = 8.dp)
-            .pointerInput(selectedMonth) {
-                detectVerticalDragGestures(
-                    onDragEnd = {
-                        val swipeThreshold = 150f
-                        if (kotlin.math.abs(dragOffset) > swipeThreshold) {
-                            val newDate = when {
-                                dragOffset > swipeThreshold -> {
-                                    // Swipe down - previous week (go back)
-                                    swipeDirection = -1
-                                    currentDate.minusWeeks(1)
-                                }
-                                dragOffset < -swipeThreshold -> {
-                                    // Swipe up - next week (go forward)
-                                    swipeDirection = 1
-                                    currentDate.plusWeeks(1)
-                                }
-                                else -> currentDate
-                            }
-
-                            if (newDate != currentDate) {
-                                if (onDateChange != null) {
-                                    onDateChange(newDate)
-                                } else {
-                                    onMonthChange(YearMonth.from(newDate))
-                                }
-                            }
-                        }
-                        dragOffset = 0f
-                    },
-                    onDragCancel = {
-                        dragOffset = 0f
-                    }
-                ) { _, dragAmount ->
-                    dragOffset += dragAmount
-                }
-            }
     ) {
         // Weekday header (fixed, not animated)
         WeekdayHeader(firstDayOfWeek)
 
-        // Animated calendar content
-        AnimatedContent(
-            targetState = selectedMonth,
-            transitionSpec = {
-                val direction = swipeDirection
-                (slideInVertically(
-                    animationSpec = tween(300),
-                    initialOffsetY = { fullHeight -> fullHeight * direction }
-                ) + fadeIn(animationSpec = tween(300))) togetherWith
-                (slideOutVertically(
-                    animationSpec = tween(300),
-                    targetOffsetY = { fullHeight -> -fullHeight * direction }
-                ) + fadeOut(animationSpec = tween(300)))
-            },
+        // Animated calendar content with swipe gestures - same as DayWeekView
+        Box(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(top = 60.dp) // Space for header
-        ) { month ->
-            // Calendar grid with week numbers
-            val monthWeeks = remember(month) {
-                generateWeeksForMonth(month, firstDayOfWeek, weeksToShow = 7)
-            }
+                .weight(1f)
+                .fillMaxWidth()
+                .pointerInput(Unit) {
+                    detectVerticalDragGestures(
+                        onDragEnd = {
+                            val dragValue = totalDrag
+                            if (kotlin.math.abs(dragValue) > 200f) {
+                                // Same logic as DayWeekView: dragValue > 0 means down swipe
+                                swipeDirection = if (dragValue > 0) -1 else 1
+                                val weeksToAdd = if (dragValue > 0) -1 else 1
+                                val newWeekStart = currentWeekStart.plusWeeks(weeksToAdd.toLong())
 
-            Column(
-                modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                monthWeeks.forEach { week ->
-                    WeekRow(
-                        week = week,
-                        selectedMonth = month,
-                        events = events,
-                        custodySchedules = custodySchedules,
-                        weekFields = weekFields,
-                        onDayClick = onDayClick
-                    )
+                                // Always use onDateChange for week navigation
+                                // This will update selectedDate in ViewModel, which will trigger recomposition
+                                // and currentWeekStart will be recalculated, triggering AnimatedContent animation
+                                if (onDateChange != null) {
+                                    onDateChange(newWeekStart)
+                                } else {
+                                    // Fallback to month change if onDateChange is not provided
+                                    val newMonth = YearMonth.from(newWeekStart)
+                                    if (newMonth != selectedMonth) {
+                                        onMonthChange(newMonth)
+                                    }
+                                }
+                            }
+                            totalDrag = 0f
+                            isSwipeInProgress = false
+                        }
+                    ) { _, dragAmount ->
+                        totalDrag = totalDrag + dragAmount
+                        // Mark as swipe in progress and consume to prevent clicks
+                        if (kotlin.math.abs(totalDrag) > 5f) {
+                            isSwipeInProgress = true
+                        }
+                    }
+                }
+        ) {
+            AnimatedContent(
+                targetState = currentWeekStart,
+                transitionSpec = {
+                    val direction = swipeDirection
+                    (slideInVertically(
+                        animationSpec = tween(300),
+                        initialOffsetY = { fullHeight -> fullHeight * direction }
+                    ) + fadeIn(animationSpec = tween(300))) togetherWith
+                    (slideOutVertically(
+                        animationSpec = tween(300),
+                        targetOffsetY = { fullHeight -> -fullHeight * direction }
+                    ) + fadeOut(animationSpec = tween(300)))
+                },
+                modifier = Modifier.fillMaxSize()
+            ) { weekStart ->
+                // Generate weeks starting from the selected week, not from the month start
+                // This allows scrolling through weeks while showing 6 weeks at a time
+                val monthWeeks = remember(weekStart) {
+                    generateWeeksFromWeekStart(weekStart, firstDayOfWeek, weeksToShow = 6)
+                }
+
+                // Use the month from selectedMonth for highlighting current month days
+                val displayMonth = selectedMonth
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize(),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    monthWeeks.forEach { week ->
+                        WeekRow(
+                            week = week,
+                            selectedMonth = displayMonth,
+                            events = events,
+                            custodySchedules = custodySchedules,
+                            weekFields = weekFields,
+                            onDayClick = onDayClick,
+                            isSwipeInProgress = isSwipeInProgress
+                        )
+                    }
                 }
             }
         }
@@ -168,21 +194,26 @@ private fun WeekdayHeader(firstDayOfWeek: DayOfWeek) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 12.dp),
-        horizontalArrangement = Arrangement.spacedBy(0.dp)
+            .height(90.dp)
+            .background(MaterialTheme.colorScheme.surface)
+            .padding(horizontal = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
         // Week number column header
         Box(
             modifier = Modifier
                 .width(32.dp)
-                .height(48.dp),
+                .height(90.dp)
+                .padding(end = 4.dp),
             contentAlignment = Alignment.Center
         ) {
             Text(
                 text = "",
                 style = MaterialTheme.typography.labelSmall,
-                fontSize = 15.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Normal,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
             )
         }
 
@@ -198,22 +229,44 @@ private fun WeekdayHeader(firstDayOfWeek: DayOfWeek) {
         }
 
         weekdays.forEach { dayOfWeek ->
+            val isToday = dayOfWeek == LocalDate.now().dayOfWeek
+
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .height(48.dp),
+                    .height(90.dp)
+                    .background(
+                        color = if (isToday) {
+                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f)
+                        } else {
+                            Color.Transparent
+                        },
+                        shape = RoundedCornerShape(8.dp)
+                    )
+                    .padding(6.dp),
                 contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text = dayOfWeek.getDisplayName(
-                        java.time.format.TextStyle.SHORT,
-                        Locale.getDefault()
-                    ),
-                    style = MaterialTheme.typography.labelSmall,
-                    fontSize = 8.sp,
-                    fontWeight = FontWeight.Normal,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                    modifier = Modifier.padding(vertical = 4.dp)
+                ) {
+                    Text(
+                        text = dayOfWeek.getDisplayName(
+                            java.time.format.TextStyle.SHORT,
+                            Locale.getDefault()
+                        ),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Normal,
+                        fontSize = 9.sp,
+                        color = if (isToday) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        }
+                    )
+                    // Note: In month view header, we don't show day numbers, only day names
+                }
             }
         }
     }
@@ -229,7 +282,8 @@ private fun WeekRow(
     events: List<Event>,
     custodySchedules: List<CustodyScheduleEntity>,
     weekFields: WeekFields,
-    onDayClick: (LocalDate) -> Unit
+    onDayClick: (LocalDate) -> Unit,
+    isSwipeInProgress: Boolean = false
 ) {
     val weekNumber = remember(week) {
         week.firstOrNull()?.get(weekFields.weekOfWeekBasedYear()) ?: 0
@@ -265,7 +319,8 @@ private fun WeekRow(
                 isCurrentMonth = YearMonth.from(date) == selectedMonth,
                 events = events.filter { it.startDateTime.toLocalDate() == date },
                 custodySchedules = custodySchedules,
-                onDayClick = onDayClick
+                onDayClick = onDayClick,
+                isSwipeInProgress = isSwipeInProgress
             )
         }
     }
@@ -280,7 +335,8 @@ private fun RowScope.DayCell(
     isCurrentMonth: Boolean,
     events: List<Event>,
     custodySchedules: List<CustodyScheduleEntity>,
-    onDayClick: (LocalDate) -> Unit
+    onDayClick: (LocalDate) -> Unit,
+    isSwipeInProgress: Boolean = false
 ) {
     val isToday = CustodyHelper.isToday(date)
     val custody = CustodyHelper.getCustodyForDate(date, custodySchedules)
@@ -301,7 +357,11 @@ private fun RowScope.DayCell(
                 color = backgroundColor,
                 shape = RoundedCornerShape(6.dp)
             )
-            .clickable { onDayClick(date) }
+            .clickable(enabled = !isSwipeInProgress) {
+                if (!isSwipeInProgress) {
+                    onDayClick(date)
+                }
+            }
             .padding(4.dp),
         contentAlignment = Alignment.TopCenter
     ) {
@@ -384,6 +444,38 @@ private fun RowScope.DayCell(
 }
 
 /**
+ * Generate weeks starting from a specific week start date
+ * @param weekStart The first day of the week to start from
+ * @param firstDayOfWeek The first day of the week (e.g., Monday or Sunday)
+ * @param weeksToShow Number of weeks to display
+ */
+private fun generateWeeksFromWeekStart(
+    weekStart: LocalDate,
+    firstDayOfWeek: DayOfWeek,
+    weeksToShow: Int = 6
+): List<List<LocalDate>> {
+    // Ensure weekStart is actually the start of a week
+    var currentDate = weekStart
+    while (currentDate.dayOfWeek != firstDayOfWeek) {
+        currentDate = currentDate.minusDays(1)
+    }
+
+    val weeks = mutableListOf<List<LocalDate>>()
+
+    // Generate exactly weeksToShow weeks starting from weekStart
+    repeat(weeksToShow) {
+        val week = mutableListOf<LocalDate>()
+        repeat(7) {
+            week.add(currentDate)
+            currentDate = currentDate.plusDays(1)
+        }
+        weeks.add(week)
+    }
+
+    return weeks
+}
+
+/**
  * Generate weeks for the month view, including days from adjacent months
  * @param yearMonth The month to display
  * @param firstDayOfWeek The first day of the week (e.g., Monday or Sunday)
@@ -402,18 +494,6 @@ private fun generateWeeksForMonth(
         currentDate = currentDate.minusDays(1)
     }
 
-    val weeks = mutableListOf<List<LocalDate>>()
-
-    // Generate exactly weeksToShow weeks
-    repeat(weeksToShow) {
-        val week = mutableListOf<LocalDate>()
-        repeat(7) {
-            week.add(currentDate)
-            currentDate = currentDate.plusDays(1)
-        }
-        weeks.add(week)
-    }
-
-    return weeks
+    return generateWeeksFromWeekStart(currentDate, firstDayOfWeek, weeksToShow)
 }
 
