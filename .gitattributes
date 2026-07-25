@@ -1,0 +1,7 @@
+# Keep Cloud Functions JS as LF regardless of the checkout platform, so the
+# functions predeploy ESLint (google config wants unix linebreaks) does not fail
+# on Windows machines where core.autocrlf converts to CRLF.
+functions/**/*.js text eol=lf
+functions/**/*.json text eol=lf
+*.gradle text eol=lf
+*.gradle.kts text eol=lf

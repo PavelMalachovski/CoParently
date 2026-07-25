@@ -15,6 +15,9 @@ module.exports = {
     'prefer-arrow-callback': 'error',
     'quotes': ['error', 'single', {'allowTemplateLiterals': true}],
     'max-len': ['error', {'code': 120}],
+    // Windows checkouts get CRLF via core.autocrlf; don't fail the functions
+    // predeploy lint over line endings. `.gitattributes` keeps the repo copy LF.
+    'linebreak-style': 'off',
   },
   overrides: [
     {
