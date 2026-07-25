@@ -161,7 +161,9 @@ fun NavGraph(
                     onAddEventClick = { date, hour ->
                         navController.navigate(Screen.AddEvent.createRoute(date, hour))
                     },
-                    // Settings moved to the bottom navigation bar — no gear in the header
+                    onSettingsClick = {
+                        navController.navigate(Screen.Settings.route)
+                    },
                     onChangeRequestsClick = {
                         navController.navigate(Screen.ChangeRequests.route)
                     },
@@ -334,8 +336,9 @@ fun NavGraph(
             ) {
                 val googleSignInCallback = LocalGoogleSignInCallback.current
                 SettingsScreen(
-                    // Reached via the bottom bar — no up navigation from a top-level tab
-                    onNavigateUp = null,
+                    // Reached via the gear action in the top-level top bars — it opens as
+                    // a detail screen, so it gets a back arrow.
+                    onNavigateUp = { navController.popBackStack() },
                     onNavigateToChildInfo = {
                         navController.navigate(Screen.ChildInfo.route)
                     },
@@ -435,6 +438,9 @@ fun NavGraph(
                     },
                     onNavigateToPairing = {
                         navController.navigate(Screen.Pairing.route)
+                    },
+                    onOpenSettings = {
+                        navController.navigate(Screen.Settings.route)
                     }
                 )
             }
@@ -479,6 +485,9 @@ fun NavGraph(
                     },
                     onOpenBudgets = {
                         navController.navigate(Screen.Budgets.route)
+                    },
+                    onOpenSettings = {
+                        navController.navigate(Screen.Settings.route)
                     }
                 )
             }

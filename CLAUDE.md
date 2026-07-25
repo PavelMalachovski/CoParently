@@ -18,12 +18,13 @@ dashboards) is next. The latest full audit lives in `docs/AUDIT-2026-07.md`.
 Direction agreed after a live walkthrough and shipped on `feature/ux-overhaul`.
 When touching the UI, keep these invariants:
 
-1. **Bottom navigation bar** (Calendar / Chat / Expenses / Settings) is the top-level
+1. **Bottom navigation bar** (Home / Calendar / Chat / Expenses) is the top-level
    navigation — see `presentation/navigation/BottomNavDestination.kt`. It shows only on
-   those four routes (`BottomNavDestination.topLevelRoutes`); detail screens hide it and
-   keep an up-arrow. Budgets open from an Expenses top-bar action. Settings, reached as a
-   tab, passes `onNavigateUp = null` (no back arrow). `QuickActionsBottomSheet` was dead
-   code and is gone.
+   those routes (`BottomNavDestination.topLevelRoutes`); detail screens hide it and keep
+   an up-arrow. **Settings is NOT a tab** — it opens from a gear action in each top-level
+   screen's top bar and is a detail screen (`onNavigateUp = popBackStack`, bottom bar
+   hidden). Budgets open from an Expenses top-bar action. `QuickActionsBottomSheet` was
+   dead code and is gone.
 2. **Toolchain**: compileSdk/targetSdk 36, Kotlin 2.1 (+ `kotlin.plugin.compose`),
    Compose BOM 2025.10 (Material 3 1.4 / M3 Expressive), Room 2.7.2 (2.6.x kapt breaks on
    Kotlin 2.x metadata), Navigation 2.9.3, Hilt 2.56.2, predictive back on.
@@ -39,7 +40,11 @@ When touching the UI, keep these invariants:
 6. **Color semantics**: Mom-pink/Dad-blue are parent identity ONLY, applied via
    `CoPlanlyColors.MomPink/DadBlue` directly. The theme's `secondary` slot is a neutral
    indigo (`CoPlanlyColors.Neutral*`), so generic Material selected states (FilterChips)
-   are neutral — never wire pink through `colorScheme.secondary`.
+   are neutral — never wire pink through `colorScheme.secondary`. **Saturation rule** (so
+   the day-cell wash and the event chip read as one system, not two pinks): a custody
+   *day background* is the parent hue at ~14% alpha (`MomPink.copy(alpha = 0.14f)`), while
+   a *chip / dot / marker* is the same hue at full strength. Same token, different alpha —
+   intentional, keep it that way.
 7. **Notification permission** is requested contextually via
    `rememberNotificationPermissionRequester()` (push toggle, reminder selection), never on
    cold start.

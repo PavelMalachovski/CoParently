@@ -6,11 +6,9 @@ import androidx.compose.material.icons.automirrored.outlined.Chat
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Payments
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Payments
-import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -57,13 +55,11 @@ enum class BottomNavDestination(
         labelRes = R.string.nav_expenses,
         selectedIcon = Icons.Filled.Payments,
         unselectedIcon = Icons.Outlined.Payments
-    ),
-    SETTINGS(
-        route = Screen.Settings.route,
-        labelRes = R.string.nav_settings,
-        selectedIcon = Icons.Filled.Settings,
-        unselectedIcon = Icons.Outlined.Settings
     );
+
+    // Settings is intentionally NOT a bottom-nav destination — it is reached via a
+    // gear action in the top bar of the top-level screens and opens as a detail
+    // screen (with a back arrow, bottom bar hidden).
 
     companion object {
         /** Routes on which the bottom bar is visible. */
