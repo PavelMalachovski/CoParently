@@ -57,7 +57,15 @@ object FirebaseModule {
     @Provides
     @Singleton
     fun provideFirebaseStorage(): com.google.firebase.storage.FirebaseStorage {
-        return com.google.firebase.storage.FirebaseStorage.getInstance()
+        return com.google.firebase.storage.FirebaseStorage.getInstance().apply {
+            // Default retry windows are ~2 minutes, so a photo upload/download to a
+            // bucket that is unreachable (e.g. Storage not enabled yet) hangs the Save
+            // for that long before failing. Cap them so an upload fails fast and the
+            // event/expense is saved promptly without the photo (with a warning).
+            maxUploadRetryTimeMillis = STORAGE_RETRY_TIMEOUT_MS
+            maxDownloadRetryTimeMillis = STORAGE_RETRY_TIMEOUT_MS
+            maxOperationRetryTimeMillis = STORAGE_RETRY_TIMEOUT_MS
+        }
     }
 
     /**
@@ -95,6 +103,9 @@ object FirebaseModule {
     fun provideQRCodeService(): com.coparently.app.data.remote.firebase.QRCodeService {
         return com.coparently.app.data.remote.firebase.QRCodeService()
     }
+
+    /** Cap Storage retries at 20s so photo uploads fail fast instead of hanging ~2min. */
+    private const val STORAGE_RETRY_TIMEOUT_MS = 20_000L
 }
 
 /**

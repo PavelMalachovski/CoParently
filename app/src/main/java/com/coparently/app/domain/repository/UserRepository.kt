@@ -29,6 +29,14 @@ interface UserRepository {
     suspend fun getCurrentUser(): User?
 
     /**
+     * The signed-in user's id (Firebase UID), independent of whether a local
+     * profile row exists yet. Null when signed out. Use this when only the id is
+     * needed — [getCurrentUser] returns null until a local profile row is created
+     * (which today only happens during pairing).
+     */
+    suspend fun getCurrentUserId(): String?
+
+    /**
      * Inserts or updates a user.
      */
     suspend fun upsertUser(user: User)
