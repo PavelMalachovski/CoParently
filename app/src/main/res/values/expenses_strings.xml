@@ -21,4 +21,6 @@
     <string name="budget_save">Save budget</string>
     <string name="budgets_empty_title">No budgets yet</string>
     <string name="budgets_empty_description">Set a monthly limit per category to keep shared spending on track.</string>
+    <string name="expenses_empty_title">No expenses yet</string>
+    <string name="expenses_empty_description">Log a shared cost — daycare, clothes, a doctor visit — and split it with your co-parent.</string>
 </resources>

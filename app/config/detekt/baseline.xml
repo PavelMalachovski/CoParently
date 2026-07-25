@@ -119,6 +119,7 @@
     <ID>LongMethod:ChildInfoScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun ChildInfoScreen( onNavigateBack: () -&gt; Unit, onEditClick: (String) -&gt; Unit, viewModel: ChildInfoViewModel = hiltViewModel() )</ID>
     <ID>LongMethod:CoPlanlySnackbarHost.kt$@Composable fun CoPlanlySnackbarHost( snackbarHostState: SnackbarHostState, modifier: Modifier = Modifier )</ID>
     <ID>LongMethod:ConflictAlertCard.kt$@Composable fun ConflictAlertCard( conflict: UpcomingConflict, onViewSolutions: () -&gt; Unit, onDismiss: () -&gt; Unit, modifier: Modifier = Modifier )</ID>
+    <ID>LongMethod:ConversationsScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun ConversationsScreen( onConversationClick: (String) -&gt; Unit, onNavigateToPairing: () -&gt; Unit, onOpenSettings: () -&gt; Unit, viewModel: ChatViewModel = hiltViewModel() )</ID>
     <ID>LongMethod:CustodyIndicatorToday.kt$@Composable fun CustodyIndicatorToday(custody: String)</ID>
     <ID>LongMethod:CustodySetupScreen.kt$@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class) @Composable fun CustodySetupScreen( onNavigateBack: () -&gt; Unit, viewModel: CustodySetupViewModel = hiltViewModel() )</ID>
     <ID>LongMethod:DayWeekView.kt$@Composable private fun EventChip( event: Event, onClick: () -&gt; Unit, columnWidthPx: Float, hourHeightPx: Float, baseDate: LocalDate, baseHour: Int, onDragDrop: ((String, LocalDate, Int) -&gt; Unit)?, onResize: ((String, LocalDateTime?, LocalDateTime?) -&gt; Unit)? = null, onDelete: ((String) -&gt; Unit)? = null, onLongPressStart: ((String) -&gt; Unit)? = null, onLongPressEnd: (() -&gt; Unit)? = null, onDragOverDeleteButton: ((Boolean) -&gt; Unit)? = null, // Visible segment of the event within the current day (differs from the real event // times for multi-day / overnight events, which are clamped to each day). displayStart: LocalDateTime = event.startDateTime, displayEnd: LocalDateTime = event.endDateTime ?: event.startDateTime.plusHours(1), // Continuation segments of multi-day events are not resizable/movable (ambiguous). resizable: Boolean = true, draggable: Boolean = true )</ID>
@@ -572,7 +573,6 @@
     <ID>NoUnusedImports:FirestoreEventDataSource.kt$com.coparently.app.data.remote.firebase.FirestoreEventDataSource.kt</ID>
     <ID>NoUnusedImports:GoogleCalendarApi.kt$com.coparently.app.data.remote.google.GoogleCalendarApi.kt</ID>
     <ID>NoUnusedImports:GoogleModule.kt$com.coparently.app.di.GoogleModule.kt</ID>
-    <ID>NoUnusedImports:HomeScreen.kt$com.coparently.app.presentation.home.HomeScreen.kt</ID>
     <ID>NoUnusedImports:LoadingButton.kt$com.coparently.app.presentation.common.LoadingButton.kt</ID>
     <ID>NoUnusedImports:LoadingSkeleton.kt$com.coparently.app.presentation.common.animations.LoadingSkeleton.kt</ID>
     <ID>NoUnusedImports:MedicalRepositoryImpl.kt$com.coparently.app.data.repository.MedicalRepositoryImpl.kt</ID>
