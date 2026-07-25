@@ -33,6 +33,9 @@ sealed interface ExpenseSaveState {
      * the expense itself was still saved, just without the receipt.
      */
     data class Saved(val warning: String? = null) : ExpenseSaveState
+
+    /** Save could not proceed (e.g. no signed-in user); [message] is user-facing. */
+    data class Error(val message: String) : ExpenseSaveState
 }
 
 @HiltViewModel
@@ -47,8 +50,11 @@ class ExpenseViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            userRepository.getCurrentUser()?.let { user ->
-                _currentUserId.value = user.id
+            // Use the auth uid, which is available immediately after sign-in — the local
+            // profile row (getCurrentUser) only exists after pairing, so relying on it
+            // here left unpaired accounts with an empty id and a silently-failing Save.
+            userRepository.getCurrentUserId()?.let { uid ->
+                _currentUserId.value = uid
                 expenseRepository.syncWithFirestore()
             }
         }
@@ -97,12 +103,19 @@ class ExpenseViewModel @Inject constructor(
         notes: String? = null,
         receiptImageUri: String? = null
     ) {
-        val userId = _currentUserId.value
-        if (userId.isEmpty()) return
         if (_saveState.value is ExpenseSaveState.Saving) return
 
         viewModelScope.launch {
             _saveState.value = ExpenseSaveState.Saving
+
+            // Resolve the payer id now: init may not have completed yet, and there may
+            // be no local profile row, so fall back to the auth uid directly.
+            val userId = _currentUserId.value.ifEmpty { userRepository.getCurrentUserId() ?: "" }
+            if (userId.isEmpty()) {
+                _saveState.value = ExpenseSaveState.Error("You must be signed in to add an expense")
+                return@launch
+            }
+            _currentUserId.value = userId
 
             val expenseId = UUID.randomUUID().toString()
             var receiptUrl: String? = null

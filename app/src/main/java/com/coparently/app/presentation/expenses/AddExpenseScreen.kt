@@ -78,11 +78,17 @@ fun AddExpenseScreen(
     ) { uri -> if (uri != null) receiptUri = uri }
 
     LaunchedEffect(saveState) {
-        val state = saveState
-        if (state is ExpenseSaveState.Saved) {
-            state.warning?.let { Toast.makeText(context, it, Toast.LENGTH_LONG).show() }
-            viewModel.resetSaveState()
-            onBack()
+        when (val state = saveState) {
+            is ExpenseSaveState.Saved -> {
+                state.warning?.let { Toast.makeText(context, it, Toast.LENGTH_LONG).show() }
+                viewModel.resetSaveState()
+                onBack()
+            }
+            is ExpenseSaveState.Error -> {
+                Toast.makeText(context, state.message, Toast.LENGTH_LONG).show()
+                viewModel.resetSaveState()
+            }
+            else -> Unit
         }
     }
 
