@@ -15,4 +15,10 @@
     <string name="expense_attach_receipt">Attach receipt photo</string>
     <string name="expense_remove_receipt">Remove receipt photo</string>
     <string name="budget_add">Add budget</string>
+    <string name="budget_add_title">New budget</string>
+    <string name="budget_field_category">Category</string>
+    <string name="budget_field_limit">Monthly limit</string>
+    <string name="budget_save">Save budget</string>
+    <string name="budgets_empty_title">No budgets yet</string>
+    <string name="budgets_empty_description">Set a monthly limit per category to keep shared spending on track.</string>
 </resources>

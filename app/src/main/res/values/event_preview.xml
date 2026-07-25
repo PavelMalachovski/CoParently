@@ -8,4 +8,7 @@
     <string name="event_preview_mom">Mom</string>
     <string name="event_preview_dad">Dad</string>
     <string name="event_form_save">Save event</string>
+    <!-- Shown after deleting an event from the preview sheet; offers an Undo. -->
+    <string name="event_deleted_message">Event deleted</string>
+    <string name="event_deleted_undo">Undo</string>
 </resources>

@@ -470,6 +470,8 @@ fun CalendarScreen(
     previewEventId?.let { eventId ->
         val previewEvent = events.firstOrNull { it.id == eventId }
         if (previewEvent != null) {
+            val deletedMessage = stringResource(R.string.event_deleted_message)
+            val undoLabel = stringResource(R.string.event_deleted_undo)
             com.coparently.app.presentation.event.EventPreviewSheet(
                 event = previewEvent,
                 onEdit = {
@@ -478,7 +480,20 @@ fun CalendarScreen(
                 },
                 onDelete = {
                     previewEventId = null
-                    eventViewModel.deleteEventById(eventId)
+                    // Delete now, offer Undo. The full event is captured here, so Undo
+                    // re-creates it with the same id (matches EventListScreen's pattern).
+                    val deletedEvent = previewEvent
+                    eventViewModel.deleteEvent(deletedEvent)
+                    scope.launch {
+                        val result = snackbarHostState.showSnackbar(
+                            message = deletedMessage,
+                            actionLabel = undoLabel,
+                            duration = SnackbarDuration.Short
+                        )
+                        if (result == SnackbarResult.ActionPerformed) {
+                            eventViewModel.createEvent(deletedEvent)
+                        }
+                    }
                 },
                 onDismiss = { previewEventId = null }
             )
