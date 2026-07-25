@@ -17,6 +17,7 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SwapHoriz
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -52,6 +53,7 @@ fun HomeScreen(
     onOpenChangeRequests: () -> Unit,
     onOpenWeeklySummary: () -> Unit,
     onOpenSettings: () -> Unit,
+    onNavigateToPairing: () -> Unit,
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val recentChanges by viewModel.recentChanges.collectAsState()
@@ -87,16 +89,33 @@ fun HomeScreen(
             if (recentChanges.isEmpty()) {
                 item {
                     Card(modifier = Modifier.fillMaxWidth()) {
-                        Text(
-                            text = if (paired) {
-                                "Nothing new from your co-parent yet. Changes they make will show up here."
-                            } else {
-                                "Pair with your co-parent to see the changes they make here."
-                            },
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(16.dp)
-                        )
+                        if (paired) {
+                            Text(
+                                text = "Nothing new from your co-parent yet. Changes they make will show up here.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(16.dp)
+                            )
+                        } else {
+                            // Most of the app's value is gated on pairing, so make this a
+                            // direct call-to-action instead of a dead notice.
+                            Column(
+                                modifier = Modifier.padding(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Text(
+                                    text = "Pair with your co-parent to see the changes they make here.",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Button(
+                                    onClick = onNavigateToPairing,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text("Pair with your co-parent")
+                                }
+                            }
+                        }
                     }
                 }
             } else {

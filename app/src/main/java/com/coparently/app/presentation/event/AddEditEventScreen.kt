@@ -419,7 +419,7 @@ fun AddEditEventScreen(
                 }
 
                 snackbarHostState.showSnackbar(
-                    message = if (eventId == null) "Event created successfully" else "Event updated successfully",
+                    message = if (eventId == null) "Event created" else "Event updated",
                     duration = SnackbarDuration.Short
                 )
 
@@ -498,29 +498,8 @@ fun AddEditEventScreen(
                         }
                     }
 
-                    // Save button in app bar
-                    IconButton(
-                        onClick = performSave,
-                        enabled = isFormValid && !isSaving && !isDeleting
-                    ) {
-                        if (isSaving) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(24.dp),
-                                color = MaterialTheme.colorScheme.primary,
-                                strokeWidth = 2.dp
-                            )
-                        } else {
-                            Icon(
-                                imageVector = Icons.Default.Check,
-                                contentDescription = "Save",
-                                tint = if (isFormValid) {
-                                    MaterialTheme.colorScheme.primary
-                                } else {
-                                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-                                }
-                            )
-                        }
-                    }
+                    // Saving is done via the sticky "Save event" button at the bottom;
+                    // a duplicate check-mark here was two controls for one action.
                 }
             )
         },
@@ -1336,7 +1315,7 @@ fun AddEditEventScreen(
                                 event?.let {
                                     viewModel.deleteEvent(it)
                                     snackbarHostState.showSnackbar(
-                                        message = "Event deleted successfully",
+                                        message = "Event deleted",
                                         duration = SnackbarDuration.Short
                                     )
                                     kotlinx.coroutines.delay(500)

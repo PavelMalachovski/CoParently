@@ -142,6 +142,9 @@ fun NavGraph(
                     },
                     onOpenSettings = {
                         navController.navigate(Screen.Settings.route)
+                    },
+                    onNavigateToPairing = {
+                        navController.navigate(Screen.Pairing.route)
                     }
                 )
             }
