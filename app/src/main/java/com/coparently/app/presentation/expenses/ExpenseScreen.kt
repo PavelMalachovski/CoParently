@@ -3,9 +3,12 @@ package com.coparently.app.presentation.expenses
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Box
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material.icons.filled.Savings
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -20,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.coparently.app.R
+import com.coparently.app.presentation.common.animations.AnimatedEmptyState
 
 /**
  * Expense list screen — a top-level bottom-navigation destination.
@@ -30,6 +34,7 @@ import com.coparently.app.R
 fun ExpenseScreen(
     onAddExpense: () -> Unit,
     onOpenBudgets: (() -> Unit)? = null,
+    onOpenSettings: (() -> Unit)? = null,
     viewModel: ExpenseViewModel = hiltViewModel()
 ) {
     val expenses by viewModel.expenses.collectAsState()
@@ -45,6 +50,14 @@ fun ExpenseScreen(
                             Icon(
                                 imageVector = Icons.Default.Savings,
                                 contentDescription = stringResource(R.string.expenses_open_budgets)
+                            )
+                        }
+                    }
+                    onOpenSettings?.let { openSettings ->
+                        IconButton(onClick = openSettings) {
+                            Icon(
+                                imageVector = Icons.Default.Settings,
+                                contentDescription = stringResource(R.string.nav_settings)
                             )
                         }
                     }
@@ -64,11 +77,23 @@ fun ExpenseScreen(
         ) {
             ExpenseSummaryCards(summary = summary)
 
-            ExpenseList(
-                expenses = expenses,
-                onExpenseClick = { /* TODO: Show details */ },
-                modifier = Modifier.weight(1f)
-            )
+            if (expenses.isEmpty()) {
+                Box(modifier = Modifier.weight(1f)) {
+                    AnimatedEmptyState(
+                        icon = Icons.Default.ReceiptLong,
+                        title = stringResource(R.string.expenses_empty_title),
+                        description = stringResource(R.string.expenses_empty_description),
+                        actionText = stringResource(R.string.expenses_add),
+                        onActionClick = onAddExpense
+                    )
+                }
+            } else {
+                ExpenseList(
+                    expenses = expenses,
+                    onExpenseClick = { /* TODO: Show details */ },
+                    modifier = Modifier.weight(1f)
+                )
+            }
         }
     }
 }
