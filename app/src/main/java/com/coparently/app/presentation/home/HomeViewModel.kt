@@ -2,20 +2,30 @@ package com.coparently.app.presentation.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.coparently.app.data.repository.CustodyModelRepository
+import com.coparently.app.domain.model.CustodyModel
 import com.coparently.app.domain.model.Event
 import com.coparently.app.domain.repository.ChangeRequestRepository
 import com.coparently.app.domain.repository.EventRepository
+import com.coparently.app.domain.repository.ExpenseRepository
+import com.coparently.app.domain.repository.MessageRepository
 import com.coparently.app.domain.repository.UserRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.Duration
+import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.temporal.ChronoUnit
 import javax.inject.Inject
 
 /**
@@ -25,13 +35,6 @@ enum class ActivityKind { EVENT_CREATED, EVENT_UPDATED, PICKUP_CONFIRMED, CHANGE
 
 /**
  * One entry in the "recent changes the co-parent made" feed.
- *
- * @property id Stable key for the list
- * @property kind What happened
- * @property title Event title the change concerns
- * @property timestamp When it happened (drives ordering)
- * @property eventId Event to open when tapped
- * @property isChangeRequest Whether tapping should open the change-requests inbox instead of the event
  */
 data class ActivityItem(
     val id: String,
@@ -43,23 +46,47 @@ data class ActivityItem(
 )
 
 /**
- * ViewModel for the home dashboard: the last few changes the *other* parent made,
- * derived from already-synced events and change requests (no separate activity log).
- * Pure deletions aren't surfaced — there is nothing left to open.
+ * The next custody handover computed from the active custody model.
+ *
+ * @property date Day custody switches to the other parent
+ * @property daysUntil Whole days from today to [date] (0 = today, 1 = tomorrow)
+ * @property fromParent Parent who has custody now ("mom"/"dad")
+ * @property toParent Parent who takes over on [date] ("mom"/"dad")
  */
+data class HandoverInfo(
+    val date: LocalDate,
+    val daysUntil: Long,
+    val fromParent: String,
+    val toParent: String
+)
+
+/** This month's shared spending total. */
+data class MonthSpend(val total: Double, val currency: String)
+
+/**
+ * ViewModel for the home dashboard. Surfaces the at-a-glance co-parenting state:
+ * the next custody handover, the next few events, this month's spend, unread
+ * messages, and the recent changes the *other* parent made.
+ */
+@OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class HomeViewModel @Inject constructor(
     eventRepository: EventRepository,
     changeRequestRepository: ChangeRequestRepository,
+    custodyModelRepository: CustodyModelRepository,
+    expenseRepository: ExpenseRepository,
+    messageRepository: MessageRepository,
     private val userRepository: UserRepository
 ) : ViewModel() {
 
     private val _partnerId = MutableStateFlow<String?>(null)
     private val _paired = MutableStateFlow(false)
+    private val _userId = MutableStateFlow("")
 
     init {
         viewModelScope.launch {
             val user = userRepository.getCurrentUser()
+            _userId.value = userRepository.getCurrentUserId().orEmpty()
             _partnerId.value = user?.partnerId?.takeIf { it.isNotEmpty() }
             _paired.value = _partnerId.value != null
         }
@@ -67,6 +94,47 @@ class HomeViewModel @Inject constructor(
 
     /** Whether the user has a paired co-parent (drives the empty state copy). */
     val paired: StateFlow<Boolean> = _paired.asStateFlow()
+
+    /** Next custody handover, or null when no custody model is configured. */
+    val nextHandover: StateFlow<HandoverInfo?> = custodyModelRepository.getActiveModel()
+        .map { model -> model?.let { nextHandoverFrom(it, LocalDate.now()) } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), null)
+
+    /** The next [MAX_UPCOMING] events starting from now (private events included). */
+    val upcomingEvents: StateFlow<List<Event>> = eventRepository
+        .getEventsByDateRange(LocalDateTime.now(), LocalDateTime.now().plusDays(LOOKAHEAD_DAYS))
+        .map { events ->
+            val now = LocalDateTime.now()
+            events.filter { it.startDateTime >= now }
+                .sortedBy { it.startDateTime }
+                .take(MAX_UPCOMING)
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), emptyList())
+
+    /** This calendar month's total spend across all shared expenses. */
+    val monthSpend: StateFlow<MonthSpend> = expenseRepository.getAllExpenses()
+        .map { expenses ->
+            val month = LocalDate.now()
+            val inMonth = expenses.filter {
+                it.date.year == month.year && it.date.month == month.month
+            }
+            MonthSpend(
+                total = inMonth.sumOf { it.amount },
+                currency = inMonth.firstOrNull()?.currency ?: DEFAULT_CURRENCY
+            )
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), MonthSpend(0.0, DEFAULT_CURRENCY))
+
+    /** Total unread messages across all conversations. */
+    val unreadCount: StateFlow<Int> = _userId
+        .flatMapLatest { id ->
+            if (id.isEmpty()) {
+                flowOf(0)
+            } else {
+                messageRepository.getConversations(id).map { convs -> convs.sumOf { it.unreadCount } }
+            }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), 0)
 
     /**
      * Up to [MAX_ITEMS] most recent changes made by the co-parent, newest first.
@@ -100,9 +168,33 @@ class HomeViewModel @Inject constructor(
             .take(MAX_ITEMS)
     }.stateIn(
         scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
+        started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS),
         initialValue = emptyList()
     )
+
+    /**
+     * Walks forward from [today] to the first day custody switches to the other
+     * parent. Bounded by two full pattern cycles, so it always terminates.
+     */
+    private fun nextHandoverFrom(model: CustodyModel, today: LocalDate): HandoverInfo? {
+        val current = model.getCustodyFor(today)
+        val maxDays = model.patternDays * 2 + 1
+        var day = today
+        repeat(maxDays) {
+            val next = day.plusDays(1)
+            val nextParent = model.getCustodyFor(next)
+            if (nextParent != current) {
+                return HandoverInfo(
+                    date = next,
+                    daysUntil = ChronoUnit.DAYS.between(today, next),
+                    fromParent = current,
+                    toParent = nextParent
+                )
+            }
+            day = next
+        }
+        return null
+    }
 
     private fun Event.toActivityItem(): ActivityItem {
         val kind = when {
@@ -125,6 +217,10 @@ class HomeViewModel @Inject constructor(
 
     private companion object {
         const val MAX_ITEMS = 5
+        const val MAX_UPCOMING = 3
+        const val LOOKAHEAD_DAYS = 60L
+        const val STOP_TIMEOUT_MS = 5000L
+        const val DEFAULT_CURRENCY = "USD"
         val NEAR_THRESHOLD: Duration = Duration.ofSeconds(2)
     }
 }
