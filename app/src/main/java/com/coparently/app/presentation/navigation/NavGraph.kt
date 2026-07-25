@@ -429,6 +429,9 @@ fun NavGraph(
                 com.coparently.app.presentation.chat.ConversationsScreen(
                     onConversationClick = { conversationId ->
                         navController.navigate(Screen.Chat.createRoute(conversationId))
+                    },
+                    onNavigateToPairing = {
+                        navController.navigate(Screen.Pairing.route)
                     }
                 )
             }

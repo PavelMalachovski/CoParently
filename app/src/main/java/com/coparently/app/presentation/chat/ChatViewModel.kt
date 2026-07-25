@@ -36,10 +36,17 @@ class ChatViewModel @Inject constructor(
     private val _currentUserId = MutableStateFlow<String>("")
     val currentUserId: StateFlow<String> = _currentUserId.asStateFlow()
 
+    // Firebase UID of the paired co-parent, or null when the account is not paired.
+    // The chat entry points use this to decide whether to open a conversation or
+    // send the user to the pairing screen (an unpaired account has no one to chat with).
+    private val _partnerId = MutableStateFlow<String?>(null)
+    val partnerId: StateFlow<String?> = _partnerId.asStateFlow()
+
     init {
         viewModelScope.launch {
             userRepository.getCurrentUser()?.let { user ->
                 _currentUserId.value = user.id
+                _partnerId.value = user.partnerId
                 messageRepository.syncWithFirestore()
             }
         }
@@ -134,6 +141,37 @@ class ChatViewModel @Inject constructor(
             )
             messageRepository.createConversation(conversation)
             _currentConversationId.value = conversation.id
+        }
+    }
+
+    /**
+     * Opens a conversation with the paired co-parent — reusing the existing 1:1
+     * conversation if there is one, otherwise creating it — then invokes [onOpened]
+     * with its id so the screen can navigate to it. No-op when the account is not
+     * paired; callers must route to pairing in that case (see [partnerId]).
+     */
+    fun startConversationWithPartner(onOpened: (String) -> Unit) {
+        val userId = _currentUserId.value
+        val partner = _partnerId.value
+        if (userId.isEmpty() || partner.isNullOrEmpty()) return
+
+        viewModelScope.launch {
+            val existing = conversations.value.firstOrNull {
+                it.participants.toSet() == setOf(userId, partner)
+            }
+            val conversationId = existing?.id ?: run {
+                val partnerName = userRepository.getUserById(partner)?.name ?: "Co-parent"
+                val conversation = Conversation(
+                    id = UUID.randomUUID().toString(),
+                    participants = listOf(userId, partner),
+                    title = partnerName,
+                    createdAt = LocalDateTime.now()
+                )
+                messageRepository.createConversation(conversation)
+                conversation.id
+            }
+            _currentConversationId.value = conversationId
+            onOpened(conversationId)
         }
     }
 

@@ -41,17 +41,33 @@ import java.time.format.DateTimeFormatter
 @Composable
 fun ConversationsScreen(
     onConversationClick: (String) -> Unit,
+    onNavigateToPairing: () -> Unit,
     viewModel: ChatViewModel = hiltViewModel()
 ) {
     val conversations by viewModel.conversations.collectAsState()
+    val partnerId by viewModel.partnerId.collectAsState()
+
+    // Chat needs a co-parent: if paired, open (or create) the conversation with them;
+    // if not, send the user to pairing instead of silently doing nothing.
+    val startChat: () -> Unit = {
+        if (partnerId.isNullOrEmpty()) {
+            onNavigateToPairing()
+        } else {
+            viewModel.startConversationWithPartner(onOpened = onConversationClick)
+        }
+    }
 
     Scaffold(
         topBar = {
             TopAppBar(title = { Text(stringResource(R.string.conversations_title)) })
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = { /* TODO: Implement new conversation dialog */ }) {
-                Icon(Icons.Default.Add, contentDescription = stringResource(R.string.chat_new_conversation))
+            // Only show the FAB when there are conversations; the empty state carries
+            // its own primary action, so a second entry point would be redundant.
+            if (conversations.isNotEmpty()) {
+                FloatingActionButton(onClick = startChat) {
+                    Icon(Icons.Default.Add, contentDescription = stringResource(R.string.chat_new_conversation))
+                }
             }
         }
     ) { padding ->
@@ -62,7 +78,7 @@ fun ConversationsScreen(
                 title = stringResource(R.string.chat_empty_title),
                 description = stringResource(R.string.chat_empty_description),
                 actionText = stringResource(R.string.chat_new_conversation),
-                onActionClick = { /* TODO: Implement new conversation dialog */ }
+                onActionClick = startChat
             )
         } else {
             LazyColumn(

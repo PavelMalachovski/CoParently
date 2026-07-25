@@ -9,6 +9,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Savings
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -32,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.coparently.app.R
 import com.coparently.app.domain.model.BudgetAlert
+import com.coparently.app.presentation.common.animations.AnimatedEmptyState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -41,6 +43,7 @@ fun BudgetScreen(
 ) {
     val budgets by viewModel.budgets.collectAsState()
     val alerts by viewModel.activeAlerts.collectAsState()
+    var showAddSheet by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         viewModel.refreshAlerts()
@@ -63,41 +66,65 @@ fun BudgetScreen(
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = { /* TODO: Add budget dialog */ }) {
-                Icon(Icons.Default.Add, contentDescription = stringResource(R.string.budget_add))
-            }
-        }
-    ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(16.dp)
-        ) {
-            // Active alerts
-            if (alerts.isNotEmpty()) {
-                AlertSection(alerts = alerts)
-            }
-
-            // Budget list
-            LazyColumn {
-                items(budgets) { budget ->
-                    // We need to fetch spent amount for each budget
-                    // In a real app, this might be better handled in the VM with a combined state
-                    var spentAmount by remember { mutableStateOf(0.0) }
-
-                    LaunchedEffect(budget.id) {
-                        spentAmount = viewModel.getSpentForBudget(budget.id)
-                    }
-
-                    BudgetItem(
-                        budget = budget,
-                        spentAmount = spentAmount,
-                        onEdit = { /* navigate to edit */ }
-                    )
+            // Only show the FAB when budgets exist; the empty state carries its own
+            // "Add budget" action, so a second entry point would be redundant.
+            if (budgets.isNotEmpty()) {
+                FloatingActionButton(onClick = { showAddSheet = true }) {
+                    Icon(Icons.Default.Add, contentDescription = stringResource(R.string.budget_add))
                 }
             }
         }
+    ) { padding ->
+        if (budgets.isEmpty()) {
+            AnimatedEmptyState(
+                icon = Icons.Default.Savings,
+                title = stringResource(R.string.budgets_empty_title),
+                description = stringResource(R.string.budgets_empty_description),
+                actionText = stringResource(R.string.budget_add),
+                onActionClick = { showAddSheet = true }
+            )
+        } else {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(16.dp)
+            ) {
+                // Active alerts
+                if (alerts.isNotEmpty()) {
+                    AlertSection(alerts = alerts)
+                }
+
+                // Budget list
+                LazyColumn {
+                    items(budgets) { budget ->
+                        // We need to fetch spent amount for each budget
+                        // In a real app, this might be better handled in the VM with a combined state
+                        var spentAmount by remember { mutableStateOf(0.0) }
+
+                        LaunchedEffect(budget.id) {
+                            spentAmount = viewModel.getSpentForBudget(budget.id)
+                        }
+
+                        BudgetItem(
+                            budget = budget,
+                            spentAmount = spentAmount,
+                            onEdit = { /* navigate to edit */ }
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    if (showAddSheet) {
+        AddBudgetSheet(
+            onDismiss = { showAddSheet = false },
+            onSave = { category, monthlyLimit ->
+                viewModel.addBudget(category = category, monthlyLimit = monthlyLimit)
+                showAddSheet = false
+            }
+        )
     }
 }
 
