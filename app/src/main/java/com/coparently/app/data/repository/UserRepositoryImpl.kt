@@ -51,6 +51,8 @@ class UserRepositoryImpl @Inject constructor(
         }
     }
 
+    override suspend fun getCurrentUserId(): String? = firebaseAuthService.getCurrentUser()?.uid
+
     override suspend fun upsertUser(user: User) {
         try {
             userDao.insertUser(user.toEntity())

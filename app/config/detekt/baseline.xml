@@ -60,10 +60,8 @@
     <ID>ForEachOnRange:CustodySetupScreen.kt$0..6</ID>
     <ID>ForEachOnRange:CustodySetupScreen.kt$7..13.coerceAtMost(uiState.customPatternDays - 1)</ID>
     <ID>ForbiddenComment:AuthScreen.kt$/* TODO: Implement password reset */</ID>
-    <ID>ForbiddenComment:BudgetScreen.kt$/* TODO: Add budget dialog */</ID>
     <ID>ForbiddenComment:CalendarSyncRepository.kt$CalendarSyncRepository$// TODO: Determine from event data</ID>
     <ID>ForbiddenComment:ConversationSummarizer.kt$ConversationSummarizer$// TODO: Add method to MessageRepository to get messages since a specific date</ID>
-    <ID>ForbiddenComment:ConversationsScreen.kt$/* TODO: Implement new conversation dialog */</ID>
     <ID>ForbiddenComment:ExpenseScreen.kt$/* TODO: Show details */</ID>
     <ID>ForbiddenComment:FamilyInsightsEngine.kt$FamilyInsightsEngine$// TODO: Add method to EventRepository to filter events by child</ID>
     <ID>ForbiddenComment:FamilyInsightsEngine.kt$FamilyInsightsEngine$// TODO: Add method to ExpenseRepository to filter by child and date range</ID>
@@ -103,12 +101,14 @@
     <ID>Indentation:SmartSchedulingUseCase.kt$ConflictDetector$ </ID>
     <ID>Indentation:SmartSchedulingUseCase.kt$SmartSchedulingUseCase$ </ID>
     <ID>LongMethod:ActivityEditor.kt$@Composable private fun ActivityForm( activity: Activity? = null, onSave: (Activity) -&gt; Unit, onCancel: () -&gt; Unit )</ID>
+    <ID>LongMethod:AddBudgetSheet.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun AddBudgetSheet( onDismiss: () -&gt; Unit, onSave: (category: ExpenseCategory, monthlyLimit: Double) -&gt; Unit )</ID>
     <ID>LongMethod:AddEditChildInfoScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun AddEditChildInfoScreen( childInfoId: String?, onNavigateBack: () -&gt; Unit, viewModel: ChildInfoViewModel = hiltViewModel() )</ID>
     <ID>LongMethod:AddEditEventScreen.kt$@OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class) @Composable fun AddEditEventScreen( eventId: String?, initialDate: LocalDate? = null, initialHour: Int? = null, onSave: () -&gt; Unit, onCancel: () -&gt; Unit, onRequestChange: ((String) -&gt; Unit)? = null, viewModel: EventViewModel = hiltViewModel() )</ID>
     <ID>LongMethod:AddExpenseScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun AddExpenseScreen( onBack: () -&gt; Unit, viewModel: ExpenseViewModel = hiltViewModel() )</ID>
     <ID>LongMethod:AllergyEditor.kt$@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class) @Composable fun AllergyEditor( allergies: List&lt;String&gt;, onAdd: (String) -&gt; Unit, onRemove: (Int) -&gt; Unit, modifier: Modifier = Modifier )</ID>
     <ID>LongMethod:AnimatedTheme.kt$@Composable private fun animateColorScheme(targetScheme: ColorScheme): ColorScheme</ID>
     <ID>LongMethod:AuthScreen.kt$@Composable fun AuthScreen( onAuthSuccess: () -&gt; Unit, onViewModelReady: ((AuthViewModel) -&gt; Unit)? = null, viewModel: AuthViewModel = hiltViewModel() )</ID>
+    <ID>LongMethod:BudgetScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun BudgetScreen( onBack: (() -&gt; Unit)? = null, viewModel: BudgetViewModel = hiltViewModel() )</ID>
     <ID>LongMethod:CalendarFilters.kt$@OptIn(ExperimentalMaterial3Api::class, FoundationExperimentalLayoutApi::class) @Composable fun EventTypeFilterSheet( allEventTypes: List&lt;String&gt;, hiddenEventTypes: Set&lt;String&gt;, showHolidays: Boolean, onToggleType: (String) -&gt; Unit, onAddCustomType: (String) -&gt; Unit, onShowHolidaysChange: (Boolean) -&gt; Unit, onDismiss: () -&gt; Unit, sheetState: SheetState )</ID>
     <ID>LongMethod:CalendarHeader.kt$@Composable private fun MonthTitleSelector( selectedDate: LocalDate, viewMode: CalendarViewMode, onViewModeChange: (CalendarViewMode) -&gt; Unit )</ID>
     <ID>LongMethod:CalendarScreen.kt$@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class) @Composable fun CalendarScreen( onEventClick: (String) -&gt; Unit = {}, onAddEventClick: (LocalDate?, Int?) -&gt; Unit, onSettingsClick: (() -&gt; Unit)? = null, onChangeRequestsClick: (() -&gt; Unit)? = null, onWeeklySummaryClick: (() -&gt; Unit)? = null, eventViewModel: EventViewModel = hiltViewModel(), calendarViewModel: CalendarViewModel = hiltViewModel(), changeRequestViewModel: com.coparently.app.presentation.changerequests.ChangeRequestViewModel = hiltViewModel() )</ID>
@@ -119,6 +119,7 @@
     <ID>LongMethod:ChildInfoScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun ChildInfoScreen( onNavigateBack: () -&gt; Unit, onEditClick: (String) -&gt; Unit, viewModel: ChildInfoViewModel = hiltViewModel() )</ID>
     <ID>LongMethod:CoPlanlySnackbarHost.kt$@Composable fun CoPlanlySnackbarHost( snackbarHostState: SnackbarHostState, modifier: Modifier = Modifier )</ID>
     <ID>LongMethod:ConflictAlertCard.kt$@Composable fun ConflictAlertCard( conflict: UpcomingConflict, onViewSolutions: () -&gt; Unit, onDismiss: () -&gt; Unit, modifier: Modifier = Modifier )</ID>
+    <ID>LongMethod:ConversationsScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun ConversationsScreen( onConversationClick: (String) -&gt; Unit, onNavigateToPairing: () -&gt; Unit, onOpenSettings: () -&gt; Unit, viewModel: ChatViewModel = hiltViewModel() )</ID>
     <ID>LongMethod:CustodyIndicatorToday.kt$@Composable fun CustodyIndicatorToday(custody: String)</ID>
     <ID>LongMethod:CustodySetupScreen.kt$@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class) @Composable fun CustodySetupScreen( onNavigateBack: () -&gt; Unit, viewModel: CustodySetupViewModel = hiltViewModel() )</ID>
     <ID>LongMethod:DayWeekView.kt$@Composable private fun EventChip( event: Event, onClick: () -&gt; Unit, columnWidthPx: Float, hourHeightPx: Float, baseDate: LocalDate, baseHour: Int, onDragDrop: ((String, LocalDate, Int) -&gt; Unit)?, onResize: ((String, LocalDateTime?, LocalDateTime?) -&gt; Unit)? = null, onDelete: ((String) -&gt; Unit)? = null, onLongPressStart: ((String) -&gt; Unit)? = null, onLongPressEnd: (() -&gt; Unit)? = null, onDragOverDeleteButton: ((Boolean) -&gt; Unit)? = null, // Visible segment of the event within the current day (differs from the real event // times for multi-day / overnight events, which are clamped to each day). displayStart: LocalDateTime = event.startDateTime, displayEnd: LocalDateTime = event.endDateTime ?: event.startDateTime.plusHours(1), // Continuation segments of multi-day events are not resizable/movable (ambiguous). resizable: Boolean = true, draggable: Boolean = true )</ID>
@@ -126,7 +127,7 @@
     <ID>LongMethod:ErrorDisplay.kt$@Composable fun ErrorDisplay( error: UiError, modifier: Modifier = Modifier, onDismiss: (() -&gt; Unit)? = null )</ID>
     <ID>LongMethod:EventListScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun EventListScreen( onEventClick: (String) -&gt; Unit, onAddEventClick: () -&gt; Unit, onNavigateUp: () -&gt; Unit, viewModel: EventViewModel = hiltViewModel() )</ID>
     <ID>LongMethod:EventSuggestionsScreen.kt$@Composable fun SuggestionCard( suggestion: EventSuggestion, onAccept: () -&gt; Unit, onReject: () -&gt; Unit, onModify: () -&gt; Unit, modifier: Modifier = Modifier )</ID>
-    <ID>LongMethod:HomeScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun HomeScreen( onOpenEvent: (String) -&gt; Unit, onOpenChangeRequests: () -&gt; Unit, onOpenWeeklySummary: () -&gt; Unit, onOpenSettings: () -&gt; Unit, viewModel: HomeViewModel = hiltViewModel() )</ID>
+    <ID>LongMethod:HomeScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun HomeScreen( onOpenEvent: (String) -&gt; Unit, onOpenChangeRequests: () -&gt; Unit, onOpenWeeklySummary: () -&gt; Unit, onOpenSettings: () -&gt; Unit, onNavigateToPairing: () -&gt; Unit, viewModel: HomeViewModel = hiltViewModel() )</ID>
     <ID>LongMethod:MainActivity.kt$MainActivity$override fun onCreate(savedInstanceState: Bundle?)</ID>
     <ID>LongMethod:MedicationEditor.kt$@Composable private fun MedicationForm( medication: Medication? = null, onSave: (Medication) -&gt; Unit, onCancel: () -&gt; Unit )</ID>
     <ID>LongMethod:MessagesList.kt$@Composable fun MessageItem( message: Message, isCurrentUser: Boolean )</ID>
@@ -154,6 +155,7 @@
     <ID>LongParameterList:EventViewModel.kt$EventViewModel$( title: String, description: String, parentOwner: String, eventType: String, startDate: LocalDate, startTime: LocalTime, endTime: LocalTime )</ID>
     <ID>LongParameterList:GoogleCalendarApi.kt$GoogleCalendarApi$( credential: Credential, calendarId: String = "primary", eventId: String, title: String, description: String?, startDateTime: LocalDateTime, endDateTime: LocalDateTime? )</ID>
     <ID>LongParameterList:GoogleCalendarApi.kt$GoogleCalendarApi$( credential: Credential, calendarId: String = "primary", title: String, description: String?, startDateTime: LocalDateTime, endDateTime: LocalDateTime? )</ID>
+    <ID>LongParameterList:HomeScreen.kt$( onOpenEvent: (String) -&gt; Unit, onOpenChangeRequests: () -&gt; Unit, onOpenWeeklySummary: () -&gt; Unit, onOpenSettings: () -&gt; Unit, onNavigateToPairing: () -&gt; Unit, viewModel: HomeViewModel = hiltViewModel() )</ID>
     <ID>LongParameterList:LoadingButton.kt$( onClick: () -&gt; Unit, modifier: Modifier = Modifier, enabled: Boolean = true, isLoading: Boolean = false, loadingText: String? = null, colors: androidx.compose.material3.ButtonColors = ButtonDefaults.buttonColors(), content: @Composable RowScope.() -&gt; Unit )</ID>
     <ID>LongParameterList:LoadingButton.kt$( onClick: () -&gt; Unit, modifier: Modifier = Modifier, enabled: Boolean = true, isLoading: Boolean = false, loadingText: String? = null, content: @Composable RowScope.() -&gt; Unit )</ID>
     <ID>LongParameterList:NaturalLanguageEventScreen.kt$( parsedEvent: ParsedEvent, confidence: Double, validationIssues: List&lt;String&gt;, onConfirm: () -&gt; Unit, onEdit: () -&gt; Unit, modifier: Modifier = Modifier )</ID>
@@ -392,7 +394,6 @@
     <ID>MaxLineLength:CzechHolidays.kt$CzechHolidays$Holiday(LocalDate.of(year, 10, 28), "Independent Czechoslovak State Day", "Den vzniku samostatného československého státu")</ID>
     <ID>MaxLineLength:CzechHolidays.kt$CzechHolidays$Holiday(LocalDate.of(year, 7, 5), "Saints Cyril and Methodius Day", "Den slovanských věrozvěstů Cyrila a Metoděje")</ID>
     <ID>MaxLineLength:DatabaseMigrations.kt$DatabaseMigrations.&lt;no name provided&gt;$"CREATE INDEX IF NOT EXISTS index_events_parentOwner_startDateTime ON events(parentOwner, startDateTime)"</ID>
-    <ID>MaxLineLength:DatabaseModule.kt$DatabaseModule$.</ID>
     <ID>MaxLineLength:DayWeekView.kt$contentDescription = "Time slot at ${String.format("%02d:00", hour)} on ${date.format(DateTimeFormatter.ofPattern("MMM dd"))}. Tap to add event."</ID>
     <ID>MaxLineLength:DayWeekView.kt$val minuteShift = (rawMinuteShift / RESIZE_SNAP_MINUTES.toFloat()).roundToInt() * RESIZE_SNAP_MINUTES</ID>
     <ID>MaxLineLength:EncryptedPreferences.kt$EncryptedPreferences$Log.e("EncryptedPreferences", "Critical: Failed to create any SharedPreferences, using in-memory fallback", e2)</ID>
@@ -572,7 +573,6 @@
     <ID>NoUnusedImports:FirestoreEventDataSource.kt$com.coparently.app.data.remote.firebase.FirestoreEventDataSource.kt</ID>
     <ID>NoUnusedImports:GoogleCalendarApi.kt$com.coparently.app.data.remote.google.GoogleCalendarApi.kt</ID>
     <ID>NoUnusedImports:GoogleModule.kt$com.coparently.app.di.GoogleModule.kt</ID>
-    <ID>NoUnusedImports:HomeScreen.kt$com.coparently.app.presentation.home.HomeScreen.kt</ID>
     <ID>NoUnusedImports:LoadingButton.kt$com.coparently.app.presentation.common.LoadingButton.kt</ID>
     <ID>NoUnusedImports:LoadingSkeleton.kt$com.coparently.app.presentation.common.animations.LoadingSkeleton.kt</ID>
     <ID>NoUnusedImports:MedicalRepositoryImpl.kt$com.coparently.app.data.repository.MedicalRepositoryImpl.kt</ID>
