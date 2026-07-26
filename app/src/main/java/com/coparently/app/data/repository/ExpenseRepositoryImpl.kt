@@ -77,29 +77,36 @@ class ExpenseRepositoryImpl @Inject constructor(
     }
 
     override suspend fun addExpense(expense: Expense) {
+        // Room is the source of truth — persist locally first so the expense is never
+        // lost, even if the Firestore push below fails.
         val entity = expense.toEntity()
         expenseDao.insertExpense(entity)
 
-        val firebaseUser = firebaseAuthService.getCurrentUser()
-        if (firebaseUser != null) {
-            val expenseData = mapOf(
-                "id" to expense.id,
-                "childId" to (expense.childId ?: ""),
-                "title" to expense.title,
-                "amount" to expense.amount,
-                "currency" to expense.currency,
-                "category" to expense.category.name,
-                "paidBy" to expense.paidBy,
-                "splitBetween" to expense.splitBetween,
-                "date" to expense.date.format(dateFormatter),
-                "receiptUrl" to (expense.receiptUrl ?: ""),
-                "notes" to (expense.notes ?: ""),
-                "createdAt" to expense.createdAt.format(dateTimeFormatter)
-            )
+        val firebaseUser = firebaseAuthService.getCurrentUser() ?: return
+        val expenseData = mapOf(
+            "id" to expense.id,
+            "childId" to (expense.childId ?: ""),
+            "title" to expense.title,
+            "amount" to expense.amount,
+            "currency" to expense.currency,
+            "category" to expense.category.name,
+            // createdByFirebaseUid mirrors the events schema so the Firestore rules can
+            // gate ownership consistently; paidBy stays for split/summary logic.
+            "createdByFirebaseUid" to firebaseUser.uid,
+            "paidBy" to expense.paidBy,
+            "splitBetween" to expense.splitBetween,
+            "date" to expense.date.format(dateFormatter),
+            "receiptUrl" to (expense.receiptUrl ?: ""),
+            "notes" to (expense.notes ?: ""),
+            "createdAt" to expense.createdAt.format(dateTimeFormatter)
+        )
+        // A rejected/failed sync must never crash the app — the expense is already saved
+        // locally and will re-sync later. (A PERMISSION_DENIED here used to be fatal.)
+        try {
             firestoreExpenseDataSource.setExpense(expense.id, expenseData)
-
-            val syncedExpense = expense.copy(syncedToFirestore = true)
-            expenseDao.insertExpense(syncedExpense.toEntity())
+            expenseDao.insertExpense(expense.copy(syncedToFirestore = true).toEntity())
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+            android.util.Log.w("ExpenseRepo", "Expense Firestore sync failed; kept locally", e)
         }
     }
 
