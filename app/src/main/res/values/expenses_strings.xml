@@ -23,4 +23,27 @@
     <string name="budgets_empty_description">Set a monthly limit per category to keep shared spending on track.</string>
     <string name="expenses_empty_title">No expenses yet</string>
     <string name="expenses_empty_description">Log a shared cost — daycare, clothes, a doctor visit — and split it with your co-parent.</string>
+    <!-- Month summary header: total, who-paid split and settle-up -->
+    <string name="expenses_month_shared_spend">%1$s · shared spend</string>
+    <string name="expenses_mom_paid">Mom paid %1$s</string>
+    <string name="expenses_dad_paid">Dad paid %1$s</string>
+    <string name="expenses_balance_owed_to_you">Your co-parent owes you %1$s</string>
+    <string name="expenses_balance_you_owe">You owe your co-parent %1$s</string>
+    <string name="expenses_balance_settled">You are all square</string>
+    <string name="expenses_settle_up">Settle up</string>
+    <!-- Drafted into the chat composer; the user reviews and sends it themselves -->
+    <string name="expenses_settle_up_message_owed">Settling up for %2$s — you owe me %1$s.</string>
+    <string name="expenses_settle_up_message_owing">Settling up for %2$s — I owe you %1$s.</string>
+
+    <!-- Expense list rows -->
+    <string name="expenses_this_month">This month</string>
+    <plurals name="expenses_count">
+        <item quantity="one">%1$d expense</item>
+        <item quantity="other">%1$d expenses</item>
+    </plurals>
+    <string name="expenses_row_subtitle">%1$s · %2$s paid · %3$s</string>
+    <string name="expenses_row_subtitle_unknown_payer">%1$s · %2$s</string>
+    <string name="expenses_split_even">split 50/50</string>
+    <string name="expenses_split_n_ways">split 1/%1$d</string>
+    <string name="expenses_split_none">not split</string>
 </resources>

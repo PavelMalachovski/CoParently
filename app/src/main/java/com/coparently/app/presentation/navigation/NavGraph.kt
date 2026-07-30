@@ -1,5 +1,6 @@
 package com.coparently.app.presentation.navigation
 
+import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -76,7 +77,7 @@ fun NavGraph(
                 CoPlanlyBottomBar(
                     currentRoute = currentRoute,
                     onNavigate = { destination ->
-                        navController.navigate(destination.route) {
+                        navController.navigate(destination.navRoute) {
                             // Keep one instance per tab, preserve each tab's state
                             popUpTo(Screen.Home.route) { saveState = true }
                             launchSingleTop = true
@@ -427,14 +428,24 @@ fun NavGraph(
             // Chat & Communications
             composable(
                 route = Screen.Conversations.route,
+                arguments = listOf(
+                    navArgument(Screen.Conversations.ARG_DRAFT) {
+                        type = NavType.StringType
+                        defaultValue = ""
+                    }
+                ),
                 enterTransition = { slideInFromRight() },
                 exitTransition = { slideOutToLeft() },
                 popEnterTransition = { slideInFromLeft() },
                 popExitTransition = { slideOutToRight() }
-            ) {
+            ) { backStackEntry ->
+                val draft = backStackEntry.arguments
+                    ?.getString(Screen.Conversations.ARG_DRAFT).orEmpty()
                 com.coparently.app.presentation.chat.ConversationsScreen(
                     onConversationClick = { conversationId ->
-                        navController.navigate(Screen.Chat.createRoute(conversationId))
+                        navController.navigate(
+                            Screen.Chat.createRoute(conversationId, draft.ifEmpty { null })
+                        )
                     },
                     onNavigateToPairing = {
                         navController.navigate(Screen.Pairing.route)
@@ -450,6 +461,10 @@ fun NavGraph(
                 arguments = listOf(
                     navArgument(Screen.Chat.ARG_CONVERSATION_ID) {
                         type = NavType.StringType
+                    },
+                    navArgument(Screen.Chat.ARG_DRAFT) {
+                        type = NavType.StringType
+                        defaultValue = ""
                     }
                 ),
                 enterTransition = { slideInFromRight() },
@@ -460,6 +475,7 @@ fun NavGraph(
                 val conversationId = backStackEntry.arguments?.getString(Screen.Chat.ARG_CONVERSATION_ID) ?: return@composable
                 com.coparently.app.presentation.chat.ChatScreen(
                     conversationId = conversationId,
+                    draft = backStackEntry.arguments?.getString(Screen.Chat.ARG_DRAFT).orEmpty(),
                     onBack = {
                         navController.popBackStack()
                     },
@@ -488,6 +504,11 @@ fun NavGraph(
                     },
                     onOpenSettings = {
                         navController.navigate(Screen.Settings.route)
+                    },
+                    onSettleUp = { draft ->
+                        // Carries the message to the thread the user opens and stops there:
+                        // sending it is theirs to do.
+                        navController.navigate(Screen.Conversations.createRoute(draft))
                     }
                 )
             }
@@ -586,12 +607,26 @@ sealed class Screen(val route: String) {
         }
     }
 
-    data object Conversations : Screen("conversations")
-    data object Chat : Screen("chat/{conversationId}") {
-        const val ARG_CONVERSATION_ID = "conversationId"
+    /**
+     * Conversation list. An optional [ARG_DRAFT] is carried through to the thread the user
+     * opens, so "Settle up" on Expenses can pre-fill the composer without sending anything.
+     */
+    data object Conversations : Screen("conversations?draft={draft}") {
+        const val ARG_DRAFT = "draft"
 
-        fun createRoute(conversationId: String): String {
-            return "chat/$conversationId"
+        fun createRoute(draft: String? = null): String {
+            val encoded = draft?.let { Uri.encode(it) }.orEmpty()
+            return "conversations?draft=$encoded"
+        }
+    }
+
+    data object Chat : Screen("chat/{conversationId}?draft={draft}") {
+        const val ARG_CONVERSATION_ID = "conversationId"
+        const val ARG_DRAFT = "draft"
+
+        fun createRoute(conversationId: String, draft: String? = null): String {
+            val encoded = draft?.let { Uri.encode(it) }.orEmpty()
+            return "chat/$conversationId?draft=$encoded"
         }
     }
     data object Expenses : Screen("expenses")

@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Calendar strings. Deliberately a tracked, feature-named file: the repo's strings.xml is
+  gitignored (it holds local OAuth values), so anything placed there is missing from a fresh
+  clone. Key names avoid calendar_title / calendar_settings / calendar_add_event, which the
+  local strings.xml already defines.
+-->
+<resources>
+    <!-- Parent names, used to compose custody and handover copy -->
+    <string name="calendar_parent_mom">Mom</string>
+    <string name="calendar_parent_dad">Dad</string>
+
+    <!-- Custody ribbon -->
+    <string name="calendar_custody_today_with">Today with %1$s</string>
+    <string name="calendar_custody_handover_tomorrow">→ %1$s tomorrow</string>
+    <plurals name="calendar_custody_handover_in_days">
+        <item quantity="one">→ %2$s in %1$d day</item>
+        <item quantity="other">→ %2$s in %1$d days</item>
+    </plurals>
+    <string name="calendar_custody_ribbon_description">Today the child is with %1$s</string>
+    <string name="calendar_custody_ribbon_description_handover">Today the child is with %1$s. Custody passes to %2$s in %3$d days.</string>
+
+    <!-- View mode switcher -->
+    <string name="calendar_viewmode_month">Month</string>
+    <string name="calendar_viewmode_week">Week</string>
+    <string name="calendar_viewmode_day">Day</string>
+    <string name="calendar_filters_button">Filters</string>
+    <string name="calendar_today_button">Today</string>
+    <!-- Header subtitle when the selected day is today, e.g. "Sat 25 · today" -->
+    <string name="calendar_subtitle_today">%1$s · today</string>
+
+    <!-- Legend under the month grid -->
+    <string name="calendar_legend_mom">Mom</string>
+    <string name="calendar_legend_dad">Dad</string>
+    <string name="calendar_legend_vacation">Vacation</string>
+
+    <!-- Parent filter, now shown inside the Filters sheet -->
+    <string name="calendar_filter_show">Show</string>
+    <string name="calendar_filter_both">Both</string>
+</resources>

@@ -3,7 +3,8 @@ package com.coparently.app.presentation.home
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.coparently.app.data.repository.CustodyModelRepository
-import com.coparently.app.domain.model.CustodyModel
+import com.coparently.app.domain.custody.HandoverCalculator
+import com.coparently.app.domain.custody.HandoverInfo
 import com.coparently.app.domain.model.Event
 import com.coparently.app.domain.repository.ChangeRequestRepository
 import com.coparently.app.domain.repository.EventRepository
@@ -25,7 +26,6 @@ import kotlinx.coroutines.launch
 import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalDateTime
-import java.time.temporal.ChronoUnit
 import javax.inject.Inject
 
 /**
@@ -43,21 +43,6 @@ data class ActivityItem(
     val timestamp: LocalDateTime,
     val eventId: String,
     val isChangeRequest: Boolean
-)
-
-/**
- * The next custody handover computed from the active custody model.
- *
- * @property date Day custody switches to the other parent
- * @property daysUntil Whole days from today to [date] (0 = today, 1 = tomorrow)
- * @property fromParent Parent who has custody now ("mom"/"dad")
- * @property toParent Parent who takes over on [date] ("mom"/"dad")
- */
-data class HandoverInfo(
-    val date: LocalDate,
-    val daysUntil: Long,
-    val fromParent: String,
-    val toParent: String
 )
 
 /** This month's shared spending total. */
@@ -97,7 +82,7 @@ class HomeViewModel @Inject constructor(
 
     /** Next custody handover, or null when no custody model is configured. */
     val nextHandover: StateFlow<HandoverInfo?> = custodyModelRepository.getActiveModel()
-        .map { model -> model?.let { nextHandoverFrom(it, LocalDate.now()) } }
+        .map { model -> model?.let { HandoverCalculator.nextHandoverFrom(it, LocalDate.now()) } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), null)
 
     /** The next [MAX_UPCOMING] events starting from now (private events included). */
@@ -171,30 +156,6 @@ class HomeViewModel @Inject constructor(
         started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS),
         initialValue = emptyList()
     )
-
-    /**
-     * Walks forward from [today] to the first day custody switches to the other
-     * parent. Bounded by two full pattern cycles, so it always terminates.
-     */
-    private fun nextHandoverFrom(model: CustodyModel, today: LocalDate): HandoverInfo? {
-        val current = model.getCustodyFor(today)
-        val maxDays = model.patternDays * 2 + 1
-        var day = today
-        repeat(maxDays) {
-            val next = day.plusDays(1)
-            val nextParent = model.getCustodyFor(next)
-            if (nextParent != current) {
-                return HandoverInfo(
-                    date = next,
-                    daysUntil = ChronoUnit.DAYS.between(today, next),
-                    fromParent = current,
-                    toParent = nextParent
-                )
-            }
-            day = next
-        }
-        return null
-    }
 
     private fun Event.toActivityItem(): ActivityItem {
         val kind = when {

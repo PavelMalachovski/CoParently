@@ -21,7 +21,10 @@ import com.coparently.app.R
 /**
  * Top-level destinations reachable from the bottom navigation bar.
  *
- * @property route Navigation route of the destination
+ * @property route Route *pattern* of the destination, used to match the current entry
+ * @property navRoute Concrete route to navigate to. Differs from [route] where the pattern
+ *   carries optional arguments — navigating to a pattern would pass `{placeholder}` through as
+ *   a literal value.
  * @property labelRes Label string resource
  * @property selectedIcon Icon when the destination is selected
  * @property unselectedIcon Icon when the destination is not selected
@@ -30,7 +33,8 @@ enum class BottomNavDestination(
     val route: String,
     val labelRes: Int,
     val selectedIcon: ImageVector,
-    val unselectedIcon: ImageVector
+    val unselectedIcon: ImageVector,
+    val navRoute: String = route
 ) {
     HOME(
         route = Screen.Home.route,
@@ -48,7 +52,9 @@ enum class BottomNavDestination(
         route = Screen.Conversations.route,
         labelRes = R.string.nav_chat,
         selectedIcon = Icons.AutoMirrored.Filled.Chat,
-        unselectedIcon = Icons.AutoMirrored.Outlined.Chat
+        unselectedIcon = Icons.AutoMirrored.Outlined.Chat,
+        // The pattern carries an optional draft argument; the tab opens the plain list.
+        navRoute = Screen.Conversations.createRoute()
     ),
     EXPENSES(
         route = Screen.Expenses.route,
