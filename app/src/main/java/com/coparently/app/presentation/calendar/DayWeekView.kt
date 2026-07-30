@@ -56,8 +56,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
@@ -71,7 +71,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.coparently.app.domain.model.Event
 import com.coparently.app.presentation.theme.CoPlanlyColors
 import com.coparently.app.presentation.theme.dimensions
@@ -203,6 +202,11 @@ private fun DayWeekPage(
     val dims = dimensions()
     val hours = (0..23).toList()
     val density = LocalDensity.current
+    // Match the actually-rendered theme, not the system one (the app can force light while
+    // the system is dark). Hoisted here because both the day headers and the hour-grid
+    // columns below need it to pick the readable member of a colour pair.
+    val isDarkTheme =
+        MaterialTheme.colorScheme.surface.luminance() < CoPlanlyColors.DARK_LUMINANCE_THRESHOLD
     val hourCellHeight = dims.buttonHeight * 1.07f
     val hourCellHeightPx = remember(hourCellHeight, density) {
         with(density) { hourCellHeight.toPx() }
@@ -279,7 +283,6 @@ private fun DayWeekPage(
                         Text(
                             text = weekNumber.toString(),
                             style = MaterialTheme.typography.labelSmall,
-                            fontSize = 11.sp,
                             fontWeight = FontWeight.Normal,
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                         )
@@ -329,7 +332,6 @@ private fun DayWeekPage(
                                     text = date.format(DateTimeFormatter.ofPattern("EEE")),
                                     style = MaterialTheme.typography.labelSmall,
                                     fontWeight = FontWeight.Normal,
-                                    fontSize = 9.sp,
                                     color = if (isToday) {
                                         MaterialTheme.colorScheme.primary
                                     } else {
@@ -339,11 +341,14 @@ private fun DayWeekPage(
                                 Text(
                                     text = date.dayOfMonth.toString(),
                                     style = MaterialTheme.typography.bodyMedium,
-                                    fontSize = 13.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = when {
                                         isToday -> MaterialTheme.colorScheme.primary
-                                        isPublicHoliday -> CoPlanlyColors.HolidayRed
+                                        isPublicHoliday -> if (isDarkTheme) {
+                                            CoPlanlyColors.HolidayRedDark
+                                        } else {
+                                            CoPlanlyColors.HolidayRed
+                                        }
                                         else -> MaterialTheme.colorScheme.onSurface
                                     }
                                 )
@@ -357,13 +362,15 @@ private fun DayWeekPage(
                                     Text(
                                         text = holidayName,
                                         style = MaterialTheme.typography.labelSmall,
-                                        fontSize = 9.sp,
                                         maxLines = 1,
                                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                                        color = if (isPublicHoliday) {
-                                            CoPlanlyColors.HolidayRed
-                                        } else {
-                                            CoPlanlyColors.VacationTint
+                                        // Holiday/vacation names are text, so each needs the
+                                        // member of its pair that clears AA on this theme.
+                                        color = when {
+                                            isPublicHoliday && isDarkTheme -> CoPlanlyColors.HolidayRedDark
+                                            isPublicHoliday -> CoPlanlyColors.HolidayRed
+                                            isDarkTheme -> CoPlanlyColors.VacationTint
+                                            else -> CoPlanlyColors.VacationTintLight
                                         }
                                     )
                                 }
@@ -403,8 +410,10 @@ private fun DayWeekPage(
                         ) {
                             Text(
                                 text = String.format("%02d:00", hour),
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontSize = 11.sp,
+                                // labelSmall (11sp) rather than bodyMedium: the hour gutter is
+                                // narrow, and this keeps the rendered size while still scaling
+                                // with the user's font-size setting.
+                                style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontWeight = FontWeight.Medium,
                                 maxLines = 1
@@ -459,18 +468,21 @@ private fun DayWeekPage(
                                     val isToday = date == LocalDate.now()
                                     val custody = getCustody(date)
                                     val isWeekend = CustodyHelper.isWeekend(date)
-                                    // Match the actually-rendered theme, not the system one
-                                    // (the app can force light while the system is dark).
-                                    val isDarkTheme = MaterialTheme.colorScheme.surface.luminance() < 0.5f
                                     val weekendColor = if (isDarkTheme) {
                                         CoPlanlyColors.WeekendBackgroundDark.copy(alpha = 0.5f)
                                     } else {
                                         CoPlanlyColors.WeekendBackgroundLight.copy(alpha = 0.3f)
                                     }
+                                    // Custody wins over the today tint, matching MonthView:
+                                    // it is the product's core signal, and today already
+                                    // reads as today from its coloured header above. The old
+                                    // order hid custody on the one column parents check first.
                                     val backgroundColor = when {
+                                        custody == "mom" ->
+                                            CoPlanlyColors.MomPink.copy(alpha = CoPlanlyColors.CUSTODY_TINT_ALPHA)
+                                        custody == "dad" ->
+                                            CoPlanlyColors.DadBlue.copy(alpha = CoPlanlyColors.CUSTODY_TINT_ALPHA)
                                         isToday -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.05f)
-                                        custody == "mom" -> CoPlanlyColors.MomPink.copy(alpha = 0.03f)
-                                        custody == "dad" -> CoPlanlyColors.DadBlue.copy(alpha = 0.03f)
                                         isWeekend -> weekendColor
                                         else -> MaterialTheme.colorScheme.surface
                                     }
@@ -662,11 +674,10 @@ private fun EventChip(
         else -> MaterialTheme.colorScheme.tertiary.copy(alpha = 0.8f)
     }
 
-    val textColor = when (event.parentOwner) {
-        "mom" -> CoPlanlyColors.MomPink
-        "dad" -> CoPlanlyColors.DadBlue
-        else -> MaterialTheme.colorScheme.onTertiaryContainer
-    }
+    // The title is NOT tinted with the parent colour: pink text on a pink fill (and blue on
+    // blue) was the same hue at three alphas and unreadable. Identity is carried by the
+    // border above; the label just has to be legible.
+    val textColor = MaterialTheme.colorScheme.onSurface
 
     // Drag states
     var isDraggingEvent by remember { mutableStateOf(false) }
@@ -950,7 +961,6 @@ private fun EventChip(
                         java.time.format.DateTimeFormatter.ofPattern("HH:mm")
                     )} - ${tempEndTime.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"))}",
                     style = MaterialTheme.typography.labelSmall,
-                    fontSize = 10.sp,
                     maxLines = 1,
                     softWrap = false,
                     overflow = TextOverflow.Ellipsis,

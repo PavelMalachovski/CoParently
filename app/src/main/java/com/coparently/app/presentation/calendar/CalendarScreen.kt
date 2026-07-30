@@ -230,6 +230,31 @@ fun CalendarScreen(
         }
     }
 
+    // Single delete path for the whole screen, so every way of destroying an event offers the
+    // same protection. Deleting by id alone cannot be undone (the row is already gone), so the
+    // full event is captured first and Undo re-creates it with the same id.
+    val deletedMessage = stringResource(R.string.event_deleted_message)
+    val undoLabel = stringResource(R.string.event_deleted_undo)
+    val deleteEventWithUndo: (String) -> Unit = { eventId ->
+        val deletedEvent = events.firstOrNull { it.id == eventId }
+        if (deletedEvent == null) {
+            // Already gone (deleted elsewhere or synced away) — nothing to capture or restore.
+            eventViewModel.deleteEventById(eventId)
+        } else {
+            eventViewModel.deleteEvent(deletedEvent)
+            scope.launch {
+                val result = snackbarHostState.showSnackbar(
+                    message = deletedMessage,
+                    actionLabel = undoLabel,
+                    duration = SnackbarDuration.Short
+                )
+                if (result == SnackbarResult.ActionPerformed) {
+                    eventViewModel.createEvent(deletedEvent)
+                }
+            }
+        }
+    }
+
     val pendingChangeRequests by changeRequestViewModel.pendingIncomingCount.collectAsState()
 
     Scaffold(
@@ -256,7 +281,7 @@ fun CalendarScreen(
                         onClick = {
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             eventToDelete?.let { eventId ->
-                                eventViewModel.deleteEventById(eventId)
+                                deleteEventWithUndo(eventId)
                             }
                             showDeleteButton = false
                             eventToDelete = null
@@ -386,7 +411,7 @@ fun CalendarScreen(
                                         eventViewModel.resizeEvent(eventId, newStartTime, newEndTime)
                                     },
                                     onEventDelete = { eventId ->
-                                        eventViewModel.deleteEventById(eventId)
+                                        deleteEventWithUndo(eventId)
                                     },
                                     onEventLongPressStart = { eventId ->
                                         showDeleteButton = true
@@ -470,8 +495,6 @@ fun CalendarScreen(
     previewEventId?.let { eventId ->
         val previewEvent = events.firstOrNull { it.id == eventId }
         if (previewEvent != null) {
-            val deletedMessage = stringResource(R.string.event_deleted_message)
-            val undoLabel = stringResource(R.string.event_deleted_undo)
             com.coparently.app.presentation.event.EventPreviewSheet(
                 event = previewEvent,
                 onEdit = {
@@ -480,20 +503,7 @@ fun CalendarScreen(
                 },
                 onDelete = {
                     previewEventId = null
-                    // Delete now, offer Undo. The full event is captured here, so Undo
-                    // re-creates it with the same id (matches EventListScreen's pattern).
-                    val deletedEvent = previewEvent
-                    eventViewModel.deleteEvent(deletedEvent)
-                    scope.launch {
-                        val result = snackbarHostState.showSnackbar(
-                            message = deletedMessage,
-                            actionLabel = undoLabel,
-                            duration = SnackbarDuration.Short
-                        )
-                        if (result == SnackbarResult.ActionPerformed) {
-                            eventViewModel.createEvent(deletedEvent)
-                        }
-                    }
+                    deleteEventWithUndo(eventId)
                 },
                 onDismiss = { previewEventId = null }
             )

@@ -5,68 +5,106 @@ import androidx.compose.ui.graphics.Color
 /**
  * Color palette for CoPlanly app.
  * Defines colors for parents (mom = pink, dad = blue) and app theme.
- * Enhanced with brand colors and improved contrast ratios for WCAG AA compliance (4.5:1 minimum).
  *
- * Contrast ratios verified with WebAIM Contrast Checker:
- * - MomPink on white: 4.56:1 ✓
- * - DadBlue on white: 4.51:1 ✓
- * - MomPinkDark on white: 7.0:1 ✓
- * - DadBlueDark on white: 8.59:1 ✓
+ * Every token below records **two** contrast ratios — against white (light theme) and against
+ * [DarkSurface] `#1B1B21` (dark theme) — because the app ships and is used in dark, where a
+ * ratio measured on white says nothing. Ratios are computed with the WCAG 2.x relative
+ * luminance formula.
+ *
+ * Each token also states whether it is **text-grade** (may be used as a foreground colour, so
+ * it must clear 4.5:1 against the surface it sits on) or **fill-only** (tints, borders, dots —
+ * WCAG 1.4.3 does not apply, and using it as text is a bug). No single hue clears 4.5:1
+ * against both white and `#1B1B21`, which is why the text-grade entries come in theme-aware
+ * pairs. Pick between a pair with `MaterialTheme.colorScheme.surface.luminance()`, never with
+ * `isSystemInDarkTheme()` — the in-app theme can differ from the system one.
  */
 object CoPlanlyColors {
-    // Parent colors - Improved contrast for accessibility (WCAG AA compliant)
-    val MomPink = Color(0xFFE91E63) // Material Pink 700 - contrast 7.0:1 on white
-    val DadBlue = Color(0xFF1976D2) // Material Blue 700 - contrast 8.59:1 on white
+    /**
+     * Alpha for the custody background tint on calendar cells (month) and columns (week/day).
+     * Kept as one constant so the views cannot drift apart again: week/day used to tint at
+     * 0.03f, which over [DarkSurface] is about one RGB step and made custody invisible.
+     */
+    const val CUSTODY_TINT_ALPHA = 0.14f
 
-    // Additional color variations with WCAG AA compliance
-    val MomPinkLight = Color(0xFFFFC1E3) // Light background variant (for alpha usage)
-    val MomPinkDark = Color(0xFFC2185B) // Material Pink 800 - contrast 9.63:1 on white
-    val DadBlueLight = Color(0xFF90CAF9) // Light background variant (for alpha usage)
-    val DadBlueDark = Color(0xFF0D47A1) // Material Blue 900 - contrast 12.63:1 on white
+    /**
+     * Threshold for `MaterialTheme.colorScheme.surface.luminance()` when choosing between the
+     * light- and dark-theme member of a text-grade colour pair. Below this the rendered theme
+     * is dark. Use this rather than `isSystemInDarkTheme()`: the app can force light while the
+     * system is dark, and the colour must follow what is actually painted.
+     */
+    const val DARK_LUMINANCE_THRESHOLD = 0.5f
 
-    // Neutral colors - improved contrast
-    val EventGray = Color(0xFF616161) // Gray 700 - contrast 7.31:1 on white
+    // Parent colors — product-level identity (mom = pink, dad = blue), do not repurpose.
+    // FILL-ONLY: custody tints, identity borders, legend dots. Neither clears 4.5:1 as text
+    // in either theme, so never use these as a foreground colour — see the *Text pairs below.
+    val MomPink = Color(0xFFE91E63) // Material Pink 700 - 4.35:1 on white / 3.94:1 on DarkSurface
+    val DadBlue = Color(0xFF1976D2) // Material Blue 700 - 4.60:1 on white / 3.72:1 on DarkSurface
+
+    // Parent colors as TEXT-GRADE foregrounds, paired by theme.
+    // Light theme reads the Dark variants; dark theme reads the Light variants.
+    val MomPinkLight = Color(0xFFFFC1E3) // Pink 100 - 1.50:1 on white / 11.42:1 on DarkSurface (text-grade in dark)
+    val MomPinkDark = Color(0xFFC2185B) // Pink 800 - 5.87:1 on white / 2.92:1 on DarkSurface (text-grade in light)
+    val DadBlueLight = Color(0xFF90CAF9) // Blue 200 - 1.75:1 on white / 9.79:1 on DarkSurface (text-grade in dark)
+    val DadBlueDark = Color(0xFF0D47A1) // Blue 900 - 8.63:1 on white / 1.99:1 on DarkSurface (text-grade in light)
+
+    // Solid parent fills carrying WHITE text (month event chips). Solid MomPink is only
+    // 4.35:1 under white text and fails AA, so the chip fill uses the Dark variants:
+    // white on MomPinkDark is 5.87:1, white on DadBlueDark is 8.63:1.
+    val MomChipFill = MomPinkDark
+    val DadChipFill = DadBlueDark
+
+    // Neutral colors
+    // UNUSED as of 2026-07-30 — no references in app/src/main.
+    val EventGray = Color(0xFF616161) // Gray 700 - 6.19:1 on white / 2.77:1 on DarkSurface
 
     // Secondary (neutral) tonal family — used by generic Material components such as
     // the selected state of FilterChips. Deliberately an indigo-tinted neutral, NOT
     // Mom-pink: pink/blue are reserved for parent identity and are applied via the
     // MomPink/DadBlue values above, never through the theme's `secondary` slot.
-    val NeutralSecondary = Color(0xFF5B5D72) // muted indigo-gray
-    val NeutralSecondaryContainer = Color(0xFFE1E0F7) // light indigo tint
+    // muted indigo-gray - 6.45:1 on white / 2.66:1 on DarkSurface (light theme only)
+    val NeutralSecondary = Color(0xFF5B5D72)
+    val NeutralSecondaryContainer = Color(0xFFE1E0F7) // light indigo tint - fill-only
     val NeutralOnSecondaryContainer = Color(0xFF191A2C) // deep indigo for container text
-    val NeutralSecondaryDark = Color(0xFFC5C4DD) // light tone for dark theme
+    val NeutralSecondaryDark = Color(0xFFC5C4DD) // light tone for dark theme - 10.05:1 on DarkSurface
     val NeutralOnSecondaryDark = Color(0xFF2E2F42) // container text on dark
-    val NeutralSecondaryContainerDark = Color(0xFF434559) // dark indigo container
+    val NeutralSecondaryContainerDark = Color(0xFF434559) // dark indigo container - fill-only
 
-    // Brand colors for app theme - improved contrast
-    val BrandPrimary = Color(0xFF4F46E5) // Indigo 600 - contrast 7.04:1 on white
-    val BrandPrimaryContainer = Color(0xFFE2E0FF) // Soft indigo container
+    // Brand colors for app theme
+    val BrandPrimary = Color(0xFF4F46E5) // Indigo 600 - 6.29:1 on white / 2.73:1 on DarkSurface (light theme only)
+    val BrandPrimaryContainer = Color(0xFFE2E0FF) // Soft indigo container - fill-only
     val BrandOnPrimaryContainer = Color(0xFF1A1650) // Deep indigo for container text
-    val BrandSecondary = Color(0xFF7C3AED) // Purple 600 - contrast 5.55:1 on white
-    val BrandAccent = Color(0xFF059669) // Green 600 - contrast 4.54:1 on white
+    val BrandSecondary = Color(0xFF7C3AED) // Purple 600 - 5.70:1 on white / 3.01:1 on DarkSurface (light theme only)
+    val BrandAccent = Color(0xFF059669) // Green 600 - 3.77:1 on white / 4.55:1 on DarkSurface (dark theme only)
 
     // Light theme colors - subtle indigo-tinted neutrals for a modern tonal look
     val LightBackground = Color(0xFFFCFBFF)
     val LightSurface = Color(0xFFFFFFFF)
-    val LightOnSurface = Color(0xFF1B1B21) // contrast 15.9:1 on white
+    val LightOnSurface = Color(0xFF1B1B21) // 15.9:1 on white - text-grade in light theme
     val LightOnBackground = Color(0xFF1B1B21)
 
     // Dark theme colors - tinted dark neutrals instead of pure gray
     val DarkBackground = Color(0xFF131318)
     val DarkSurface = Color(0xFF1B1B21)
-    val DarkOnSurface = Color(0xFFE4E1E9) // contrast 12.1:1 on dark background
+
+    // 14.33:1 on DarkBackground, 13.26:1 on DarkSurface - text-grade in dark theme
+    val DarkOnSurface = Color(0xFFE4E1E9)
     val DarkOnBackground = Color(0xFFE4E1E9)
 
-    // Custody indicator colors - improved contrast
-    val CustodyIndicatorActive = Color(0xFFF59E0B) // Amber 500 - contrast 5.09:1 on white
-    val CustodyIndicatorInactive = Color(0xFF616161) // Gray 700 - contrast 7.31:1 on white
+    // Custody indicator colors
+    // UNUSED as of 2026-07-30 — no references in app/src/main.
+    val CustodyIndicatorActive = Color(0xFFF59E0B) // Amber 500 - 2.15:1 on white / 7.98:1 on DarkSurface
+    val CustodyIndicatorInactive = Color(0xFF616161) // Gray 700 - 6.19:1 on white / 2.77:1 on DarkSurface
 
-    // Weekend background colors - subtle distinction for Saturday/Sunday
+    // Weekend background colors - subtle distinction for Saturday/Sunday. Fill-only.
     val WeekendBackgroundLight = Color(0xFFFFF8E1) // Warm cream/amber tint
     val WeekendBackgroundDark = Color(0xFF2D2D1E) // Dark warm tone
 
-    // Holiday colors - public holidays and school vacations (Czech calendar)
-    val HolidayRed = Color(0xFFD32F2F) // Red 700 - public holiday day numbers, contrast 5.9:1 on white
-    val VacationTint = Color(0xFF26A69A) // Teal 400 - school vacation background tint
+    // Holiday colors - public holidays and school vacations (Czech calendar).
+    // Both are used as day-number TEXT, so each needs a theme-aware partner: no single red
+    // or teal clears 4.5:1 against both white and DarkSurface.
+    val HolidayRed = Color(0xFFD32F2F) // Red 700 - 4.98:1 on white / 3.44:1 on DarkSurface (light theme)
+    val HolidayRedDark = Color(0xFFEF5350) // Red 400 - 3.49:1 on white / 4.92:1 on DarkSurface (dark theme)
+    val VacationTint = Color(0xFF26A69A) // Teal 400 - 3.00:1 on white / 5.72:1 on DarkSurface (dark theme)
+    val VacationTintLight = Color(0xFF00796B) // Teal 700 - 5.32:1 on white / 3.22:1 on DarkSurface (light theme)
 }
 

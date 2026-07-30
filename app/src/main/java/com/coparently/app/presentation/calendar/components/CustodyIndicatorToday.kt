@@ -24,6 +24,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -57,9 +58,14 @@ fun CustodyIndicatorToday(custody: String) {
         else -> MaterialTheme.colorScheme.outline
     }
 
+    // This label is text, so it needs the member of each parent pair that clears AA against
+    // the rendered theme: the Dark variants are 2.92:1/1.99:1 on DarkSurface, the Light ones
+    // 11.42:1/9.79:1. The border above keeps full-strength MomPink/DadBlue for identity.
+    val isDarkTheme =
+        MaterialTheme.colorScheme.surface.luminance() < CoPlanlyColors.DARK_LUMINANCE_THRESHOLD
     val textColor = when (custody) {
-        "mom" -> CoPlanlyColors.MomPinkDark
-        "dad" -> CoPlanlyColors.DadBlueDark
+        "mom" -> if (isDarkTheme) CoPlanlyColors.MomPinkLight else CoPlanlyColors.MomPinkDark
+        "dad" -> if (isDarkTheme) CoPlanlyColors.DadBlueLight else CoPlanlyColors.DadBlueDark
         else -> MaterialTheme.colorScheme.onSurface
     }
 

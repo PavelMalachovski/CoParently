@@ -90,7 +90,6 @@ fun ExpenseScreen(
             } else {
                 ExpenseList(
                     expenses = expenses,
-                    onExpenseClick = { /* TODO: Show details */ },
                     modifier = Modifier.weight(1f)
                 )
             }

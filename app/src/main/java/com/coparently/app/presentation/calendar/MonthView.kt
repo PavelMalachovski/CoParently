@@ -36,7 +36,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.coparently.app.domain.holidays.Holiday
 import com.coparently.app.domain.model.Event
 import com.coparently.app.presentation.theme.CoPlanlyColors
@@ -49,8 +48,8 @@ import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
-import java.time.temporal.ChronoUnit
 import java.time.format.TextStyle
+import java.time.temporal.ChronoUnit
 import java.util.Locale
 
 /** Months scrollable to each side of the visible month in the pager. */
@@ -61,9 +60,6 @@ private const val DAYS_PER_WEEK = 7L
 
 /** Width of the school-vacation strip relative to the day cell. */
 private const val VACATION_STRIP_WIDTH_FRACTION = 0.6f
-
-/** Surface luminance below this is treated as a dark theme (picks dark weekend fill). */
-private const val DARK_LUMINANCE_THRESHOLD = 0.5f
 
 /**
  * Classic month grid: always starts at the 1st of the month, pages horizontally
@@ -219,9 +215,8 @@ private fun WeekdayHeader(firstDayOfWeek: DayOfWeek) {
             ) {
                 Text(
                     text = dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.getDefault()),
-                    style = MaterialTheme.typography.labelSmall,
+                    style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.Normal,
-                    fontSize = 10.sp,
                     color = if (isToday) {
                         MaterialTheme.colorScheme.primary
                     } else {
@@ -258,7 +253,8 @@ private fun DayCell(
     val isWeekend = CustodyHelper.isWeekend(date)
     // Use the actually-rendered theme (the app can force light while the system is
     // dark); isSystemInDarkTheme() would pick the dark weekend fill on a light grid.
-    val isDarkTheme = MaterialTheme.colorScheme.surface.luminance() < DARK_LUMINANCE_THRESHOLD
+    val isDarkTheme =
+        MaterialTheme.colorScheme.surface.luminance() < CoPlanlyColors.DARK_LUMINANCE_THRESHOLD
 
     val weekendColor = if (isDarkTheme) {
         CoPlanlyColors.WeekendBackgroundDark
@@ -274,8 +270,8 @@ private fun DayCell(
     // custody colors); it renders as a thin strip at the bottom instead.
     val backgroundColor = when {
         !isCurrentMonth -> MaterialTheme.colorScheme.surface
-        custody == "mom" -> CoPlanlyColors.MomPink.copy(alpha = 0.14f)
-        custody == "dad" -> CoPlanlyColors.DadBlue.copy(alpha = 0.14f)
+        custody == "mom" -> CoPlanlyColors.MomPink.copy(alpha = CoPlanlyColors.CUSTODY_TINT_ALPHA)
+        custody == "dad" -> CoPlanlyColors.DadBlue.copy(alpha = CoPlanlyColors.CUSTODY_TINT_ALPHA)
         isPublicHoliday -> CoPlanlyColors.HolidayRed.copy(alpha = 0.10f)
         isWeekend -> weekendColor
         else -> MaterialTheme.colorScheme.surface
@@ -347,29 +343,36 @@ private fun DayCell(
                 Text(
                     text = date.dayOfMonth.toString(),
                     style = MaterialTheme.typography.bodyMedium,
-                    fontSize = 13.sp,
                     fontWeight = if (isToday || isPublicHoliday) FontWeight.Bold else FontWeight.Normal,
                     color = when {
                         isToday -> MaterialTheme.colorScheme.onPrimary
                         isSelected -> MaterialTheme.colorScheme.onPrimaryContainer
                         !isCurrentMonth -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
-                        isPublicHoliday -> CoPlanlyColors.HolidayRed
+                        // Red 700 is only 3.44:1 on DarkSurface; Red 400 clears AA there.
+                        isPublicHoliday -> if (isDarkTheme) {
+                            CoPlanlyColors.HolidayRedDark
+                        } else {
+                            CoPlanlyColors.HolidayRed
+                        }
                         else -> MaterialTheme.colorScheme.onSurface
                     }
                 )
             }
 
             events.firstOrNull()?.let { event ->
+                // Solid fill, and the *Dark parent variants rather than MomPink/DadBlue:
+                // white text on solid MomPink is only 4.35:1 and fails AA, while white on
+                // MomPinkDark is 5.87:1. Still unmistakably pink/blue.
                 val eventColor = when (event.parentOwner) {
-                    "mom" -> CoPlanlyColors.MomPink
-                    "dad" -> CoPlanlyColors.DadBlue
+                    "mom" -> CoPlanlyColors.MomChipFill
+                    "dad" -> CoPlanlyColors.DadChipFill
                     else -> MaterialTheme.colorScheme.tertiary
                 }
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .background(
-                            color = eventColor.copy(alpha = 0.9f),
+                            color = eventColor,
                             shape = RoundedCornerShape(3.dp)
                         )
                         .padding(horizontal = 2.dp, vertical = 1.dp),
@@ -378,7 +381,6 @@ private fun DayCell(
                     Text(
                         text = event.title,
                         style = MaterialTheme.typography.labelSmall,
-                        fontSize = 8.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         color = Color.White,
@@ -391,7 +393,6 @@ private fun DayCell(
                 Text(
                     text = "+${events.size - 1}",
                     style = MaterialTheme.typography.labelSmall,
-                    fontSize = 8.sp,
                     color = if (isCurrentMonth) {
                         MaterialTheme.colorScheme.primary
                     } else {
