@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_language_title">Sprache</string>
+    <string name="settings_language_description">Sprache der App-Oberfläche. „Systemstandard" folgt der Gerätesprache.</string>
+    <string name="settings_language_system">Systemstandard</string>
+    <string name="settings_language_picker_title">Sprache auswählen</string>
+    <string name="settings_language_picker_cancel">Abbrechen</string>
+</resources>

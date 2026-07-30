@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- In-app language picker (Settings). Language endonyms are not translatable. -->
+<resources>
+    <string name="settings_language_title">Language</string>
+    <string name="settings_language_description">Language of the app interface. "System default" follows the device language.</string>
+    <string name="settings_language_system">System default</string>
+    <string name="settings_language_picker_title">Choose language</string>
+    <string name="settings_language_picker_cancel">Cancel</string>
+    <string name="settings_language_english" translatable="false">English</string>
+    <string name="settings_language_czech" translatable="false">Čeština</string>
+    <string name="settings_language_german" translatable="false">Deutsch</string>
+    <string name="settings_language_russian" translatable="false">Русский</string>
+    <string name="settings_language_ukrainian" translatable="false">Українська</string>
+</resources>
