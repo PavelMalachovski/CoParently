@@ -167,6 +167,7 @@ class ExpenseViewModel @Inject constructor(
                     // Any upload failure (IO, storage, decode) must not lose the expense
                     @Suppress("TooGenericExceptionCaught") e: Exception
                 ) {
+                    android.util.Log.e("CoPlanlyUpload", "Receipt upload failed", e)
                     warning = "Receipt upload failed — expense saved without receipt"
                     null
                 }
@@ -197,16 +198,46 @@ class ExpenseViewModel @Inject constructor(
         _saveState.value = ExpenseSaveState.Idle
     }
 
+    /**
+     * Removes the expense row so it leaves the list immediately.
+     *
+     * The receipt photo is deliberately left in storage: an Undo has to be able to bring the
+     * expense back intact, and a deleted photo cannot be un-deleted. Call [purgeReceipt] once
+     * the undo window has closed.
+     *
+     * @param expenseId Expense to remove
+     */
     fun deleteExpense(expenseId: String) {
         viewModelScope.launch {
-            val expense = expenseRepository.getExpenseById(expenseId)
             expenseRepository.deleteExpense(expenseId)
-            if (expense?.receiptUrl != null) {
-                // Best-effort cleanup; an orphaned photo must not block the delete.
-                runCatching { receiptStorage.deleteReceipt(expenseId) }
-            }
-            // Refresh summary
             loadSummaryForMonth(LocalDate.now())
+        }
+    }
+
+    /**
+     * Puts back an expense removed by [deleteExpense], keeping its original id so the receipt
+     * it points at is still the right one.
+     *
+     * @param expense The captured expense to restore
+     */
+    fun restoreExpense(expense: Expense) {
+        viewModelScope.launch {
+            expenseRepository.addExpense(expense)
+            loadSummaryForMonth(expense.date)
+        }
+    }
+
+    /**
+     * Deletes the stored receipt photo for an expense the user did not undo.
+     *
+     * Best effort: an orphaned photo is a smaller problem than a failed delete, and the row is
+     * already gone either way.
+     *
+     * @param expenseId Expense whose receipt should be removed
+     */
+    fun purgeReceipt(expenseId: String) {
+        viewModelScope.launch {
+            runCatching { receiptStorage.deleteReceipt(expenseId) }
         }
     }
 }

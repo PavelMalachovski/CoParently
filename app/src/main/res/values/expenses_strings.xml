@@ -46,4 +46,7 @@
     <string name="expenses_split_even">split 50/50</string>
     <string name="expenses_split_n_ways">split 1/%1$d</string>
     <string name="expenses_split_none">not split</string>
+    <string name="expenses_delete">Delete expense</string>
+    <string name="expenses_deleted">Expense deleted</string>
+    <string name="expenses_deleted_undo">Undo</string>
 </resources>
