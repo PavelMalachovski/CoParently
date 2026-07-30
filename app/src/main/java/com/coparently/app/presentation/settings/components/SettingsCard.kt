@@ -8,7 +8,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.coparently.app.R
 
 /**
  * Reusable settings card component.
@@ -116,7 +118,7 @@ fun SettingsNavigationCard(
             }
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                contentDescription = "Navigate",
+                contentDescription = stringResource(R.string.settings_navigate),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }

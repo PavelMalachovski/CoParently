@@ -23,4 +23,5 @@
     <string name="settings_about">About CoPlanly</string>
     <string name="settings_about_tagline">Shared calendar for co-parenting</string>
     <string name="settings_version">Version %1$s</string>
+    <string name="settings_navigate">Open</string>
 </resources>
