@@ -424,8 +424,11 @@ private fun ExpenseDatePickerDialog(
 /**
  * Current values of the fields a receipt scan may pre-fill, read by [ReceiptScanEffect] to
  * decide whether each one is still untouched.
+ *
+ * Internal rather than private so the timing behaviour of [ReceiptScanEffect] can be driven
+ * directly from a Compose UI test (`ReceiptScanEffectTest`) without standing up the whole form.
  */
-private data class ReceiptScanFormState(
+internal data class ReceiptScanFormState(
     val title: String,
     val amount: String,
     val category: ExpenseCategory,
@@ -433,8 +436,11 @@ private data class ReceiptScanFormState(
     val currency: SupportedCurrency?
 )
 
-/** Setters back into the Add Expense form, used by [ReceiptScanEffect] to apply or undo a scan. */
-private data class ReceiptScanCallbacks(
+/**
+ * Setters back into the Add Expense form, used by [ReceiptScanEffect] to apply or undo a scan.
+ * Internal for the same reason as [ReceiptScanFormState].
+ */
+internal data class ReceiptScanCallbacks(
     val onTitleChange: (String) -> Unit,
     val onAmountChange: (String) -> Unit,
     val onCategoryChange: (ExpenseCategory) -> Unit,
@@ -509,9 +515,13 @@ private fun restoreReceiptScanSnapshot(snapshot: ReceiptUndoSnapshot, callbacks:
  *
  * Extracted out of [AddExpenseScreen] so the apply/undo branching does not count toward that
  * composable's cyclomatic complexity.
+ *
+ * Internal (not private) so `ReceiptScanEffectTest` can drive it directly from a fake
+ * `MutableStateFlow<ReceiptScanState>` and assert the Undo snackbar survives the recomposition
+ * that follows [ReceiptScanCallbacks.onScanConsumed].
  */
 @Composable
-private fun ReceiptScanEffect(
+internal fun ReceiptScanEffect(
     scanState: ReceiptScanState,
     formState: ReceiptScanFormState,
     callbacks: ReceiptScanCallbacks,
@@ -523,29 +533,41 @@ private fun ReceiptScanEffect(
         when (val state = scanState) {
             is ReceiptScanState.Applied -> {
                 val update = buildReceiptScanUpdate(state.scan, formState)
-                callbacks.onScanConsumed()
-                if (update.hasChanges) {
-                    val snapshot = ReceiptUndoSnapshot(
-                        title = formState.title,
-                        amount = formState.amount,
-                        category = formState.category,
-                        date = formState.date,
-                        currency = formState.currency
-                    )
-                    applyReceiptScanUpdate(update, callbacks)
-                    val result = snackbarHostState.showSnackbar(
-                        message = context.getString(R.string.receipt_scan_applied),
-                        actionLabel = context.getString(R.string.receipt_scan_undo)
-                    )
-                    if (result == SnackbarResult.ActionPerformed) {
-                        restoreReceiptScanSnapshot(snapshot, callbacks)
+                // onScanConsumed() resets the ViewModel's scanState back to Idle, and this
+                // effect is keyed on scanState — resetting it early would change the key while
+                // showSnackbar is still suspended, cancelling this coroutine and, with it, the
+                // snackbar (SnackbarHostState clears currentSnackbarData on cancellation). It
+                // must run last, and in a finally so navigating away mid-snackbar still clears
+                // the ViewModel state instead of leaving a stale Applied/Failed to re-apply.
+                try {
+                    if (update.hasChanges) {
+                        val snapshot = ReceiptUndoSnapshot(
+                            title = formState.title,
+                            amount = formState.amount,
+                            category = formState.category,
+                            date = formState.date,
+                            currency = formState.currency
+                        )
+                        applyReceiptScanUpdate(update, callbacks)
+                        val result = snackbarHostState.showSnackbar(
+                            message = context.getString(R.string.receipt_scan_applied),
+                            actionLabel = context.getString(R.string.receipt_scan_undo)
+                        )
+                        if (result == SnackbarResult.ActionPerformed) {
+                            restoreReceiptScanSnapshot(snapshot, callbacks)
+                        }
                     }
+                } finally {
+                    callbacks.onScanConsumed()
                 }
             }
 
             ReceiptScanState.Failed -> {
-                callbacks.onScanConsumed()
-                snackbarHostState.showSnackbar(context.getString(R.string.receipt_scan_failed))
+                try {
+                    snackbarHostState.showSnackbar(context.getString(R.string.receipt_scan_failed))
+                } finally {
+                    callbacks.onScanConsumed()
+                }
             }
 
             else -> Unit
