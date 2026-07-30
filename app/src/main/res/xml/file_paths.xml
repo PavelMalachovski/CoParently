@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- Receipt photos taken in-app land in the cache; they are uploaded to
+         Firebase Storage and the local copy is disposable. -->
+    <cache-path name="receipts" path="receipts/" />
+</paths>

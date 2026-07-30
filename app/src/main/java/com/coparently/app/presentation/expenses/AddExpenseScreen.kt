@@ -1,5 +1,8 @@
 package com.coparently.app.presentation.expenses
 
+import android.Manifest
+import android.content.Context
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -23,6 +26,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AddAPhoto
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
@@ -56,12 +60,15 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.coparently.app.R
 import com.coparently.app.domain.model.ExpenseCategory
 import com.coparently.app.domain.money.SupportedCurrency
 import com.coparently.app.presentation.theme.CoPlanlyShapes
+import java.io.File
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
@@ -96,6 +103,28 @@ fun AddExpenseScreen(
     val photoPicker = rememberLauncherForActivityResult(
         ActivityResultContracts.PickVisualMedia()
     ) { uri -> if (uri != null) receiptUri = uri }
+
+    var pendingCaptureUri by remember { mutableStateOf<Uri?>(null) }
+
+    val cameraLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.TakePicture()
+    ) { success -> if (success) receiptUri = pendingCaptureUri }
+
+    val takePhoto = {
+        val uri = createReceiptCaptureUri(context)
+        pendingCaptureUri = uri
+        cameraLauncher.launch(uri)
+    }
+
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            takePhoto()
+        } else {
+            Toast.makeText(context, R.string.receipt_camera_denied, Toast.LENGTH_LONG).show()
+        }
+    }
 
     LaunchedEffect(saveState) {
         when (val state = saveState) {
@@ -211,6 +240,13 @@ fun AddExpenseScreen(
             ReceiptPicker(
                 receiptUri = receiptUri,
                 enabled = !isSaving,
+                onTakePhoto = {
+                    val granted = ContextCompat.checkSelfPermission(
+                        context,
+                        Manifest.permission.CAMERA
+                    ) == PackageManager.PERMISSION_GRANTED
+                    if (granted) takePhoto() else cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+                },
                 onPickPhoto = {
                     photoPicker.launch(
                         PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
@@ -293,18 +329,33 @@ fun AddExpenseScreen(
 private fun ReceiptPicker(
     receiptUri: Uri?,
     enabled: Boolean,
+    onTakePhoto: () -> Unit,
     onPickPhoto: () -> Unit,
     onRemovePhoto: () -> Unit
 ) {
     if (receiptUri == null) {
-        OutlinedButton(
-            onClick = onPickPhoto,
-            enabled = enabled,
-            modifier = Modifier.fillMaxWidth()
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Icon(Icons.Default.AddAPhoto, contentDescription = null)
-            Spacer(modifier = Modifier.size(8.dp))
-            Text(stringResource(R.string.expense_attach_receipt))
+            OutlinedButton(
+                onClick = onTakePhoto,
+                enabled = enabled,
+                modifier = Modifier.weight(1f)
+            ) {
+                Icon(Icons.Default.PhotoCamera, contentDescription = null)
+                Spacer(modifier = Modifier.size(8.dp))
+                Text(stringResource(R.string.receipt_take_photo))
+            }
+            OutlinedButton(
+                onClick = onPickPhoto,
+                enabled = enabled,
+                modifier = Modifier.weight(1f)
+            ) {
+                Icon(Icons.Default.AddAPhoto, contentDescription = null)
+                Spacer(modifier = Modifier.size(8.dp))
+                Text(stringResource(R.string.receipt_pick_photo))
+            }
         }
     } else {
         Box(modifier = Modifier.fillMaxWidth()) {
@@ -328,4 +379,16 @@ private fun ReceiptPicker(
             }
         }
     }
+}
+
+/**
+ * Creates a shareable URI for a new receipt photo in the app cache.
+ *
+ * @param context Context used to resolve the cache directory and the FileProvider authority
+ * @return URI the camera app may write to
+ */
+private fun createReceiptCaptureUri(context: Context): Uri {
+    val directory = File(context.cacheDir, "receipts").apply { mkdirs() }
+    val file = File(directory, "receipt_${System.currentTimeMillis()}.jpg")
+    return FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
 }
