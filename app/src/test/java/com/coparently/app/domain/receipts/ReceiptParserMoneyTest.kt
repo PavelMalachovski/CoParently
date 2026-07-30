@@ -93,4 +93,36 @@ class ReceiptParserMoneyTest {
     fun `returns null when there is no money at all`() {
         assertNull(ReceiptParser.findTotal(listOf("hello", "world")))
     }
+
+    @Test
+    fun `a total keyword wins over a VAT keyword on the same czech line`() {
+        val lines = listOf(
+            "LEKARNA DR.MAX",
+            "Paralen 500mg        89,00",
+            "Vitamin D           210,00",
+            "CELKEM S DPH        299,00 Kc"
+        )
+        assertEquals(299.0, ReceiptParser.findTotal(lines))
+    }
+
+    @Test
+    fun `a total keyword wins over a VAT keyword on the same english line`() {
+        assertEquals(12.99, ReceiptParser.findTotal(listOf("TOTAL (incl. VAT) 12.99")))
+    }
+
+    @Test
+    fun `a vat-only line with no total keyword is still excluded`() {
+        val lines = listOf(
+            "Rossmann",
+            "ZAKLAD DPH 21%     999,00",
+            "DPH 21%            209,79"
+        )
+        assertNull(ReceiptParser.findTotal(lines))
+    }
+
+    @Test
+    fun `does not treat vat inside private as a VAT keyword`() {
+        val lines = listOf("Kiosk", "18,00", "PRIVATE 799,00")
+        assertEquals(799.0, ReceiptParser.findTotal(lines))
+    }
 }

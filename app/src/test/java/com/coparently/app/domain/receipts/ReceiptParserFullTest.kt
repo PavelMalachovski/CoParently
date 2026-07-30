@@ -65,6 +65,12 @@ class ReceiptParserFullTest {
     }
 
     @Test
+    fun `does not mistake tel inside hotel for the phone-number stopword`() {
+        val lines = listOf("HOTEL PRAHA", "Nocleh 1200,00")
+        assertEquals("HOTEL PRAHA", ReceiptParser.findMerchant(lines))
+    }
+
+    @Test
     fun `guesses education from school keywords`() {
         assertEquals(
             ExpenseCategory.EDUCATION,

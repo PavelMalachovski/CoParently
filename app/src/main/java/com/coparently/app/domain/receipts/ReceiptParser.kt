@@ -90,19 +90,41 @@ object ReceiptParser {
     private fun moneyOnLine(line: String): List<Double> =
         MONEY_REGEX.findAll(line).mapNotNull { parseMoney(it.value) }.toList()
 
+    /** Whether already-normalised [text] carries a total keyword, matched at token boundaries. */
+    private fun hasTotalKeyword(text: String): Boolean = TOTAL_KEYWORDS.any { containsToken(text, it) }
+
     /**
-     * Lines that carry a total keyword (e.g. "celkem", "total") without also carrying an
-     * excluded keyword (VAT breakdown, subtotal, ...). Shared by [findTotal] and [findCurrency]
-     * so both agree on which line is "the" total line.
+     * Whether already-normalised [text] carries an excluded (VAT/subtotal/...) keyword, matched
+     * at token boundaries.
+     */
+    private fun hasExcludedKeyword(text: String): Boolean = EXCLUDED_KEYWORDS.any { containsToken(text, it) }
+
+    /**
+     * Whether [line]'s money should be ignored when hunting for the total: it carries a VAT
+     * breakdown / subtotal / rounding keyword and *no* total keyword. A total keyword always
+     * wins over an excluded one on the same line — the exclusion exists to reject lines that are
+     * only a VAT/subtotal line, not a real total line that happens to also mention VAT (e.g.
+     * "Celkem s DPH" / "TOTAL (incl. VAT)").
+     *
+     * @param line Recognised receipt line
+     * @return True when this line's amounts must not be treated as the total
+     */
+    private fun isExcludedFromTotal(line: String): Boolean {
+        val text = normalise(line)
+        return hasExcludedKeyword(text) && !hasTotalKeyword(text)
+    }
+
+    /**
+     * Lines that carry a total keyword (e.g. "celkem", "total"). Shared by [findTotal] and
+     * [findCurrency] so both agree on which line is "the" total line. A total keyword qualifies
+     * a line even when an excluded keyword (VAT, subtotal, ...) is also present on it — see
+     * [isExcludedFromTotal].
      *
      * @param lines Recognised receipt lines
      * @return Matching lines paired with their original index
      */
     private fun totalKeywordLines(lines: List<String>): List<IndexedValue<String>> =
-        lines.withIndex().filter { (_, line) ->
-            val text = normalise(line)
-            TOTAL_KEYWORDS.any { it in text } && EXCLUDED_KEYWORDS.none { it in text }
-        }
+        lines.withIndex().filter { (_, line) -> hasTotalKeyword(normalise(line)) }
 
     /**
      * Finds the amount charged.
@@ -121,13 +143,13 @@ object ReceiptParser {
         for ((index, line) in keywordLines) {
             moneyOnLine(line).lastOrNull()?.let { return it }
             lines.drop(index + 1)
-                .firstOrNull { candidate -> EXCLUDED_KEYWORDS.none { it in normalise(candidate) } }
+                .firstOrNull { candidate -> !isExcludedFromTotal(candidate) }
                 ?.let { candidate -> moneyOnLine(candidate).firstOrNull() }
                 ?.let { return it }
         }
 
         return lines
-            .filter { line -> EXCLUDED_KEYWORDS.none { it in normalise(line) } }
+            .filter { line -> !isExcludedFromTotal(line) }
             .flatMap { moneyOnLine(it) }
             .maxOrNull()
     }
@@ -165,10 +187,15 @@ object ReceiptParser {
     /**
      * Whether [marker] occurs in [text] as a standalone token rather than as a substring of an
      * unrelated word (e.g. "zl" must not match inside "puzzle", "eur" must not match inside
-     * "europe", "kc" must not match inside "kcal"). Boundaries are checked with
-     * [Char.isLetterOrDigit] rather than regex `\b` because that Unicode-aware check is what
-     * lets "zł" keep matching: `ł` is a letter, but Java/Kotlin's default (ASCII-only) `\w` does
-     * not treat it as a word character, so `\b` would silently fail to match it.
+     * "europe", "kc" must not match inside "kcal", "tel" must not match inside "hotel", "vat"
+     * must not match inside "private"). Boundaries are checked with [Char.isLetterOrDigit]
+     * rather than regex `\b` because that Unicode-aware check is what lets "zł" keep matching:
+     * `ł` is a letter, but Java/Kotlin's default (ASCII-only) `\w` does not treat it as a word
+     * character, so `\b` would silently fail to match it.
+     *
+     * Used for currency markers, total/excluded keywords and merchant stopwords alike — all of
+     * them are matched against normalised text where the same substring-vs-word-boundary problem
+     * applies.
      */
     private fun containsToken(text: String, marker: String): Boolean {
         var index = text.indexOf(marker)
@@ -320,7 +347,7 @@ object ReceiptParser {
         .filter { line -> line.any { it.isLetter() } }
         .filter { line ->
             val text = normalise(line)
-            MERCHANT_STOPWORDS.none { it in text }
+            MERCHANT_STOPWORDS.none { containsToken(text, it) }
         }
         .filterNot { line -> line.count { it.isDigit() } * MERCHANT_DIGIT_HEAVY_RATIO > line.length }
         .firstOrNull()
