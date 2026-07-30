@@ -1,6 +1,7 @@
 package com.coparently.app.presentation.expenses
 
 import android.Manifest
+import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -104,6 +105,10 @@ fun AddExpenseScreen(
         ActivityResultContracts.PickVisualMedia()
     ) { uri -> if (uri != null) receiptUri = uri }
 
+    val hasCamera = remember {
+        context.packageManager.hasSystemFeature(PackageManager.FEATURE_CAMERA_ANY)
+    }
+
     var pendingCaptureUri by remember { mutableStateOf<Uri?>(null) }
 
     val cameraLauncher = rememberLauncherForActivityResult(
@@ -113,7 +118,11 @@ fun AddExpenseScreen(
     val takePhoto = {
         val uri = createReceiptCaptureUri(context)
         pendingCaptureUri = uri
-        cameraLauncher.launch(uri)
+        try {
+            cameraLauncher.launch(uri)
+        } catch (e: ActivityNotFoundException) {
+            Toast.makeText(context, R.string.receipt_camera_unavailable, Toast.LENGTH_LONG).show()
+        }
     }
 
     val cameraPermissionLauncher = rememberLauncherForActivityResult(
@@ -238,8 +247,11 @@ fun AddExpenseScreen(
             )
 
             ReceiptPicker(
-                receiptUri = receiptUri,
-                enabled = !isSaving,
+                state = ReceiptPickerState(
+                    receiptUri = receiptUri,
+                    enabled = !isSaving,
+                    hasCamera = hasCamera
+                ),
                 onTakePhoto = {
                     val granted = ContextCompat.checkSelfPermission(
                         context,
@@ -322,30 +334,43 @@ fun AddExpenseScreen(
 }
 
 /**
+ * Display state for [ReceiptPicker]: the current photo (if any), whether its controls
+ * are enabled, and whether the device has a camera to photograph with. Bundled into one
+ * class so the composable does not take an ever-growing list of parameters.
+ */
+private data class ReceiptPickerState(
+    val receiptUri: Uri?,
+    val enabled: Boolean,
+    val hasCamera: Boolean
+)
+
+/**
  * Receipt photo section of the form: a button to attach a photo, or a preview
  * of the picked image with a remove control.
  */
 @Composable
 private fun ReceiptPicker(
-    receiptUri: Uri?,
-    enabled: Boolean,
+    state: ReceiptPickerState,
     onTakePhoto: () -> Unit,
     onPickPhoto: () -> Unit,
     onRemovePhoto: () -> Unit
 ) {
+    val (receiptUri, enabled, hasCamera) = state
     if (receiptUri == null) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            OutlinedButton(
-                onClick = onTakePhoto,
-                enabled = enabled,
-                modifier = Modifier.weight(1f)
-            ) {
-                Icon(Icons.Default.PhotoCamera, contentDescription = null)
-                Spacer(modifier = Modifier.size(8.dp))
-                Text(stringResource(R.string.receipt_take_photo))
+            if (hasCamera) {
+                OutlinedButton(
+                    onClick = onTakePhoto,
+                    enabled = enabled,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(Icons.Default.PhotoCamera, contentDescription = null)
+                    Spacer(modifier = Modifier.size(8.dp))
+                    Text(stringResource(R.string.receipt_take_photo))
+                }
             }
             OutlinedButton(
                 onClick = onPickPhoto,
