@@ -1,5 +1,6 @@
 package com.coparently.app.domain.repository
 
+import com.coparently.app.domain.money.SupportedCurrency
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -34,5 +35,20 @@ interface PreferencesRepository {
      * Clears the dark theme preference (reverts to system default).
      */
     suspend fun clearDarkTheme()
+
+    /**
+     * Gets the app-wide default currency as a Flow. Never emits null — when nothing has been
+     * stored the region's currency is resolved and persisted on first read.
+     *
+     * @return Flow emitting the current default currency
+     */
+    fun getDefaultCurrencyFlow(): Flow<SupportedCurrency>
+
+    /**
+     * Sets the app-wide default currency used to pre-fill new expenses.
+     *
+     * @param currency Currency to store as the default
+     */
+    suspend fun setDefaultCurrency(currency: SupportedCurrency)
 }
 

@@ -127,8 +127,16 @@ Data flow: UI → ViewModel → UseCase → Repository → Room (source of truth
 9. **Reminders** are scheduled through the `ReminderScheduler` domain interface
    (WorkManager impl `EventReminderScheduler`), hooked into the event use cases —
    schedule on create/update, cancel on delete.
+10. **Receipt OCR is on-device only** (`ReceiptTextRecognizer`/ML Kit, parsed by
+    `ReceiptParser`, wired up in `AddExpenseScreen`/`ExpenseViewModel.scanReceipt`) — no
+    receipt text or photo may be sent to Gemini or any other remote service without an
+    explicit product decision.
 
 ## Known issues / do not "fix" silently
+
+- `Expense.currency` is a real per-expense field, but `calculateExpenseBalance` still does not
+  convert between currencies — a month mixing currencies shows a wrong total. This is a tracked
+  follow-up (mixed-currency months, spec §10); do not "fix" it by silently normalising currencies.
 
 - `firestore.rules` (strict) was realigned with the real document schema (ISO **string**
   dates, presence-based key validation, `change_requests`/`expenses` collections added,

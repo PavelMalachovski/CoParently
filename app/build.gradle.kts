@@ -192,6 +192,10 @@ dependencies {
     // ML Kit for QR code scanning
     implementation("com.google.mlkit:barcode-scanning:17.3.0")
 
+    // ML Kit text recognition for receipts — bundled Latin model, so OCR works offline
+    // and from first launch (~4 MB) instead of waiting on a Play Services download.
+    implementation("com.google.mlkit:text-recognition:16.0.1")
+
     // Generative AI - Gemini API
     implementation("com.google.ai.client.generativeai:generativeai:0.9.0")
 

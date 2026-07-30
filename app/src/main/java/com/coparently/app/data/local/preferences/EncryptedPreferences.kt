@@ -290,6 +290,26 @@ class EncryptedPreferences @Inject constructor(
     }
 
     /**
+     * Stores the app-wide default currency.
+     *
+     * @param code ISO 4217 currency code, e.g. "CZK"
+     */
+    fun putDefaultCurrency(code: String) {
+        encryptedPreferences.edit()
+            .putString(KEY_DEFAULT_CURRENCY, code)
+            .apply()
+    }
+
+    /**
+     * Retrieves the stored default currency code.
+     *
+     * @return The ISO 4217 code, or null when the user has never had one resolved
+     */
+    fun getDefaultCurrency(): String? {
+        return encryptedPreferences.getString(KEY_DEFAULT_CURRENCY, null)
+    }
+
+    /**
      * Clears all stored preferences.
      */
     fun clear() {
@@ -306,6 +326,7 @@ class EncryptedPreferences @Inject constructor(
         private const val KEY_USER_EMAIL = "user_email"
         private const val KEY_DARK_THEME = "dark_theme"
         private const val KEY_EVENT_DRAFT = "event_draft"
+        private const val KEY_DEFAULT_CURRENCY = "default_currency"
     }
 }
 

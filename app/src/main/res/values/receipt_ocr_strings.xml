@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Receipt capture and scanning strings. Kept out of strings.xml because
+     strings.xml is gitignored in this project (it holds local OAuth values). -->
+<resources>
+    <string name="receipt_take_photo">Take photo</string>
+    <string name="receipt_pick_photo">From gallery</string>
+    <string name="receipt_camera_denied">Camera permission is needed to photograph a receipt</string>
+    <string name="receipt_camera_unavailable">No camera app is available to take a photo</string>
+    <string name="receipt_scanning">Reading the receipt…</string>
+    <string name="receipt_scan_failed">Couldn\'t read the receipt</string>
+    <string name="receipt_scan_applied">Filled from receipt</string>
+    <string name="receipt_scan_undo">Undo</string>
+</resources>
