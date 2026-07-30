@@ -17,6 +17,13 @@ import java.time.LocalDate
 @Suppress("TooManyFunctions")
 object ReceiptParser {
 
+    // Every entry in TOTAL_KEYWORDS, EXCLUDED_KEYWORDS and MERCHANT_STOPWORDS below is matched
+    // with containsToken, which requires a standalone token match, not substring containment.
+    // An entry written as a prefix or fragment of a longer real word (e.g. a deliberately
+    // shortened "zaokr" for "zaokrouhleni", meant to also match the full word) will silently
+    // stop matching that longer word entirely — it is not a partial match, it is no match. List
+    // only whole tokens; if both a short and a long form appear on real receipts, list both.
+
     /** Lines whose text marks the amount actually charged. */
     private val TOTAL_KEYWORDS = listOf("celkem", "k uhrade", "suma", "total", "amount due")
 
@@ -26,7 +33,7 @@ object ReceiptParser {
      * beats the real total.
      */
     private val EXCLUDED_KEYWORDS =
-        listOf("dph", "vat", "zaklad", "zaokr", "subtotal", "mezisoucet")
+        listOf("dph", "vat", "zaklad", "zaokr", "zaokrouhleni", "subtotal", "mezisoucet")
 
     /** A run of digits possibly grouped by spaces, dots or commas. */
     private val MONEY_REGEX = Regex("""\d[\d  .,]*""")
@@ -288,7 +295,7 @@ object ReceiptParser {
 
     /** Header lines that are never the shop's name. */
     private val MERCHANT_STOPWORDS = listOf(
-        "ico", "dic", "tel", "www", "http", "ulice", "namesti", "psc",
+        "ico", "dic", "tel", "www", "http", "https", "ulice", "namesti", "psc",
         "danovy doklad", "uctenka", "receipt", "faktura", "pokladna"
     )
 

@@ -71,6 +71,14 @@ class ReceiptParserFullTest {
     }
 
     @Test
+    fun `skips an https header line when naming the merchant`() {
+        // "http" is a deliberate prefix of "https"; containsToken's word-boundary check means
+        // the short form no longer matches "https://..." lines, so both must be listed.
+        val lines = listOf("HTTPS://SHOP.CZ", "REAL SHOP NAME", "CELKEM 100,00")
+        assertEquals("REAL SHOP NAME", ReceiptParser.findMerchant(lines))
+    }
+
+    @Test
     fun `guesses education from school keywords`() {
         assertEquals(
             ExpenseCategory.EDUCATION,

@@ -125,4 +125,13 @@ class ReceiptParserMoneyTest {
         val lines = listOf("Kiosk", "18,00", "PRIVATE 799,00")
         assertEquals(799.0, ReceiptParser.findTotal(lines))
     }
+
+    @Test
+    fun `a full-word rounding line is still excluded from the total search`() {
+        // "zaokr" is a deliberate prefix of the Czech "zaokrouhleni" (rounding); containsToken's
+        // word-boundary check means the short form alone no longer matches the word as printed
+        // in full on a receipt, so the full spelling must be listed too.
+        val lines = listOf("CELKEM", "ZAOKROUHLENI     0,40", "288,79")
+        assertEquals(288.79, ReceiptParser.findTotal(lines))
+    }
 }
