@@ -1,6 +1,7 @@
 package com.coparently.app.presentation.event
 
 import android.net.Uri
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -364,6 +365,9 @@ fun AddEditEventScreen(
                     try {
                         viewModel.uploadEventImage(resolvedId, pickedImageUri.toString())
                     } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+                        // Log the cause: this failure used to be swallowed silently, which left
+                        // "Photo upload failed" as the only evidence anywhere in the system.
+                        android.util.Log.e("CoPlanlyUpload", "Event image upload failed", e)
                         imageUploadFailed = true
                         existingImageUrl
                     }
@@ -406,32 +410,36 @@ fun AddEditEventScreen(
                     viewModel.updateEvent(event)
                 }
 
-                if (imageUploadFailed) {
-                    snackbarHostState.showSnackbar(
-                        message = "Photo upload failed — event saved without the new photo",
-                        duration = SnackbarDuration.Long
-                    )
-                }
-
                 // Clear draft after successful save
                 if (eventId == null) {
                     viewModel.clearEventDraft()
                 }
 
-                snackbarHostState.showSnackbar(
-                    message = if (eventId == null) "Event created" else "Event updated",
-                    duration = SnackbarDuration.Short
-                )
-
-                // Navigate after a short delay
-                kotlinx.coroutines.delay(500)
+                // Leave immediately. `showSnackbar` suspends until the snackbar is dismissed or
+                // times out, so confirming the save here used to hold the editor open for the
+                // snackbar's full duration — about 4.5s normally and 14.5s when a photo upload
+                // had also failed — long after the event itself was written. The saved event is
+                // its own confirmation once the calendar is back.
+                //
+                // The upload warning still has to reach the user, so it goes out as a Toast,
+                // which survives navigation. This matches AddExpenseScreen, which already
+                // reports its receipt-upload warning the same way.
+                if (imageUploadFailed) {
+                    Toast.makeText(
+                        context,
+                        "Photo upload failed — event saved without the new photo",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
                 onSave()
             } catch (e: Exception) {
+                // Re-enable Save before the snackbar, not after: this suspends for the
+                // snackbar's lifetime and used to leave the button dead in the meantime.
+                isSaving = false
                 snackbarHostState.showSnackbar(
                     message = "Failed to save event: ${e.message}",
                     duration = SnackbarDuration.Long
                 )
-                isSaving = false
             }
         }
     }

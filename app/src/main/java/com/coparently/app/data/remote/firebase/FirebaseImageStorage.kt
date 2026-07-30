@@ -1,5 +1,6 @@
 package com.coparently.app.data.remote.firebase
 
+import android.content.ContentResolver
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -15,6 +16,7 @@ import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 import java.io.IOException
+import java.io.InputStream
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -68,14 +70,17 @@ class FirebaseImageStorage @Inject constructor(
     private fun compressImage(uri: Uri): ByteArray {
         val resolver = context.contentResolver
 
+        // `decodeStream` returns null by contract when inJustDecodeBounds is set — it only
+        // fills in the Options. So the null check belongs on the *stream*; testing the decode
+        // result instead rejected every image ever picked, which is why attaching a photo has
+        // never worked. An undecodable file still fails, on the second pass below.
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
-            ?: throw IOException("Cannot open image: $uri")
+        resolver.openStreamOrThrow(uri).use { BitmapFactory.decodeStream(it, null, bounds) }
 
         val options = BitmapFactory.Options().apply {
             inSampleSize = calculateInSampleSize(bounds.outWidth, bounds.outHeight)
         }
-        val bitmap = resolver.openInputStream(uri)?.use {
+        val bitmap = resolver.openStreamOrThrow(uri).use {
             BitmapFactory.decodeStream(it, null, options)
         } ?: throw IOException("Cannot decode image: $uri")
 
@@ -88,6 +93,10 @@ class FirebaseImageStorage @Inject constructor(
             bitmap.recycle()
         }
     }
+
+    /** Opens [uri] for reading, failing loudly rather than returning null to the caller. */
+    private fun ContentResolver.openStreamOrThrow(uri: Uri): InputStream =
+        openInputStream(uri) ?: throw IOException("Cannot open image: $uri")
 
     private fun calculateInSampleSize(width: Int, height: Int): Int {
         var sampleSize = 1

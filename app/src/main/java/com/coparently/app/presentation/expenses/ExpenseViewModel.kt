@@ -167,6 +167,7 @@ class ExpenseViewModel @Inject constructor(
                     // Any upload failure (IO, storage, decode) must not lose the expense
                     @Suppress("TooGenericExceptionCaught") e: Exception
                 ) {
+                    android.util.Log.e("CoPlanlyUpload", "Receipt upload failed", e)
                     warning = "Receipt upload failed — expense saved without receipt"
                     null
                 }
