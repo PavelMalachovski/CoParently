@@ -79,6 +79,7 @@ import androidx.compose.ui.unit.dp
 import com.coparently.app.R
 import com.coparently.app.domain.model.Event
 import com.coparently.app.presentation.theme.CoPlanlyColors
+import com.coparently.app.presentation.theme.Dimensions
 import com.coparently.app.presentation.theme.dimensions
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -93,11 +94,28 @@ private const val PAGER_BASE_PAGE = 1200
 /** Height of the custody band drawn above the week's day headers. */
 private val CUSTODY_BAND_HEIGHT = 16.dp
 
-/** Full-hue bar on an event block's start edge; the only identity carrier in week view. */
+/** Full-hue bar on an event block's start edge, carrying parent identity. */
 private val EVENT_ACCENT_BAR_WIDTH = 3.dp
+
+/** Block height from which a week-view title is allowed a second line. */
+private val TWO_LINE_MIN_HEIGHT = 44.dp
 
 /** Opacity of the hour-grid outline. Enough to read on DarkSurface without becoming a cage. */
 private const val GRIDLINE_ALPHA = 0.55f
+
+/**
+ * Width of the hour-label gutter.
+ *
+ * The day headers, the custody band, the hour grid and the absolutely-positioned events
+ * overlay all measure from this. They have to agree: if one drifts, blocks stop lining up
+ * with the day they belong to. It used to be written out as `iconSize * 2.17f` in four
+ * separate places.
+ *
+ * 1.25x (~30dp on a compact phone) rather than the old 2.17x (~52dp). The gutter shows a
+ * bare hour number ("13"), so it no longer has to fit "13:00"; the 22dp reclaimed goes to the
+ * seven day columns, which are the scarce resource here.
+ */
+private val Dimensions.hourGutterWidth: Dp get() = iconSize * 1.25f
 
 /**
  * Hourly view for day/week calendar views.
@@ -289,7 +307,7 @@ private fun DayWeekPage(
                     CustodyWeekBand(
                         dates = currentDates,
                         getCustody = getCustody,
-                        gutterWidth = dims.iconSize * 2.17f,
+                        gutterWidth = dims.hourGutterWidth,
                         modifier = Modifier.align(Alignment.TopCenter)
                     )
                 }
@@ -327,7 +345,7 @@ private fun DayWeekPage(
                     // Time column space - fixed width for consistency (matches content layout)
                     Box(
                         modifier = Modifier
-                            .width(dims.iconSize * 2.17f) // ~52dp for compact
+                            .width(dims.hourGutterWidth)
                             .fillMaxHeight()
                     )
 
@@ -430,13 +448,16 @@ private fun DayWeekPage(
                         // Fixed width to ensure consistent layout and single-line time display
                         Box(
                             modifier = Modifier
-                                .width(dims.iconSize * 2.17f) // ~52dp for compact
+                                .width(dims.hourGutterWidth)
                                 .height(hourCellHeight) // ~60dp for compact
                                 .padding(top = dims.paddingSmall / 2),
                             contentAlignment = Alignment.TopCenter
                         ) {
                             Text(
-                                text = String.format("%02d:00", hour),
+                                // Hour number only: on an hour gridline the ":00" is constant,
+                                // so it costs gutter width without telling the user anything.
+                                // The accessible time-slot description below still spells it out.
+                                text = String.format(Locale.getDefault(), "%02d", hour),
                                 // labelSmall (11sp) rather than bodyMedium: the hour gutter is
                                 // narrow, and this keeps the rendered size while still scaling
                                 // with the user's font-size setting.
@@ -551,7 +572,7 @@ private fun DayWeekPage(
             val firstVisibleHour = scrollState.firstVisibleItemIndex
 
             // Calculate layout dimensions
-            val hourLabelWidth = dims.iconSize * 2.17f
+            val hourLabelWidth = dims.hourGutterWidth
             val horizontalPadding = 8.dp
             val daySpacing = 4.dp
             val headerHeight = dims.buttonHeight * 1.6f // Match header height
@@ -625,7 +646,7 @@ private fun DayWeekPage(
                                         displayEnd = seg.segEnd,
                                         resizable = !seg.clamped,
                                         draggable = !seg.clamped,
-                                        showLabels = daysCount == 1
+                                        showTime = daysCount == 1
                                     )
                                 }
                             }
@@ -684,11 +705,9 @@ private fun EventChip(
     // Continuation segments of multi-day events are not resizable/movable (ambiguous).
     resizable: Boolean = true,
     draggable: Boolean = true,
-    // Week columns are ~40dp wide, where a title renders about two characters before
-    // ellipsising. Day view has the room; week view drops the text entirely and lets the
-    // parent bar carry identity. The block keeps its contentDescription either way, so a
-    // screen reader still announces the full title and time.
-    showLabels: Boolean = true
+    // Day view spells the time out under the title; week view leaves it to the block's
+    // vertical position and spends the row on the title instead.
+    showTime: Boolean = true
 ) {
     val density = LocalDensity.current
     val hapticFeedback = LocalHapticFeedback.current
@@ -881,8 +900,15 @@ private fun EventChip(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 8.dp, vertical = 4.dp)
-                .padding(start = 12.dp, end = 12.dp) // Padding to avoid resize handles
+                // Asymmetric: the start edge clears the 3dp parent accent bar drawn behind.
+                //
+                // There used to be a further `.padding(start = 12.dp, end = 12.dp)` here,
+                // commented as avoiding the resize handles. It cannot: the handles are pinned
+                // to TopCenter and BottomCenter, so only vertical space moves content clear of
+                // them. What it actually did was eat 24dp of a ~53dp week column, leaving
+                // roughly one and a half characters — which is why week blocks rendered as
+                // nothing but an ellipsis.
+                .padding(start = 5.dp, end = 3.dp, top = 4.dp, bottom = 4.dp)
                 .pointerInput(
                     columnWidthPx,
                     hourHeightPx,
@@ -976,46 +1002,48 @@ private fun EventChip(
                 },
             verticalArrangement = Arrangement.Center
         ) {
-            if (showLabels) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    if (event.isPrivate) {
-                        Icon(
-                            imageVector = Icons.Default.Lock,
-                            contentDescription = "Private event",
-                            tint = textColor,
-                            modifier = Modifier.size(10.dp)
-                        )
-                    }
-                    if (event.pickupConfirmedBy != null) {
-                        Icon(
-                            imageVector = Icons.Default.CheckCircle,
-                            contentDescription = "Pickup confirmed by ${event.pickupConfirmedBy}",
-                            tint = textColor,
-                            modifier = Modifier.size(10.dp)
-                        )
-                    }
-                    Text(
-                        text = event.title,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = textColor,
-                        maxLines = 1,
-                        // Never wrap character-by-character in narrow week columns —
-                        // a clipped-but-horizontal title beats an unreadable vertical one
-                        softWrap = false,
-                        overflow = TextOverflow.Ellipsis,
-                        fontWeight = FontWeight.SemiBold,
-                        textAlign = TextAlign.Start,
-                        modifier = Modifier.fillMaxWidth()
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (event.isPrivate) {
+                    Icon(
+                        imageVector = Icons.Default.Lock,
+                        contentDescription = "Private event",
+                        tint = textColor,
+                        modifier = Modifier.size(10.dp)
                     )
                 }
+                if (event.pickupConfirmedBy != null) {
+                    Icon(
+                        imageVector = Icons.Default.CheckCircle,
+                        contentDescription = "Pickup confirmed by ${event.pickupConfirmedBy}",
+                        tint = textColor,
+                        modifier = Modifier.size(10.dp)
+                    )
+                }
+                Text(
+                    text = event.title,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = textColor,
+                    // Wrap onto a second line when the block is tall enough to show one.
+                    // A ~53dp column fits roughly seven characters per line, so a second line
+                    // is the difference between "Dentist" and "Dentist appt".
+                    maxLines = if (dynamicHeightDp >= TWO_LINE_MIN_HEIGHT) 2 else 1,
+                    overflow = TextOverflow.Ellipsis,
+                    // Medium rather than SemiBold: at this size the heavier weight is no more
+                    // legible on a tinted fill, and it costs about half a character per line —
+                    // which in a ~54dp column is the difference between fitting a word and not.
+                    fontWeight = FontWeight.Medium,
+                    textAlign = TextAlign.Start,
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
-            // Always show time if enough space, or if resizing (to give feedback).
-            // Resize feedback still shows in week view, where the label is otherwise hidden:
-            // the user is actively dragging and needs to see the time they are setting.
-            if (showLabels && totalMinutes >= 45 || isResizingStart || isResizingEnd) {
+            // The time is spelled out only in day view. In week view the block's vertical
+            // position already encodes it, and the row it would occupy is worth more to the
+            // title. It still appears mid-resize in either mode, where the user is actively
+            // setting a time and needs the feedback.
+            if (showTime && totalMinutes >= 45 || isResizingStart || isResizingEnd) {
                 Text(
                     text = "${tempStartTime.format(
                         java.time.format.DateTimeFormatter.ofPattern("HH:mm")
