@@ -66,6 +66,20 @@ object ReceiptParser {
         MONEY_REGEX.findAll(line).mapNotNull { parseMoney(it.value) }.toList()
 
     /**
+     * Lines that carry a total keyword (e.g. "celkem", "total") without also carrying an
+     * excluded keyword (VAT breakdown, subtotal, ...). Shared by [findTotal] and [findCurrency]
+     * so both agree on which line is "the" total line.
+     *
+     * @param lines Recognised receipt lines
+     * @return Matching lines paired with their original index
+     */
+    private fun totalKeywordLines(lines: List<String>): List<IndexedValue<String>> =
+        lines.withIndex().filter { (_, line) ->
+            val text = normalise(line)
+            TOTAL_KEYWORDS.any { it in text } && EXCLUDED_KEYWORDS.none { it in text }
+        }
+
+    /**
      * Finds the amount charged.
      *
      * Prefers the last amount on a line carrying a total keyword, falling back to the first
@@ -77,10 +91,7 @@ object ReceiptParser {
      * @return The total, or null when the receipt holds no money at all
      */
     internal fun findTotal(lines: List<String>): Double? {
-        val keywordLines = lines.withIndex().filter { (_, line) ->
-            val text = normalise(line)
-            TOTAL_KEYWORDS.any { it in text } && EXCLUDED_KEYWORDS.none { it in text }
-        }
+        val keywordLines = totalKeywordLines(lines)
 
         for ((index, line) in keywordLines) {
             moneyOnLine(line).lastOrNull()?.let { return it }
@@ -164,10 +175,7 @@ object ReceiptParser {
      * @return ISO 4217 code, or null when no marker is present
      */
     internal fun findCurrency(lines: List<String>): String? {
-        val totalIndices = lines.withIndex().filter { (_, line) ->
-            val text = normalise(line)
-            TOTAL_KEYWORDS.any { it in text } && EXCLUDED_KEYWORDS.none { it in text }
-        }.map { it.index }.toSet()
+        val totalIndices = totalKeywordLines(lines).map { it.index }.toSet()
 
         val totalText = normalise(
             lines.filterIndexed { index, _ -> index in totalIndices }.joinToString(" ")
