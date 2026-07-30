@@ -1,6 +1,7 @@
 package com.coparently.app.domain.receipts
 
 import java.text.Normalizer
+import java.time.LocalDate
 
 /**
  * Turns the raw lines recognised on a receipt into structured fields.
@@ -93,5 +94,72 @@ object ReceiptParser {
             .filter { line -> EXCLUDED_KEYWORDS.none { it in normalise(line) } }
             .flatMap { moneyOnLine(it) }
             .maxOrNull()
+    }
+
+    /**
+     * Currency markers searched in normalised text. "Kč" normalises to "kc"; "zł" keeps its
+     * stroked l because NFD does not decompose it, so both spellings are listed.
+     */
+    private val CURRENCY_MARKERS = listOf(
+        "czk" to "CZK", "kc" to "CZK",
+        "eur" to "EUR", "€" to "EUR",
+        "pln" to "PLN", "zł" to "PLN", "zl" to "PLN",
+        "usd" to "USD", "$" to "USD",
+        "gbp" to "GBP", "£" to "GBP"
+    )
+
+    private val DATE_DMY = Regex("""\b(\d{1,2})[.\-/](\d{1,2})[.\-/](\d{4})\b""")
+    private val DATE_YMD = Regex("""\b(\d{4})-(\d{1,2})-(\d{1,2})\b""")
+    private val DATE_DMY_SHORT = Regex("""\b(\d{1,2})[.\-/](\d{1,2})[.\-/](\d{2})\b""")
+
+    /** A receipt older than this is almost certainly a misread, not a real purchase. */
+    private const val MAX_RECEIPT_AGE_YEARS = 2L
+
+    /**
+     * Detects the currency printed on the receipt.
+     *
+     * @param lines Recognised receipt lines
+     * @return ISO 4217 code, or null when no marker is present
+     */
+    internal fun findCurrency(lines: List<String>): String? {
+        val text = normalise(lines.joinToString(" "))
+        return CURRENCY_MARKERS.firstOrNull { (marker, _) -> marker in text }?.second
+    }
+
+    /**
+     * Detects the purchase date.
+     *
+     * Dates in the future or more than [MAX_RECEIPT_AGE_YEARS] old are rejected — that guard is
+     * what stops a card expiry or a "platnost do" line being read as the purchase date.
+     *
+     * @param lines Recognised receipt lines
+     * @param today Reference date; injected so the tests are deterministic
+     * @return The purchase date, or null when nothing plausible was found
+     */
+    internal fun findDate(lines: List<String>, today: LocalDate): LocalDate? {
+        val oldest = today.minusYears(MAX_RECEIPT_AGE_YEARS)
+
+        for (line in lines) {
+            val candidates = buildList {
+                DATE_DMY.findAll(line).forEach { match ->
+                    val (day, month, year) = match.destructured
+                    add(Triple(year.toInt(), month.toInt(), day.toInt()))
+                }
+                DATE_YMD.findAll(line).forEach { match ->
+                    val (year, month, day) = match.destructured
+                    add(Triple(year.toInt(), month.toInt(), day.toInt()))
+                }
+                DATE_DMY_SHORT.findAll(line).forEach { match ->
+                    val (day, month, year) = match.destructured
+                    add(Triple(2000 + year.toInt(), month.toInt(), day.toInt()))
+                }
+            }
+
+            candidates.forEach { (year, month, day) ->
+                val date = runCatching { LocalDate.of(year, month, day) }.getOrNull()
+                if (date != null && !date.isAfter(today) && !date.isBefore(oldest)) return date
+            }
+        }
+        return null
     }
 }
