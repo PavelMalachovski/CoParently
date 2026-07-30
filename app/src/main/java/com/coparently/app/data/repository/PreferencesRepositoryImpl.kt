@@ -1,10 +1,13 @@
 package com.coparently.app.data.repository
 
 import com.coparently.app.data.local.preferences.EncryptedPreferences
+import com.coparently.app.domain.money.SupportedCurrency
+import com.coparently.app.domain.money.defaultCurrencyForRegion
 import com.coparently.app.domain.repository.PreferencesRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -18,10 +21,22 @@ class PreferencesRepositoryImpl @Inject constructor(
 ) : PreferencesRepository {
 
     private val _darkThemeFlow = MutableStateFlow<Boolean?>(null)
+    private val _defaultCurrencyFlow = MutableStateFlow(resolveInitialCurrency())
 
     init {
         // Initialize with current value
         _darkThemeFlow.value = encryptedPreferences.getDarkTheme()
+    }
+
+    /**
+     * Reads the stored currency, or resolves one from the device region and persists it so the
+     * choice stays stable even if the device locale later changes.
+     */
+    private fun resolveInitialCurrency(): SupportedCurrency {
+        SupportedCurrency.fromCode(encryptedPreferences.getDefaultCurrency())?.let { return it }
+        val resolved = defaultCurrencyForRegion(Locale.getDefault().country)
+        encryptedPreferences.putDefaultCurrency(resolved.code)
+        return resolved
     }
 
     override fun getDarkThemeFlow(): Flow<Boolean?> {
@@ -40,6 +55,14 @@ class PreferencesRepositoryImpl @Inject constructor(
     override suspend fun clearDarkTheme() {
         encryptedPreferences.clearDarkTheme()
         _darkThemeFlow.value = null
+    }
+
+    override fun getDefaultCurrencyFlow(): Flow<SupportedCurrency> =
+        _defaultCurrencyFlow.asStateFlow()
+
+    override suspend fun setDefaultCurrency(currency: SupportedCurrency) {
+        encryptedPreferences.putDefaultCurrency(currency.code)
+        _defaultCurrencyFlow.value = currency
     }
 }
 
