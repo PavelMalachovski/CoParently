@@ -24,10 +24,13 @@ object ReceiptParser {
     /** A run of digits possibly grouped by spaces, dots or commas. */
     private val MONEY_REGEX = Regex("""\d[\d  .,]*""")
 
+    /** Combining diacritical marks left behind by NFD normalisation. */
+    private val COMBINING_MARKS_REGEX = Regex("""\p{Mn}+""")
+
     /** Lowercases and strips diacritics so "K ÚHRADĚ" and "k uhrade" compare equal. */
     internal fun normalise(text: String): String =
         Normalizer.normalize(text.lowercase(), Normalizer.Form.NFD)
-            .replace(Regex("""\p{Mn}+"""), "")
+            .replace(COMBINING_MARKS_REGEX, "")
 
     /**
      * Parses one money-shaped token.
@@ -65,8 +68,9 @@ object ReceiptParser {
      * Finds the amount charged.
      *
      * Prefers the last amount on a line carrying a total keyword, falling back to the first
-     * amount on the following line (some receipts print the label and the number separately),
-     * and finally to the largest amount anywhere outside the VAT breakdown.
+     * amount on the next non-excluded line below it (some receipts print the label and the
+     * number separately, sometimes with a VAT breakdown printed in between), and finally to the
+     * largest amount anywhere outside the VAT breakdown.
      *
      * @param lines Recognised receipt lines
      * @return The total, or null when the receipt holds no money at all
@@ -79,8 +83,9 @@ object ReceiptParser {
 
         for ((index, line) in keywordLines) {
             moneyOnLine(line).lastOrNull()?.let { return it }
-            lines.getOrNull(index + 1)
-                ?.let { moneyOnLine(it).firstOrNull() }
+            lines.drop(index + 1)
+                .firstOrNull { candidate -> EXCLUDED_KEYWORDS.none { it in normalise(candidate) } }
+                ?.let { candidate -> moneyOnLine(candidate).firstOrNull() }
                 ?.let { return it }
         }
 

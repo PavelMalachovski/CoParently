@@ -67,6 +67,17 @@ class ReceiptParserMoneyTest {
     }
 
     @Test
+    fun `skips excluded lines when the total is several lines below the keyword`() {
+        val lines = listOf(
+            "CELKEM",
+            "ZAKLAD DPH 21%     999,00",
+            "DPH 21%            209,79",
+            "288,79"
+        )
+        assertEquals(288.79, ReceiptParser.findTotal(lines))
+    }
+
+    @Test
     fun `finds an english total`() {
         val lines = listOf("BOOKSHOP", "Item        5.00", "TOTAL      12.99")
         assertEquals(12.99, ReceiptParser.findTotal(lines))
