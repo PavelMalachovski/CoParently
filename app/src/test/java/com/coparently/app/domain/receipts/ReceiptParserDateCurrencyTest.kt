@@ -36,6 +36,32 @@ class ReceiptParserDateCurrencyTest {
     }
 
     @Test
+    fun `does not mistake zl inside puzzle for zloty`() {
+        assertEquals("USD", ReceiptParser.findCurrency(listOf("Puzzle Toy \$12.99 Total")))
+    }
+
+    @Test
+    fun `does not mistake eur inside europe for euro`() {
+        assertEquals("USD", ReceiptParser.findCurrency(listOf("Made in Europe - Total \$5.00")))
+    }
+
+    @Test
+    fun `does not mistake kc inside kcal for czech crowns`() {
+        assertEquals(
+            "USD",
+            ReceiptParser.findCurrency(listOf("Grocery Store - 350 kcal per serving - Total \$9.99"))
+        )
+    }
+
+    @Test
+    fun `prefers a currency marker on the total line over one elsewhere`() {
+        // "usd" sits earlier than "gbp"/pound-sign in CURRENCY_MARKERS, so a naive
+        // whole-receipt search would wrongly return USD from the non-total line.
+        val lines = listOf("USD Import Duty Note", "TOTAL 25.00 £")
+        assertEquals("GBP", ReceiptParser.findCurrency(lines))
+    }
+
+    @Test
     fun `reads a czech style date`() {
         assertEquals(
             LocalDate.of(2026, 7, 12),

@@ -108,22 +108,76 @@ object ReceiptParser {
         "gbp" to "GBP", "£" to "GBP"
     )
 
+    /** `day.month.year` or `day/month/year` with a 4-digit year, e.g. "12.07.2026". */
     private val DATE_DMY = Regex("""\b(\d{1,2})[.\-/](\d{1,2})[.\-/](\d{4})\b""")
+
+    /** ISO `year-month-day`, e.g. "2026-07-12". */
     private val DATE_YMD = Regex("""\b(\d{4})-(\d{1,2})-(\d{1,2})\b""")
+
+    /** `day.month.year` or `day/month/year` with a 2-digit year, e.g. "12.07.26". */
     private val DATE_DMY_SHORT = Regex("""\b(\d{1,2})[.\-/](\d{1,2})[.\-/](\d{2})\b""")
 
     /** A receipt older than this is almost certainly a misread, not a real purchase. */
     private const val MAX_RECEIPT_AGE_YEARS = 2L
 
     /**
+     * Whether [marker] occurs in [text] as a standalone token rather than as a substring of an
+     * unrelated word (e.g. "zl" must not match inside "puzzle", "eur" must not match inside
+     * "europe", "kc" must not match inside "kcal"). Boundaries are checked with
+     * [Char.isLetterOrDigit] rather than regex `\b` because that Unicode-aware check is what
+     * lets "zł" keep matching: `ł` is a letter, but Java/Kotlin's default (ASCII-only) `\w` does
+     * not treat it as a word character, so `\b` would silently fail to match it.
+     */
+    private fun containsToken(text: String, marker: String): Boolean {
+        var index = text.indexOf(marker)
+        while (index >= 0) {
+            val before = index - 1
+            val after = index + marker.length
+            val boundaryBefore = before < 0 || !text[before].isLetterOrDigit()
+            val boundaryAfter = after >= text.length || !text[after].isLetterOrDigit()
+            if (boundaryBefore && boundaryAfter) return true
+            index = text.indexOf(marker, index + 1)
+        }
+        return false
+    }
+
+    /**
+     * Searches already-normalised [text] for a currency marker.
+     *
+     * Alphabetic markers ("czk", "zł", ...) must match as a standalone token, checked via
+     * [containsToken]. Currency symbols ("€", "$", "£") are not letters, so a word-boundary check
+     * does not apply to them — plain substring containment is enough and correct.
+     */
+    private fun findCurrencyMarker(text: String): String? =
+        CURRENCY_MARKERS.firstOrNull { (marker, _) ->
+            if (marker.all { it.isLetter() }) containsToken(text, marker) else marker in text
+        }?.second
+
+    /**
      * Detects the currency printed on the receipt.
+     *
+     * Searched on the total line first (reusing the same total/excluded keyword rules as
+     * [findTotal]), then anywhere else in the text — a marker on the actual total line should
+     * beat a stray match in the item list, country-of-origin text or nutrition information.
      *
      * @param lines Recognised receipt lines
      * @return ISO 4217 code, or null when no marker is present
      */
     internal fun findCurrency(lines: List<String>): String? {
-        val text = normalise(lines.joinToString(" "))
-        return CURRENCY_MARKERS.firstOrNull { (marker, _) -> marker in text }?.second
+        val totalIndices = lines.withIndex().filter { (_, line) ->
+            val text = normalise(line)
+            TOTAL_KEYWORDS.any { it in text } && EXCLUDED_KEYWORDS.none { it in text }
+        }.map { it.index }.toSet()
+
+        val totalText = normalise(
+            lines.filterIndexed { index, _ -> index in totalIndices }.joinToString(" ")
+        )
+        findCurrencyMarker(totalText)?.let { return it }
+
+        val restText = normalise(
+            lines.filterIndexed { index, _ -> index !in totalIndices }.joinToString(" ")
+        )
+        return findCurrencyMarker(restText)
     }
 
     /**
@@ -140,6 +194,9 @@ object ReceiptParser {
         val oldest = today.minusYears(MAX_RECEIPT_AGE_YEARS)
 
         for (line in lines) {
+            // Candidates are ordered by regex type (DMY, then ISO YMD, then short-year DMY),
+            // not by where they appear in the line — a line matching more than one format keeps
+            // that fixed precedence rather than reading left to right.
             val candidates = buildList {
                 DATE_DMY.findAll(line).forEach { match ->
                     val (day, month, year) = match.destructured
