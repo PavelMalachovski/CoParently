@@ -1,5 +1,6 @@
 package com.coparently.app.domain.receipts
 
+import com.coparently.app.domain.model.ExpenseCategory
 import java.text.Normalizer
 import java.time.LocalDate
 
@@ -227,4 +228,89 @@ object ReceiptParser {
         }
         return null
     }
+
+    /** Header lines that are never the shop's name. */
+    private val MERCHANT_STOPWORDS = listOf(
+        "ico", "dic", "tel", "www", "http", "ulice", "namesti", "psc",
+        "danovy doklad", "uctenka", "receipt", "faktura", "pokladna"
+    )
+
+    private const val MERCHANT_MIN_LENGTH = 3
+    private const val MERCHANT_MAX_LENGTH = 40
+
+    /** Keyword to category, first match wins. */
+    private val CATEGORY_KEYWORDS = listOf(
+        "lekarna" to ExpenseCategory.MEDICAL,
+        "pharmacy" to ExpenseCategory.MEDICAL,
+        "apotheke" to ExpenseCategory.MEDICAL,
+        "zubni" to ExpenseCategory.MEDICAL,
+        "skolka" to ExpenseCategory.EDUCATION,
+        "skolne" to ExpenseCategory.EDUCATION,
+        "skola" to ExpenseCategory.EDUCATION,
+        "krouzek" to ExpenseCategory.EDUCATION,
+        "tuition" to ExpenseCategory.EDUCATION,
+        "potraviny" to ExpenseCategory.FOOD,
+        "restaurace" to ExpenseCategory.FOOD,
+        "kavarna" to ExpenseCategory.FOOD,
+        "bistro" to ExpenseCategory.FOOD,
+        "cafe" to ExpenseCategory.FOOD,
+        "obleceni" to ExpenseCategory.CLOTHING,
+        "obuv" to ExpenseCategory.CLOTHING,
+        "clothing" to ExpenseCategory.CLOTHING,
+        "hracky" to ExpenseCategory.TOYS,
+        "toys" to ExpenseCategory.TOYS,
+        "jizdenka" to ExpenseCategory.TRANSPORTATION,
+        "benzin" to ExpenseCategory.TRANSPORTATION,
+        "nafta" to ExpenseCategory.TRANSPORTATION,
+        "fuel" to ExpenseCategory.TRANSPORTATION,
+        "drogerie" to ExpenseCategory.HOUSEHOLD,
+        "household" to ExpenseCategory.HOUSEHOLD
+    )
+
+    /**
+     * Picks the shop name: the first header line that reads like a name rather than an address,
+     * a registration number or a phone number.
+     *
+     * Returned verbatim apart from whitespace collapsing — receipt headers are usually already
+     * capitalised the way the shop writes its name.
+     *
+     * @param lines Recognised receipt lines
+     * @return The merchant name, or null when no line qualifies
+     */
+    internal fun findMerchant(lines: List<String>): String? = lines.asSequence()
+        .map { it.trim().replace(Regex("""\s+"""), " ") }
+        .filter { it.length in MERCHANT_MIN_LENGTH..MERCHANT_MAX_LENGTH }
+        .filter { line -> line.any { it.isLetter() } }
+        .filter { line ->
+            val text = normalise(line)
+            MERCHANT_STOPWORDS.none { it in text }
+        }
+        .filterNot { line -> line.count { it.isDigit() } * 3 > line.length }
+        .firstOrNull()
+
+    /**
+     * Guesses a category from keywords anywhere on the receipt.
+     *
+     * @param lines Recognised receipt lines
+     * @return The matched category, or null when nothing matched
+     */
+    internal fun findCategory(lines: List<String>): ExpenseCategory? {
+        val text = normalise(lines.joinToString(" "))
+        return CATEGORY_KEYWORDS.firstOrNull { (keyword, _) -> keyword in text }?.second
+    }
+
+    /**
+     * Parses recognised receipt lines into structured fields.
+     *
+     * @param lines Recognised receipt lines, roughly top to bottom
+     * @param today Reference date used to sanity-check the purchase date
+     * @return Best-effort fields; any of them may be null
+     */
+    fun parse(lines: List<String>, today: LocalDate = LocalDate.now()): ReceiptScan = ReceiptScan(
+        total = findTotal(lines),
+        currency = findCurrency(lines),
+        merchant = findMerchant(lines),
+        date = findDate(lines, today),
+        category = findCategory(lines)
+    )
 }
