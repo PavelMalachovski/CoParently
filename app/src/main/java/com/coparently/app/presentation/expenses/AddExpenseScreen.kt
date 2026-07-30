@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -24,6 +25,8 @@ import androidx.compose.material.icons.filled.AddAPhoto
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
@@ -35,7 +38,9 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -57,6 +62,11 @@ import com.coparently.app.R
 import com.coparently.app.domain.model.ExpenseCategory
 import com.coparently.app.domain.money.SupportedCurrency
 import com.coparently.app.presentation.theme.CoPlanlyShapes
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -74,6 +84,10 @@ fun AddExpenseScreen(
     val defaultCurrency by viewModel.defaultCurrency.collectAsState()
     var currency by remember { mutableStateOf<SupportedCurrency?>(null) }
     val effectiveCurrency = currency ?: defaultCurrency
+
+    var date by remember { mutableStateOf(LocalDate.now()) }
+    var showDatePicker by remember { mutableStateOf(false) }
+    val dateFormatter = remember { DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM) }
 
     val saveState by viewModel.saveState.collectAsState()
     val isSaving = saveState is ExpenseSaveState.Saving
@@ -176,6 +190,17 @@ fun AddExpenseScreen(
             }
 
             OutlinedTextField(
+                value = date.format(dateFormatter),
+                onValueChange = {},
+                readOnly = true,
+                enabled = false,
+                label = { Text(stringResource(R.string.expense_field_date)) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(enabled = !isSaving) { showDatePicker = true }
+            )
+
+            OutlinedTextField(
                 value = notes,
                 onValueChange = { notes = it },
                 label = { Text(stringResource(R.string.expense_field_notes)) },
@@ -205,6 +230,7 @@ fun AddExpenseScreen(
                             amount = amountValue,
                             category = category,
                             currency = effectiveCurrency.code,
+                            date = date,
                             notes = notes.takeIf { it.isNotBlank() },
                             receiptImageUri = receiptUri?.toString()
                         )
@@ -220,6 +246,39 @@ fun AddExpenseScreen(
                     )
                 } else {
                     Text(stringResource(R.string.expense_save))
+                }
+            }
+
+            if (showDatePicker) {
+                val pickerState = rememberDatePickerState(
+                    initialSelectedDateMillis = date
+                        .atStartOfDay(ZoneOffset.UTC)
+                        .toInstant()
+                        .toEpochMilli()
+                )
+                DatePickerDialog(
+                    onDismissRequest = { showDatePicker = false },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            pickerState.selectedDateMillis?.let { millis ->
+                                // The picker reports UTC midnight; converting through the system
+                                // zone here would shift the date by a day in negative offsets.
+                                date = Instant.ofEpochMilli(millis)
+                                    .atZone(ZoneOffset.UTC)
+                                    .toLocalDate()
+                            }
+                            showDatePicker = false
+                        }) {
+                            Text(stringResource(R.string.expense_date_confirm))
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showDatePicker = false }) {
+                            Text(stringResource(R.string.expense_date_cancel))
+                        }
+                    }
+                ) {
+                    DatePicker(state = pickerState)
                 }
             }
         }

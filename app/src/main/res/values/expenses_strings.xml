@@ -49,4 +49,7 @@
     <string name="expenses_delete">Delete expense</string>
     <string name="expenses_deleted">Expense deleted</string>
     <string name="expenses_deleted_undo">Undo</string>
+    <string name="expense_field_date">Date</string>
+    <string name="expense_date_confirm">OK</string>
+    <string name="expense_date_cancel">Cancel</string>
 </resources>
