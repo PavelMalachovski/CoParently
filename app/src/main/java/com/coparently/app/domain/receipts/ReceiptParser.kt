@@ -10,6 +10,11 @@ import java.time.LocalDate
  * Pure and deterministic: every heuristic here is covered by unit tests, because OCR output
  * varies wildly between shops and this is where the feature is most likely to be wrong.
  */
+// Each field (total, currency, date, merchant, category) gets its own function on purpose — that
+// is what lets every heuristic be reasoned about and unit-tested independently, which is the
+// whole design of this parser. Splitting the object to dodge the function count would work
+// against that.
+@Suppress("TooManyFunctions")
 object ReceiptParser {
 
     /** Lines whose text marks the amount actually charged. */
@@ -238,6 +243,13 @@ object ReceiptParser {
     private const val MERCHANT_MIN_LENGTH = 3
     private const val MERCHANT_MAX_LENGTH = 40
 
+    /**
+     * A merchant-name candidate line is rejected once at least a third of its characters are
+     * digits — that ratio is the signature of a phone number, a registration number
+     * (e.g. "ICO 12345678") or a street address, never a shop name.
+     */
+    private const val MERCHANT_DIGIT_HEAVY_RATIO = 3
+
     /** Keyword to category, first match wins. */
     private val CATEGORY_KEYWORDS = listOf(
         "lekarna" to ExpenseCategory.MEDICAL,
@@ -285,7 +297,7 @@ object ReceiptParser {
             val text = normalise(line)
             MERCHANT_STOPWORDS.none { it in text }
         }
-        .filterNot { line -> line.count { it.isDigit() } * 3 > line.length }
+        .filterNot { line -> line.count { it.isDigit() } * MERCHANT_DIGIT_HEAVY_RATIO > line.length }
         .firstOrNull()
 
     /**
