@@ -4,14 +4,17 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.coparently.app.data.analytics.AnalyticsManager
 import com.coparently.app.data.remote.firebase.FcmService
+import com.coparently.app.domain.money.SupportedCurrency
 import com.coparently.app.domain.repository.PreferencesRepository
 import com.coparently.app.domain.repository.UserRepository
 import com.coparently.app.presentation.common.UiError
 import com.coparently.app.presentation.common.UiState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.io.IOException
 import javax.inject.Inject
@@ -42,6 +45,20 @@ class SettingsViewModel @Inject constructor(
             }
             stateFlow
         }
+
+    /** App-wide default currency for new expenses. */
+    val defaultCurrency: StateFlow<SupportedCurrency> =
+        preferencesRepository.getDefaultCurrencyFlow()
+            .stateIn(viewModelScope, SharingStarted.Eagerly, SupportedCurrency.DEFAULT)
+
+    /**
+     * Stores a new app-wide default currency.
+     *
+     * @param currency Currency to use for expenses created from now on
+     */
+    fun setDefaultCurrency(currency: SupportedCurrency) {
+        viewModelScope.launch { preferencesRepository.setDefaultCurrency(currency) }
+    }
 
     init {
         loadSettings()

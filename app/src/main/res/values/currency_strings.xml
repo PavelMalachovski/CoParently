@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Currency selection strings. Kept out of strings.xml because strings.xml is
+     gitignored in this project (it holds local OAuth values). -->
+<resources>
+    <string name="currency_settings_title">Currency</string>
+    <string name="currency_settings_default">Default currency</string>
+    <string name="currency_settings_description">Used for new expenses. You can change it on a single expense.</string>
+    <string name="currency_picker_title">Choose default currency</string>
+    <string name="currency_picker_cancel">Cancel</string>
+    <string name="currency_selector_label">Currency</string>
+</resources>

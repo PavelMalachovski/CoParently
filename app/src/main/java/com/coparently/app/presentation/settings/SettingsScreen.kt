@@ -1,5 +1,6 @@
 package com.coparently.app.presentation.settings
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -18,6 +19,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.coparently.app.R
+import com.coparently.app.domain.money.SupportedCurrency
 import com.coparently.app.presentation.settings.components.SettingsNavigationCard
 import com.coparently.app.presentation.settings.components.SettingsSwitchCard
 import com.coparently.app.presentation.sync.GoogleCalendarSyncState
@@ -69,6 +71,8 @@ fun SettingsScreen(
     val settingsUiState by settingsViewModel.settingsState.collectAsState()
     val operationState by settingsViewModel.operationState.collectAsState()
     val darkTheme by settingsViewModel.darkThemeFlow.collectAsState()
+    val defaultCurrency by settingsViewModel.defaultCurrency.collectAsState()
+    var showCurrencyPicker by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -178,6 +182,39 @@ fun SettingsScreen(
                             modifier = Modifier.weight(1f)
                         )
                     }
+                }
+            }
+
+            // Default Currency
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Payments,
+                            contentDescription = null,
+                            modifier = Modifier.padding(end = 8.dp)
+                        )
+                        Text(
+                            text = stringResource(R.string.currency_settings_title),
+                            style = MaterialTheme.typography.titleLarge
+                        )
+                    }
+                    ListItem(
+                        headlineContent = {
+                            Text(stringResource(R.string.currency_settings_default))
+                        },
+                        supportingContent = {
+                            Text(stringResource(R.string.currency_settings_description))
+                        },
+                        trailingContent = {
+                            TextButton(onClick = { showCurrencyPicker = true }) {
+                                Text("${defaultCurrency.code} ${defaultCurrency.symbol}")
+                            }
+                        }
+                    )
                 }
             }
 
@@ -515,6 +552,46 @@ fun SettingsScreen(
                         Text(stringResource(R.string.settings_account_sign_out))
                     }
                 }
+            }
+
+            if (showCurrencyPicker) {
+                AlertDialog(
+                    onDismissRequest = { showCurrencyPicker = false },
+                    title = { Text(stringResource(R.string.currency_picker_title)) },
+                    text = {
+                        Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                            SupportedCurrency.entries.forEach { currency ->
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            settingsViewModel.setDefaultCurrency(currency)
+                                            showCurrencyPicker = false
+                                        }
+                                        .padding(vertical = 8.dp)
+                                ) {
+                                    RadioButton(
+                                        selected = currency == defaultCurrency,
+                                        onClick = {
+                                            settingsViewModel.setDefaultCurrency(currency)
+                                            showCurrencyPicker = false
+                                        }
+                                    )
+                                    Text(
+                                        text = "${currency.code}  ${currency.symbol}",
+                                        modifier = Modifier.padding(start = 8.dp)
+                                    )
+                                }
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(onClick = { showCurrencyPicker = false }) {
+                            Text(stringResource(R.string.currency_picker_cancel))
+                        }
+                    }
+                )
             }
         }
     }
