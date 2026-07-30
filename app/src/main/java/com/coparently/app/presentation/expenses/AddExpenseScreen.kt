@@ -42,6 +42,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
@@ -551,7 +552,8 @@ internal fun ReceiptScanEffect(
                         applyReceiptScanUpdate(update, callbacks)
                         val result = snackbarHostState.showSnackbar(
                             message = context.getString(R.string.receipt_scan_applied),
-                            actionLabel = context.getString(R.string.receipt_scan_undo)
+                            actionLabel = context.getString(R.string.receipt_scan_undo),
+                            duration = SnackbarDuration.Short
                         )
                         if (result == SnackbarResult.ActionPerformed) {
                             restoreReceiptScanSnapshot(snapshot, callbacks)
@@ -564,7 +566,10 @@ internal fun ReceiptScanEffect(
 
             ReceiptScanState.Failed -> {
                 try {
-                    snackbarHostState.showSnackbar(context.getString(R.string.receipt_scan_failed))
+                    snackbarHostState.showSnackbar(
+                        message = context.getString(R.string.receipt_scan_failed),
+                        duration = SnackbarDuration.Short
+                    )
                 } finally {
                     callbacks.onScanConsumed()
                 }

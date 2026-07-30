@@ -22,6 +22,9 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import java.time.LocalDate
 
+/** `SnackbarDuration.Short`'s timeout per `SnackbarHost.kt`'s `toMillis` (material3 1.4.0). */
+private const val SHORT_SNACKBAR_TIMEOUT_MILLIS = 4_000L
+
 /**
  * Regression test for a timing bug found in code review: [ReceiptScanEffect] must not reset
  * [ReceiptScanCallbacks.onScanConsumed] until *after* the Undo/failure snackbar's
@@ -99,6 +102,35 @@ class ReceiptScanEffectTest {
 
         val undoLabel = context().getString(R.string.receipt_scan_undo)
         composeTestRule.onNodeWithText(undoLabel).assertIsDisplayed()
+    }
+
+    /**
+     * Pins the fix's second half: the Applied snackbar must carry an explicit
+     * `SnackbarDuration.Short`, not fall through to the `actionLabel != null` default of
+     * `Indefinite` (`SnackbarHost.kt`'s `toMillis`, `SnackbarDuration.Indefinite -> Long.MAX_VALUE`).
+     * `Short` resolves to 4000ms there, so advancing the clock past that (with no Undo tap)
+     * must make the snackbar go away on its own — if it never goes away, this fails.
+     */
+    @Test
+    fun appliedScan_undoSnackbar_disappearsAfterShortDurationElapses() {
+        val snackbarHostState = SnackbarHostState()
+        setContentWithEffect(snackbarHostState)
+        composeTestRule.waitForIdle()
+
+        composeTestRule.runOnIdle {
+            scanState.value = ReceiptScanState.Applied(
+                ReceiptScan(total = 150.0, merchant = "Lekarna", currency = "CZK")
+            )
+        }
+        composeTestRule.waitForIdle()
+
+        val undoLabel = context().getString(R.string.receipt_scan_undo)
+        composeTestRule.onNodeWithText(undoLabel).assertIsDisplayed()
+
+        composeTestRule.mainClock.advanceTimeBy(SHORT_SNACKBAR_TIMEOUT_MILLIS + 1_000L)
+        composeTestRule.waitForIdle()
+
+        composeTestRule.onNodeWithText(undoLabel).assertDoesNotExist()
     }
 
     @Test
