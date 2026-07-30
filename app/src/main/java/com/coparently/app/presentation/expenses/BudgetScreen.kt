@@ -108,8 +108,7 @@ fun BudgetScreen(
 
                         BudgetItem(
                             budget = budget,
-                            spentAmount = spentAmount,
-                            onEdit = { /* navigate to edit */ }
+                            spentAmount = spentAmount
                         )
                     }
                 }

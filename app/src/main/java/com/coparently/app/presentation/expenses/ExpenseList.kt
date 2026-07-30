@@ -34,7 +34,6 @@ import java.util.Locale
 @Composable
 fun ExpenseList(
     expenses: List<Expense>,
-    onExpenseClick: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     // Receipt being viewed full-screen; transient UI state, deliberately local.
@@ -47,7 +46,6 @@ fun ExpenseList(
         items(expenses) { expense ->
             ExpenseItem(
                 expense = expense,
-                onClick = { onExpenseClick(expense.id) },
                 onReceiptClick = { url -> viewedReceiptUrl = url }
             )
             HorizontalDivider()
@@ -62,10 +60,14 @@ fun ExpenseList(
     }
 }
 
+/**
+ * A single expense row. Deliberately NOT clickable as a whole: there is no expense-detail
+ * screen yet, and a row that ripples but does nothing reads as a broken app. The receipt
+ * thumbnail is the one real affordance here and stays tappable.
+ */
 @Composable
 fun ExpenseItem(
     expense: Expense,
-    onClick: () -> Unit,
     onReceiptClick: (String) -> Unit = {}
 ) {
     val dateFormatter = DateTimeFormatter.ofPattern("MMM d, yyyy")
@@ -102,8 +104,7 @@ fun ExpenseItem(
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.primary
             )
-        },
-        modifier = Modifier.clickable(onClick = onClick)
+        }
     )
 }
 

@@ -23,6 +23,12 @@ import com.coparently.app.data.preferences.ThemePreferences
  * - Custom color schemes
  * - Font scaling for accessibility
  *
+ * NOTE: not currently wired into the app. `MainActivity` renders through
+ * [CoPlanlyTheme] in `Theme.kt`; this file and `AnimatedTheme.kt` are kept for a future
+ * dynamic-theme path. Its colour slots are held in sync with `Theme.kt` deliberately — in
+ * particular `secondary` stays neutral rather than Mom-pink, so whichever theme path the app
+ * ends up on, the parent-identity rule holds.
+ *
  * @param themePrefs Theme preferences containing all customization options
  * @param content The composable content to display with this theme
  */
@@ -50,10 +56,12 @@ fun CoPlanlyDynamicTheme(
                 onPrimary = CoPlanlyColors.DadBlueDark,
                 primaryContainer = CoPlanlyColors.DadBlueDark,
                 onPrimaryContainer = CoPlanlyColors.DadBlueLight,
-                secondary = CoPlanlyColors.MomPinkLight,
-                onSecondary = CoPlanlyColors.MomPinkDark,
-                secondaryContainer = CoPlanlyColors.MomPinkDark,
-                onSecondaryContainer = CoPlanlyColors.MomPinkLight,
+                // Neutral, NOT Mom-pink — see CoPlanlyColors.NeutralSecondary. Feeds generic
+                // Material selected states (FilterChips); parent pink/blue is applied directly.
+                secondary = CoPlanlyColors.NeutralSecondaryDark,
+                onSecondary = CoPlanlyColors.NeutralOnSecondaryDark,
+                secondaryContainer = CoPlanlyColors.NeutralSecondaryContainerDark,
+                onSecondaryContainer = CoPlanlyColors.NeutralSecondaryDark,
                 tertiary = Color(0xFF66FF99),
                 onTertiary = Color(0xFF003314),
                 background = CoPlanlyColors.DarkBackground,
@@ -68,10 +76,11 @@ fun CoPlanlyDynamicTheme(
                 onPrimary = Color.White,
                 primaryContainer = CoPlanlyColors.DadBlueLight,
                 onPrimaryContainer = CoPlanlyColors.DadBlueDark,
-                secondary = CoPlanlyColors.MomPink,
+                // Neutral, NOT Mom-pink — see CoPlanlyColors.NeutralSecondary.
+                secondary = CoPlanlyColors.NeutralSecondary,
                 onSecondary = Color.White,
-                secondaryContainer = CoPlanlyColors.MomPinkLight,
-                onSecondaryContainer = CoPlanlyColors.MomPinkDark,
+                secondaryContainer = CoPlanlyColors.NeutralSecondaryContainer,
+                onSecondaryContainer = CoPlanlyColors.NeutralOnSecondaryContainer,
                 tertiary = CoPlanlyColors.BrandAccent,
                 onTertiary = Color.White,
                 background = CoPlanlyColors.LightBackground,

@@ -19,11 +19,14 @@ import java.text.NumberFormat
 import java.util.Locale
 import kotlin.math.roundToInt
 
+/**
+ * A single budget card. Read-only: there is no budget-edit screen yet, so the card carries no
+ * tap affordance rather than offering one that does nothing.
+ */
 @Composable
 fun BudgetItem(
     budget: Budget,
-    spentAmount: Double,
-    onEdit: () -> Unit
+    spentAmount: Double
 ) {
     val progress = if (budget.monthlyLimit > 0) (spentAmount / budget.monthlyLimit).coerceIn(0.0, 1.0) else 0.0
     val color = when {
