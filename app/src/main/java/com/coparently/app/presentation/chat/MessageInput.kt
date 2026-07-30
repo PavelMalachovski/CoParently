@@ -29,9 +29,12 @@ import com.coparently.app.R
 fun MessageInput(
     onSendMessage: (String) -> Unit,
     onAttachClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    // Seed text for the composer. Keyed on the value so arriving with a new draft replaces
+    // the field, while ordinary recomposition leaves what the user has typed alone.
+    initialText: String = ""
 ) {
-    var text by remember { mutableStateOf("") }
+    var text by remember(initialText) { mutableStateOf(initialText) }
 
     Row(
         modifier = modifier

@@ -40,6 +40,9 @@ import java.time.format.DateTimeFormatter
 fun ChatScreen(
     conversationId: String,
     onBack: () -> Unit,
+    // Pre-filled composer text (e.g. a settle-up message drafted on Expenses). Never sent
+    // automatically — a message to the co-parent is the user's to send.
+    draft: String = "",
     onRequestChangeForEvent: (String) -> Unit = {},
     viewModel: ChatViewModel = hiltViewModel()
 ) {
@@ -89,6 +92,7 @@ fun ChatScreen(
             )
 
             MessageInput(
+                initialText = draft,
                 onSendMessage = { content ->
                     viewModel.sendMessage(content)
                 },

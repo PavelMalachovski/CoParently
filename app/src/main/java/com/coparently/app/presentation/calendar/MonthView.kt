@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -60,6 +61,9 @@ private const val DAYS_PER_WEEK = 7L
 
 /** Width of the school-vacation strip relative to the day cell. */
 private const val VACATION_STRIP_WIDTH_FRACTION = 0.6f
+
+/** Full-hue edge marking the first day of a custody run. */
+private val CUSTODY_EDGE_WIDTH = 2.dp
 
 /**
  * Classic month grid: always starts at the 1st of the month, pages horizontally
@@ -322,6 +326,25 @@ private fun DayCell(
             .padding(dims.paddingSmall / 2),
         contentAlignment = Alignment.TopCenter
     ) {
+        // First day of a custody run gets a full-hue edge, so the pattern is legible without
+        // relying on a 14% fill alone — where a run starts is the thing parents actually scan for.
+        if (isCurrentMonth && custody != null && custody != getCustody(date.minusDays(1))) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .fillMaxHeight()
+                    .width(CUSTODY_EDGE_WIDTH)
+                    .background(
+                        color = if (custody == "mom") {
+                            CoPlanlyColors.MomPink
+                        } else {
+                            CoPlanlyColors.DadBlue
+                        },
+                        shape = RoundedCornerShape(1.dp)
+                    )
+            )
+        }
+
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(2.dp)

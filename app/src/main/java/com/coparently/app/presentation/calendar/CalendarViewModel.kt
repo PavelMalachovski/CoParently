@@ -6,14 +6,22 @@ import com.coparently.app.data.local.dao.CustodyScheduleDao
 import com.coparently.app.data.local.entity.CustodyScheduleEntity
 import com.coparently.app.data.local.preferences.EncryptedPreferences
 import com.coparently.app.data.repository.CustodyModelRepository
+import com.coparently.app.domain.custody.HandoverCalculator
+import com.coparently.app.domain.custody.HandoverInfo
 import com.coparently.app.domain.model.CustodyModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import javax.inject.Inject
+
+/** Keeps the handover flow warm across brief unsubscriptions (config changes). */
+private const val HANDOVER_STOP_TIMEOUT_MS = 5_000L
 
 /**
  * ViewModel for calendar screen.
@@ -32,6 +40,15 @@ class CalendarViewModel @Inject constructor(
 
     private val _custodyModel = MutableStateFlow<CustodyModel?>(null)
     val custodyModel: StateFlow<CustodyModel?> = _custodyModel.asStateFlow()
+
+    /**
+     * Next custody handover, or null when no model is configured or custody never switches.
+     * Feeds the trailing half of the custody ribbon ("→ Mom in 2 days"). Shares
+     * [HandoverCalculator] with the home dashboard so the two cannot disagree on the date.
+     */
+    val nextHandover: StateFlow<HandoverInfo?> = _custodyModel
+        .map { model -> model?.let { HandoverCalculator.nextHandoverFrom(it, LocalDate.now()) } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(HANDOVER_STOP_TIMEOUT_MS), null)
 
     private val _viewMode = MutableStateFlow(CalendarViewMode.MONTH)
     val viewMode: StateFlow<CalendarViewMode> = _viewMode.asStateFlow()

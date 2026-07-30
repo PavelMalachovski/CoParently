@@ -53,8 +53,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
@@ -65,12 +68,15 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.coparently.app.R
 import com.coparently.app.domain.model.Event
 import com.coparently.app.presentation.theme.CoPlanlyColors
 import com.coparently.app.presentation.theme.dimensions
@@ -83,6 +89,15 @@ import kotlin.math.roundToInt
 
 /** Virtual center page of the day/week pager (allows ~3 years of swiping each way). */
 private const val PAGER_BASE_PAGE = 1200
+
+/** Height of the custody band drawn above the week's day headers. */
+private val CUSTODY_BAND_HEIGHT = 16.dp
+
+/** Full-hue bar on an event block's start edge; the only identity carrier in week view. */
+private val EVENT_ACCENT_BAR_WIDTH = 3.dp
+
+/** Opacity of the hour-grid outline. Enough to read on DarkSurface without becoming a cage. */
+private const val GRIDLINE_ALPHA = 0.55f
 
 /**
  * Hourly view for day/week calendar views.
@@ -267,6 +282,18 @@ private fun DayWeekPage(
                     .background(MaterialTheme.colorScheme.surface)
                     .padding(horizontal = dims.paddingSmall)
             ) {
+                // Custody band across the visible week. The column tint alone answers "whose day
+                // is this?" only once the eye has settled on a column; the band answers it for
+                // the whole week at a glance, and shows where the handover falls.
+                if (daysCount > 1) {
+                    CustodyWeekBand(
+                        dates = currentDates,
+                        getCustody = getCustody,
+                        gutterWidth = dims.iconSize * 2.17f,
+                        modifier = Modifier.align(Alignment.TopCenter)
+                    )
+                }
+
                 // Week number for 3 days and week views (absolutely positioned, doesn't affect layout)
                 if (daysCount >= 3) {
                     val weekFields = WeekFields.ISO // Always use Monday-first week
@@ -495,6 +522,15 @@ private fun DayWeekPage(
                                                 color = backgroundColor,
                                                 shape = RoundedCornerShape(dims.paddingSmall)
                                             )
+                                            // Hour cells had no outline at all, so on a dark
+                                            // surface the grid read as one flat block and the
+                                            // hour boundaries were invisible.
+                                            .border(
+                                                width = 1.dp,
+                                                color = MaterialTheme.colorScheme.outlineVariant
+                                                    .copy(alpha = GRIDLINE_ALPHA),
+                                                shape = RoundedCornerShape(dims.paddingSmall)
+                                            )
                                             .clickable {
                                                 onAddEventClick(date, hour)
                                             }
@@ -588,7 +624,8 @@ private fun DayWeekPage(
                                         displayStart = seg.segStart,
                                         displayEnd = seg.segEnd,
                                         resizable = !seg.clamped,
-                                        draggable = !seg.clamped
+                                        draggable = !seg.clamped,
+                                        showLabels = daysCount == 1
                                     )
                                 }
                             }
@@ -646,7 +683,12 @@ private fun EventChip(
     displayEnd: LocalDateTime = event.endDateTime ?: event.startDateTime.plusHours(1),
     // Continuation segments of multi-day events are not resizable/movable (ambiguous).
     resizable: Boolean = true,
-    draggable: Boolean = true
+    draggable: Boolean = true,
+    // Week columns are ~40dp wide, where a title renders about two characters before
+    // ellipsising. Day view has the room; week view drops the text entirely and lets the
+    // parent bar carry identity. The block keeps its contentDescription either way, so a
+    // screen reader still announces the full title and time.
+    showLabels: Boolean = true
 ) {
     val density = LocalDensity.current
     val hapticFeedback = LocalHapticFeedback.current
@@ -672,6 +714,14 @@ private fun EventChip(
         "mom" -> CoPlanlyColors.MomPink.copy(alpha = 0.8f)
         "dad" -> CoPlanlyColors.DadBlue.copy(alpha = 0.8f)
         else -> MaterialTheme.colorScheme.tertiary.copy(alpha = 0.8f)
+    }
+
+    // Full-hue bar on the start edge. This is what carries parent identity in week view, where
+    // the block has no room for a label at all.
+    val accentColor = when (event.parentOwner) {
+        "mom" -> CoPlanlyColors.MomPink
+        "dad" -> CoPlanlyColors.DadBlue
+        else -> MaterialTheme.colorScheme.tertiary
     }
 
     // The title is NOT tinted with the parent colour: pink text on a pink fill (and blue on
@@ -744,14 +794,20 @@ private fun EventChip(
                 // localToWindow converts local coordinates to window coordinates
                 eventGlobalPosition = coordinates.localToWindow(Offset.Zero)
             }
+            .clip(RoundedCornerShape(6.dp))
             .background(
                 color = if (isDraggingEvent && isOverDeleteButton) {
                     MaterialTheme.colorScheme.error.copy(alpha = 0.3f)
                 } else {
                     backgroundColor
-                },
-                shape = RoundedCornerShape(6.dp)
+                }
             )
+            .drawBehind {
+                drawRect(
+                    color = accentColor,
+                    size = Size(EVENT_ACCENT_BAR_WIDTH.toPx(), size.height)
+                )
+            }
             .border(
                 width = 1.dp,
                 color = borderColor,
@@ -920,42 +976,46 @@ private fun EventChip(
                 },
             verticalArrangement = Arrangement.Center
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                if (event.isPrivate) {
-                    Icon(
-                        imageVector = Icons.Default.Lock,
-                        contentDescription = "Private event",
-                        tint = textColor,
-                        modifier = Modifier.size(10.dp)
+            if (showLabels) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (event.isPrivate) {
+                        Icon(
+                            imageVector = Icons.Default.Lock,
+                            contentDescription = "Private event",
+                            tint = textColor,
+                            modifier = Modifier.size(10.dp)
+                        )
+                    }
+                    if (event.pickupConfirmedBy != null) {
+                        Icon(
+                            imageVector = Icons.Default.CheckCircle,
+                            contentDescription = "Pickup confirmed by ${event.pickupConfirmedBy}",
+                            tint = textColor,
+                            modifier = Modifier.size(10.dp)
+                        )
+                    }
+                    Text(
+                        text = event.title,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = textColor,
+                        maxLines = 1,
+                        // Never wrap character-by-character in narrow week columns —
+                        // a clipped-but-horizontal title beats an unreadable vertical one
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis,
+                        fontWeight = FontWeight.SemiBold,
+                        textAlign = TextAlign.Start,
+                        modifier = Modifier.fillMaxWidth()
                     )
                 }
-                if (event.pickupConfirmedBy != null) {
-                    Icon(
-                        imageVector = Icons.Default.CheckCircle,
-                        contentDescription = "Pickup confirmed by ${event.pickupConfirmedBy}",
-                        tint = textColor,
-                        modifier = Modifier.size(10.dp)
-                    )
-                }
-                Text(
-                    text = event.title,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = textColor,
-                    maxLines = 1,
-                    // Never wrap character-by-character in narrow week columns —
-                    // a clipped-but-horizontal title beats an unreadable vertical one
-                    softWrap = false,
-                    overflow = TextOverflow.Ellipsis,
-                    fontWeight = FontWeight.SemiBold,
-                    textAlign = TextAlign.Start,
-                    modifier = Modifier.fillMaxWidth()
-                )
             }
-            // Always show time if enough space, or if resizing (to give feedback)
-            if (totalMinutes >= 45 || isResizingStart || isResizingEnd) {
+            // Always show time if enough space, or if resizing (to give feedback).
+            // Resize feedback still shows in week view, where the label is otherwise hidden:
+            // the user is actively dragging and needs to see the time they are setting.
+            if (showLabels && totalMinutes >= 45 || isResizingStart || isResizingEnd) {
                 Text(
                     text = "${tempStartTime.format(
                         java.time.format.DateTimeFormatter.ofPattern("HH:mm")
@@ -1181,4 +1241,81 @@ private fun resizedTime(
     val snapped = ((minutesOfDay + RESIZE_SNAP_MINUTES / 2) / RESIZE_SNAP_MINUTES) * RESIZE_SNAP_MINUTES
     val clamped = snapped.coerceIn(0, 24 * 60 - RESIZE_SNAP_MINUTES)
     return moved.toLocalDate().atStartOfDay().plusMinutes(clamped.toLong())
+}
+
+/**
+ * Solid band above the week's day headers, split into runs of consecutive same-custody days.
+ *
+ * Each run is drawn at full hue and labelled when it is wide enough to hold a word; a one-day
+ * run gets no label, because a clipped "M" is worse than a plain coloured block. Column geometry
+ * (gutter width, weights, 4dp gaps) mirrors the header and content rows so the band lines up
+ * with the days it describes.
+ *
+ * @param dates Visible dates, in order
+ * @param getCustody Unified custody lookup (model first, legacy schedules as fallback)
+ * @param gutterWidth Width of the hour-label gutter the band must skip
+ * @param modifier Modifier for the band row
+ */
+@Composable
+private fun CustodyWeekBand(
+    dates: List<LocalDate>,
+    getCustody: (LocalDate) -> String?,
+    gutterWidth: Dp,
+    modifier: Modifier = Modifier
+) {
+    // Collapse the week into runs so a Mon–Wed stretch is one block, not three.
+    val runs: List<Pair<String?, Int>> = remember(dates, getCustody) {
+        buildList {
+            dates.forEach { date ->
+                val custody = getCustody(date)
+                val last = lastOrNull()
+                if (last != null && last.first == custody) {
+                    set(lastIndex, custody to last.second + 1)
+                } else {
+                    add(custody to 1)
+                }
+            }
+        }
+    }
+    if (runs.all { it.first == null }) return
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(CUSTODY_BAND_HEIGHT),
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Box(modifier = Modifier.width(gutterWidth))
+
+        runs.forEach { (custody, days) ->
+            val color = when (custody) {
+                "mom" -> CoPlanlyColors.MomPink
+                "dad" -> CoPlanlyColors.DadBlue
+                else -> Color.Transparent
+            }
+            Box(
+                modifier = Modifier
+                    .weight(days.toFloat())
+                    .fillMaxHeight()
+                    .background(color, RoundedCornerShape(4.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                if (custody != null && days >= 2) {
+                    Text(
+                        text = if (custody == "mom") {
+                            stringResource(R.string.calendar_parent_mom)
+                        } else {
+                            stringResource(R.string.calendar_parent_dad)
+                        },
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color.White,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
+    }
 }

@@ -2,6 +2,7 @@ package com.coparently.app.presentation.calendar.components
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -9,17 +10,17 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SheetState
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -28,79 +29,24 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.foundation.layout.ExperimentalLayoutApi as FoundationExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.coparently.app.R
 import com.coparently.app.presentation.calendar.ParentFilter
 import com.coparently.app.presentation.theme.CoPlanlyColors
 import com.coparently.app.presentation.theme.dimensions
+import androidx.compose.foundation.layout.ExperimentalLayoutApi as FoundationExperimentalLayoutApi
 
 /**
- * Segmented control for switching between "Mom", "Both" and "Dad" calendar views.
- * Implements the roadmap items "Switch between You and Him view" and
- * "Have selected mom and dad at the same time".
- */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun ParentFilterBar(
-    selected: ParentFilter,
-    onSelected: (ParentFilter) -> Unit,
-    onFilterClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val dims = dimensions()
-
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = dims.paddingMedium, vertical = dims.paddingSmall / 2),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        androidx.compose.material3.SingleChoiceSegmentedButtonRow(
-            modifier = Modifier.weight(1f)
-        ) {
-            val options = listOf(
-                Triple(ParentFilter.MOM, "Mom", CoPlanlyColors.MomPink),
-                Triple(ParentFilter.BOTH, "Both", MaterialTheme.colorScheme.primary),
-                Triple(ParentFilter.DAD, "Dad", CoPlanlyColors.DadBlue)
-            )
-            options.forEachIndexed { index, (filter, label, color) ->
-                SegmentedButton(
-                    selected = selected == filter,
-                    onClick = { onSelected(filter) },
-                    shape = SegmentedButtonDefaults.itemShape(index = index, count = options.size),
-                    colors = SegmentedButtonDefaults.colors(
-                        activeContainerColor = color.copy(alpha = 0.15f),
-                        activeContentColor = color,
-                        activeBorderColor = color
-                    ),
-                    icon = {}
-                ) {
-                    Text(
-                        text = label,
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = if (selected == filter) FontWeight.Bold else FontWeight.Medium
-                    )
-                }
-            }
-        }
-
-        IconButton(onClick = onFilterClick) {
-            Icon(
-                imageVector = Icons.Default.FilterList,
-                contentDescription = "Filter event types",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
-}
-
-/**
- * Bottom sheet with event type visibility toggles, custom type creation
- * and the holiday visibility switch.
+ * Bottom sheet holding every calendar filter: whose events to show, event type visibility,
+ * custom type creation and the holiday switch.
+ *
+ * The Mom/Both/Dad control used to be a permanent row under the header. It moved in here so the
+ * header could collapse to two rows; the trade-off is one extra tap to switch parent, which the
+ * Filters button on [CalendarViewModeBar] makes explicit.
  */
 @OptIn(ExperimentalMaterial3Api::class, FoundationExperimentalLayoutApi::class)
 @Composable
@@ -108,6 +54,8 @@ fun EventTypeFilterSheet(
     allEventTypes: List<String>,
     hiddenEventTypes: Set<String>,
     showHolidays: Boolean,
+    parentFilter: ParentFilter,
+    onParentFilterChange: (ParentFilter) -> Unit,
     onToggleType: (String) -> Unit,
     onAddCustomType: (String) -> Unit,
     onShowHolidaysChange: (Boolean) -> Unit,
@@ -128,6 +76,18 @@ fun EventTypeFilterSheet(
                 .padding(bottom = dims.paddingMedium * 2),
             verticalArrangement = Arrangement.spacedBy(dims.paddingMedium)
         ) {
+            Text(
+                text = stringResource(R.string.calendar_filter_show),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+            ParentFilterSegments(
+                selected = parentFilter,
+                onSelected = onParentFilterChange
+            )
+
+            HorizontalDivider()
+
             Text(
                 text = "Event types",
                 style = MaterialTheme.typography.titleMedium,
@@ -215,6 +175,49 @@ fun EventTypeFilterSheet(
                 Switch(
                     checked = showHolidays,
                     onCheckedChange = onShowHolidaysChange
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Mom / Both / Dad segments.
+ *
+ * Parent colours are applied directly from [CoPlanlyColors] rather than through the theme's
+ * `secondary` slot: pink and blue mean parent identity in this product and nothing else.
+ *
+ * @param selected Currently active filter
+ * @param onSelected Callback when a segment is chosen
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ParentFilterSegments(
+    selected: ParentFilter,
+    onSelected: (ParentFilter) -> Unit
+) {
+    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+        val options = listOf(
+            Triple(ParentFilter.MOM, stringResource(R.string.calendar_parent_mom), CoPlanlyColors.MomPink),
+            Triple(ParentFilter.BOTH, stringResource(R.string.calendar_filter_both), MaterialTheme.colorScheme.primary),
+            Triple(ParentFilter.DAD, stringResource(R.string.calendar_parent_dad), CoPlanlyColors.DadBlue)
+        )
+        options.forEachIndexed { index, (filter, label, color) ->
+            SegmentedButton(
+                selected = selected == filter,
+                onClick = { onSelected(filter) },
+                shape = SegmentedButtonDefaults.itemShape(index = index, count = options.size),
+                colors = SegmentedButtonDefaults.colors(
+                    activeContainerColor = color.copy(alpha = 0.15f),
+                    activeContentColor = color,
+                    activeBorderColor = color
+                ),
+                icon = {}
+            ) {
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = if (selected == filter) FontWeight.Bold else FontWeight.Medium
                 )
             }
         }

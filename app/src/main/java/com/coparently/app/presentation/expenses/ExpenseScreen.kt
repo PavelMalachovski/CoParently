@@ -1,8 +1,11 @@
 package com.coparently.app.presentation.expenses
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -13,21 +16,30 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.coparently.app.R
 import com.coparently.app.presentation.common.animations.AnimatedEmptyState
 
+/** Fallback currency when the month has no expenses to take one from. */
+private const val DEFAULT_CURRENCY = "USD"
+
 /**
  * Expense list screen — a top-level bottom-navigation destination.
- * Shows summary cards and the expense list; budgets open from the top-bar action.
+ *
+ * Leads with the month's who-paid-what split and settle-up balance, then this month's
+ * expenses; budgets open from the top-bar action.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -35,10 +47,13 @@ fun ExpenseScreen(
     onAddExpense: () -> Unit,
     onOpenBudgets: (() -> Unit)? = null,
     onOpenSettings: (() -> Unit)? = null,
+    onSettleUp: (String) -> Unit = {},
     viewModel: ExpenseViewModel = hiltViewModel()
 ) {
     val expenses by viewModel.expenses.collectAsState()
-    val summary by viewModel.expenseSummary.collectAsState()
+    val monthExpenses by viewModel.expensesThisMonth.collectAsState()
+    val balance by viewModel.balance.collectAsState()
+    val roleByUid by viewModel.roleByUid.collectAsState()
 
     Scaffold(
         topBar = {
@@ -75,8 +90,6 @@ fun ExpenseScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            ExpenseSummaryCards(summary = summary)
-
             if (expenses.isEmpty()) {
                 Box(modifier = Modifier.weight(1f)) {
                     AnimatedEmptyState(
@@ -88,8 +101,38 @@ fun ExpenseScreen(
                     )
                 }
             } else {
+                ExpenseSummaryHeader(
+                    balance = balance,
+                    currency = monthExpenses.firstOrNull()?.currency ?: DEFAULT_CURRENCY,
+                    onSettleUp = onSettleUp,
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp)
+                )
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Bottom
+                ) {
+                    Text(
+                        text = stringResource(R.string.expenses_this_month),
+                        style = MaterialTheme.typography.titleSmall
+                    )
+                    Text(
+                        text = pluralStringResource(
+                            R.plurals.expenses_count,
+                            monthExpenses.size,
+                            monthExpenses.size
+                        ),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
                 ExpenseList(
-                    expenses = expenses,
+                    expenses = monthExpenses,
+                    roleByUid = roleByUid,
                     modifier = Modifier.weight(1f)
                 )
             }

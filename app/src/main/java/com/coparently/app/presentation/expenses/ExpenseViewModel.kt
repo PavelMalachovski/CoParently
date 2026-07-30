@@ -2,6 +2,8 @@ package com.coparently.app.presentation.expenses
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.coparently.app.domain.expenses.ExpenseBalance
+import com.coparently.app.domain.expenses.calculateExpenseBalance
 import com.coparently.app.domain.model.Expense
 import com.coparently.app.domain.model.ExpenseCategory
 import com.coparently.app.domain.model.ExpenseSummary
@@ -13,12 +15,17 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.util.UUID
 import javax.inject.Inject
+
+/** Keeps derived flows warm across brief unsubscriptions (config changes). */
+private const val STOP_TIMEOUT_MS = 5_000L
 
 /**
  * State of the "save expense" operation, driving the Add Expense screen.
@@ -69,6 +76,39 @@ class ExpenseViewModel @Inject constructor(
 
     private val _expenseSummary = MutableStateFlow<ExpenseSummary?>(null)
     val expenseSummary: StateFlow<ExpenseSummary?> = _expenseSummary.asStateFlow()
+
+    /** uid -> "mom"/"dad", so a payer can be named and coloured. Empty until users sync. */
+    val roleByUid: StateFlow<Map<String, String>> = userRepository.getAllUsers()
+        .map { users -> users.associate { it.id to it.role } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), emptyMap())
+
+    /** Expenses dated within the current calendar month, newest first. */
+    val expensesThisMonth: StateFlow<List<Expense>> = expenses
+        .map { all ->
+            val today = LocalDate.now()
+            all.filter {
+                it.date.year == today.year && it.date.month == today.month
+            }.sortedByDescending { it.date }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), emptyList())
+
+    /**
+     * This month's who-paid-what split and settle-up figure.
+     *
+     * Derived rather than stored: [calculateExpenseBalance] is pure, so the split bar cannot
+     * drift out of sync with the list it summarises.
+     */
+    val balance: StateFlow<ExpenseBalance> = combine(
+        expensesThisMonth,
+        _currentUserId,
+        roleByUid
+    ) { monthExpenses, userId, roles ->
+        calculateExpenseBalance(monthExpenses, userId, roles)
+    }.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS),
+        ExpenseBalance(0.0, 0.0, 0.0, 0.0, splitKnown = false)
+    )
 
     private val _saveState = MutableStateFlow<ExpenseSaveState>(ExpenseSaveState.Idle)
     val saveState: StateFlow<ExpenseSaveState> = _saveState.asStateFlow()

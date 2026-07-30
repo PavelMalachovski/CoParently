@@ -58,9 +58,10 @@ import com.coparently.app.R
 import com.coparently.app.domain.holidays.CzechHolidays
 import com.coparently.app.domain.holidays.Holiday
 import com.coparently.app.presentation.calendar.components.CalendarHeader
-import com.coparently.app.presentation.calendar.components.CustodyIndicatorToday
+import com.coparently.app.presentation.calendar.components.CalendarLegend
+import com.coparently.app.presentation.calendar.components.CalendarViewModeBar
+import com.coparently.app.presentation.calendar.components.CustodyRibbon
 import com.coparently.app.presentation.calendar.components.EventTypeFilterSheet
-import com.coparently.app.presentation.calendar.components.ParentFilterBar
 import com.coparently.app.presentation.event.EventUiState
 import com.coparently.app.presentation.event.EventViewModel
 import com.coparently.app.presentation.theme.dimensions
@@ -134,6 +135,7 @@ fun CalendarScreen(
     val hiddenEventTypes by calendarViewModel.hiddenEventTypes.collectAsState()
     val customEventTypes by calendarViewModel.customEventTypes.collectAsState()
     val showHolidays by calendarViewModel.showHolidays.collectAsState()
+    val nextHandover by calendarViewModel.nextHandover.collectAsState()
 
     // Reduce animation duration on older devices for better performance
     val animationDuration = remember {
@@ -261,8 +263,6 @@ fun CalendarScreen(
         topBar = {
             CalendarHeader(
                 selectedDate = selectedDate,
-                viewMode = viewMode,
-                onViewModeChange = { mode -> calendarViewModel.setViewMode(mode) },
                 onNavigateToToday = { calendarViewModel.setSelectedDate(LocalDate.now()) },
                 onSettingsClick = onSettingsClick,
                 onChangeRequestsClick = onChangeRequestsClick,
@@ -347,15 +347,19 @@ fun CalendarScreen(
             Column(
                 modifier = Modifier.fillMaxSize()
             ) {
-                // Parent view switcher: Mom / Both / Dad + event type filter entry point
-                ParentFilterBar(
-                    selected = parentFilter,
-                    onSelected = { calendarViewModel.setParentFilter(it) },
-                    onFilterClick = { showTypeFilters = true }
+                // View mode + the entry point to every filter (parent and event type).
+                CalendarViewModeBar(
+                    viewMode = viewMode,
+                    onViewModeChange = { mode -> calendarViewModel.setViewMode(mode) },
+                    onFiltersClick = { showTypeFilters = true },
+                    filtersActive = parentFilter != ParentFilter.BOTH ||
+                        hiddenEventTypes.isNotEmpty() ||
+                        !showHolidays
                 )
 
-                // Today's custody indicator (only for month view)
-                if (viewMode == CalendarViewMode.MONTH) {
+                // Today's custody ribbon. Shown in month and day view; week view carries its own
+                // full-width custody band above the day headers instead.
+                if (viewMode != CalendarViewMode.WEEK) {
                     val today = LocalDate.now()
                     val todayCustody = getCustody(today)
                     if (todayCustody != null) {
@@ -373,10 +377,10 @@ fun CalendarScreen(
                                 },
                                 modifier = Modifier.padding(
                                     horizontal = dims.paddingMedium,
-                                    vertical = dims.paddingSmall
+                                    vertical = dims.paddingSmall / 2
                                 )
                             ) { custody ->
-                                CustodyIndicatorToday(custody = custody)
+                                CustodyRibbon(custody = custody, handover = nextHandover)
                             }
                         }
                     }
@@ -445,6 +449,18 @@ fun CalendarScreen(
                             }
                         }
                     }
+                }
+
+                // Legend shares its line with the FAB, which floats over the end side. Month
+                // only: week and day have no vacation strip and no custody fill to explain.
+                if (viewMode == CalendarViewMode.MONTH) {
+                    CalendarLegend(
+                        modifier = Modifier.padding(
+                            start = dims.paddingMedium,
+                            end = 72.dp,
+                            bottom = dims.paddingMedium
+                        )
+                    )
                 }
             }
         }
@@ -519,6 +535,8 @@ fun CalendarScreen(
             allEventTypes = CalendarViewModel.DEFAULT_EVENT_TYPES + customEventTypes,
             hiddenEventTypes = hiddenEventTypes,
             showHolidays = showHolidays,
+            parentFilter = parentFilter,
+            onParentFilterChange = { calendarViewModel.setParentFilter(it) },
             onToggleType = { calendarViewModel.toggleEventTypeVisibility(it) },
             onAddCustomType = { calendarViewModel.addCustomEventType(it) },
             onShowHolidaysChange = { calendarViewModel.setShowHolidays(it) },
