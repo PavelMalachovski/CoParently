@@ -1,0 +1,152 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- App name -->
+    <string name="app_name">CoPlanly</string>
+
+    <!-- Calendar Screen -->
+    <string name="calendar_title">CoPlanly</string>
+    <string name="calendar_settings">Einstellungen</string>
+    <string name="calendar_add_event">Termin hinzufügen</string>
+
+    <!-- Event Screens -->
+    <string name="events_title">Termine</string>
+    <string name="events_loading">Wird geladen…</string>
+    <string name="events_error">Fehler: %1$s</string>
+    <string name="events_empty">Noch keine Termine</string>
+    <string name="event_add">Termin hinzufügen</string>
+    <string name="event_edit">Termin bearbeiten</string>
+    <string name="event_title">Titel</string>
+    <string name="event_description">Beschreibung</string>
+    <string name="event_save">Speichern</string>
+    <string name="event_update">Aktualisieren</string>
+    <string name="event_cancel">Abbrechen</string>
+    <string name="event_date">Datum: %1$s</string>
+    <string name="event_parent">Elternteil: %1$s</string>
+    <string name="event_parent_mom">Mama</string>
+    <string name="event_parent_dad">Papa</string>
+
+    <!-- Auth Screen -->
+    <string name="auth_sign_in">Anmelden</string>
+    <string name="auth_create_account">Konto erstellen</string>
+    <string name="auth_email">E-Mail</string>
+    <string name="auth_password">Passwort</string>
+    <string name="auth_sign_up_prompt">Noch kein Konto? Registrieren</string>
+    <string name="auth_sign_in_prompt">Bereits ein Konto? Anmelden</string>
+    <string name="auth_forgot_password">Passwort vergessen?</string>
+    <string name="auth_fill_all_fields">Bitte alle Felder ausfüllen</string>
+    <string name="auth_sign_in_failed">Anmeldung fehlgeschlagen</string>
+    <string name="auth_sign_up_failed">Registrierung fehlgeschlagen</string>
+    <string name="auth_sign_in_with_google">Mit Google anmelden</string>
+    <string name="auth_or">oder</string>
+
+    <!-- Settings Screen -->
+    <string name="settings_title">Einstellungen</string>
+    <string name="settings_back">Zurück</string>
+    <string name="settings_google_calendar_sync">Google Kalender-Synchronisierung</string>
+    <string name="settings_enable_sync">Synchronisierung aktivieren</string>
+    <string name="settings_signed_in_google">Bei Google angemeldet</string>
+    <string name="settings_not_signed_in">Nicht angemeldet</string>
+    <string name="settings_sync_from_google">Aus Google Kalender synchronisieren</string>
+    <string name="settings_sign_out">Abmelden</string>
+    <string name="settings_syncing">Synchronisierung…</string>
+    <string name="settings_theme">Design</string>
+    <string name="settings_theme_system">System</string>
+    <string name="settings_theme_light">Hell</string>
+    <string name="settings_theme_dark">Dunkel</string>
+    <string name="settings_theme_description">Bevorzugtes Design auswählen</string>
+    <string name="settings_notifications">Benachrichtigungen</string>
+    <string name="settings_push_notifications">Push-Benachrichtigungen</string>
+    <string name="settings_push_notifications_description">Bei Änderungen benachrichtigt werden</string>
+
+    <!-- Pairing Screen -->
+    <string name="pairing_title">Co-Elternteil verknüpfen</string>
+    <string name="pairing_paired_with">Verknüpft mit</string>
+    <string name="pairing_unpair">Verknüpfung aufheben</string>
+    <string name="pairing_partner_email">E-Mail des Partners</string>
+    <string name="pairing_send_invitation">Einladung senden</string>
+    <string name="pairing_pending_invitations">Ausstehende Einladungen</string>
+    <string name="pairing_accept">Annehmen</string>
+    <string name="pairing_reject">Ablehnen</string>
+    <string name="pairing_enter_email">Bitte E-Mail-Adresse eingeben</string>
+    <string name="pairing_failed_send">Einladung konnte nicht gesendet werden</string>
+    <string name="pairing_unknown">Unbekannt</string>
+
+    <!-- Custody -->
+    <string name="custody_with_mom">Bei Mama</string>
+    <string name="custody_with_dad">Bei Papa</string>
+    <string name="custody_today">Heute: %1$s</string>
+
+    <!-- Common -->
+    <string name="common_back">Zurück</string>
+    <string name="common_loading">Wird geladen…</string>
+    <string name="common_error">Fehler</string>
+    <string name="common_unknown">Unbekannt</string>
+    <string name="common_save">Speichern</string>
+    <string name="common_cancel">Abbrechen</string>
+    <string name="common_delete">Löschen</string>
+    <string name="common_edit">Bearbeiten</string>
+    <string name="common_add">Hinzufügen</string>
+    <string name="common_retry">Wiederholen</string>
+    <string name="common_try_again">Erneut versuchen</string>
+    <string name="common_clear">Leeren</string>
+    <string name="common_optional">optional</string>
+
+    <!-- Child Info Screen -->
+    <string name="child_info_title">Informationen zum Kind</string>
+    <string name="child_info_add">Kind hinzufügen</string>
+    <string name="child_info_edit">Kind bearbeiten</string>
+    <string name="child_info_name">Name des Kindes</string>
+    <string name="child_info_name_required">Name des Kindes *</string>
+    <string name="child_info_medical_notes">Weitere medizinische Informationen</string>
+    <string name="child_info_medical_notes_hint">Weitere wichtige medizinische Informationen…</string>
+    <string name="child_info_medications">Medikamente</string>
+    <string name="child_info_activities">Aktivitäten</string>
+    <string name="child_info_allergies">Allergien</string>
+    <string name="child_info_emergency_contacts">Notfallkontakte</string>
+    <string name="child_info_school">Schulinformationen</string>
+    <string name="child_info_empty">Noch keine Kinder hinzugefügt</string>
+
+    <!-- Medication Editor -->
+    <string name="medication_name">Name des Medikaments</string>
+    <string name="medication_dosage">Dosierung</string>
+    <string name="medication_frequency">Häufigkeit</string>
+    <string name="medication_notes">Notizen (optional)</string>
+    <string name="medication_add">Medikament hinzufügen</string>
+
+    <!-- Activity Editor -->
+    <string name="activity_name">Name der Aktivität</string>
+    <string name="activity_schedule">Zeitplan</string>
+    <string name="activity_location">Ort (optional)</string>
+    <string name="activity_notes">Notizen (optional)</string>
+    <string name="activity_add">Aktivität hinzufügen</string>
+
+    <!-- Allergy Editor -->
+    <string name="allergy_name">Name der Allergie</string>
+    <string name="allergy_severity">Schweregrad</string>
+    <string name="allergy_reaction">Reaktion</string>
+    <string name="allergy_notes">Notizen (optional)</string>
+    <string name="allergy_add">Allergie hinzufügen</string>
+
+    <!-- Emergency Contact Editor -->
+    <string name="emergency_contact_add">Notfallkontakt hinzufügen</string>
+    <string name="emergency_contact_name">Name</string>
+    <string name="emergency_contact_relationship">Beziehung</string>
+    <string name="emergency_contact_relationship_hint">z. B. Großmutter, Onkel</string>
+    <string name="emergency_contact_phone">Telefonnummer</string>
+    <string name="emergency_contact_alternate">Alternative Telefonnummer (optional)</string>
+
+    <!-- School Info Editor -->
+    <string name="school_name">Name der Schule</string>
+    <string name="school_address">Adresse (optional)</string>
+    <string name="school_phone">Telefon der Schule (optional)</string>
+    <string name="school_grade">Klasse (optional)</string>
+    <string name="school_grade_hint">z. B. 3. Klasse</string>
+    <string name="school_teacher_name">Name der Lehrkraft (optional)</string>
+    <string name="school_teacher_email">E-Mail der Lehrkraft (optional)</string>
+
+    <!-- Sync -->
+    <string name="sync_sign_in_google">Mit Google anmelden</string>
+    <string name="sync_syncing_from_google">Aus Google Kalender synchronisieren</string>
+    <string name="sync_google_sign_in_cancelled">Google-Anmeldung abgebrochen</string>
+    <string name="sync_google_sign_in_failed">Anmeldung mit Google nicht möglich. Bitte erneut versuchen.</string>
+</resources>

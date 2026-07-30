@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="reminder_channel_name">Terminerinnerungen</string>
+    <string name="reminder_channel_description">Benachrichtigungen vor anstehenden Terminen und Abholungen</string>
+    <string name="reminder_notification_text">Beginnt um %1$s</string>
+</resources>

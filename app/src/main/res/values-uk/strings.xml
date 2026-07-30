@@ -1,0 +1,152 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- App name -->
+    <string name="app_name">CoPlanly</string>
+
+    <!-- Calendar Screen -->
+    <string name="calendar_title">CoPlanly</string>
+    <string name="calendar_settings">Налаштування</string>
+    <string name="calendar_add_event">Додати подію</string>
+
+    <!-- Event Screens -->
+    <string name="events_title">Події</string>
+    <string name="events_loading">Завантаження…</string>
+    <string name="events_error">Помилка: %1$s</string>
+    <string name="events_empty">Поки немає подій</string>
+    <string name="event_add">Додати подію</string>
+    <string name="event_edit">Редагувати подію</string>
+    <string name="event_title">Назва</string>
+    <string name="event_description">Опис</string>
+    <string name="event_save">Зберегти</string>
+    <string name="event_update">Оновити</string>
+    <string name="event_cancel">Скасувати</string>
+    <string name="event_date">Дата: %1$s</string>
+    <string name="event_parent">Хто з батьків: %1$s</string>
+    <string name="event_parent_mom">Мама</string>
+    <string name="event_parent_dad">Тато</string>
+
+    <!-- Auth Screen -->
+    <string name="auth_sign_in">Увійти</string>
+    <string name="auth_create_account">Створити обліковий запис</string>
+    <string name="auth_email">Ел. пошта</string>
+    <string name="auth_password">Пароль</string>
+    <string name="auth_sign_up_prompt">Немає облікового запису? Зареєструйтеся</string>
+    <string name="auth_sign_in_prompt">Вже є обліковий запис? Увійдіть</string>
+    <string name="auth_forgot_password">Забули пароль?</string>
+    <string name="auth_fill_all_fields">Будь ласка, заповніть усі поля</string>
+    <string name="auth_sign_in_failed">Не вдалося увійти</string>
+    <string name="auth_sign_up_failed">Не вдалося зареєструватися</string>
+    <string name="auth_sign_in_with_google">Увійти через Google</string>
+    <string name="auth_or">або</string>
+
+    <!-- Settings Screen -->
+    <string name="settings_title">Налаштування</string>
+    <string name="settings_back">Назад</string>
+    <string name="settings_google_calendar_sync">Синхронізація з Google Календарем</string>
+    <string name="settings_enable_sync">Увімкнути синхронізацію</string>
+    <string name="settings_signed_in_google">Ви ввійшли в Google</string>
+    <string name="settings_not_signed_in">Вхід не виконано</string>
+    <string name="settings_sync_from_google">Синхронізувати з Google Календаря</string>
+    <string name="settings_sign_out">Вийти</string>
+    <string name="settings_syncing">Синхронізація…</string>
+    <string name="settings_theme">Тема</string>
+    <string name="settings_theme_system">системна</string>
+    <string name="settings_theme_light">світла</string>
+    <string name="settings_theme_dark">темна</string>
+    <string name="settings_theme_description">Виберіть бажану тему</string>
+    <string name="settings_notifications">Сповіщення</string>
+    <string name="settings_push_notifications">Push-сповіщення</string>
+    <string name="settings_push_notifications_description">Отримувати сповіщення про зміни</string>
+
+    <!-- Pairing Screen -->
+    <string name="pairing_title">Зв\'язок батьків</string>
+    <string name="pairing_paired_with">Зв\'язано з</string>
+    <string name="pairing_unpair">Розірвати зв\'язок</string>
+    <string name="pairing_partner_email">Ел. пошта партнера</string>
+    <string name="pairing_send_invitation">Надіслати запрошення</string>
+    <string name="pairing_pending_invitations">Запрошення в очікуванні</string>
+    <string name="pairing_accept">Прийняти</string>
+    <string name="pairing_reject">Відхилити</string>
+    <string name="pairing_enter_email">Будь ласка, введіть ел. пошту</string>
+    <string name="pairing_failed_send">Не вдалося надіслати запрошення</string>
+    <string name="pairing_unknown">Невідомо</string>
+
+    <!-- Custody -->
+    <string name="custody_with_mom">У мами</string>
+    <string name="custody_with_dad">У тата</string>
+    <string name="custody_today">Сьогодні: %1$s</string>
+
+    <!-- Common -->
+    <string name="common_back">Назад</string>
+    <string name="common_loading">Завантаження…</string>
+    <string name="common_error">Помилка</string>
+    <string name="common_unknown">Невідомо</string>
+    <string name="common_save">Зберегти</string>
+    <string name="common_cancel">Скасувати</string>
+    <string name="common_delete">Видалити</string>
+    <string name="common_edit">Редагувати</string>
+    <string name="common_add">Додати</string>
+    <string name="common_retry">Повторити</string>
+    <string name="common_try_again">Спробувати ще раз</string>
+    <string name="common_clear">Очистити</string>
+    <string name="common_optional">необов\'язково</string>
+
+    <!-- Child Info Screen -->
+    <string name="child_info_title">Інформація про дитину</string>
+    <string name="child_info_add">Додати дитину</string>
+    <string name="child_info_edit">Редагувати дані дитини</string>
+    <string name="child_info_name">Ім\'я дитини</string>
+    <string name="child_info_name_required">Ім\'я дитини *</string>
+    <string name="child_info_medical_notes">Додаткова медична інформація</string>
+    <string name="child_info_medical_notes_hint">Будь-яка інша важлива медична інформація…</string>
+    <string name="child_info_medications">Ліки</string>
+    <string name="child_info_activities">Заняття</string>
+    <string name="child_info_allergies">Алергії</string>
+    <string name="child_info_emergency_contacts">Екстрені контакти</string>
+    <string name="child_info_school">Інформація про школу</string>
+    <string name="child_info_empty">Поки не додано жодної дитини</string>
+
+    <!-- Medication Editor -->
+    <string name="medication_name">Назва ліків</string>
+    <string name="medication_dosage">Дозування</string>
+    <string name="medication_frequency">Частота прийому</string>
+    <string name="medication_notes">Нотатки (необов\'язково)</string>
+    <string name="medication_add">Додати ліки</string>
+
+    <!-- Activity Editor -->
+    <string name="activity_name">Назва заняття</string>
+    <string name="activity_schedule">Розклад</string>
+    <string name="activity_location">Місце (необов\'язково)</string>
+    <string name="activity_notes">Нотатки (необов\'язково)</string>
+    <string name="activity_add">Додати заняття</string>
+
+    <!-- Allergy Editor -->
+    <string name="allergy_name">Назва алергії</string>
+    <string name="allergy_severity">Тяжкість</string>
+    <string name="allergy_reaction">Реакція</string>
+    <string name="allergy_notes">Нотатки (необов\'язково)</string>
+    <string name="allergy_add">Додати алергію</string>
+
+    <!-- Emergency Contact Editor -->
+    <string name="emergency_contact_add">Додати екстрений контакт</string>
+    <string name="emergency_contact_name">Ім\'я</string>
+    <string name="emergency_contact_relationship">Родинний зв\'язок</string>
+    <string name="emergency_contact_relationship_hint">наприклад, Бабуся, Дядько</string>
+    <string name="emergency_contact_phone">Номер телефону</string>
+    <string name="emergency_contact_alternate">Додатковий телефон (необов\'язково)</string>
+
+    <!-- School Info Editor -->
+    <string name="school_name">Назва школи</string>
+    <string name="school_address">Адреса (необов\'язково)</string>
+    <string name="school_phone">Телефон школи (необов\'язково)</string>
+    <string name="school_grade">Клас (необов\'язково)</string>
+    <string name="school_grade_hint">наприклад, 3 клас</string>
+    <string name="school_teacher_name">Ім\'я вчителя (необов\'язково)</string>
+    <string name="school_teacher_email">Ел. пошта вчителя (необов\'язково)</string>
+
+    <!-- Sync -->
+    <string name="sync_sign_in_google">Увійти через Google</string>
+    <string name="sync_syncing_from_google">Синхронізувати з Google Календаря</string>
+    <string name="sync_google_sign_in_cancelled">Вхід через Google скасовано</string>
+    <string name="sync_google_sign_in_failed">Не вдалося увійти через Google. Будь ласка, спробуйте ще раз.</string>
+</resources>

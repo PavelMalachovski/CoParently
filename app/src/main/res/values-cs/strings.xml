@@ -37,6 +37,7 @@
     <string name="auth_sign_in_failed">Přihlášení selhalo</string>
     <string name="auth_sign_in_with_google">Přihlásit se přes Google</string>
     <string name="auth_sign_up_failed">Registrace selhala</string>
+    <string name="auth_or">nebo</string>
 
     <!-- Settings Screen -->
     <string name="settings_title">Nastavení</string>
@@ -49,9 +50,9 @@
     <string name="settings_sign_out">Odhlásit se</string>
     <string name="settings_syncing">Synchronizace…</string>
     <string name="settings_theme">Téma</string>
-    <string name="settings_theme_system">default</string>
-    <string name="settings_theme_light">light</string>
-    <string name="settings_theme_dark">dark</string>
+    <string name="settings_theme_system">systémové</string>
+    <string name="settings_theme_light">světlé</string>
+    <string name="settings_theme_dark">tmavé</string>
     <string name="settings_theme_description">Vyberte preferované téma</string>
     <string name="settings_notifications">Oznámení</string>
     <string name="settings_push_notifications">Push oznámení</string>
@@ -146,5 +147,7 @@
     <!-- Sync -->
     <string name="sync_sign_in_google">Přihlásit se přes Google</string>
     <string name="sync_syncing_from_google">Synchronizovat z Google kalendáře</string>
+    <string name="sync_google_sign_in_cancelled">Přihlášení přes Google bylo zrušeno</string>
+    <string name="sync_google_sign_in_failed">Přihlášení přes Google se nezdařilo. Zkuste to prosím znovu.</string>
 </resources>
 
