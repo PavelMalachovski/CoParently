@@ -15,11 +15,16 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.ReceiptLong
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -47,16 +52,19 @@ import java.util.Locale
 private const val PAYER_TINT_ALPHA = 0.18f
 
 /**
- * List of expenses for the period.
+ * List of expenses for the period. Each row swipes left to delete, matching [EventListScreen].
  *
  * @param expenses Expenses to show, already ordered
  * @param roleByUid Map of payer uid to "mom"/"dad"; a missing entry just omits the payer
+ * @param onDelete Invoked with the swiped expense; null hides the affordance
  * @param modifier Modifier for the list
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ExpenseList(
     expenses: List<Expense>,
     roleByUid: Map<String, String>,
+    onDelete: ((Expense) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     // Receipt being viewed full-screen; transient UI state, deliberately local.
@@ -68,11 +76,18 @@ fun ExpenseList(
         verticalArrangement = Arrangement.spacedBy(7.dp)
     ) {
         items(expenses, key = { it.id }) { expense ->
-            ExpenseItem(
-                expense = expense,
-                payerRole = roleByUid[expense.paidBy],
-                onReceiptClick = { url -> viewedReceiptUrl = url }
-            )
+            val row: @Composable () -> Unit = {
+                ExpenseItem(
+                    expense = expense,
+                    payerRole = roleByUid[expense.paidBy],
+                    onReceiptClick = { url -> viewedReceiptUrl = url }
+                )
+            }
+            if (onDelete == null) {
+                row()
+            } else {
+                SwipeToDeleteRow(onDelete = { onDelete(expense) }, content = row)
+            }
         }
     }
 
@@ -217,6 +232,58 @@ fun ExpenseItem(
 
 /** Payer colour at the tint alpha used behind row icons. */
 private fun payerTint(color: Color): Color = color.copy(alpha = PAYER_TINT_ALPHA)
+
+/**
+ * Wraps a row in a left-swipe delete gesture, same shape as `EventListScreen`'s.
+ *
+ * Until now there was no way to remove an expense at all — `ExpenseViewModel.deleteExpense`
+ * existed but nothing called it — so a mistyped amount was permanent.
+ *
+ * @param onDelete Invoked once the row is swiped past the threshold
+ * @param content The row itself
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SwipeToDeleteRow(
+    onDelete: () -> Unit,
+    content: @Composable () -> Unit
+) {
+    val dismissState = rememberSwipeToDismissBoxState(
+        confirmValueChange = { value ->
+            if (value == SwipeToDismissBoxValue.EndToStart) {
+                onDelete()
+                true
+            } else {
+                false
+            }
+        }
+    )
+
+    SwipeToDismissBox(
+        state = dismissState,
+        enableDismissFromStartToEnd = false,
+        backgroundContent = {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        color = MaterialTheme.colorScheme.error,
+                        shape = RoundedCornerShape(10.dp)
+                    )
+                    .padding(horizontal = 20.dp),
+                contentAlignment = Alignment.CenterEnd
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Delete,
+                    contentDescription = stringResource(R.string.expenses_delete),
+                    tint = MaterialTheme.colorScheme.onError
+                )
+            }
+        }
+    ) {
+        content()
+    }
+}
 
 /**
  * Full-width receipt photo viewer; tap anywhere on the image or outside to close.

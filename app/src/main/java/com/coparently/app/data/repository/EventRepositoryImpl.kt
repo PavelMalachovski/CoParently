@@ -106,7 +106,14 @@ class EventRepositoryImpl @Inject constructor(
 
         val firebaseUser = firebaseAuthService.getCurrentUser()
         if (firebaseUser != null && event.syncedToFirestore) {
-            firestoreEventDataSource.deleteEvent(event.id)
+            // The event is already gone locally. A rejected remote delete arrives from
+            // Firestore's write-rejection path and kills the app if nothing catches it —
+            // the same failure the expense add path was hardened against.
+            try {
+                firestoreEventDataSource.deleteEvent(event.id)
+            } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+                android.util.Log.w("EventRepo", "Event Firestore delete failed", e)
+            }
         }
     }
 

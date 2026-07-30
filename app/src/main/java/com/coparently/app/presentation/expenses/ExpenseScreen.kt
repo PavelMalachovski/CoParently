@@ -18,11 +18,17 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.pluralStringResource
@@ -30,7 +36,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.coparently.app.R
+import com.coparently.app.domain.model.Expense
 import com.coparently.app.presentation.common.animations.AnimatedEmptyState
+import kotlinx.coroutines.launch
 
 /** Fallback currency when the month has no expenses to take one from. */
 private const val DEFAULT_CURRENCY = "USD"
@@ -54,6 +62,30 @@ fun ExpenseScreen(
     val monthExpenses by viewModel.expensesThisMonth.collectAsState()
     val balance by viewModel.balance.collectAsState()
     val roleByUid by viewModel.roleByUid.collectAsState()
+
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    val deletedMessage = stringResource(R.string.expenses_deleted)
+    val undoLabel = stringResource(R.string.expenses_deleted_undo)
+
+    // Delete now, offer Undo — the same shape EventListScreen uses. The receipt photo is only
+    // purged once the window closes, because a deleted photo cannot be brought back and Undo
+    // has to restore the expense intact.
+    val deleteWithUndo: (Expense) -> Unit = { expense ->
+        viewModel.deleteExpense(expense.id)
+        scope.launch {
+            val result = snackbarHostState.showSnackbar(
+                message = deletedMessage,
+                actionLabel = undoLabel,
+                duration = SnackbarDuration.Short
+            )
+            if (result == SnackbarResult.ActionPerformed) {
+                viewModel.restoreExpense(expense)
+            } else if (expense.receiptUrl != null) {
+                viewModel.purgeReceipt(expense.id)
+            }
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -79,6 +111,7 @@ fun ExpenseScreen(
                 }
             )
         },
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         floatingActionButton = {
             FloatingActionButton(onClick = onAddExpense) {
                 Icon(Icons.Default.Add, contentDescription = stringResource(R.string.expenses_add))
@@ -133,6 +166,7 @@ fun ExpenseScreen(
                 ExpenseList(
                     expenses = monthExpenses,
                     roleByUid = roleByUid,
+                    onDelete = deleteWithUndo,
                     modifier = Modifier.weight(1f)
                 )
             }

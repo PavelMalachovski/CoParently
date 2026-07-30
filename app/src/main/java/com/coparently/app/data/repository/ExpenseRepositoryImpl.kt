@@ -119,7 +119,15 @@ class ExpenseRepositoryImpl @Inject constructor(
 
         val firebaseUser = firebaseAuthService.getCurrentUser()
         if (firebaseUser != null) {
-            firestoreExpenseDataSource.deleteExpense(expenseId)
+            // Same guard as addExpense above, which the delete path never got: the row is
+            // already gone locally, and a rejected remote delete (PERMISSION_DENIED against the
+            // deployed rules) arrives from Firestore's write-rejection path and takes the whole
+            // app down if nothing catches it.
+            try {
+                firestoreExpenseDataSource.deleteExpense(expenseId)
+            } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+                android.util.Log.w("ExpenseRepo", "Expense Firestore delete failed", e)
+            }
         }
     }
 
