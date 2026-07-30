@@ -8,6 +8,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -54,6 +55,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.coparently.app.R
 import com.coparently.app.domain.model.ExpenseCategory
+import com.coparently.app.domain.money.SupportedCurrency
 import com.coparently.app.presentation.theme.CoPlanlyShapes
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -68,6 +70,10 @@ fun AddExpenseScreen(
     var notes by remember { mutableStateOf("") }
     var expanded by remember { mutableStateOf(false) }
     var receiptUri by remember { mutableStateOf<Uri?>(null) }
+
+    val defaultCurrency by viewModel.defaultCurrency.collectAsState()
+    var currency by remember { mutableStateOf<SupportedCurrency?>(null) }
+    val effectiveCurrency = currency ?: defaultCurrency
 
     val saveState by viewModel.saveState.collectAsState()
     val isSaving = saveState is ExpenseSaveState.Saving
@@ -119,13 +125,24 @@ fun AddExpenseScreen(
                 modifier = Modifier.fillMaxWidth()
             )
 
-            OutlinedTextField(
-                value = amount,
-                onValueChange = { amount = it },
-                label = { Text(stringResource(R.string.expense_field_amount)) },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                modifier = Modifier.fillMaxWidth()
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                OutlinedTextField(
+                    value = amount,
+                    onValueChange = { amount = it },
+                    label = { Text(stringResource(R.string.expense_field_amount)) },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    modifier = Modifier.weight(1f)
+                )
+                CurrencySelector(
+                    selected = effectiveCurrency,
+                    enabled = !isSaving,
+                    onSelect = { currency = it }
+                )
+            }
 
             ExposedDropdownMenuBox(
                 expanded = expanded,
@@ -187,6 +204,7 @@ fun AddExpenseScreen(
                             title = title,
                             amount = amountValue,
                             category = category,
+                            currency = effectiveCurrency.code,
                             notes = notes.takeIf { it.isNotBlank() },
                             receiptImageUri = receiptUri?.toString()
                         )

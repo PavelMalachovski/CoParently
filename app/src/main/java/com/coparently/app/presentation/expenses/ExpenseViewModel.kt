@@ -7,7 +7,9 @@ import com.coparently.app.domain.expenses.calculateExpenseBalance
 import com.coparently.app.domain.model.Expense
 import com.coparently.app.domain.model.ExpenseCategory
 import com.coparently.app.domain.model.ExpenseSummary
+import com.coparently.app.domain.money.SupportedCurrency
 import com.coparently.app.domain.repository.ExpenseRepository
+import com.coparently.app.domain.repository.PreferencesRepository
 import com.coparently.app.domain.repository.ReceiptStorage
 import com.coparently.app.domain.repository.UserRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -49,11 +51,17 @@ sealed interface ExpenseSaveState {
 class ExpenseViewModel @Inject constructor(
     private val expenseRepository: ExpenseRepository,
     private val userRepository: UserRepository,
-    private val receiptStorage: ReceiptStorage
+    private val receiptStorage: ReceiptStorage,
+    private val preferencesRepository: PreferencesRepository
 ) : ViewModel() {
 
     private val _currentUserId = MutableStateFlow<String>("")
     val currentUserId: StateFlow<String> = _currentUserId.asStateFlow()
+
+    /** App-wide default currency, used to pre-fill the expense form. */
+    val defaultCurrency: StateFlow<SupportedCurrency> =
+        preferencesRepository.getDefaultCurrencyFlow()
+            .stateIn(viewModelScope, SharingStarted.Eagerly, SupportedCurrency.DEFAULT)
 
     init {
         viewModelScope.launch {
@@ -138,6 +146,7 @@ class ExpenseViewModel @Inject constructor(
         title: String,
         amount: Double,
         category: ExpenseCategory,
+        currency: String,
         childId: String? = null,
         date: LocalDate = LocalDate.now(),
         notes: String? = null,
@@ -179,6 +188,7 @@ class ExpenseViewModel @Inject constructor(
                 title = title,
                 amount = amount,
                 category = category,
+                currency = currency,
                 paidBy = userId,
                 date = date,
                 receiptUrl = receiptUrl,
