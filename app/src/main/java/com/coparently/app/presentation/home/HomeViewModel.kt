@@ -6,10 +6,12 @@ import com.coparently.app.data.repository.CustodyModelRepository
 import com.coparently.app.domain.custody.HandoverCalculator
 import com.coparently.app.domain.custody.HandoverInfo
 import com.coparently.app.domain.model.Event
+import com.coparently.app.domain.money.SupportedCurrency
 import com.coparently.app.domain.repository.ChangeRequestRepository
 import com.coparently.app.domain.repository.EventRepository
 import com.coparently.app.domain.repository.ExpenseRepository
 import com.coparently.app.domain.repository.MessageRepository
+import com.coparently.app.domain.repository.PreferencesRepository
 import com.coparently.app.domain.repository.UserRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -49,6 +51,21 @@ data class ActivityItem(
 data class MonthSpend(val total: Double, val currency: String)
 
 /**
+ * The two repositories [HomeViewModel.monthSpend] is derived from, bundled into one
+ * constructor-injected value.
+ *
+ * [HomeViewModel] already sat at the constructor-parameter limit before the currency fallback
+ * (finding 4) needed [PreferencesRepository] alongside the existing [ExpenseRepository] — both
+ * of which only ever feed `monthSpend`. Bundling them keeps the real dependency count visible
+ * (no `@Suppress`, no widened detekt threshold) while still giving `monthSpend` everything it
+ * needs.
+ */
+data class MonthSpendDependencies @Inject constructor(
+    val expenseRepository: ExpenseRepository,
+    val preferencesRepository: PreferencesRepository
+)
+
+/**
  * ViewModel for the home dashboard. Surfaces the at-a-glance co-parenting state:
  * the next custody handover, the next few events, this month's spend, unread
  * messages, and the recent changes the *other* parent made.
@@ -59,10 +76,15 @@ class HomeViewModel @Inject constructor(
     eventRepository: EventRepository,
     changeRequestRepository: ChangeRequestRepository,
     custodyModelRepository: CustodyModelRepository,
-    expenseRepository: ExpenseRepository,
+    monthSpendDependencies: MonthSpendDependencies,
     messageRepository: MessageRepository,
     private val userRepository: UserRepository
 ) : ViewModel() {
+
+    /** App-wide default currency, used when the month has no expenses to take one from. */
+    private val defaultCurrency: StateFlow<SupportedCurrency> =
+        monthSpendDependencies.preferencesRepository.getDefaultCurrencyFlow()
+            .stateIn(viewModelScope, SharingStarted.Eagerly, SupportedCurrency.DEFAULT)
 
     private val _partnerId = MutableStateFlow<String?>(null)
     private val _paired = MutableStateFlow(false)
@@ -97,18 +119,23 @@ class HomeViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), emptyList())
 
     /** This calendar month's total spend across all shared expenses. */
-    val monthSpend: StateFlow<MonthSpend> = expenseRepository.getAllExpenses()
-        .map { expenses ->
-            val month = LocalDate.now()
-            val inMonth = expenses.filter {
-                it.date.year == month.year && it.date.month == month.month
-            }
-            MonthSpend(
-                total = inMonth.sumOf { it.amount },
-                currency = inMonth.firstOrNull()?.currency ?: DEFAULT_CURRENCY
-            )
+    val monthSpend: StateFlow<MonthSpend> = combine(
+        monthSpendDependencies.expenseRepository.getAllExpenses(),
+        defaultCurrency
+    ) { expenses, fallbackCurrency ->
+        val month = LocalDate.now()
+        val inMonth = expenses.filter {
+            it.date.year == month.year && it.date.month == month.month
         }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), MonthSpend(0.0, DEFAULT_CURRENCY))
+        MonthSpend(
+            total = inMonth.sumOf { it.amount },
+            currency = inMonth.firstOrNull()?.currency ?: fallbackCurrency.code
+        )
+    }.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS),
+        MonthSpend(0.0, SupportedCurrency.DEFAULT.code)
+    )
 
     /** Total unread messages across all conversations. */
     val unreadCount: StateFlow<Int> = _userId
@@ -181,7 +208,6 @@ class HomeViewModel @Inject constructor(
         const val MAX_UPCOMING = 3
         const val LOOKAHEAD_DAYS = 60L
         const val STOP_TIMEOUT_MS = 5000L
-        const val DEFAULT_CURRENCY = "USD"
         val NEAR_THRESHOLD: Duration = Duration.ofSeconds(2)
     }
 }

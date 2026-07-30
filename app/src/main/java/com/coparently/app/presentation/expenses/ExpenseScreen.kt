@@ -40,9 +40,6 @@ import com.coparently.app.domain.model.Expense
 import com.coparently.app.presentation.common.animations.AnimatedEmptyState
 import kotlinx.coroutines.launch
 
-/** Fallback currency when the month has no expenses to take one from. */
-private const val DEFAULT_CURRENCY = "USD"
-
 /**
  * Expense list screen — a top-level bottom-navigation destination.
  *
@@ -62,6 +59,7 @@ fun ExpenseScreen(
     val monthExpenses by viewModel.expensesThisMonth.collectAsState()
     val balance by viewModel.balance.collectAsState()
     val roleByUid by viewModel.roleByUid.collectAsState()
+    val defaultCurrency by viewModel.defaultCurrency.collectAsState()
 
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -136,7 +134,7 @@ fun ExpenseScreen(
             } else {
                 ExpenseSummaryHeader(
                     balance = balance,
-                    currency = monthExpenses.firstOrNull()?.currency ?: DEFAULT_CURRENCY,
+                    currency = monthExpenses.firstOrNull()?.currency ?: defaultCurrency.code,
                     onSettleUp = onSettleUp,
                     modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp)
                 )
