@@ -463,8 +463,11 @@ private data class ReceiptUndoSnapshot(
  * Which fields a receipt scan would still change, given the form state at the time it
  * completed. A null field means that field is untouched by the scan — either the scan found
  * nothing for it, or the user had already filled it in.
+ *
+ * Internal, not private, because it is [buildReceiptScanUpdate]'s return type and that function
+ * is internal for testability — see [buildReceiptScanUpdate].
  */
-private data class ReceiptScanUpdate(
+internal data class ReceiptScanUpdate(
     val title: String? = null,
     val amount: String? = null,
     val category: ExpenseCategory? = null,
@@ -479,15 +482,27 @@ private data class ReceiptScanUpdate(
  * Works out which of [formState]'s still-untouched fields [scan] can fill in.
  *
  * Each field keeps its own untouched test: title/amount only when blank, date only while it is
- * still today, category only while it is still [ExpenseCategory.OTHER], and currency only
+ * still [today], category only while it is still [ExpenseCategory.OTHER], and currency only
  * while the selector has not been touched ([ReceiptScanFormState.currency] is still null).
+ *
+ * Internal (not private) — and takes [today] rather than reading `LocalDate.now()` itself — so
+ * `BuildReceiptScanUpdateTest` can exercise the non-overwrite rule as a plain JVM unit test,
+ * without a wall-clock dependency or a Compose UI test.
+ *
+ * @param scan Fields read off the receipt photo
+ * @param formState Current form values, used to decide which fields are still untouched
+ * @param today Reference date the "date field untouched" check compares against
  */
-private fun buildReceiptScanUpdate(scan: ReceiptScan, formState: ReceiptScanFormState): ReceiptScanUpdate =
+internal fun buildReceiptScanUpdate(
+    scan: ReceiptScan,
+    formState: ReceiptScanFormState,
+    today: LocalDate = LocalDate.now()
+): ReceiptScanUpdate =
     ReceiptScanUpdate(
         title = scan.merchant?.takeIf { formState.title.isBlank() },
         amount = scan.total?.takeIf { formState.amount.isBlank() }?.toString(),
         category = scan.category?.takeIf { formState.category == ExpenseCategory.OTHER },
-        date = scan.date?.takeIf { formState.date == LocalDate.now() },
+        date = scan.date?.takeIf { formState.date == today },
         currency = SupportedCurrency.fromCode(scan.currency)?.takeIf { formState.currency == null }
     )
 
