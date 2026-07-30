@@ -5,7 +5,9 @@ import androidx.lifecycle.viewModelScope
 import com.coparently.app.domain.model.Budget
 import com.coparently.app.domain.model.BudgetAlert
 import com.coparently.app.domain.model.ExpenseCategory
+import com.coparently.app.domain.money.SupportedCurrency
 import com.coparently.app.domain.repository.BudgetRepository
+import com.coparently.app.domain.repository.PreferencesRepository
 import com.coparently.app.domain.repository.UserRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -21,10 +23,16 @@ import javax.inject.Inject
 @HiltViewModel
 class BudgetViewModel @Inject constructor(
     private val budgetRepository: BudgetRepository,
-    private val userRepository: UserRepository
+    private val userRepository: UserRepository,
+    private val preferencesRepository: PreferencesRepository
 ) : ViewModel() {
 
     private val _currentUserId = MutableStateFlow<String>("")
+
+    /** App-wide default currency, written onto new budgets — mirrors [ExpenseViewModel]. */
+    private val defaultCurrency: StateFlow<SupportedCurrency> =
+        preferencesRepository.getDefaultCurrencyFlow()
+            .stateIn(viewModelScope, SharingStarted.Eagerly, SupportedCurrency.DEFAULT)
 
     init {
         viewModelScope.launch {
@@ -70,6 +78,7 @@ class BudgetViewModel @Inject constructor(
                 childId = childId,
                 category = category,
                 monthlyLimit = monthlyLimit,
+                currency = defaultCurrency.value.code,
                 createdAt = LocalDateTime.now()
             )
             budgetRepository.addBudget(budget)
