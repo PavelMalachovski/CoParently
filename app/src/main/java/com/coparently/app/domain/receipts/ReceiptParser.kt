@@ -39,6 +39,23 @@ object ReceiptParser {
         Normalizer.normalize(text.lowercase(), Normalizer.Form.NFD)
             .replace(COMBINING_MARKS_REGEX, "")
 
+    /** Whether [char] can appear in a money-shaped token: a digit, or one of the two separators. */
+    private fun isMoneyCharacter(char: Char): Boolean = char.isDigit() || char == '.' || char == ','
+
+    /**
+     * A tail exactly this long after the last separator marks thousands grouping (e.g. the
+     * ".234" in "1.234", read as 1234) rather than a decimal fraction — real money is never
+     * quoted to three decimal places.
+     */
+    private const val THOUSANDS_GROUPING_TAIL_LENGTH = 3
+
+    /**
+     * Thousands grouping only makes sense with a head this short (e.g. "1", "12" or "123" before
+     * the separator, as in "1.234"). A longer head isn't a single group of digits, so the token
+     * is rejected instead of being misread as a decimal amount.
+     */
+    private const val MAX_THOUSANDS_GROUPING_HEAD_LENGTH = 3
+
     /**
      * Parses one money-shaped token.
      *
@@ -51,7 +68,7 @@ object ReceiptParser {
      */
     internal fun parseMoney(raw: String): Double? {
         val cleaned = raw.replace(" ", "").replace(" ", "").trim('.', ',')
-        if (cleaned.isEmpty() || !cleaned.all { it.isDigit() || it == '.' || it == ',' }) return null
+        if (cleaned.isEmpty() || !cleaned.all(::isMoneyCharacter)) return null
 
         val separatorIndex = maxOf(cleaned.lastIndexOf('.'), cleaned.lastIndexOf(','))
         if (separatorIndex < 0) return cleaned.toDoubleOrNull()
@@ -62,7 +79,9 @@ object ReceiptParser {
 
         return when {
             tail.length in 1..2 -> "$headDigits.$tail".toDoubleOrNull()
-            tail.length == 3 && headDigits.length in 1..3 -> (headDigits + tail).toDoubleOrNull()
+            tail.length == THOUSANDS_GROUPING_TAIL_LENGTH &&
+                headDigits.length in 1..MAX_THOUSANDS_GROUPING_HEAD_LENGTH ->
+                (headDigits + tail).toDoubleOrNull()
             else -> null
         }
     }
@@ -136,6 +155,12 @@ object ReceiptParser {
 
     /** A receipt older than this is almost certainly a misread, not a real purchase. */
     private const val MAX_RECEIPT_AGE_YEARS = 2L
+
+    /**
+     * Two-digit receipt years are assumed to fall in the 2000s (e.g. "26" reads as 2026) —
+     * there is no plausible retail receipt from the 1900s.
+     */
+    private const val ASSUMED_CENTURY_BASE = 2000
 
     /**
      * Whether [marker] occurs in [text] as a standalone token rather than as a substring of an
@@ -222,7 +247,7 @@ object ReceiptParser {
                 }
                 DATE_DMY_SHORT.findAll(line).forEach { match ->
                     val (day, month, year) = match.destructured
-                    add(Triple(2000 + year.toInt(), month.toInt(), day.toInt()))
+                    add(Triple(ASSUMED_CENTURY_BASE + year.toInt(), month.toInt(), day.toInt()))
                 }
             }
 
