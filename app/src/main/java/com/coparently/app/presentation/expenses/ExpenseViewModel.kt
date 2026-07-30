@@ -8,6 +8,9 @@ import com.coparently.app.domain.model.Expense
 import com.coparently.app.domain.model.ExpenseCategory
 import com.coparently.app.domain.model.ExpenseSummary
 import com.coparently.app.domain.money.SupportedCurrency
+import com.coparently.app.domain.receipts.ReceiptParser
+import com.coparently.app.domain.receipts.ReceiptScan
+import com.coparently.app.domain.receipts.ReceiptTextRecognizer
 import com.coparently.app.domain.repository.ExpenseRepository
 import com.coparently.app.domain.repository.PreferencesRepository
 import com.coparently.app.domain.repository.ReceiptStorage
@@ -47,12 +50,27 @@ sealed interface ExpenseSaveState {
     data class Error(val message: String) : ExpenseSaveState
 }
 
+/**
+ * State of the on-device receipt scan that pre-fills the Add Expense form.
+ */
+sealed interface ReceiptScanState {
+    data object Idle : ReceiptScanState
+    data object Scanning : ReceiptScanState
+
+    /** OCR produced usable fields; the form applies the ones the user has not filled in. */
+    data class Applied(val scan: ReceiptScan) : ReceiptScanState
+
+    /** Recognition failed, or produced nothing usable. The photo stays attached regardless. */
+    data object Failed : ReceiptScanState
+}
+
 @HiltViewModel
 class ExpenseViewModel @Inject constructor(
     private val expenseRepository: ExpenseRepository,
     private val userRepository: UserRepository,
     private val receiptStorage: ReceiptStorage,
-    private val preferencesRepository: PreferencesRepository
+    private val preferencesRepository: PreferencesRepository,
+    private val receiptTextRecognizer: ReceiptTextRecognizer
 ) : ViewModel() {
 
     private val _currentUserId = MutableStateFlow<String>("")
@@ -206,6 +224,40 @@ class ExpenseViewModel @Inject constructor(
     /** Resets [saveState] back to [ExpenseSaveState.Idle] after the UI consumed a result. */
     fun resetSaveState() {
         _saveState.value = ExpenseSaveState.Idle
+    }
+
+    private val _scanState = MutableStateFlow<ReceiptScanState>(ReceiptScanState.Idle)
+    val scanState: StateFlow<ReceiptScanState> = _scanState.asStateFlow()
+
+    /**
+     * Runs on-device OCR over a receipt photo and parses it into form fields.
+     *
+     * Failures are not fatal: the photo is still a valid receipt, so the expense can be saved
+     * with it either way.
+     *
+     * @param imageUri Content or file URI string of the receipt photo
+     */
+    fun scanReceipt(imageUri: String) {
+        if (_scanState.value is ReceiptScanState.Scanning) return
+
+        viewModelScope.launch {
+            _scanState.value = ReceiptScanState.Scanning
+            _scanState.value = try {
+                val scan = ReceiptParser.parse(receiptTextRecognizer.recognize(imageUri))
+                if (scan.isEmpty) ReceiptScanState.Failed else ReceiptScanState.Applied(scan)
+            } catch (
+                // Any recognition failure (IO, decode, model load) must not break the form
+                @Suppress("TooGenericExceptionCaught") e: Exception
+            ) {
+                android.util.Log.e("CoPlanlyReceiptScan", "Receipt OCR failed", e)
+                ReceiptScanState.Failed
+            }
+        }
+    }
+
+    /** Resets [scanState] after the UI consumed a result. */
+    fun resetScanState() {
+        _scanState.value = ReceiptScanState.Idle
     }
 
     /**
