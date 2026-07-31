@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Child info: common actions -->
+    <string name="childinfo_back">Zpět</string>
+    <string name="childinfo_edit">Upravit</string>
+    <string name="childinfo_delete">Smazat</string>
+    <string name="childinfo_remove">Odebrat</string>
+    <string name="childinfo_add">Přidat</string>
+    <string name="childinfo_save">Uložit</string>
+    <string name="childinfo_cancel">Zrušit</string>
+    <string name="childinfo_clear">Vymazat</string>
+    <string name="childinfo_ok">OK</string>
+    <string name="childinfo_retry">Zkusit znovu</string>
+    <string name="childinfo_sync">Synchronizovat</string>
+
+    <!-- Child info: titles and sections -->
+    <string name="childinfo_screen_title">Informace o dítěti</string>
+    <string name="childinfo_title_add">Přidat informace o dítěti</string>
+    <string name="childinfo_title_edit">Upravit informace o dítěti</string>
+    <string name="childinfo_empty_state">Zatím žádné informace o dítěti</string>
+    <string name="childinfo_section_basic">Základní informace</string>
+    <string name="childinfo_section_medications">Léky</string>
+    <string name="childinfo_section_activities">Kroužky a aktivity</string>
+    <string name="childinfo_section_allergies">Alergie</string>
+    <string name="childinfo_section_medical_notes">Zdravotní poznámky</string>
+    <string name="childinfo_section_emergency_contacts">Nouzové kontakty</string>
+    <string name="childinfo_section_school">Informace o škole</string>
+    <string name="childinfo_section_teacher">Informace o učiteli</string>
+
+    <!-- Child info: basic form -->
+    <string name="childinfo_child_name_label">Jméno dítěte *</string>
+    <string name="childinfo_dob_value">Datum narození: %1$s</string>
+    <string name="childinfo_select_dob">Vybrat datum narození</string>
+    <string name="childinfo_add_child_button">Přidat dítě</string>
+    <string name="childinfo_save_changes">Uložit změny</string>
+    <string name="childinfo_medical_notes_label">Další zdravotní informace</string>
+    <string name="childinfo_medical_notes_placeholder">Další důležité zdravotní informace…</string>
+
+    <!-- Child info: detail rows -->
+    <string name="childinfo_detail_dosage">Dávkování: %1$s</string>
+    <string name="childinfo_detail_frequency">Frekvence: %1$s</string>
+    <string name="childinfo_detail_notes">Poznámky: %1$s</string>
+    <string name="childinfo_detail_schedule">Rozvrh: %1$s</string>
+    <string name="childinfo_detail_location">Místo: %1$s</string>
+    <string name="childinfo_detail_contact">Kontakt: %1$s</string>
+    <string name="childinfo_detail_phone">Telefon: %1$s</string>
+    <string name="childinfo_detail_relationship">Vztah: %1$s</string>
+    <string name="childinfo_detail_alt_phone">Další telefon: %1$s</string>
+    <string name="childinfo_detail_address">Adresa: %1$s</string>
+    <string name="childinfo_detail_teacher">Učitel: %1$s</string>
+    <string name="childinfo_detail_email">E-mail: %1$s</string>
+    <string name="childinfo_detail_grade">Třída: %1$s</string>
+    <string name="childinfo_allergy_bullet">• %1$s</string>
+
+    <!-- Child info: medications editor -->
+    <string name="childinfo_add_medication">Přidat lék</string>
+    <string name="childinfo_new_medication">Nový lék</string>
+    <string name="childinfo_edit_medication">Upravit lék</string>
+    <string name="childinfo_medication_name_label">Název léku</string>
+    <string name="childinfo_dosage_label">Dávkování (např. 10 mg)</string>
+    <string name="childinfo_frequency_label">Frekvence (např. 2× denně)</string>
+    <string name="childinfo_notes_optional_label">Poznámky (nepovinné)</string>
+    <string name="childinfo_medication_summary">%1$s - %2$s</string>
+
+    <!-- Child info: activities editor -->
+    <string name="childinfo_add_activity">Přidat aktivitu</string>
+    <string name="childinfo_new_activity">Nová aktivita</string>
+    <string name="childinfo_edit_activity">Upravit aktivitu</string>
+    <string name="childinfo_activity_name_label">Název aktivity</string>
+    <string name="childinfo_activity_name_placeholder">např. fotbal, klavír</string>
+    <string name="childinfo_schedule_label">Rozvrh</string>
+    <string name="childinfo_schedule_placeholder">např. po a st, 16–17 h</string>
+    <string name="childinfo_location_optional_label">Místo (nepovinné)</string>
+    <string name="childinfo_contact_person_optional_label">Kontaktní osoba (nepovinné)</string>
+    <string name="childinfo_contact_phone_optional_label">Kontaktní telefon (nepovinné)</string>
+    <string name="childinfo_activity_location_marker">📍 %1$s</string>
+    <string name="childinfo_activity_contact_marker">👤 %1$s</string>
+    <string name="childinfo_activity_contact_phone_marker">👤 %1$s • %2$s</string>
+
+    <!-- Child info: allergies editor -->
+    <string name="childinfo_add_allergy">Přidat alergii</string>
+    <string name="childinfo_allergy_label">Alergie</string>
+    <string name="childinfo_allergy_placeholder">např. arašídy, laktóza</string>
+
+    <!-- Child info: emergency contacts editor -->
+    <string name="childinfo_add_emergency_contact">Přidat nouzový kontakt</string>
+    <string name="childinfo_new_emergency_contact">Nový nouzový kontakt</string>
+    <string name="childinfo_edit_emergency_contact">Upravit nouzový kontakt</string>
+    <string name="childinfo_name_label">Jméno</string>
+    <string name="childinfo_relationship_label">Vztah</string>
+    <string name="childinfo_relationship_placeholder">např. babička, strýc</string>
+    <string name="childinfo_phone_number_label">Telefonní číslo</string>
+    <string name="childinfo_alternate_phone_optional_label">Další telefon (nepovinné)</string>
+    <string name="childinfo_contact_phone_marker">📞 %1$s</string>
+    <string name="childinfo_contact_alt_phone_marker">📱 %1$s</string>
+
+    <!-- Child info: school editor -->
+    <string name="childinfo_add_school_info">Přidat informace o škole</string>
+    <string name="childinfo_school_name_label">Název školy</string>
+    <string name="childinfo_address_optional_label">Adresa (nepovinné)</string>
+    <string name="childinfo_school_phone_optional_label">Telefon školy (nepovinné)</string>
+    <string name="childinfo_grade_optional_label">Třída (nepovinné)</string>
+    <string name="childinfo_grade_placeholder">např. 3. třída</string>
+    <string name="childinfo_teacher_name_optional_label">Jméno učitele (nepovinné)</string>
+    <string name="childinfo_teacher_email_optional_label">E-mail učitele (nepovinné)</string>
+</resources>

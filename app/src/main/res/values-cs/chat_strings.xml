@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="chat_new_conversation">Nová konverzace</string>
+    <string name="chat_empty_title">Zatím žádné konverzace</string>
+    <string name="chat_empty_description">Začněte konverzaci s druhým rodičem, abyste sladili plány a sdíleli novinky.</string>
+    <string name="chat_no_messages">Zatím žádné zprávy</string>
+    <string name="chat_messages_empty_title">Zatím žádné zprávy</string>
+    <string name="chat_messages_empty_description">Začněte konverzaci odesláním zprávy druhému rodiči.</string>
+    <string name="chat_type_message">Napište zprávu…</string>
+    <string name="chat_attach">Přiložit</string>
+    <string name="chat_send">Odeslat</string>
+    <string name="chat_status_sending">Odesílání</string>
+    <string name="chat_status_error">Chyba</string>
+    <string name="chat_status_sent">Odesláno</string>
+    <string name="chat_sending_ellipsis">Odesílání…</string>
+    <string name="chat_failed_to_send">Nepodařilo se odeslat</string>
+    <string name="chat_title_fallback">Chat</string>
+    <string name="chat_back">Zpět</string>
+    <string name="chat_request_change">Požádat o změnu</string>
+    <string name="chat_request_change_title">Požádat o změnu</string>
+    <string name="chat_no_upcoming_events">Žádné nadcházející události, u kterých lze navrhnout změnu.</string>
+    <string name="chat_pick_event_to_reschedule">Vyberte událost, kterou chcete přeložit:</string>
+</resources>

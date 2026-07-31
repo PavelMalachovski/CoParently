@@ -213,14 +213,17 @@ fun CalendarScreen(
         eventViewModel.loadEventsForDateRange(start, end)
     }
 
-    // Show snackbar with undo when event is moved
+    // Show snackbar with undo when event is moved.
+    // Resolved here: stringResource is composable and must not be called inside LaunchedEffect.
+    val movedMessage = stringResource(R.string.calendar_event_moved)
+    val undoMoveLabel = stringResource(R.string.calendar_undo)
     LaunchedEffect(uiState) {
         when (val state = uiState) {
             is EventUiState.OperationSuccess -> {
                 if (state.message == "Event rescheduled" && eventViewModel.hasUndoAction()) {
                     val result = snackbarHostState.showSnackbar(
-                        message = "Event moved",
-                        actionLabel = "Undo",
+                        message = movedMessage,
+                        actionLabel = undoMoveLabel,
                         duration = SnackbarDuration.Short
                     )
                     if (result == SnackbarResult.ActionPerformed) {
@@ -302,7 +305,7 @@ fun CalendarScreen(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Close,
-                            contentDescription = "Delete event",
+                            contentDescription = stringResource(R.string.calendar_delete_event),
                             modifier = Modifier.size(dims.iconSize)
                         )
                     }
@@ -488,12 +491,12 @@ fun CalendarScreen(
                         showDatePicker = false
                     }
                 ) {
-                    Text("OK")
+                    Text(stringResource(R.string.calendar_dialog_ok))
                 }
             },
             dismissButton = {
                 Button(onClick = { showDatePicker = false }) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.calendar_dialog_cancel))
                 }
             },
             colors = DatePickerDefaults.colors()

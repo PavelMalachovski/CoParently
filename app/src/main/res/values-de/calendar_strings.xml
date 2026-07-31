@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="calendar_parent_mom">Mama</string>
+    <string name="calendar_parent_dad">Papa</string>
+
+    <string name="calendar_custody_today_with">Heute bei %1$s</string>
+    <string name="calendar_custody_handover_tomorrow">→ %1$s morgen</string>
+    <plurals name="calendar_custody_handover_in_days">
+        <item quantity="one">→ %2$s in %1$d Tag</item>
+        <item quantity="other">→ %2$s in %1$d Tagen</item>
+    </plurals>
+    <string name="calendar_custody_ribbon_description">Heute ist das Kind bei %1$s</string>
+    <string name="calendar_custody_ribbon_description_handover">Heute ist das Kind bei %1$s. Die Betreuung geht in %3$d Tagen an %2$s über.</string>
+
+    <string name="calendar_viewmode_month">Monat</string>
+    <string name="calendar_viewmode_week">Woche</string>
+    <string name="calendar_viewmode_day">Tag</string>
+    <string name="calendar_filters_button">Filter</string>
+    <string name="calendar_today_button">Heute</string>
+    <string name="calendar_subtitle_today">%1$s · heute</string>
+
+    <string name="calendar_legend_mom">Mama</string>
+    <string name="calendar_legend_dad">Papa</string>
+    <string name="calendar_legend_vacation">Ferien</string>
+
+    <string name="calendar_filter_show">Anzeigen</string>
+    <string name="calendar_filter_both">Beide</string>
+
+    <string name="calendar_event_moved">Termin verschoben</string>
+    <string name="calendar_undo">Rückgängig</string>
+
+    <string name="calendar_delete_event">Termin löschen</string>
+
+    <string name="calendar_dialog_ok">OK</string>
+    <string name="calendar_dialog_cancel">Abbrechen</string>
+
+    <string name="calendar_weekly_summary">Wochenübersicht</string>
+    <string name="calendar_change_requests">Änderungsanfragen</string>
+
+    <string name="calendar_filter_event_types">Terminarten</string>
+    <string name="calendar_filter_hidden_types_hint">Ausgeblendete Arten werden im Kalender nicht angezeigt</string>
+    <string name="calendar_filter_type_visible">Sichtbar</string>
+    <string name="calendar_filter_new_type_label">Neue Terminart</string>
+    <string name="calendar_filter_new_type_placeholder">z. B. Musikunterricht</string>
+    <string name="calendar_filter_add_button">Hinzufügen</string>
+    <string name="calendar_filter_holidays_title">Tschechische Feiertage</string>
+    <string name="calendar_filter_holidays_subtitle">Gesetzliche Feiertage und Schulferien</string>
+
+    <string name="calendar_weekday_header_description">Kalender-Wochentagsüberschrift</string>
+    <string name="calendar_day_desc_today">Heute</string>
+    <string name="calendar_day_desc_outside_month">Außerhalb des aktuellen Monats</string>
+    <string name="calendar_day_desc_with_parent">Bei %1$s</string>
+    <plurals name="calendar_day_desc_events">
+        <item quantity="one">%1$d Termin</item>
+        <item quantity="other">%1$d Termine</item>
+    </plurals>
+    <string name="calendar_day_click_label">Termine für %1$s anzeigen</string>
+    <string name="calendar_legend_description">Legende: Rosa ist Mama, Blau ist Papa, ein türkiser Streifen markiert Schulferien</string>
+
+    <string name="calendar_time_slot_description">Zeitfenster um %1$s am %2$s. Tippen, um einen Termin hinzuzufügen.</string>
+    <string name="calendar_event_chip_description">Termin %1$s. %2$s</string>
+    <string name="calendar_event_dragging">Wird gezogen</string>
+    <string name="calendar_event_resizing_start">Startzeit wird auf %1$s geändert</string>
+    <string name="calendar_event_resizing_end">Endzeit wird auf %1$s geändert</string>
+    <string name="calendar_event_long_pressed">Lange gedrückt, Löschen-Schaltfläche angezeigt</string>
+    <string name="calendar_event_chip_hint">Tippen zum Ansehen, lange drücken zum Löschen, Ecken ziehen zum Anpassen</string>
+    <string name="calendar_event_private">Privater Termin</string>
+    <string name="calendar_event_pickup_confirmed">Abholung von %1$s bestätigt</string>
+    <string name="calendar_resize_start_handle">Startzeit anpassen. Nach oben oder unten ziehen (15-Minuten-Schritte).</string>
+    <string name="calendar_resize_end_handle">Endzeit anpassen. Nach oben oder unten ziehen (15-Minuten-Schritte).</string>
+</resources>

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="nav_home">Главная</string>
+    <string name="nav_calendar">Календарь</string>
+    <string name="nav_chat">Чат</string>
+    <string name="nav_expenses">Расходы</string>
+    <string name="nav_settings">Настройки</string>
+    <string name="expenses_title">Расходы</string>
+    <string name="expenses_open_budgets">Бюджеты</string>
+    <string name="budgets_title">Бюджеты</string>
+    <string name="budgets_back">Назад</string>
+    <string name="conversations_title">Сообщения</string>
+</resources>

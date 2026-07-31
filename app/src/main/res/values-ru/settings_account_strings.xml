@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Russian translations of settings_account_strings.xml. -->
+<resources>
+    <string name="settings_co_parent_sync">Синхронизация со вторым родителем</string>
+    <string name="settings_co_parent_sync_description">Автоматически синхронизирует события и информацию о ребёнке со вторым родителем</string>
+    <string name="settings_sync">Синхронизировать</string>
+    <string name="settings_google_sync">Синхронизация с Google Календарём</string>
+    <string name="settings_gcal_enable_sync">Включить синхронизацию</string>
+    <string name="settings_signed_in_as">Вы вошли как: %1$s</string>
+    <string name="settings_gcal_not_signed_in">Вход не выполнен</string>
+    <string name="settings_unknown">Неизвестно</string>
+    <string name="settings_calendar_sign_out">Выйти из синхронизации календаря</string>
+    <string name="settings_account">Аккаунт</string>
+    <string name="settings_account_description">Полный выход из приложения. Для доступа к аккаунту потребуется войти снова.</string>
+    <string name="settings_account_sign_out">Выйти из приложения</string>
+    <string name="settings_pairing_title">Связь со вторым родителем</string>
+    <string name="settings_pairing_description">Пригласите второго родителя или управляйте связью</string>
+    <string name="settings_child_info_title">Информация о ребёнке</string>
+    <string name="settings_child_info_description">Лекарства, занятия, аллергии</string>
+    <string name="settings_custody_title">График опеки</string>
+    <string name="settings_custody_description">Настройте схему опеки (неделя через неделю, 2-2-3 и т. д.)</string>
+    <string name="settings_about">О приложении CoPlanly</string>
+    <string name="settings_about_tagline">Общий календарь для совместного воспитания</string>
+    <string name="settings_version">Версия %1$s</string>
+    <string name="settings_navigate">Открыть</string>
+</resources>

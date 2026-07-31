@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="nav_home">Start</string>
+    <string name="nav_calendar">Kalender</string>
+    <string name="nav_chat">Chat</string>
+    <string name="nav_expenses">Ausgaben</string>
+    <string name="nav_settings">Einstellungen</string>
+    <string name="expenses_title">Ausgaben</string>
+    <string name="expenses_open_budgets">Budgets</string>
+    <string name="budgets_title">Budgets</string>
+    <string name="budgets_back">Zurück</string>
+    <string name="conversations_title">Nachrichten</string>
+</resources>

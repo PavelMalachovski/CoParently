@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="change_request_inbox_title">Žádosti o změnu</string>
+    <string name="change_request_back">Zpět</string>
+    <string name="change_request_empty_title">Zatím žádné žádosti o změnu</string>
+    <string name="change_request_empty_hint">Otevřete událost a klepněte na „Požádat o změnu“, abyste druhému rodiči navrhli nový čas.</string>
+    <string name="change_request_incoming">Příchozí</string>
+    <string name="change_request_outgoing">Odchozí</string>
+    <string name="change_request_status_pending">Čeká na odpověď</string>
+    <string name="change_request_status_accepted">Přijato</string>
+    <string name="change_request_status_declined">Zamítnuto</string>
+    <string name="change_request_status_cancelled">Staženo</string>
+    <string name="change_request_current">Aktuální</string>
+    <string name="change_request_proposed">Navrhované</string>
+    <string name="change_request_note_quoted">„%1$s“</string>
+    <string name="change_request_accept">Přijmout</string>
+    <string name="change_request_decline">Zamítnout</string>
+    <string name="change_request_withdraw">Stáhnout žádost</string>
+    <string name="change_request_form_title">Požádat o změnu</string>
+    <string name="change_request_currently">Nyní: %1$s v %2$s</string>
+    <string name="change_request_proposed_new_time">Navrhovaný nový čas</string>
+    <string name="change_request_from_time">Od %1$s</string>
+    <string name="change_request_to_time">Do %1$s</string>
+    <string name="change_request_to_unset">Do —</string>
+    <string name="change_request_note_label">Zpráva druhému rodiči (nepovinné)</string>
+    <string name="change_request_send">Odeslat žádost</string>
+    <string name="change_request_ok">OK</string>
+    <string name="change_request_cancel">Zrušit</string>
+</resources>

@@ -37,4 +37,60 @@
     <!-- Parent filter, now shown inside the Filters sheet -->
     <string name="calendar_filter_show">Show</string>
     <string name="calendar_filter_both">Both</string>
+
+    <!-- Snackbar shown after drag-and-drop rescheduling / deleting -->
+    <string name="calendar_event_moved">Event moved</string>
+    <string name="calendar_undo">Undo</string>
+
+    <!-- FAB actions -->
+    <string name="calendar_delete_event">Delete event</string>
+
+    <!-- Month/year picker dialog -->
+    <string name="calendar_dialog_ok">OK</string>
+    <string name="calendar_dialog_cancel">Cancel</string>
+
+    <!-- Top bar action icons -->
+    <string name="calendar_weekly_summary">Weekly summary</string>
+    <string name="calendar_change_requests">Change requests</string>
+
+    <!-- Filters sheet: event types, custom type creation, holiday switch -->
+    <string name="calendar_filter_event_types">Event types</string>
+    <string name="calendar_filter_hidden_types_hint">Hidden types are not shown in the calendar</string>
+    <string name="calendar_filter_type_visible">Visible</string>
+    <string name="calendar_filter_new_type_label">New event type</string>
+    <string name="calendar_filter_new_type_placeholder">e.g., Music lessons</string>
+    <string name="calendar_filter_add_button">Add</string>
+    <string name="calendar_filter_holidays_title">Czech holidays</string>
+    <string name="calendar_filter_holidays_subtitle">Public holidays and school vacations</string>
+
+    <!-- Month grid accessibility -->
+    <string name="calendar_weekday_header_description">Calendar weekday header</string>
+    <string name="calendar_day_desc_today">Today</string>
+    <string name="calendar_day_desc_outside_month">Outside current month</string>
+    <!-- %1$s = localized parent name (Mom/Dad) -->
+    <string name="calendar_day_desc_with_parent">With %1$s</string>
+    <plurals name="calendar_day_desc_events">
+        <item quantity="one">%1$d event</item>
+        <item quantity="other">%1$d events</item>
+    </plurals>
+    <!-- %1$s = formatted date, e.g. "July 30" -->
+    <string name="calendar_day_click_label">View events for %1$s</string>
+    <string name="calendar_legend_description">Legend: pink is Mom, blue is Dad, a teal strip marks school vacation</string>
+
+    <!-- Day/week grid accessibility -->
+    <!-- %1$s = time like 08:00, %2$s = formatted date -->
+    <string name="calendar_time_slot_description">Time slot at %1$s on %2$s. Tap to add event.</string>
+    <!-- %1$s = event title, %2$s = current interaction state -->
+    <string name="calendar_event_chip_description">%1$s event. %2$s</string>
+    <string name="calendar_event_dragging">Dragging</string>
+    <!-- %1$s = time like 08:15 -->
+    <string name="calendar_event_resizing_start">Resizing start time to %1$s</string>
+    <string name="calendar_event_resizing_end">Resizing end time to %1$s</string>
+    <string name="calendar_event_long_pressed">Long pressed, delete button shown</string>
+    <string name="calendar_event_chip_hint">Tap to view, long press to show delete, drag corners to resize</string>
+    <string name="calendar_event_private">Private event</string>
+    <!-- %1$s = localized parent name (Mom/Dad) -->
+    <string name="calendar_event_pickup_confirmed">Pickup confirmed by %1$s</string>
+    <string name="calendar_resize_start_handle">Resize start time. Drag up or down (15-minute steps).</string>
+    <string name="calendar_resize_end_handle">Resize end time. Drag up or down (15-minute steps).</string>
 </resources>

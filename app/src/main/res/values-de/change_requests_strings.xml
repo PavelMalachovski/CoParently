@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="change_request_inbox_title">Änderungsanfragen</string>
+    <string name="change_request_back">Zurück</string>
+    <string name="change_request_empty_title">Noch keine Änderungsanfragen</string>
+    <string name="change_request_empty_hint">Öffne einen Termin und tippe auf „Änderung anfragen“, um dem anderen Elternteil eine neue Zeit vorzuschlagen.</string>
+    <string name="change_request_incoming">Eingehend</string>
+    <string name="change_request_outgoing">Ausgehend</string>
+    <string name="change_request_status_pending">Ausstehend</string>
+    <string name="change_request_status_accepted">Angenommen</string>
+    <string name="change_request_status_declined">Abgelehnt</string>
+    <string name="change_request_status_cancelled">Zurückgezogen</string>
+    <string name="change_request_current">Aktuell</string>
+    <string name="change_request_proposed">Vorgeschlagen</string>
+    <string name="change_request_note_quoted">„%1$s“</string>
+    <string name="change_request_accept">Annehmen</string>
+    <string name="change_request_decline">Ablehnen</string>
+    <string name="change_request_withdraw">Anfrage zurückziehen</string>
+    <string name="change_request_form_title">Änderung anfragen</string>
+    <string name="change_request_currently">Aktuell: %1$s um %2$s</string>
+    <string name="change_request_proposed_new_time">Vorgeschlagene neue Zeit</string>
+    <string name="change_request_from_time">Von %1$s</string>
+    <string name="change_request_to_time">Bis %1$s</string>
+    <string name="change_request_to_unset">Bis —</string>
+    <string name="change_request_note_label">Nachricht an den anderen Elternteil (optional)</string>
+    <string name="change_request_send">Anfrage senden</string>
+    <string name="change_request_ok">OK</string>
+    <string name="change_request_cancel">Abbrechen</string>
+</resources>

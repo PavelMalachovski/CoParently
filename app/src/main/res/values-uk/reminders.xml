@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="reminder_channel_name">Нагадування про події</string>
+    <string name="reminder_channel_description">Сповіщення перед майбутніми подіями та передачею дитини</string>
+    <string name="reminder_notification_text">Початок о %1$s</string>
+</resources>

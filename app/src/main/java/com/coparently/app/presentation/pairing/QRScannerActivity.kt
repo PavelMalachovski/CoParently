@@ -6,9 +6,9 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
 import android.util.Log
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.material.icons.Icons
@@ -17,12 +17,14 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.coparently.app.R
 import com.coparently.app.data.remote.firebase.CoParentPairingService
 import com.coparently.app.data.remote.firebase.FirebaseAuthService
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -42,7 +44,7 @@ import kotlinx.coroutines.launch
  * Activity for scanning QR codes to accept co-parent pairing invitations.
  * Uses ML Kit for barcode scanning and handles camera permissions.
  */
-class QRScannerActivity : ComponentActivity() {
+class QRScannerActivity : AppCompatActivity() {
 
     private lateinit var barcodeScanner: BarcodeScanner
 
@@ -56,7 +58,7 @@ class QRScannerActivity : ComponentActivity() {
         } else {
             // Permission denied, show message and finish
             Log.w("QRScannerActivity", "Camera permission denied")
-            finishWithResult(false, "Camera permission required for QR scanning")
+            finishWithResult(false, getString(R.string.pairing_camera_permission_needed_result))
         }
     }
 
@@ -83,7 +85,7 @@ class QRScannerActivity : ComponentActivity() {
                             requestCameraPermission()
                         },
                         onBackPressed = {
-                            finishWithResult(false, "Scanning cancelled")
+                            finishWithResult(false, getString(R.string.pairing_scanning_cancelled))
                         }
                     )
                 }
@@ -121,11 +123,14 @@ class QRScannerActivity : ComponentActivity() {
                 // Valid QR code, process the invitation
                 processInvitation(qrData)
             } else {
-                finishWithResult(false, "Invalid QR code format")
+                finishWithResult(false, getString(R.string.pairing_invalid_qr_format))
             }
         } catch (e: Exception) {
             Log.e("QRScannerActivity", "Error processing QR code", e)
-            finishWithResult(false, "Error processing QR code: ${e.message}")
+            finishWithResult(
+                false,
+                getString(R.string.pairing_error_processing_qr, e.message ?: "")
+            )
         }
     }
 
@@ -175,7 +180,7 @@ class QRScannerActivity : ComponentActivity() {
         val expiryTime = qrData.timestamp + (24 * 60 * 60 * 1000) // 24 hours in milliseconds
 
         if (currentTime > expiryTime) {
-            finishWithResult(false, "QR code has expired. Please ask your partner to generate a new one.")
+            finishWithResult(false, getString(R.string.pairing_qr_expired_ask_new))
             return
         }
 
@@ -261,12 +266,12 @@ fun QRScannerScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Scan QR Code") },
+                title = { Text(stringResource(R.string.pairing_scan_qr_code)) },
                 navigationIcon = {
                     IconButton(onClick = onBackPressed) {
                         Icon(
                             imageVector = androidx.compose.material.icons.Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back"
+                            contentDescription = stringResource(R.string.pairing_back)
                         )
                     }
                 }
@@ -287,17 +292,17 @@ fun QRScannerScreen(
                         modifier = Modifier.padding(24.dp)
                     ) {
                         Text(
-                            text = "Camera permission required",
+                            text = stringResource(R.string.pairing_camera_permission_title),
                             style = MaterialTheme.typography.headlineSmall,
                             textAlign = TextAlign.Center
                         )
                         Text(
-                            text = "Please grant camera permission to scan QR codes for co-parent invitations.",
+                            text = stringResource(R.string.pairing_camera_permission_message),
                             style = MaterialTheme.typography.bodyLarge,
                             textAlign = TextAlign.Center
                         )
                         Button(onClick = onPermissionRequest) {
-                            Text("Grant Permission")
+                            Text(stringResource(R.string.pairing_grant_permission))
                         }
                     }
                 }
@@ -309,7 +314,7 @@ fun QRScannerScreen(
                     ) {
                         CircularProgressIndicator()
                         Text(
-                            text = "Processing QR code...",
+                            text = stringResource(R.string.pairing_processing_qr),
                             style = MaterialTheme.typography.bodyLarge
                         )
                     }
@@ -321,12 +326,12 @@ fun QRScannerScreen(
                         modifier = Modifier.padding(24.dp)
                     ) {
                         Text(
-                            text = "Position QR code within the camera view",
+                            text = stringResource(R.string.pairing_position_qr),
                             style = MaterialTheme.typography.headlineSmall,
                             textAlign = TextAlign.Center
                         )
                         Text(
-                            text = "Make sure the QR code is well lit and fits within the frame.",
+                            text = stringResource(R.string.pairing_qr_hint),
                             style = MaterialTheme.typography.bodyLarge,
                             textAlign = TextAlign.Center
                         )
@@ -342,7 +347,7 @@ fun QRScannerScreen(
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
-                                    text = "Camera Preview",
+                                    text = stringResource(R.string.pairing_camera_preview),
                                     style = MaterialTheme.typography.bodyLarge,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )

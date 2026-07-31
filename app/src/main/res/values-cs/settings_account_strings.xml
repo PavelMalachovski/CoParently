@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Czech translations of settings_account_strings.xml. -->
+<resources>
+    <string name="settings_co_parent_sync">Synchronizace s druhým rodičem</string>
+    <string name="settings_co_parent_sync_description">Automaticky synchronizuje události a informace o dítěti s druhým rodičem</string>
+    <string name="settings_sync">Synchronizovat</string>
+    <string name="settings_google_sync">Synchronizace s Kalendářem Google</string>
+    <string name="settings_gcal_enable_sync">Zapnout synchronizaci</string>
+    <string name="settings_signed_in_as">Přihlášeno jako: %1$s</string>
+    <string name="settings_gcal_not_signed_in">Nepřihlášeno</string>
+    <string name="settings_unknown">Neznámé</string>
+    <string name="settings_calendar_sign_out">Odhlásit se ze synchronizace kalendáře</string>
+    <string name="settings_account">Účet</string>
+    <string name="settings_account_description">Úplné odhlášení z aplikace. Pro přístup k účtu se budete muset znovu přihlásit.</string>
+    <string name="settings_account_sign_out">Odhlásit se z aplikace</string>
+    <string name="settings_pairing_title">Propojení s druhým rodičem</string>
+    <string name="settings_pairing_description">Pozvěte nebo spravujte druhého rodiče</string>
+    <string name="settings_child_info_title">Informace o dítěti</string>
+    <string name="settings_child_info_description">Léky, kroužky, alergie</string>
+    <string name="settings_custody_title">Rozvrh péče</string>
+    <string name="settings_custody_description">Nastavte schéma střídavé péče (týden po týdnu, 2-2-3 apod.)</string>
+    <string name="settings_about">O aplikaci CoPlanly</string>
+    <string name="settings_about_tagline">Sdílený kalendář pro střídavou péči</string>
+    <string name="settings_version">Verze %1$s</string>
+    <string name="settings_navigate">Otevřít</string>
+</resources>

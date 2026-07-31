@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="common_splash_tagline">Общий календарь для со-родителей</string>
+    <string name="common_checking_authentication">Проверка авторизации…</string>
+    <string name="common_confirm">Подтвердить</string>
+    <string name="common_dialog_cancel">Отмена</string>
+    <string name="common_dialog_ok">OK</string>
+    <string name="common_dismiss">Закрыть</string>
+    <string name="common_error_title">Ошибка</string>
+    <string name="common_action_retry">Повторить</string>
+    <string name="common_error_network_title">Ошибка сети</string>
+    <string name="common_error_auth_title">Ошибка авторизации</string>
+    <string name="common_error_permission_title">Доступ запрещён</string>
+    <string name="common_error_not_found_title">Не найдено</string>
+    <string name="common_error_validation_title">Ошибка проверки</string>
+    <string name="common_error_server_title">Ошибка сервера</string>
+    <string name="common_loading_events">Загрузка событий…</string>
+    <string name="common_no_data_title">Нет данных</string>
+    <string name="common_no_data_description">Здесь пока нечего показать</string>
+    <string name="common_quick_actions_title">Быстрые действия</string>
+    <string name="common_quick_action_new_event">Новое событие</string>
+    <string name="common_quick_action_new_event_subtitle">Создать новое событие календаря</string>
+    <string name="common_quick_action_today">Перейти к сегодня</string>
+    <string name="common_quick_action_today_subtitle">Перейти к текущей дате</string>
+    <string name="common_quick_action_settings">Настройки</string>
+    <string name="common_quick_action_settings_subtitle">Параметры приложения</string>
+</resources>

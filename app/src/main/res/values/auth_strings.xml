@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Authentication screen strings. Key names are deliberately distinct from the
+     auth_* keys already present in strings.xml to avoid duplicate resources. -->
+<resources>
+    <string name="auth_cd_logo">CoPlanly logo</string>
+    <string name="auth_tagline">Shared Calendar for Co-Parenting</string>
+    <string name="auth_welcome_back">Welcome Back!</string>
+    <string name="auth_create_your_account">Create Your Account</string>
+    <string name="auth_sign_in_subtitle">Sign in to continue managing your co-parenting schedule</string>
+    <string name="auth_sign_up_subtitle">Join thousands of parents working together</string>
+    <string name="auth_email_label">Email Address</string>
+    <string name="auth_email_placeholder">your@email.com</string>
+    <string name="auth_password_label">Password</string>
+    <string name="auth_password_placeholder">Enter your password</string>
+    <string name="auth_hide_password">Hide password</string>
+    <string name="auth_show_password">Show password</string>
+    <string name="auth_google_sign_in">Sign in with Google</string>
+    <string name="auth_google_sign_in_failed">Google Sign-In failed</string>
+    <string name="auth_divider_or">or</string>
+    <string name="auth_action_sign_in">Sign In</string>
+    <string name="auth_action_create_account">Create Account</string>
+    <string name="auth_action_sign_up">Sign Up</string>
+    <string name="auth_no_account_question">Don\'t have an account?</string>
+    <string name="auth_have_account_question">Already have an account?</string>
+    <string name="auth_forgot_password_link">Forgot Password?</string>
+</resources>

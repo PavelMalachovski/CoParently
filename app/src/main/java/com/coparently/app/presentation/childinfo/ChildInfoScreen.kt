@@ -12,8 +12,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.coparently.app.R
 import com.coparently.app.domain.model.Activity
 import com.coparently.app.domain.model.ChildInfo
 import com.coparently.app.domain.model.EmergencyContact
@@ -41,13 +43,16 @@ fun ChildInfoScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Child Information") },
+                title = { Text(stringResource(R.string.childinfo_screen_title)) },
                 navigationIcon = {
                     IconButton(onClick = {
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         onNavigateBack()
                     }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.childinfo_back)
+                        )
                     }
                 },
                 actions = {
@@ -56,14 +61,20 @@ fun ChildInfoScreen(
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             currentChildInfo?.let { onEditClick(it.id) }
                         }) {
-                            Icon(Icons.Default.Edit, contentDescription = "Edit")
+                            Icon(
+                                Icons.Default.Edit,
+                                contentDescription = stringResource(R.string.childinfo_edit)
+                            )
                         }
                     }
                     IconButton(onClick = {
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         viewModel.syncChildInfo()
                     }) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Sync")
+                        Icon(
+                            Icons.Default.Refresh,
+                            contentDescription = stringResource(R.string.childinfo_sync)
+                        )
                     }
                 }
             )
@@ -97,7 +108,7 @@ fun ChildInfoScreen(
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             viewModel.loadChildInfo()
                         }) {
-                            Text("Retry")
+                            Text(stringResource(R.string.childinfo_retry))
                         }
                     }
                 }
@@ -110,7 +121,7 @@ fun ChildInfoScreen(
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Text(
-                                text = "No child information yet",
+                                text = stringResource(R.string.childinfo_empty_state),
                                 style = MaterialTheme.typography.bodyLarge
                             )
                             Spacer(modifier = Modifier.height(8.dp))
@@ -120,7 +131,7 @@ fun ChildInfoScreen(
                             }) {
                                 Icon(Icons.Default.Add, contentDescription = null)
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("Add Child Info")
+                                Text(stringResource(R.string.childinfo_title_add))
                             }
                         }
                     } else {
@@ -159,7 +170,7 @@ fun ChildInfoContent(childInfo: ChildInfo) {
                     )
                     childInfo.dateOfBirth?.let { dob ->
                         Text(
-                            text = "Date of Birth: ${dob.toLocalDate()}",
+                            text = stringResource(R.string.childinfo_dob_value, dob.toLocalDate().toString()),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -171,7 +182,10 @@ fun ChildInfoContent(childInfo: ChildInfo) {
         // Medications
         if (childInfo.medications.isNotEmpty()) {
             item {
-                SectionHeader(title = "Medications", icon = Icons.Default.Favorite)
+                SectionHeader(
+                    title = stringResource(R.string.childinfo_section_medications),
+                    icon = Icons.Default.Favorite
+                )
             }
             items(childInfo.medications) { medication ->
                 MedicationCard(medication = medication)
@@ -181,7 +195,10 @@ fun ChildInfoContent(childInfo: ChildInfo) {
         // Activities
         if (childInfo.activities.isNotEmpty()) {
             item {
-                SectionHeader(title = "Activities & Classes", icon = Icons.Default.Star)
+                SectionHeader(
+                    title = stringResource(R.string.childinfo_section_activities),
+                    icon = Icons.Default.Star
+                )
             }
             items(childInfo.activities) { activity ->
                 ActivityCard(activity = activity)
@@ -191,7 +208,10 @@ fun ChildInfoContent(childInfo: ChildInfo) {
         // Allergies
         if (childInfo.allergies.isNotEmpty()) {
             item {
-                SectionHeader(title = "Allergies", icon = Icons.Default.Warning)
+                SectionHeader(
+                    title = stringResource(R.string.childinfo_section_allergies),
+                    icon = Icons.Default.Warning
+                )
             }
             item {
                 Card(
@@ -205,7 +225,7 @@ fun ChildInfoContent(childInfo: ChildInfo) {
                     ) {
                         childInfo.allergies.forEach { allergy ->
                             Text(
-                                text = "• $allergy",
+                                text = stringResource(R.string.childinfo_allergy_bullet, allergy),
                                 style = MaterialTheme.typography.bodyLarge,
                                 color = MaterialTheme.colorScheme.onErrorContainer
                             )
@@ -218,7 +238,10 @@ fun ChildInfoContent(childInfo: ChildInfo) {
         // Medical Notes
         childInfo.medicalNotes?.let { notes ->
             item {
-                SectionHeader(title = "Medical Notes", icon = Icons.Default.Info)
+                SectionHeader(
+                    title = stringResource(R.string.childinfo_section_medical_notes),
+                    icon = Icons.Default.Info
+                )
             }
             item {
                 Card(modifier = Modifier.fillMaxWidth()) {
@@ -234,7 +257,10 @@ fun ChildInfoContent(childInfo: ChildInfo) {
         // Emergency Contacts
         if (childInfo.emergencyContacts.isNotEmpty()) {
             item {
-                SectionHeader(title = "Emergency Contacts", icon = Icons.Default.Phone)
+                SectionHeader(
+                    title = stringResource(R.string.childinfo_section_emergency_contacts),
+                    icon = Icons.Default.Phone
+                )
             }
             items(childInfo.emergencyContacts) { contact ->
                 EmergencyContactCard(contact = contact)
@@ -244,7 +270,10 @@ fun ChildInfoContent(childInfo: ChildInfo) {
         // School Info
         childInfo.schoolInfo?.let { school ->
             item {
-                SectionHeader(title = "School Information", icon = Icons.Default.Place)
+                SectionHeader(
+                    title = stringResource(R.string.childinfo_section_school),
+                    icon = Icons.Default.Place
+                )
             }
             item {
                 SchoolInfoCard(schoolInfo = school)

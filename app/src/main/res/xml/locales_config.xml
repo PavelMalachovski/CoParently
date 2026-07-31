@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Locales supported by the app. Android 13+ reads this to offer per-app language
+  selection in system settings; keep it in sync with the values-* resource folders
+  and with AppLanguage in presentation/settings.
+-->
+<locale-config xmlns:android="http://schemas.android.com/apk/res/android">
+    <locale android:name="en" />
+    <locale android:name="cs" />
+    <locale android:name="de" />
+    <locale android:name="ru" />
+    <locale android:name="uk" />
+</locale-config>

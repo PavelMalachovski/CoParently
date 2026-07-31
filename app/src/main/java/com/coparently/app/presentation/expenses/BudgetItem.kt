@@ -14,7 +14,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.coparently.app.R
 import com.coparently.app.domain.model.Budget
 import kotlin.math.roundToInt
 
@@ -48,11 +50,15 @@ fun BudgetItem(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = budget.category.displayName,
+                    text = stringResource(budget.category.labelRes),
                     style = MaterialTheme.typography.titleMedium
                 )
                 Text(
-                    text = "${format.format(spentAmount)} / ${format.format(budget.monthlyLimit)}",
+                    text = stringResource(
+                        R.string.budget_spent_of_limit,
+                        format.format(spentAmount),
+                        format.format(budget.monthlyLimit)
+                    ),
                     style = MaterialTheme.typography.bodyMedium
                 )
             }
@@ -66,7 +72,7 @@ fun BudgetItem(
             )
 
             Text(
-                text = "${(progress * 100).roundToInt()}% used",
+                text = stringResource(R.string.budget_percent_used, (progress * 100).roundToInt()),
                 style = MaterialTheme.typography.bodySmall,
                 color = color
             )

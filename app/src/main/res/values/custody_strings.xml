@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Custody setup screen strings. Kept out of strings.xml because
+     strings.xml is gitignored in this project (it holds local OAuth values). -->
+<resources>
+    <string name="custody_title">Custody Schedule</string>
+    <string name="custody_back">Back</string>
+    <string name="custody_save_button">Save Custody Schedule</string>
+    <string name="custody_select_schedule_type">Select Schedule Type</string>
+    <string name="custody_pattern_start_date">Pattern Start Date</string>
+    <string name="custody_start_date_hint">This is the anchor date - the pattern will repeat from this day</string>
+    <string name="custody_who_starts_first">Who Starts First?</string>
+    <string name="custody_mom_starts_first">Mom starts first</string>
+    <string name="custody_dad_starts_first">Dad starts first</string>
+    <string name="custody_custom_pattern">Custom Pattern</string>
+    <string name="custody_custom_pattern_hint">Tap days to assign to Mom (pink). Remaining days go to Dad (blue).</string>
+    <!-- Abbreviated week label in the custom-pattern day grid, e.g. "W1". -->
+    <string name="custody_week_abbrev">W%1$d</string>
+    <!-- Abbreviated day label in the custom-pattern day grid, e.g. "D3". -->
+    <string name="custody_day_abbrev">D%1$d</string>
+    <string name="custody_week1_to_mom">Week 1 → Mom</string>
+    <string name="custody_week2_to_mom">Week 2 → Mom</string>
+    <string name="custody_preview">Preview</string>
+    <string name="custody_next_14_days">Next 14 days:</string>
+    <string name="custody_mom">Mom</string>
+    <string name="custody_dad">Dad</string>
+    <string name="custody_ok">OK</string>
+    <string name="custody_cancel">Cancel</string>
+    <!-- Custody pattern names (UI labels for CustodyModelType). -->
+    <string name="custody_model_week_on_week_off">Week On / Week Off</string>
+    <string name="custody_model_two_two_three">2-2-3 Split</string>
+    <string name="custody_model_three_four_four_three">3-4-4-3 Split</string>
+    <string name="custody_model_custom">Custom Schedule</string>
+    <string name="custody_model_week_on_week_off_desc">One parent has the child for a full week, then they switch.</string>
+    <string name="custody_model_two_two_three_desc">2 days, 2 days, 3 days pattern. More frequent transitions.</string>
+    <string name="custody_model_three_four_four_three_desc">3 days, 4 days alternating. Balanced mid-week and weekend time.</string>
+    <string name="custody_model_custom_desc">Create your own schedule pattern.</string>
+</resources>

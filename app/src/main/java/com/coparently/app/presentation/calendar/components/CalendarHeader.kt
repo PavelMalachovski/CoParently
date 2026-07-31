@@ -77,7 +77,7 @@ fun CalendarHeader(
                 IconButton(onClick = onClick) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ViewList,
-                        contentDescription = "Weekly summary",
+                        contentDescription = stringResource(R.string.calendar_weekly_summary),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
@@ -260,7 +260,7 @@ private fun ChangeRequestsButton(
         ) {
             Icon(
                 imageVector = Icons.Default.SwapHoriz,
-                contentDescription = "Change requests",
+                contentDescription = stringResource(R.string.calendar_change_requests),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }

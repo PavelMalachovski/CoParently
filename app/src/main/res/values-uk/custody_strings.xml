@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="custody_title">Графік опіки</string>
+    <string name="custody_back">Назад</string>
+    <string name="custody_save_button">Зберегти графік опіки</string>
+    <string name="custody_select_schedule_type">Виберіть тип графіка</string>
+    <string name="custody_pattern_start_date">Дата початку циклу</string>
+    <string name="custody_start_date_hint">Це опорна дата — цикл повторюватиметься починаючи з цього дня</string>
+    <string name="custody_who_starts_first">Хто починає першим?</string>
+    <string name="custody_mom_starts_first">Мама починає першою</string>
+    <string name="custody_dad_starts_first">Тато починає першим</string>
+    <string name="custody_custom_pattern">Власний шаблон</string>
+    <string name="custody_custom_pattern_hint">Натискайте на дні, щоб призначити їх мамі (рожевий). Решта днів дістанеться татові (синій).</string>
+    <string name="custody_week_abbrev">Т%1$d</string>
+    <string name="custody_day_abbrev">Д%1$d</string>
+    <string name="custody_week1_to_mom">Тиждень 1 → Мама</string>
+    <string name="custody_week2_to_mom">Тиждень 2 → Мама</string>
+    <string name="custody_preview">Попередній перегляд</string>
+    <string name="custody_next_14_days">Наступні 14 днів:</string>
+    <string name="custody_mom">Мама</string>
+    <string name="custody_dad">Тато</string>
+    <string name="custody_ok">OK</string>
+    <string name="custody_cancel">Скасувати</string>
+    <string name="custody_model_week_on_week_off">Тиждень через тиждень</string>
+    <string name="custody_model_two_two_three">Схема 2-2-3</string>
+    <string name="custody_model_three_four_four_three">Схема 3-4-4-3</string>
+    <string name="custody_model_custom">Власний графік</string>
+    <string name="custody_model_week_on_week_off_desc">Дитина цілий тиждень в одного з батьків, потім батьки міняються.</string>
+    <string name="custody_model_two_two_three_desc">Схема 2 дні, 2 дні, 3 дні. Частіші переходи.</string>
+    <string name="custody_model_three_four_four_three_desc">Чергування 3 і 4 днів. Збалансований час у будні та вихідні.</string>
+    <string name="custody_model_custom_desc">Створіть власний шаблон графіка.</string>
+</resources>

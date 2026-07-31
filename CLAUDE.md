@@ -54,9 +54,9 @@ When touching the UI, keep these invariants:
    mid-list.
 9. **User-facing strings** live in tracked, feature-named `res/values/*_strings.xml`
    files (`chat_strings.xml`, `expenses_strings.xml`, `settings_account_strings.xml`,
-   `navigation.xml`, `event_preview.xml`), never in the gitignored `strings.xml`.
-   Some keys already exist in the local `strings.xml`; pick distinct names in the
-   tracked files (e.g. `settings_gcal_enable_sync`) so a fresh clone still builds.
+   `navigation.xml`, `event_preview.xml`, …). All `strings.xml` files are tracked too
+   (secrets were moved to BuildConfig long ago); prefer the feature files for new keys.
+   Never hardcode user-visible text in composables — see "Localization (i18n)" below.
 
 DB note: installs older than the migration chain (schema < v5) are wiped via
 `fallbackToDestructiveMigrationFrom(1,2,3,4)` in `DatabaseModule` — a v3 install used to
@@ -145,15 +145,44 @@ Data flow: UI → ViewModel → UseCase → Repository → Room (source of truth
   `firebase deploy --only firestore:rules,storage` — until then the live project runs
   whatever was last deployed and `change_requests` returns `PERMISSION_DENIED`.
   `firestore.rules.simple` remains as the permissive fallback.
-- **All `strings.xml` files are gitignored** (they hold OAuth values locally), so a fresh
-  clone has no string resources and cannot build — see audit §2.1. New string resources
-  must go into separately named, tracked files (e.g. `reminders.xml`), never into
-  `strings.xml`. Real secrets belong in `gradle.properties`/env vars like `GEMINI_API_KEY`.
+- `strings.xml` is **no longer gitignored** (older docs/audit §2.1 claim otherwise —
+  stale). No secrets live in resources: the OAuth client secret is injected via
+  BuildConfig (`GOOGLE_CLIENT_SECRET` gradle property / env var), `GEMINI_API_KEY`
+  likewise. Real secrets belong in `gradle.properties`/env vars only.
+- User-facing strings produced **inside ViewModels/services** (e.g.
+  `GoogleCalendarSyncState.message`, sync/status errors) are still hardcoded English —
+  extracting them needs a resource-provider abstraction and is a tracked follow-up of the
+  July 2026 localization pass. Don't inject `Context` into ViewModels ad hoc to "fix" one.
 - Calendar range/day queries now match multi-day & overnight events by overlap
   (`getSingleEventsByDateRange` / `getEventsByDate`), not start date only.
 - Unit tests for ChildInfo/Pairing/Settings/Sync ViewModels were removed as stale
   (they targeted long-gone APIs); rewrite them against the current constructors when
   touching those features.
+
+## Localization (i18n) — July 2026, keep consistent
+
+The app ships in 5 languages: **English (base `values/`), Czech, German, Russian,
+Ukrainian** (`values-cs/`, `values-de/`, `values-ru/`, `values-uk/`). Rules:
+
+- **Language selection**: device locale by default, plus a manual per-app override — the
+  "Language" card in Settings (`presentation/settings/AppLanguage.kt`,
+  `AppCompatDelegate.setApplicationLocales`). The choice is persisted by the
+  `autoStoreLocales` manifest service and mirrored to the Android 13+ system per-app
+  language setting. There is no DataStore/ViewModel state for it — AppCompat is the
+  source of truth.
+- **Infra invariants**: `MainActivity`/`QRScannerActivity` must stay `AppCompatActivity`
+  (not `ComponentActivity`) and `Theme.CoPlanly` must stay an AppCompat theme — per-app
+  locales silently stop working otherwise. `res/xml/locales_config.xml`, the `AppLanguage`
+  enum, and the `values-*` folders must list the same locale set.
+- **Adding a string** = add the key to the feature's base `values/<feature>_strings.xml`
+  AND to all four locale variants of that file. Missing translations fall back to English
+  at runtime (the `MissingTranslation` lint check is a warning, not an error).
+- In composables use `stringResource(...)`; for text consumed inside non-composable
+  lambdas (snackbars, coroutines) capture the string in composable scope first. Language
+  endonyms in the picker ("Čeština", "Русский", …) are `translatable="false"`.
+- Dates/day/month names come from `java.time` formatters with the default locale —
+  never from string arrays.
+- There is no `values-en/` — base `values/` IS English; don't recreate it.
 
 ## Language conventions
 

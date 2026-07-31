@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_language_title">Jazyk</string>
+    <string name="settings_language_description">Jazyk rozhraní aplikace. „Podle systému" se řídí jazykem zařízení.</string>
+    <string name="settings_language_system">Podle systému</string>
+    <string name="settings_language_picker_title">Vyberte jazyk</string>
+    <string name="settings_language_picker_cancel">Zrušit</string>
+</resources>

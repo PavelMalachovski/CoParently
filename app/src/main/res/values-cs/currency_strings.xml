@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="currency_settings_title">Měna</string>
+    <string name="currency_settings_default">Výchozí měna</string>
+    <string name="currency_settings_description">Použije se pro nové výdaje. U jednotlivého výdaje ji můžete změnit.</string>
+    <string name="currency_picker_title">Vyberte výchozí měnu</string>
+    <string name="currency_picker_cancel">Zrušit</string>
+    <string name="currency_selector_label">Měna</string>
+</resources>

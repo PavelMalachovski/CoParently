@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Main app theme -->
-    <style name="Theme.CoPlanly" parent="android:Theme.Material.Light.NoActionBar" />
+    <!-- Main app theme. AppCompat parent is required by AppCompatActivity, which in turn
+         is required for per-app language support (AppCompatDelegate.setApplicationLocales);
+         all real theming happens in Compose (CoPlanlyTheme). -->
+    <style name="Theme.CoPlanly" parent="Theme.AppCompat.Light.NoActionBar" />
 
     <!-- Splash Screen theme for Android 12+ -->
     <!-- Based on Material3 SplashScreen API -->

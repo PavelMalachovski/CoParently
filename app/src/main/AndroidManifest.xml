@@ -22,6 +22,7 @@
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
+        android:localeConfig="@xml/locales_config"
         android:theme="@style/Theme.CoPlanly.Starting"
         android:enableOnBackInvokedCallback="true"
         tools:targetApi="33">
@@ -53,6 +54,20 @@
                     android:pathPrefix="/pair" />
             </intent-filter>
         </activity>
+
+        <!--
+          Persists the per-app language chosen via AppCompatDelegate.setApplicationLocales
+          across process restarts (and syncs it to the system per-app language setting on
+          Android 13+). The service is never started; AppCompat only reads its meta-data.
+        -->
+        <service
+            android:name="androidx.appcompat.app.AppLocalesMetadataHolderService"
+            android:enabled="false"
+            android:exported="false">
+            <meta-data
+                android:name="autoStoreLocales"
+                android:value="true" />
+        </service>
 
         <!-- Firebase Cloud Messaging Service -->
         <service

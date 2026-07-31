@@ -69,7 +69,7 @@ fun AddBudgetSheet(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 OutlinedTextField(
-                    value = category.displayName,
+                    value = stringResource(category.labelRes),
                     onValueChange = {},
                     readOnly = true,
                     label = { Text(stringResource(R.string.budget_field_category)) },
@@ -83,7 +83,7 @@ fun AddBudgetSheet(
                 ) {
                     ExpenseCategory.values().forEach { cat ->
                         DropdownMenuItem(
-                            text = { Text(cat.displayName) },
+                            text = { Text(stringResource(cat.labelRes)) },
                             onClick = {
                                 category = cat
                                 categoryExpanded = false

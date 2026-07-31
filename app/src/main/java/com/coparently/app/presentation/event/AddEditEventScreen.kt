@@ -116,15 +116,16 @@ import java.util.UUID
 
 /**
  * Reminder lead-time options offered in the event form, in minutes before the
- * event start (null = no reminder). Stored as [Event.reminderMinutes].
+ * event start (null = no reminder), paired with the label resource id.
+ * Stored as [Event.reminderMinutes].
  */
-private val REMINDER_OPTIONS: List<Pair<Int?, String>> = listOf(
-    null to "None",
-    10 to "10 min",
-    30 to "30 min",
-    60 to "1 hour",
-    120 to "2 hours",
-    1440 to "1 day"
+private val REMINDER_OPTIONS: List<Pair<Int?, Int>> = listOf(
+    null to R.string.event_reminder_none,
+    10 to R.string.event_reminder_10_min,
+    30 to R.string.event_reminder_30_min,
+    60 to R.string.event_reminder_1_hour,
+    120 to R.string.event_reminder_2_hours,
+    1440 to R.string.event_reminder_1_day
 )
 
 /**
@@ -204,6 +205,12 @@ fun AddEditEventScreen(
     // gets a subtle, dismissible hint (with a Clear action) instead of a silent prefill.
     var draftRestored by remember { mutableStateOf(false) }
 
+    // Strings used inside non-composable lambdas/effects must be resolved here,
+    // in composable scope (stringResource cannot be called in those lambdas).
+    val endBeforeStartMessage = stringResource(R.string.event_form_end_before_start)
+    val draftRestoredMessage = stringResource(R.string.event_form_draft_restored)
+    val draftClearLabel = stringResource(R.string.event_form_clear)
+
     // Validation states
     var titleError by remember { mutableStateOf<String?>(null) }
     var descriptionError by remember { mutableStateOf<String?>(null) }
@@ -231,7 +238,7 @@ fun AddEditEventScreen(
 
         if (endDateTime.isBefore(startDateTime) || endDateTime.isEqual(startDateTime)) {
             showTimeValidationError = true
-            timeValidationMessage = "End time must be after start time"
+            timeValidationMessage = endBeforeStartMessage
         } else {
             showTimeValidationError = false
             timeValidationMessage = ""
@@ -297,8 +304,8 @@ fun AddEditEventScreen(
     LaunchedEffect(draftRestored) {
         if (draftRestored) {
             val result = snackbarHostState.showSnackbar(
-                message = "Draft restored",
-                actionLabel = "Clear",
+                message = draftRestoredMessage,
+                actionLabel = draftClearLabel,
                 duration = SnackbarDuration.Long
             )
             if (result == SnackbarResult.ActionPerformed) {
@@ -427,7 +434,7 @@ fun AddEditEventScreen(
                 if (imageUploadFailed) {
                     Toast.makeText(
                         context,
-                        "Photo upload failed — event saved without the new photo",
+                        context.getString(R.string.event_form_photo_upload_failed),
                         Toast.LENGTH_LONG
                     ).show()
                 }
@@ -437,7 +444,7 @@ fun AddEditEventScreen(
                 // snackbar's lifetime and used to leave the button dead in the meantime.
                 isSaving = false
                 snackbarHostState.showSnackbar(
-                    message = "Failed to save event: ${e.message}",
+                    message = context.getString(R.string.event_form_save_failed, e.message),
                     duration = SnackbarDuration.Long
                 )
             }
@@ -449,7 +456,11 @@ fun AddEditEventScreen(
             TopAppBar(
                 title = {
                     Text(
-                        if (eventId == null) "New Event" else "Edit Event",
+                        if (eventId == null) {
+                            stringResource(R.string.event_form_title_new)
+                        } else {
+                            stringResource(R.string.event_form_title_edit)
+                        },
                         style = MaterialTheme.typography.headlineSmall
                     )
                 },
@@ -460,7 +471,7 @@ fun AddEditEventScreen(
                     }) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Cancel"
+                            contentDescription = stringResource(R.string.event_form_cancel)
                         )
                     }
                 },
@@ -476,7 +487,7 @@ fun AddEditEventScreen(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.SwapHoriz,
-                                contentDescription = "Request change"
+                                contentDescription = stringResource(R.string.event_form_cd_request_change)
                             )
                         }
                     }
@@ -499,7 +510,7 @@ fun AddEditEventScreen(
                             } else {
                                 Icon(
                                     imageVector = Icons.Default.Delete,
-                                    contentDescription = "Delete event",
+                                    contentDescription = stringResource(R.string.event_form_cd_delete_event),
                                     tint = MaterialTheme.colorScheme.error
                                 )
                             }

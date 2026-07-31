@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="auth_cd_logo">Logo CoPlanly</string>
+    <string name="auth_tagline">Sdílený kalendář pro společné rodičovství</string>
+    <string name="auth_welcome_back">Vítejte zpět!</string>
+    <string name="auth_create_your_account">Vytvořte si účet</string>
+    <string name="auth_sign_in_subtitle">Přihlaste se a pokračujte ve správě společného rodičovského plánu</string>
+    <string name="auth_sign_up_subtitle">Přidejte se k tisícům rodičů, kteří spolupracují</string>
+    <string name="auth_email_label">E-mailová adresa</string>
+    <string name="auth_email_placeholder">vas@email.cz</string>
+    <string name="auth_password_label">Heslo</string>
+    <string name="auth_password_placeholder">Zadejte heslo</string>
+    <string name="auth_hide_password">Skrýt heslo</string>
+    <string name="auth_show_password">Zobrazit heslo</string>
+    <string name="auth_google_sign_in">Přihlásit se přes Google</string>
+    <string name="auth_google_sign_in_failed">Přihlášení přes Google se nezdařilo</string>
+    <string name="auth_divider_or">nebo</string>
+    <string name="auth_action_sign_in">Přihlásit se</string>
+    <string name="auth_action_create_account">Vytvořit účet</string>
+    <string name="auth_action_sign_up">Zaregistrovat se</string>
+    <string name="auth_no_account_question">Nemáte účet?</string>
+    <string name="auth_have_account_question">Už máte účet?</string>
+    <string name="auth_forgot_password_link">Zapomněli jste heslo?</string>
+</resources>

@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- PairingScreen -->
+    <string name="pairing_screen_title">Kopplung mit Co-Elternteil</string>
+    <string name="pairing_back">Zurück</string>
+    <string name="pairing_paired_with_label">Gekoppelt mit</string>
+    <string name="pairing_unpair_button">Kopplung aufheben</string>
+    <string name="pairing_partner_email_label">E-Mail des Partners</string>
+    <string name="pairing_send_email_invitation">Einladung per E-Mail senden</string>
+    <string name="pairing_share_qr_code">QR-Code teilen</string>
+    <string name="pairing_scan_qr_code">QR-Code scannen</string>
+    <string name="pairing_pending_invitations_title">Ausstehende Einladungen</string>
+    <string name="pairing_unknown_sender">Unbekannt</string>
+    <string name="pairing_accept_button">Annehmen</string>
+    <string name="pairing_reject_button">Ablehnen</string>
+    <string name="pairing_qr_dialog_title">QR-Code für Co-Eltern-Einladung</string>
+    <string name="pairing_qr_dialog_message">Teilen Sie diesen QR-Code mit dem anderen Elternteil. Durch Scannen kann er Ihre Einladung annehmen.</string>
+    <string name="pairing_qr_code_content_description">QR-Code zur Kopplung</string>
+    <string name="pairing_qr_expired">QR-Code ist abgelaufen</string>
+    <string name="pairing_generate_new_qr_code">Neuen QR-Code erstellen</string>
+    <string name="pairing_time_remaining_hours">Noch %1$d Std. %2$d Min.</string>
+    <string name="pairing_time_remaining_minutes">Noch %1$d Min. %2$d Sek.</string>
+    <string name="pairing_time_remaining_seconds">Noch %1$d Sek.</string>
+    <string name="pairing_expires_in">Läuft ab in: %1$s</string>
+    <string name="pairing_close">Schließen</string>
+    <string name="pairing_confirm_title">Mit Co-Elternteil koppeln?</string>
+    <string name="pairing_confirm_message">Möchten Sie sich wirklich mit %1$s (%2$s) koppeln? Sie können dann Kalendereinträge teilen und miteinander kommunizieren.</string>
+    <string name="pairing_accept_pairing">Kopplung annehmen</string>
+    <string name="pairing_cancel">Abbrechen</string>
+    <string name="pairing_unknown_user">Unbekannter Benutzer</string>
+
+    <!-- QRScannerActivity results -->
+    <string name="pairing_camera_permission_needed_result">Zum Scannen von QR-Codes ist die Kameraberechtigung erforderlich</string>
+    <string name="pairing_scanning_cancelled">Scannen abgebrochen</string>
+    <string name="pairing_invalid_qr_format">Ungültiges QR-Code-Format</string>
+    <string name="pairing_error_processing_qr">Fehler beim Verarbeiten des QR-Codes: %1$s</string>
+    <string name="pairing_qr_expired_ask_new">QR-Code ist abgelaufen. Bitten Sie Ihren Partner, einen neuen zu erstellen.</string>
+
+    <!-- QRScannerScreen -->
+    <string name="pairing_camera_permission_title">Kameraberechtigung erforderlich</string>
+    <string name="pairing_camera_permission_message">Bitte erteilen Sie die Kameraberechtigung, um QR-Codes für Einladungen zu scannen.</string>
+    <string name="pairing_grant_permission">Berechtigung erteilen</string>
+    <string name="pairing_processing_qr">QR-Code wird verarbeitet…</string>
+    <string name="pairing_position_qr">Halten Sie den QR-Code in das Kamerabild</string>
+    <string name="pairing_qr_hint">Achten Sie darauf, dass der QR-Code gut beleuchtet ist und vollständig in den Rahmen passt.</string>
+    <string name="pairing_camera_preview">Kameravorschau</string>
+</resources>

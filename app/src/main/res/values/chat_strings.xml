@@ -16,4 +16,10 @@
     <string name="chat_status_sent">Sent</string>
     <string name="chat_sending_ellipsis">Sending…</string>
     <string name="chat_failed_to_send">Failed to send</string>
+    <string name="chat_title_fallback">Chat</string>
+    <string name="chat_back">Back</string>
+    <string name="chat_request_change">Request change</string>
+    <string name="chat_request_change_title">Request a change</string>
+    <string name="chat_no_upcoming_events">No upcoming events to propose a change for.</string>
+    <string name="chat_pick_event_to_reschedule">Pick the event you\'d like to reschedule:</string>
 </resources>

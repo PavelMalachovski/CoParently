@@ -353,7 +353,7 @@ private fun ExpenseCategoryDropdown(
         modifier = Modifier.fillMaxWidth()
     ) {
         OutlinedTextField(
-            value = category.displayName,
+            value = stringResource(category.labelRes),
             onValueChange = {},
             readOnly = true,
             label = { Text(stringResource(R.string.expense_field_category)) },
@@ -368,7 +368,7 @@ private fun ExpenseCategoryDropdown(
         ) {
             ExpenseCategory.values().forEach { cat ->
                 DropdownMenuItem(
-                    text = { Text(cat.displayName) },
+                    text = { Text(stringResource(cat.labelRes)) },
                     onClick = { onCategorySelected(cat) }
                 )
             }

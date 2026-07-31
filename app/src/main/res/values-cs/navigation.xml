@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="nav_home">Domů</string>
+    <string name="nav_calendar">Kalendář</string>
+    <string name="nav_chat">Chat</string>
+    <string name="nav_expenses">Výdaje</string>
+    <string name="nav_settings">Nastavení</string>
+    <string name="expenses_title">Výdaje</string>
+    <string name="expenses_open_budgets">Rozpočty</string>
+    <string name="budgets_title">Rozpočty</string>
+    <string name="budgets_back">Zpět</string>
+    <string name="conversations_title">Zprávy</string>
+</resources>

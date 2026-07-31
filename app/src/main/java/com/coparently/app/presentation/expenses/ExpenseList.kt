@@ -136,14 +136,14 @@ fun ExpenseItem(
     val subtitle = if (payerName != null) {
         stringResource(
             R.string.expenses_row_subtitle,
-            expense.category.displayName,
+            stringResource(expense.category.labelRes),
             payerName,
             expense.date.format(dateFormatter)
         )
     } else {
         stringResource(
             R.string.expenses_row_subtitle_unknown_payer,
-            expense.category.displayName,
+            stringResource(expense.category.labelRes),
             expense.date.format(dateFormatter)
         )
     }

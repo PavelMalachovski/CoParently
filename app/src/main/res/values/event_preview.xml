@@ -11,4 +11,5 @@
     <!-- Shown after deleting an event from the preview sheet; offers an Undo. -->
     <string name="event_deleted_message">Event deleted</string>
     <string name="event_deleted_undo">Undo</string>
+    <string name="event_preview_photo">Event photo</string>
 </resources>

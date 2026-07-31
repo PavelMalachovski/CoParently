@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="common_splash_tagline">Sdílený kalendář pro rodiče</string>
+    <string name="common_checking_authentication">Ověřování přihlášení…</string>
+    <string name="common_confirm">Potvrdit</string>
+    <string name="common_dialog_cancel">Zrušit</string>
+    <string name="common_dialog_ok">OK</string>
+    <string name="common_dismiss">Zavřít</string>
+    <string name="common_error_title">Chyba</string>
+    <string name="common_action_retry">Opakovat</string>
+    <string name="common_error_network_title">Chyba sítě</string>
+    <string name="common_error_auth_title">Chyba přihlášení</string>
+    <string name="common_error_permission_title">Přístup odepřen</string>
+    <string name="common_error_not_found_title">Nenalezeno</string>
+    <string name="common_error_validation_title">Neplatné údaje</string>
+    <string name="common_error_server_title">Chyba serveru</string>
+    <string name="common_loading_events">Načítání událostí…</string>
+    <string name="common_no_data_title">Žádná data</string>
+    <string name="common_no_data_description">Zatím tu není nic k zobrazení</string>
+    <string name="common_quick_actions_title">Rychlé akce</string>
+    <string name="common_quick_action_new_event">Nová událost</string>
+    <string name="common_quick_action_new_event_subtitle">Vytvořit novou událost v kalendáři</string>
+    <string name="common_quick_action_today">Přejít na dnešek</string>
+    <string name="common_quick_action_today_subtitle">Přejít na aktuální datum</string>
+    <string name="common_quick_action_settings">Nastavení</string>
+    <string name="common_quick_action_settings_subtitle">Předvolby aplikace</string>
+</resources>

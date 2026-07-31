@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Shared component strings (dialogs, error displays, splash, loading states).
+     Key names are deliberately distinct from the common_* keys already present
+     in strings.xml to avoid duplicate resources. -->
+<resources>
+    <string name="common_splash_tagline">Shared calendar for co-parents</string>
+    <string name="common_checking_authentication">Checking authentication…</string>
+    <string name="common_confirm">Confirm</string>
+    <string name="common_dialog_cancel">Cancel</string>
+    <string name="common_dialog_ok">OK</string>
+    <string name="common_dismiss">Dismiss</string>
+    <string name="common_error_title">Error</string>
+    <string name="common_action_retry">Retry</string>
+    <string name="common_error_network_title">Network Error</string>
+    <string name="common_error_auth_title">Authentication Error</string>
+    <string name="common_error_permission_title">Permission Denied</string>
+    <string name="common_error_not_found_title">Not Found</string>
+    <string name="common_error_validation_title">Validation Error</string>
+    <string name="common_error_server_title">Server Error</string>
+    <string name="common_loading_events">Loading events…</string>
+    <string name="common_no_data_title">No Data</string>
+    <string name="common_no_data_description">There\'s nothing to show here yet</string>
+    <string name="common_quick_actions_title">Quick Actions</string>
+    <string name="common_quick_action_new_event">New Event</string>
+    <string name="common_quick_action_new_event_subtitle">Create a new calendar event</string>
+    <string name="common_quick_action_today">Jump to Today</string>
+    <string name="common_quick_action_today_subtitle">Navigate to current date</string>
+    <string name="common_quick_action_settings">Settings</string>
+    <string name="common_quick_action_settings_subtitle">App preferences</string>
+</resources>

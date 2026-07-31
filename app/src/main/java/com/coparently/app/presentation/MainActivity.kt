@@ -3,11 +3,11 @@ package com.coparently.app.presentation
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeOut
@@ -50,9 +50,13 @@ val LocalGoogleSignInCallback = staticCompositionLocalOf<((android.content.Inten
  * Main Activity for CoPlanly app.
  * Entry point of the application.
  * Handles Google Sign-In result, Push Notifications, and Splash Screen (Android 12+).
+ *
+ * Extends [AppCompatActivity] (not ComponentActivity) so that per-app language
+ * preferences set via AppCompatDelegate.setApplicationLocales are applied to this
+ * activity's configuration on every recreation, including on Android < 13.
  */
 @AndroidEntryPoint
-class MainActivity : ComponentActivity() {
+class MainActivity : AppCompatActivity() {
 
     @Inject
     lateinit var notificationManager: NotificationManager

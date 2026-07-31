@@ -73,6 +73,10 @@ fun SettingsScreen(
     val darkTheme by settingsViewModel.darkThemeFlow.collectAsState()
     val defaultCurrency by settingsViewModel.defaultCurrency.collectAsState()
     var showCurrencyPicker by remember { mutableStateOf(false) }
+    var showLanguagePicker by remember { mutableStateOf(false) }
+    // AppCompat is the source of truth for the per-app language; selecting a new value
+    // recreates the activity, so a plain remember is enough to keep the label fresh.
+    var currentLanguage by remember { mutableStateOf(AppLanguage.current()) }
 
     Scaffold(
         topBar = {
@@ -182,6 +186,35 @@ fun SettingsScreen(
                             modifier = Modifier.weight(1f)
                         )
                     }
+                }
+            }
+
+            // App Language
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Language,
+                            contentDescription = null,
+                            modifier = Modifier.padding(end = 8.dp)
+                        )
+                        Text(
+                            text = stringResource(R.string.settings_language_title),
+                            style = MaterialTheme.typography.titleLarge
+                        )
+                    }
+                    ListItem(
+                        headlineContent = {
+                            Text(stringResource(currentLanguage.labelRes))
+                        },
+                        supportingContent = {
+                            Text(stringResource(R.string.settings_language_description))
+                        },
+                        modifier = Modifier.clickable { showLanguagePicker = true }
+                    )
                 }
             }
 
@@ -552,6 +585,49 @@ fun SettingsScreen(
                         Text(stringResource(R.string.settings_account_sign_out))
                     }
                 }
+            }
+
+            if (showLanguagePicker) {
+                AlertDialog(
+                    onDismissRequest = { showLanguagePicker = false },
+                    title = { Text(stringResource(R.string.settings_language_picker_title)) },
+                    text = {
+                        Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                            AppLanguage.entries.forEach { language ->
+                                val select = {
+                                    showLanguagePicker = false
+                                    if (language != currentLanguage) {
+                                        currentLanguage = language
+                                        // Recreates the activity with the new locale and
+                                        // persists the choice (autoStoreLocales).
+                                        AppLanguage.apply(language)
+                                    }
+                                }
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { select() }
+                                        .padding(vertical = 8.dp)
+                                ) {
+                                    RadioButton(
+                                        selected = language == currentLanguage,
+                                        onClick = { select() }
+                                    )
+                                    Text(
+                                        text = stringResource(language.labelRes),
+                                        modifier = Modifier.padding(start = 8.dp)
+                                    )
+                                }
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(onClick = { showLanguagePicker = false }) {
+                            Text(stringResource(R.string.settings_language_picker_cancel))
+                        }
+                    }
+                )
             }
 
             if (showCurrencyPicker) {

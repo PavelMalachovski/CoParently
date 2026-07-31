@@ -535,6 +535,13 @@ private fun DayWeekPage(
                                         else -> MaterialTheme.colorScheme.surface
                                     }
 
+                                    // Resolved here: the semantics lambda is not a composable context.
+                                    val slotDescription = stringResource(
+                                        R.string.calendar_time_slot_description,
+                                        String.format(Locale.getDefault(), "%02d:00", hour),
+                                        date.format(DateTimeFormatter.ofPattern("MMM dd"))
+                                    )
+
                                     Box(
                                         modifier = Modifier
                                             .weight(1f)
@@ -556,7 +563,7 @@ private fun DayWeekPage(
                                                 onAddEventClick(date, hour)
                                             }
                                             .semantics {
-                                                contentDescription = "Time slot at ${String.format("%02d:00", hour)} on ${date.format(DateTimeFormatter.ofPattern("MMM dd"))}. Tap to add event."
+                                                contentDescription = slotDescription
                                             }
                                     )
                                 }
@@ -803,6 +810,30 @@ private fun EventChip(
     // Track global position for delete button detection
     var eventGlobalPosition by remember { mutableStateOf(Offset.Zero) }
 
+    // Accessibility strings resolved in composable scope: the semantics lambdas below are
+    // not composable contexts, so stringResource cannot be called inside them.
+    val a11yTimeFormatter = java.time.format.DateTimeFormatter.ofPattern("HH:mm")
+    val chipStateDescription = when {
+        isDraggingEvent -> stringResource(R.string.calendar_event_dragging)
+        isResizingStart -> stringResource(
+            R.string.calendar_event_resizing_start,
+            tempStartTime.format(a11yTimeFormatter)
+        )
+        isResizingEnd -> stringResource(
+            R.string.calendar_event_resizing_end,
+            tempEndTime.format(a11yTimeFormatter)
+        )
+        isLongPressing -> stringResource(R.string.calendar_event_long_pressed)
+        else -> stringResource(R.string.calendar_event_chip_hint)
+    }
+    val chipDescription = stringResource(
+        R.string.calendar_event_chip_description,
+        event.title,
+        chipStateDescription
+    )
+    val resizeStartDescription = stringResource(R.string.calendar_resize_start_handle)
+    val resizeEndDescription = stringResource(R.string.calendar_resize_end_handle)
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -885,15 +916,7 @@ private fun EventChip(
                 }
             }
             .semantics {
-                contentDescription = "${event.title} event. ${
-                    when {
-                        isDraggingEvent -> "Dragging"
-                        isResizingStart -> "Resizing start time to ${tempStartTime.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"))}"
-                        isResizingEnd -> "Resizing end time to ${tempEndTime.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"))}"
-                        isLongPressing -> "Long pressed, delete button shown"
-                        else -> "Tap to view, long press to show delete, drag corners to resize"
-                    }
-                }"
+                contentDescription = chipDescription
             }
     ) {
         // Event content - center area for drag & drop
@@ -1009,15 +1032,24 @@ private fun EventChip(
                 if (event.isPrivate) {
                     Icon(
                         imageVector = Icons.Default.Lock,
-                        contentDescription = "Private event",
+                        contentDescription = stringResource(R.string.calendar_event_private),
                         tint = textColor,
                         modifier = Modifier.size(10.dp)
                     )
                 }
                 if (event.pickupConfirmedBy != null) {
+                    // pickupConfirmedBy is "mom"/"dad" — map to the localized parent name
+                    val confirmedByName = if (event.pickupConfirmedBy == "mom") {
+                        stringResource(R.string.calendar_parent_mom)
+                    } else {
+                        stringResource(R.string.calendar_parent_dad)
+                    }
                     Icon(
                         imageVector = Icons.Default.CheckCircle,
-                        contentDescription = "Pickup confirmed by ${event.pickupConfirmedBy}",
+                        contentDescription = stringResource(
+                            R.string.calendar_event_pickup_confirmed,
+                            confirmedByName
+                        ),
                         tint = textColor,
                         modifier = Modifier.size(10.dp)
                     )
@@ -1088,7 +1120,7 @@ private fun EventChip(
                     .width(40.dp)
                     .height(14.dp)
                     .background(color = borderColor, shape = RoundedCornerShape(7.dp))
-                    .semantics { contentDescription = "Resize start time. Drag up or down (15-minute steps)." }
+                    .semantics { contentDescription = resizeStartDescription }
                     .pointerInput(hourHeightPx, onResize) {
                         detectDragGestures(
                             onDragStart = { startOffset ->
@@ -1129,7 +1161,7 @@ private fun EventChip(
                     .width(40.dp)
                     .height(14.dp)
                     .background(color = borderColor, shape = RoundedCornerShape(7.dp))
-                    .semantics { contentDescription = "Resize end time. Drag up or down (15-minute steps)." }
+                    .semantics { contentDescription = resizeEndDescription }
                     .pointerInput(hourHeightPx, onResize) {
                         detectDragGestures(
                             onDragStart = { startOffset ->

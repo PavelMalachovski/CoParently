@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="chat_new_conversation">Нова розмова</string>
+    <string name="chat_empty_title">Поки немає розмов</string>
+    <string name="chat_empty_description">Почніть розмову з іншим із батьків, щоб узгоджувати розклад і ділитися новинами.</string>
+    <string name="chat_no_messages">Поки немає повідомлень</string>
+    <string name="chat_messages_empty_title">Поки немає повідомлень</string>
+    <string name="chat_messages_empty_description">Почніть розмову, надіславши повідомлення іншому з батьків.</string>
+    <string name="chat_type_message">Введіть повідомлення…</string>
+    <string name="chat_attach">Прикріпити</string>
+    <string name="chat_send">Надіслати</string>
+    <string name="chat_status_sending">Надсилання</string>
+    <string name="chat_status_error">Помилка</string>
+    <string name="chat_status_sent">Надіслано</string>
+    <string name="chat_sending_ellipsis">Надсилання…</string>
+    <string name="chat_failed_to_send">Не вдалося надіслати</string>
+    <string name="chat_title_fallback">Чат</string>
+    <string name="chat_back">Назад</string>
+    <string name="chat_request_change">Запросити зміну</string>
+    <string name="chat_request_change_title">Запросити зміну</string>
+    <string name="chat_no_upcoming_events">Немає майбутніх подій, для яких можна запропонувати зміну.</string>
+    <string name="chat_pick_event_to_reschedule">Виберіть подію, яку хочете перенести:</string>
+</resources>
