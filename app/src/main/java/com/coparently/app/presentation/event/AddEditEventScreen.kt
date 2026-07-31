@@ -1051,7 +1051,7 @@ fun AddEditEventScreen(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                REMINDER_OPTIONS.forEach { (value, label) ->
+                REMINDER_OPTIONS.forEach { (value, labelRes) ->
                     FilterChip(
                         selected = reminderMinutes == value,
                         onClick = {
@@ -1062,7 +1062,7 @@ fun AddEditEventScreen(
                                 reminderPermissionRequester.request { reminderMinutes = value }
                             }
                         },
-                        label = { Text(label) },
+                        label = { Text(stringResource(labelRes)) },
                         leadingIcon = {
                             if (reminderMinutes == value) {
                                 Icon(
