@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="common_splash_tagline">Gemeinsamer Kalender für Co-Eltern</string>
+    <string name="common_checking_authentication">Anmeldung wird geprüft…</string>
+    <string name="common_confirm">Bestätigen</string>
+    <string name="common_dialog_cancel">Abbrechen</string>
+    <string name="common_dialog_ok">OK</string>
+    <string name="common_dismiss">Schließen</string>
+    <string name="common_error_title">Fehler</string>
+    <string name="common_action_retry">Erneut versuchen</string>
+    <string name="common_error_network_title">Netzwerkfehler</string>
+    <string name="common_error_auth_title">Authentifizierungsfehler</string>
+    <string name="common_error_permission_title">Zugriff verweigert</string>
+    <string name="common_error_not_found_title">Nicht gefunden</string>
+    <string name="common_error_validation_title">Validierungsfehler</string>
+    <string name="common_error_server_title">Serverfehler</string>
+    <string name="common_loading_events">Termine werden geladen…</string>
+    <string name="common_no_data_title">Keine Daten</string>
+    <string name="common_no_data_description">Hier gibt es noch nichts anzuzeigen</string>
+    <string name="common_quick_actions_title">Schnellaktionen</string>
+    <string name="common_quick_action_new_event">Neuer Termin</string>
+    <string name="common_quick_action_new_event_subtitle">Einen neuen Kalendertermin erstellen</string>
+    <string name="common_quick_action_today">Zu heute springen</string>
+    <string name="common_quick_action_today_subtitle">Zum aktuellen Datum navigieren</string>
+    <string name="common_quick_action_settings">Einstellungen</string>
+    <string name="common_quick_action_settings_subtitle">App-Einstellungen</string>
+</resources>

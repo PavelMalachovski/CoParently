@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="common_splash_tagline">Спільний календар для співбатьків</string>
+    <string name="common_checking_authentication">Перевірка авторизації…</string>
+    <string name="common_confirm">Підтвердити</string>
+    <string name="common_dialog_cancel">Скасувати</string>
+    <string name="common_dialog_ok">OK</string>
+    <string name="common_dismiss">Закрити</string>
+    <string name="common_error_title">Помилка</string>
+    <string name="common_action_retry">Повторити</string>
+    <string name="common_error_network_title">Помилка мережі</string>
+    <string name="common_error_auth_title">Помилка авторизації</string>
+    <string name="common_error_permission_title">Доступ заборонено</string>
+    <string name="common_error_not_found_title">Не знайдено</string>
+    <string name="common_error_validation_title">Помилка перевірки</string>
+    <string name="common_error_server_title">Помилка сервера</string>
+    <string name="common_loading_events">Завантаження подій…</string>
+    <string name="common_no_data_title">Немає даних</string>
+    <string name="common_no_data_description">Тут поки немає чого показати</string>
+    <string name="common_quick_actions_title">Швидкі дії</string>
+    <string name="common_quick_action_new_event">Нова подія</string>
+    <string name="common_quick_action_new_event_subtitle">Створити нову подію календаря</string>
+    <string name="common_quick_action_today">Перейти до сьогодні</string>
+    <string name="common_quick_action_today_subtitle">Перейти до поточної дати</string>
+    <string name="common_quick_action_settings">Налаштування</string>
+    <string name="common_quick_action_settings_subtitle">Параметри застосунку</string>
+</resources>

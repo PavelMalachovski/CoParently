@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="auth_cd_logo">Логотип CoPlanly</string>
+    <string name="auth_tagline">Спільний календар для співбатьківства</string>
+    <string name="auth_welcome_back">З поверненням!</string>
+    <string name="auth_create_your_account">Створіть акаунт</string>
+    <string name="auth_sign_in_subtitle">Увійдіть, щоб продовжити вести спільний розклад</string>
+    <string name="auth_sign_up_subtitle">Приєднуйтесь до тисяч батьків, які діють спільно</string>
+    <string name="auth_email_label">Електронна пошта</string>
+    <string name="auth_email_placeholder">your@email.com</string>
+    <string name="auth_password_label">Пароль</string>
+    <string name="auth_password_placeholder">Введіть пароль</string>
+    <string name="auth_hide_password">Сховати пароль</string>
+    <string name="auth_show_password">Показати пароль</string>
+    <string name="auth_google_sign_in">Увійти через Google</string>
+    <string name="auth_google_sign_in_failed">Не вдалося увійти через Google</string>
+    <string name="auth_divider_or">або</string>
+    <string name="auth_action_sign_in">Увійти</string>
+    <string name="auth_action_create_account">Створити акаунт</string>
+    <string name="auth_action_sign_up">Зареєструватися</string>
+    <string name="auth_no_account_question">Немає акаунта?</string>
+    <string name="auth_have_account_question">Уже маєте акаунт?</string>
+    <string name="auth_forgot_password_link">Забули пароль?</string>
+</resources>
