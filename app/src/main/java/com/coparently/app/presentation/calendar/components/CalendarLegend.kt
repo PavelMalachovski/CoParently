@@ -31,10 +31,11 @@ import com.coparently.app.utils.PreviewWrapper
  */
 @Composable
 fun CalendarLegend(modifier: Modifier = Modifier) {
+    // Resolved here: the semantics lambda is not a composable context.
+    val legendDescription = stringResource(R.string.calendar_legend_description)
     Row(
         modifier = modifier.semantics {
-            contentDescription =
-                "Legend: pink is Mom, blue is Dad, a teal strip marks school vacation"
+            contentDescription = legendDescription
         },
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically

@@ -131,7 +131,7 @@ fun BudgetScreen(
 fun AlertSection(alerts: List<BudgetAlert>) {
     Column(modifier = Modifier.padding(bottom = 16.dp)) {
         Text(
-            text = "Alerts",
+            text = stringResource(R.string.budget_alerts_title),
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.error,
             modifier = Modifier.padding(bottom = 8.dp)
@@ -148,12 +148,18 @@ fun AlertSection(alerts: List<BudgetAlert>) {
             ) {
                 Column(modifier = Modifier.padding(12.dp)) {
                     Text(
-                        text = "Budget Exceeded: ${alert.category.displayName}",
+                        text = stringResource(
+                            R.string.budget_alert_exceeded,
+                            stringResource(alert.category.labelRes)
+                        ),
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.onErrorContainer
                     )
                     Text(
-                        text = "You have spent ${(alert.percentage * 100).toInt()}% of your limit.",
+                        text = stringResource(
+                            R.string.budget_alert_percent_spent,
+                            (alert.percentage * 100).toInt()
+                        ),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onErrorContainer
                     )

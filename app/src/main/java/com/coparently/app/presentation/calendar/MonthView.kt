@@ -29,6 +29,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
@@ -37,6 +39,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.coparently.app.R
 import com.coparently.app.domain.holidays.Holiday
 import com.coparently.app.domain.model.Event
 import com.coparently.app.presentation.theme.CoPlanlyColors
@@ -183,6 +186,8 @@ private fun eventsForDate(events: List<Event>, date: LocalDate): List<Event> {
 @Composable
 private fun WeekdayHeader(firstDayOfWeek: DayOfWeek) {
     val dims = dimensions()
+    // Resolved here: the semantics lambda is not a composable context.
+    val headerDescription = stringResource(R.string.calendar_weekday_header_description)
 
     Row(
         modifier = Modifier
@@ -190,7 +195,7 @@ private fun WeekdayHeader(firstDayOfWeek: DayOfWeek) {
             .height(dims.buttonHeight * 0.8f)
             .background(MaterialTheme.colorScheme.surface)
             .semantics {
-                contentDescription = "Calendar weekday header"
+                contentDescription = headerDescription
             },
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -281,23 +286,46 @@ private fun DayCell(
         else -> MaterialTheme.colorScheme.surface
     }
 
+    // All localized pieces are resolved in composable scope; buildString itself is not one.
+    val todayLabel = stringResource(R.string.calendar_day_desc_today)
+    val outsideMonthLabel = stringResource(R.string.calendar_day_desc_outside_month)
+    val custodyLabel = when (custody) {
+        "mom" -> stringResource(
+            R.string.calendar_day_desc_with_parent,
+            stringResource(R.string.calendar_parent_mom)
+        )
+        "dad" -> stringResource(
+            R.string.calendar_day_desc_with_parent,
+            stringResource(R.string.calendar_parent_dad)
+        )
+        else -> null
+    }
+    val eventsLabel = if (events.isNotEmpty()) {
+        pluralStringResource(R.plurals.calendar_day_desc_events, events.size, events.size)
+    } else {
+        null
+    }
     val semanticDescription = buildString {
         append(date.format(DateTimeFormatter.ofPattern("EEEE, MMMM d", Locale.getDefault())))
-        if (isToday) append(", Today")
-        if (!isCurrentMonth) append(", Outside current month")
+        if (isToday) {
+            append(", ")
+            append(todayLabel)
+        }
+        if (!isCurrentMonth) {
+            append(", ")
+            append(outsideMonthLabel)
+        }
         holiday?.let {
             append(", ")
-            append(it.nameEn)
+            append(if (Locale.getDefault().language == "cs") it.nameCs else it.nameEn)
         }
-        if (custody != null) {
-            append(", With ")
-            append(if (custody == "mom") "Mom" else "Dad")
-        }
-        if (events.isNotEmpty()) {
+        custodyLabel?.let {
             append(", ")
-            append(events.size)
-            append(" event")
-            if (events.size > 1) append("s")
+            append(it)
+        }
+        eventsLabel?.let {
+            append(", ")
+            append(it)
             events.firstOrNull()?.let { event ->
                 append(": ")
                 append(event.title)
@@ -305,8 +333,10 @@ private fun DayCell(
         }
     }
 
-    val clickLabel =
-        "View events for ${date.format(DateTimeFormatter.ofPattern("MMMM d", Locale.getDefault()))}"
+    val clickLabel = stringResource(
+        R.string.calendar_day_click_label,
+        date.format(DateTimeFormatter.ofPattern("MMMM d", Locale.getDefault()))
+    )
 
     Box(
         modifier = Modifier

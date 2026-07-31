@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Child info: common actions -->
+    <string name="childinfo_back">Zurück</string>
+    <string name="childinfo_edit">Bearbeiten</string>
+    <string name="childinfo_delete">Löschen</string>
+    <string name="childinfo_remove">Entfernen</string>
+    <string name="childinfo_add">Hinzufügen</string>
+    <string name="childinfo_save">Speichern</string>
+    <string name="childinfo_cancel">Abbrechen</string>
+    <string name="childinfo_clear">Leeren</string>
+    <string name="childinfo_ok">OK</string>
+    <string name="childinfo_retry">Erneut versuchen</string>
+    <string name="childinfo_sync">Synchronisieren</string>
+
+    <!-- Child info: titles and sections -->
+    <string name="childinfo_screen_title">Informationen zum Kind</string>
+    <string name="childinfo_title_add">Kind-Infos hinzufügen</string>
+    <string name="childinfo_title_edit">Kind-Infos bearbeiten</string>
+    <string name="childinfo_empty_state">Noch keine Informationen zum Kind</string>
+    <string name="childinfo_section_basic">Grundlegende Informationen</string>
+    <string name="childinfo_section_medications">Medikamente</string>
+    <string name="childinfo_section_activities">Aktivitäten &amp; Kurse</string>
+    <string name="childinfo_section_allergies">Allergien</string>
+    <string name="childinfo_section_medical_notes">Medizinische Notizen</string>
+    <string name="childinfo_section_emergency_contacts">Notfallkontakte</string>
+    <string name="childinfo_section_school">Schulinformationen</string>
+    <string name="childinfo_section_teacher">Informationen zur Lehrkraft</string>
+
+    <!-- Child info: basic form -->
+    <string name="childinfo_child_name_label">Name des Kindes *</string>
+    <string name="childinfo_dob_value">Geburtsdatum: %1$s</string>
+    <string name="childinfo_select_dob">Geburtsdatum auswählen</string>
+    <string name="childinfo_add_child_button">Kind hinzufügen</string>
+    <string name="childinfo_save_changes">Änderungen speichern</string>
+    <string name="childinfo_medical_notes_label">Weitere medizinische Angaben</string>
+    <string name="childinfo_medical_notes_placeholder">Weitere wichtige medizinische Informationen…</string>
+
+    <!-- Child info: detail rows -->
+    <string name="childinfo_detail_dosage">Dosierung: %1$s</string>
+    <string name="childinfo_detail_frequency">Häufigkeit: %1$s</string>
+    <string name="childinfo_detail_notes">Notizen: %1$s</string>
+    <string name="childinfo_detail_schedule">Zeitplan: %1$s</string>
+    <string name="childinfo_detail_location">Ort: %1$s</string>
+    <string name="childinfo_detail_contact">Kontakt: %1$s</string>
+    <string name="childinfo_detail_phone">Telefon: %1$s</string>
+    <string name="childinfo_detail_relationship">Beziehung: %1$s</string>
+    <string name="childinfo_detail_alt_phone">Alt. Telefon: %1$s</string>
+    <string name="childinfo_detail_address">Adresse: %1$s</string>
+    <string name="childinfo_detail_teacher">Lehrkraft: %1$s</string>
+    <string name="childinfo_detail_email">E-Mail: %1$s</string>
+    <string name="childinfo_detail_grade">Klasse: %1$s</string>
+    <string name="childinfo_allergy_bullet">• %1$s</string>
+
+    <!-- Child info: medications editor -->
+    <string name="childinfo_add_medication">Medikament hinzufügen</string>
+    <string name="childinfo_new_medication">Neues Medikament</string>
+    <string name="childinfo_edit_medication">Medikament bearbeiten</string>
+    <string name="childinfo_medication_name_label">Name des Medikaments</string>
+    <string name="childinfo_dosage_label">Dosierung (z. B. 10 mg)</string>
+    <string name="childinfo_frequency_label">Häufigkeit (z. B. 2-mal täglich)</string>
+    <string name="childinfo_notes_optional_label">Notizen (optional)</string>
+    <string name="childinfo_medication_summary">%1$s - %2$s</string>
+
+    <!-- Child info: activities editor -->
+    <string name="childinfo_add_activity">Aktivität hinzufügen</string>
+    <string name="childinfo_new_activity">Neue Aktivität</string>
+    <string name="childinfo_edit_activity">Aktivität bearbeiten</string>
+    <string name="childinfo_activity_name_label">Name der Aktivität</string>
+    <string name="childinfo_activity_name_placeholder">z. B. Fußball, Klavierunterricht</string>
+    <string name="childinfo_schedule_label">Zeitplan</string>
+    <string name="childinfo_schedule_placeholder">z. B. Mo &amp; Mi, 16–17 Uhr</string>
+    <string name="childinfo_location_optional_label">Ort (optional)</string>
+    <string name="childinfo_contact_person_optional_label">Kontaktperson (optional)</string>
+    <string name="childinfo_contact_phone_optional_label">Kontakttelefon (optional)</string>
+    <string name="childinfo_activity_location_marker">📍 %1$s</string>
+    <string name="childinfo_activity_contact_marker">👤 %1$s</string>
+    <string name="childinfo_activity_contact_phone_marker">👤 %1$s • %2$s</string>
+
+    <!-- Child info: allergies editor -->
+    <string name="childinfo_add_allergy">Allergie hinzufügen</string>
+    <string name="childinfo_allergy_label">Allergie</string>
+    <string name="childinfo_allergy_placeholder">z. B. Erdnüsse, Laktose</string>
+
+    <!-- Child info: emergency contacts editor -->
+    <string name="childinfo_add_emergency_contact">Notfallkontakt hinzufügen</string>
+    <string name="childinfo_new_emergency_contact">Neuer Notfallkontakt</string>
+    <string name="childinfo_edit_emergency_contact">Notfallkontakt bearbeiten</string>
+    <string name="childinfo_name_label">Name</string>
+    <string name="childinfo_relationship_label">Beziehung</string>
+    <string name="childinfo_relationship_placeholder">z. B. Großmutter, Onkel</string>
+    <string name="childinfo_phone_number_label">Telefonnummer</string>
+    <string name="childinfo_alternate_phone_optional_label">Alternative Telefonnummer (optional)</string>
+    <string name="childinfo_contact_phone_marker">📞 %1$s</string>
+    <string name="childinfo_contact_alt_phone_marker">📱 %1$s</string>
+
+    <!-- Child info: school editor -->
+    <string name="childinfo_add_school_info">Schulinformationen hinzufügen</string>
+    <string name="childinfo_school_name_label">Name der Schule</string>
+    <string name="childinfo_address_optional_label">Adresse (optional)</string>
+    <string name="childinfo_school_phone_optional_label">Telefon der Schule (optional)</string>
+    <string name="childinfo_grade_optional_label">Klasse (optional)</string>
+    <string name="childinfo_grade_placeholder">z. B. 3. Klasse</string>
+    <string name="childinfo_teacher_name_optional_label">Name der Lehrkraft (optional)</string>
+    <string name="childinfo_teacher_email_optional_label">E-Mail der Lehrkraft (optional)</string>
+</resources>

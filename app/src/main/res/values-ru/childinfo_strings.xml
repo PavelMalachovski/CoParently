@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Child info: common actions -->
+    <string name="childinfo_back">Назад</string>
+    <string name="childinfo_edit">Изменить</string>
+    <string name="childinfo_delete">Удалить</string>
+    <string name="childinfo_remove">Убрать</string>
+    <string name="childinfo_add">Добавить</string>
+    <string name="childinfo_save">Сохранить</string>
+    <string name="childinfo_cancel">Отмена</string>
+    <string name="childinfo_clear">Очистить</string>
+    <string name="childinfo_ok">ОК</string>
+    <string name="childinfo_retry">Повторить</string>
+    <string name="childinfo_sync">Синхронизировать</string>
+
+    <!-- Child info: titles and sections -->
+    <string name="childinfo_screen_title">Информация о ребёнке</string>
+    <string name="childinfo_title_add">Добавить информацию о ребёнке</string>
+    <string name="childinfo_title_edit">Изменить информацию о ребёнке</string>
+    <string name="childinfo_empty_state">Информации о ребёнке пока нет</string>
+    <string name="childinfo_section_basic">Основная информация</string>
+    <string name="childinfo_section_medications">Лекарства</string>
+    <string name="childinfo_section_activities">Занятия и кружки</string>
+    <string name="childinfo_section_allergies">Аллергии</string>
+    <string name="childinfo_section_medical_notes">Медицинские заметки</string>
+    <string name="childinfo_section_emergency_contacts">Экстренные контакты</string>
+    <string name="childinfo_section_school">Информация о школе</string>
+    <string name="childinfo_section_teacher">Информация об учителе</string>
+
+    <!-- Child info: basic form -->
+    <string name="childinfo_child_name_label">Имя ребёнка *</string>
+    <string name="childinfo_dob_value">Дата рождения: %1$s</string>
+    <string name="childinfo_select_dob">Выбрать дату рождения</string>
+    <string name="childinfo_add_child_button">Добавить ребёнка</string>
+    <string name="childinfo_save_changes">Сохранить изменения</string>
+    <string name="childinfo_medical_notes_label">Дополнительная медицинская информация</string>
+    <string name="childinfo_medical_notes_placeholder">Любая другая важная медицинская информация…</string>
+
+    <!-- Child info: detail rows -->
+    <string name="childinfo_detail_dosage">Дозировка: %1$s</string>
+    <string name="childinfo_detail_frequency">Частота: %1$s</string>
+    <string name="childinfo_detail_notes">Заметки: %1$s</string>
+    <string name="childinfo_detail_schedule">Расписание: %1$s</string>
+    <string name="childinfo_detail_location">Место: %1$s</string>
+    <string name="childinfo_detail_contact">Контакт: %1$s</string>
+    <string name="childinfo_detail_phone">Телефон: %1$s</string>
+    <string name="childinfo_detail_relationship">Кем приходится: %1$s</string>
+    <string name="childinfo_detail_alt_phone">Доп. телефон: %1$s</string>
+    <string name="childinfo_detail_address">Адрес: %1$s</string>
+    <string name="childinfo_detail_teacher">Учитель: %1$s</string>
+    <string name="childinfo_detail_email">Эл. почта: %1$s</string>
+    <string name="childinfo_detail_grade">Класс: %1$s</string>
+    <string name="childinfo_allergy_bullet">• %1$s</string>
+
+    <!-- Child info: medications editor -->
+    <string name="childinfo_add_medication">Добавить лекарство</string>
+    <string name="childinfo_new_medication">Новое лекарство</string>
+    <string name="childinfo_edit_medication">Изменить лекарство</string>
+    <string name="childinfo_medication_name_label">Название лекарства</string>
+    <string name="childinfo_dosage_label">Дозировка (напр., 10 мг)</string>
+    <string name="childinfo_frequency_label">Частота (напр., 2 раза в день)</string>
+    <string name="childinfo_notes_optional_label">Заметки (необязательно)</string>
+    <string name="childinfo_medication_summary">%1$s - %2$s</string>
+
+    <!-- Child info: activities editor -->
+    <string name="childinfo_add_activity">Добавить занятие</string>
+    <string name="childinfo_new_activity">Новое занятие</string>
+    <string name="childinfo_edit_activity">Изменить занятие</string>
+    <string name="childinfo_activity_name_label">Название занятия</string>
+    <string name="childinfo_activity_name_placeholder">напр., футбол, уроки фортепиано</string>
+    <string name="childinfo_schedule_label">Расписание</string>
+    <string name="childinfo_schedule_placeholder">напр., пн и ср, 16:00–17:00</string>
+    <string name="childinfo_location_optional_label">Место (необязательно)</string>
+    <string name="childinfo_contact_person_optional_label">Контактное лицо (необязательно)</string>
+    <string name="childinfo_contact_phone_optional_label">Контактный телефон (необязательно)</string>
+    <string name="childinfo_activity_location_marker">📍 %1$s</string>
+    <string name="childinfo_activity_contact_marker">👤 %1$s</string>
+    <string name="childinfo_activity_contact_phone_marker">👤 %1$s • %2$s</string>
+
+    <!-- Child info: allergies editor -->
+    <string name="childinfo_add_allergy">Добавить аллергию</string>
+    <string name="childinfo_allergy_label">Аллергия</string>
+    <string name="childinfo_allergy_placeholder">напр., арахис, лактоза</string>
+
+    <!-- Child info: emergency contacts editor -->
+    <string name="childinfo_add_emergency_contact">Добавить экстренный контакт</string>
+    <string name="childinfo_new_emergency_contact">Новый экстренный контакт</string>
+    <string name="childinfo_edit_emergency_contact">Изменить экстренный контакт</string>
+    <string name="childinfo_name_label">Имя</string>
+    <string name="childinfo_relationship_label">Кем приходится</string>
+    <string name="childinfo_relationship_placeholder">напр., бабушка, дядя</string>
+    <string name="childinfo_phone_number_label">Номер телефона</string>
+    <string name="childinfo_alternate_phone_optional_label">Дополнительный телефон (необязательно)</string>
+    <string name="childinfo_contact_phone_marker">📞 %1$s</string>
+    <string name="childinfo_contact_alt_phone_marker">📱 %1$s</string>
+
+    <!-- Child info: school editor -->
+    <string name="childinfo_add_school_info">Добавить информацию о школе</string>
+    <string name="childinfo_school_name_label">Название школы</string>
+    <string name="childinfo_address_optional_label">Адрес (необязательно)</string>
+    <string name="childinfo_school_phone_optional_label">Телефон школы (необязательно)</string>
+    <string name="childinfo_grade_optional_label">Класс (необязательно)</string>
+    <string name="childinfo_grade_placeholder">напр., 3-й класс</string>
+    <string name="childinfo_teacher_name_optional_label">Имя учителя (необязательно)</string>
+    <string name="childinfo_teacher_email_optional_label">Эл. почта учителя (необязательно)</string>
+</resources>

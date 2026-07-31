@@ -1,5 +1,6 @@
 package com.coparently.app.presentation.custody
 
+import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -63,12 +64,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.coparently.app.R
 import com.coparently.app.domain.model.CustodyModelType
 import com.coparently.app.presentation.theme.CoPlanlyColors
 import com.coparently.app.presentation.theme.dimensions
@@ -112,7 +115,7 @@ fun CustodySetupScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = "Custody Schedule",
+                        text = stringResource(R.string.custody_title),
                         style = MaterialTheme.typography.titleLarge
                     )
                 },
@@ -120,7 +123,7 @@ fun CustodySetupScreen(
                     IconButton(onClick = onNavigateBack) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back"
+                            contentDescription = stringResource(R.string.custody_back)
                         )
                     }
                 },
@@ -156,7 +159,7 @@ fun CustodySetupScreen(
                             modifier = Modifier.size(20.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Save Custody Schedule")
+                        Text(stringResource(R.string.custody_save_button))
                     }
                 }
             }
@@ -171,7 +174,7 @@ fun CustodySetupScreen(
         ) {
             // Model type selection
             Text(
-                text = "Select Schedule Type",
+                text = stringResource(R.string.custody_select_schedule_type),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(vertical = dims.paddingSmall)
@@ -194,13 +197,13 @@ fun CustodySetupScreen(
 
             // Start date picker
             Text(
-                text = "Pattern Start Date",
+                text = stringResource(R.string.custody_pattern_start_date),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(vertical = dims.paddingSmall)
             )
             Text(
-                text = "This is the anchor date - the pattern will repeat from this day",
+                text = stringResource(R.string.custody_start_date_hint),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -237,7 +240,7 @@ fun CustodySetupScreen(
             // Mom first toggle (for non-custom models)
             if (uiState.selectedModelType != CustodyModelType.CUSTOM) {
                 Text(
-                    text = "Who Starts First?",
+                    text = stringResource(R.string.custody_who_starts_first),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(vertical = dims.paddingSmall)
@@ -261,7 +264,11 @@ fun CustodySetupScreen(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = if (uiState.momFirst) "Mom starts first" else "Dad starts first",
+                            text = if (uiState.momFirst) {
+                                stringResource(R.string.custody_mom_starts_first)
+                            } else {
+                                stringResource(R.string.custody_dad_starts_first)
+                            },
                             style = MaterialTheme.typography.bodyLarge
                         )
                     }
@@ -282,13 +289,13 @@ fun CustodySetupScreen(
             ) {
                 Column {
                     Text(
-                        text = "Custom Pattern",
+                        text = stringResource(R.string.custody_custom_pattern),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier.padding(vertical = dims.paddingSmall)
                     )
                     Text(
-                        text = "Tap days to assign to Mom (pink). Remaining days go to Dad (blue).",
+                        text = stringResource(R.string.custody_custom_pattern_hint),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -326,13 +333,13 @@ fun CustodySetupScreen(
                                     horizontalAlignment = Alignment.CenterHorizontally
                                 ) {
                                     Text(
-                                        text = "W$weekNumber",
+                                        text = stringResource(R.string.custody_week_abbrev, weekNumber),
                                         style = MaterialTheme.typography.labelSmall,
                                         fontSize = 8.sp,
                                         color = if (isMomDay) CoPlanlyColors.MomPink else CoPlanlyColors.DadBlue
                                     )
                                     Text(
-                                        text = "D$dayInWeek",
+                                        text = stringResource(R.string.custody_day_abbrev, dayInWeek),
                                         style = MaterialTheme.typography.labelMedium,
                                         fontWeight = FontWeight.Bold,
                                         color = if (isMomDay) CoPlanlyColors.MomPink else CoPlanlyColors.DadBlue
@@ -356,7 +363,7 @@ fun CustodySetupScreen(
                             },
                             modifier = Modifier.weight(1f)
                         ) {
-                            Text("Week 1 → Mom")
+                            Text(stringResource(R.string.custody_week1_to_mom))
                         }
                         TextButton(
                             onClick = {
@@ -369,7 +376,7 @@ fun CustodySetupScreen(
                             },
                             modifier = Modifier.weight(1f)
                         ) {
-                            Text("Week 2 → Mom")
+                            Text(stringResource(R.string.custody_week2_to_mom))
                         }
                     }
                 }
@@ -388,7 +395,7 @@ fun CustodySetupScreen(
                     modifier = Modifier.padding(dims.paddingMedium)
                 ) {
                     Text(
-                        text = "Preview",
+                        text = stringResource(R.string.custody_preview),
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary
@@ -404,7 +411,7 @@ fun CustodySetupScreen(
 
                     // Visual preview - show next 14 days
                     Text(
-                        text = "Next 14 days:",
+                        text = stringResource(R.string.custody_next_14_days),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.primary
                     )
@@ -457,7 +464,7 @@ fun CustodySetupScreen(
                                 .background(CoPlanlyColors.MomPink, CircleShape)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Mom", style = MaterialTheme.typography.labelSmall)
+                        Text(stringResource(R.string.custody_mom), style = MaterialTheme.typography.labelSmall)
                         Spacer(modifier = Modifier.width(16.dp))
                         Box(
                             modifier = Modifier
@@ -465,7 +472,7 @@ fun CustodySetupScreen(
                                 .background(CoPlanlyColors.DadBlue, CircleShape)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Dad", style = MaterialTheme.typography.labelSmall)
+                        Text(stringResource(R.string.custody_dad), style = MaterialTheme.typography.labelSmall)
                     }
                 }
             }
@@ -497,12 +504,12 @@ fun CustodySetupScreen(
                         showDatePicker = false
                     }
                 ) {
-                    Text("OK")
+                    Text(stringResource(R.string.custody_ok))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showDatePicker = false }) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.custody_cancel))
                 }
             }
         ) {

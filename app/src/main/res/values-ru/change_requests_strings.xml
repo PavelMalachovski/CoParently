@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="change_request_inbox_title">Запросы на изменение</string>
+    <string name="change_request_back">Назад</string>
+    <string name="change_request_empty_title">Пока нет запросов на изменение</string>
+    <string name="change_request_empty_hint">Откройте событие и нажмите «Запросить изменение», чтобы предложить другому родителю новое время.</string>
+    <string name="change_request_incoming">Входящие</string>
+    <string name="change_request_outgoing">Исходящие</string>
+    <string name="change_request_status_pending">Ожидает</string>
+    <string name="change_request_status_accepted">Принят</string>
+    <string name="change_request_status_declined">Отклонён</string>
+    <string name="change_request_status_cancelled">Отозван</string>
+    <string name="change_request_current">Текущее</string>
+    <string name="change_request_proposed">Предложено</string>
+    <string name="change_request_note_quoted">«%1$s»</string>
+    <string name="change_request_accept">Принять</string>
+    <string name="change_request_decline">Отклонить</string>
+    <string name="change_request_withdraw">Отозвать запрос</string>
+    <string name="change_request_form_title">Запросить изменение</string>
+    <string name="change_request_currently">Сейчас: %1$s в %2$s</string>
+    <string name="change_request_proposed_new_time">Предлагаемое новое время</string>
+    <string name="change_request_from_time">С %1$s</string>
+    <string name="change_request_to_time">До %1$s</string>
+    <string name="change_request_to_unset">До —</string>
+    <string name="change_request_note_label">Сообщение другому родителю (необязательно)</string>
+    <string name="change_request_send">Отправить запрос</string>
+    <string name="change_request_ok">OK</string>
+    <string name="change_request_cancel">Отмена</string>
+</resources>

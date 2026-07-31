@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Child info: common actions -->
+    <string name="childinfo_back">Назад</string>
+    <string name="childinfo_edit">Редагувати</string>
+    <string name="childinfo_delete">Видалити</string>
+    <string name="childinfo_remove">Прибрати</string>
+    <string name="childinfo_add">Додати</string>
+    <string name="childinfo_save">Зберегти</string>
+    <string name="childinfo_cancel">Скасувати</string>
+    <string name="childinfo_clear">Очистити</string>
+    <string name="childinfo_ok">ОК</string>
+    <string name="childinfo_retry">Повторити</string>
+    <string name="childinfo_sync">Синхронізувати</string>
+
+    <!-- Child info: titles and sections -->
+    <string name="childinfo_screen_title">Інформація про дитину</string>
+    <string name="childinfo_title_add">Додати інформацію про дитину</string>
+    <string name="childinfo_title_edit">Редагувати інформацію про дитину</string>
+    <string name="childinfo_empty_state">Інформації про дитину поки немає</string>
+    <string name="childinfo_section_basic">Основна інформація</string>
+    <string name="childinfo_section_medications">Ліки</string>
+    <string name="childinfo_section_activities">Заняття та гуртки</string>
+    <string name="childinfo_section_allergies">Алергії</string>
+    <string name="childinfo_section_medical_notes">Медичні нотатки</string>
+    <string name="childinfo_section_emergency_contacts">Екстрені контакти</string>
+    <string name="childinfo_section_school">Інформація про школу</string>
+    <string name="childinfo_section_teacher">Інформація про вчителя</string>
+
+    <!-- Child info: basic form -->
+    <string name="childinfo_child_name_label">Ім\'я дитини *</string>
+    <string name="childinfo_dob_value">Дата народження: %1$s</string>
+    <string name="childinfo_select_dob">Вибрати дату народження</string>
+    <string name="childinfo_add_child_button">Додати дитину</string>
+    <string name="childinfo_save_changes">Зберегти зміни</string>
+    <string name="childinfo_medical_notes_label">Додаткова медична інформація</string>
+    <string name="childinfo_medical_notes_placeholder">Будь-яка інша важлива медична інформація…</string>
+
+    <!-- Child info: detail rows -->
+    <string name="childinfo_detail_dosage">Дозування: %1$s</string>
+    <string name="childinfo_detail_frequency">Частота: %1$s</string>
+    <string name="childinfo_detail_notes">Нотатки: %1$s</string>
+    <string name="childinfo_detail_schedule">Розклад: %1$s</string>
+    <string name="childinfo_detail_location">Місце: %1$s</string>
+    <string name="childinfo_detail_contact">Контакт: %1$s</string>
+    <string name="childinfo_detail_phone">Телефон: %1$s</string>
+    <string name="childinfo_detail_relationship">Ким доводиться: %1$s</string>
+    <string name="childinfo_detail_alt_phone">Дод. телефон: %1$s</string>
+    <string name="childinfo_detail_address">Адреса: %1$s</string>
+    <string name="childinfo_detail_teacher">Вчитель: %1$s</string>
+    <string name="childinfo_detail_email">Ел. пошта: %1$s</string>
+    <string name="childinfo_detail_grade">Клас: %1$s</string>
+    <string name="childinfo_allergy_bullet">• %1$s</string>
+
+    <!-- Child info: medications editor -->
+    <string name="childinfo_add_medication">Додати ліки</string>
+    <string name="childinfo_new_medication">Нові ліки</string>
+    <string name="childinfo_edit_medication">Редагувати ліки</string>
+    <string name="childinfo_medication_name_label">Назва ліків</string>
+    <string name="childinfo_dosage_label">Дозування (напр., 10 мг)</string>
+    <string name="childinfo_frequency_label">Частота (напр., 2 рази на день)</string>
+    <string name="childinfo_notes_optional_label">Нотатки (необов\'язково)</string>
+    <string name="childinfo_medication_summary">%1$s - %2$s</string>
+
+    <!-- Child info: activities editor -->
+    <string name="childinfo_add_activity">Додати заняття</string>
+    <string name="childinfo_new_activity">Нове заняття</string>
+    <string name="childinfo_edit_activity">Редагувати заняття</string>
+    <string name="childinfo_activity_name_label">Назва заняття</string>
+    <string name="childinfo_activity_name_placeholder">напр., футбол, уроки фортепіано</string>
+    <string name="childinfo_schedule_label">Розклад</string>
+    <string name="childinfo_schedule_placeholder">напр., пн і ср, 16:00–17:00</string>
+    <string name="childinfo_location_optional_label">Місце (необов\'язково)</string>
+    <string name="childinfo_contact_person_optional_label">Контактна особа (необов\'язково)</string>
+    <string name="childinfo_contact_phone_optional_label">Контактний телефон (необов\'язково)</string>
+    <string name="childinfo_activity_location_marker">📍 %1$s</string>
+    <string name="childinfo_activity_contact_marker">👤 %1$s</string>
+    <string name="childinfo_activity_contact_phone_marker">👤 %1$s • %2$s</string>
+
+    <!-- Child info: allergies editor -->
+    <string name="childinfo_add_allergy">Додати алергію</string>
+    <string name="childinfo_allergy_label">Алергія</string>
+    <string name="childinfo_allergy_placeholder">напр., арахіс, лактоза</string>
+
+    <!-- Child info: emergency contacts editor -->
+    <string name="childinfo_add_emergency_contact">Додати екстрений контакт</string>
+    <string name="childinfo_new_emergency_contact">Новий екстрений контакт</string>
+    <string name="childinfo_edit_emergency_contact">Редагувати екстрений контакт</string>
+    <string name="childinfo_name_label">Ім\'я</string>
+    <string name="childinfo_relationship_label">Ким доводиться</string>
+    <string name="childinfo_relationship_placeholder">напр., бабуся, дядько</string>
+    <string name="childinfo_phone_number_label">Номер телефону</string>
+    <string name="childinfo_alternate_phone_optional_label">Додатковий телефон (необов\'язково)</string>
+    <string name="childinfo_contact_phone_marker">📞 %1$s</string>
+    <string name="childinfo_contact_alt_phone_marker">📱 %1$s</string>
+
+    <!-- Child info: school editor -->
+    <string name="childinfo_add_school_info">Додати інформацію про школу</string>
+    <string name="childinfo_school_name_label">Назва школи</string>
+    <string name="childinfo_address_optional_label">Адреса (необов\'язково)</string>
+    <string name="childinfo_school_phone_optional_label">Телефон школи (необов\'язково)</string>
+    <string name="childinfo_grade_optional_label">Клас (необов\'язково)</string>
+    <string name="childinfo_grade_placeholder">напр., 3-й клас</string>
+    <string name="childinfo_teacher_name_optional_label">Ім\'я вчителя (необов\'язково)</string>
+    <string name="childinfo_teacher_email_optional_label">Ел. пошта вчителя (необов\'язково)</string>
+</resources>

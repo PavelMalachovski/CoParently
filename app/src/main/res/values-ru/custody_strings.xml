@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="custody_title">График опеки</string>
+    <string name="custody_back">Назад</string>
+    <string name="custody_save_button">Сохранить график опеки</string>
+    <string name="custody_select_schedule_type">Выберите тип графика</string>
+    <string name="custody_pattern_start_date">Дата начала цикла</string>
+    <string name="custody_start_date_hint">Это опорная дата — цикл будет повторяться начиная с этого дня</string>
+    <string name="custody_who_starts_first">Кто начинает первым?</string>
+    <string name="custody_mom_starts_first">Мама начинает первой</string>
+    <string name="custody_dad_starts_first">Папа начинает первым</string>
+    <string name="custody_custom_pattern">Свой шаблон</string>
+    <string name="custody_custom_pattern_hint">Нажимайте на дни, чтобы назначить их маме (розовый). Остальные дни достанутся папе (синий).</string>
+    <string name="custody_week_abbrev">Н%1$d</string>
+    <string name="custody_day_abbrev">Д%1$d</string>
+    <string name="custody_week1_to_mom">Неделя 1 → Мама</string>
+    <string name="custody_week2_to_mom">Неделя 2 → Мама</string>
+    <string name="custody_preview">Предпросмотр</string>
+    <string name="custody_next_14_days">Следующие 14 дней:</string>
+    <string name="custody_mom">Мама</string>
+    <string name="custody_dad">Папа</string>
+    <string name="custody_ok">OK</string>
+    <string name="custody_cancel">Отмена</string>
+    <string name="custody_model_week_on_week_off">Неделя через неделю</string>
+    <string name="custody_model_two_two_three">Схема 2-2-3</string>
+    <string name="custody_model_three_four_four_three">Схема 3-4-4-3</string>
+    <string name="custody_model_custom">Свой график</string>
+    <string name="custody_model_week_on_week_off_desc">Ребёнок целую неделю у одного родителя, затем родители меняются.</string>
+    <string name="custody_model_two_two_three_desc">Схема 2 дня, 2 дня, 3 дня. Более частые переходы.</string>
+    <string name="custody_model_three_four_four_three_desc">Чередование 3 и 4 дней. Сбалансированное время в будни и выходные.</string>
+    <string name="custody_model_custom_desc">Создайте собственный шаблон графика.</string>
+</resources>

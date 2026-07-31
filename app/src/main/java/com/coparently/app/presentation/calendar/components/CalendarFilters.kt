@@ -89,12 +89,12 @@ fun EventTypeFilterSheet(
             HorizontalDivider()
 
             Text(
-                text = "Event types",
+                text = stringResource(R.string.calendar_filter_event_types),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold
             )
             Text(
-                text = "Hidden types are not shown in the calendar",
+                text = stringResource(R.string.calendar_filter_hidden_types_hint),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -114,7 +114,7 @@ fun EventTypeFilterSheet(
                             {
                                 Icon(
                                     imageVector = Icons.Default.Check,
-                                    contentDescription = "Visible",
+                                    contentDescription = stringResource(R.string.calendar_filter_type_visible),
                                     modifier = Modifier.size(16.dp)
                                 )
                             }
@@ -132,8 +132,8 @@ fun EventTypeFilterSheet(
                 OutlinedTextField(
                     value = newTypeName,
                     onValueChange = { newTypeName = it },
-                    label = { Text("New event type") },
-                    placeholder = { Text("e.g., Music lessons") },
+                    label = { Text(stringResource(R.string.calendar_filter_new_type_label)) },
+                    placeholder = { Text(stringResource(R.string.calendar_filter_new_type_placeholder)) },
                     singleLine = true,
                     modifier = Modifier.weight(1f)
                 )
@@ -151,7 +151,7 @@ fun EventTypeFilterSheet(
                         contentDescription = null,
                         modifier = Modifier.size(18.dp)
                     )
-                    Text("Add")
+                    Text(stringResource(R.string.calendar_filter_add_button))
                 }
             }
 
@@ -163,11 +163,11 @@ fun EventTypeFilterSheet(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "Czech holidays",
+                        text = stringResource(R.string.calendar_filter_holidays_title),
                         style = MaterialTheme.typography.titleSmall
                     )
                     Text(
-                        text = "Public holidays and school vacations",
+                        text = stringResource(R.string.calendar_filter_holidays_subtitle),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

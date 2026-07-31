@@ -39,8 +39,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.coparently.app.R
 import com.coparently.app.domain.model.Event
 import com.coparently.app.presentation.common.animations.AnimatedEmptyState
 import com.coparently.app.presentation.theme.CoPlanlyColors
@@ -63,14 +65,19 @@ fun EventListScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
+    // Snackbar strings are resolved here, in composable scope, because the
+    // delete lambda below is not composable.
+    val deletedMessage = stringResource(R.string.event_deleted_message)
+    val undoLabel = stringResource(R.string.event_deleted_undo)
+
     // Delete now, offer Undo. The full event is captured here, so Undo simply
     // re-creates it (the id is preserved on the domain model).
     val deleteWithUndo: (Event) -> Unit = { event ->
         viewModel.deleteEventById(event.id)
         scope.launch {
             val result = snackbarHostState.showSnackbar(
-                message = "Event deleted",
-                actionLabel = "Undo",
+                message = deletedMessage,
+                actionLabel = undoLabel,
                 duration = SnackbarDuration.Short
             )
             if (result == SnackbarResult.ActionPerformed) {
@@ -82,12 +89,12 @@ fun EventListScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Events") },
+                title = { Text(stringResource(R.string.event_list_title)) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateUp) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back"
+                            contentDescription = stringResource(R.string.event_list_back)
                         )
                     }
                 }
@@ -101,7 +108,7 @@ fun EventListScreen(
             ) {
                 Icon(
                     imageVector = Icons.Default.Add,
-                    contentDescription = "Add event"
+                    contentDescription = stringResource(R.string.event_list_add)
                 )
             }
         }
@@ -114,7 +121,7 @@ fun EventListScreen(
                         .padding(paddingValues)
                 ) {
                     Text(
-                        text = "Loading...",
+                        text = stringResource(R.string.event_list_loading),
                         style = MaterialTheme.typography.bodyLarge,
                         modifier = Modifier.padding(16.dp)
                     )
@@ -128,7 +135,7 @@ fun EventListScreen(
                         .padding(paddingValues)
                 ) {
                     Text(
-                        text = "Error: ${state.message}",
+                        text = stringResource(R.string.event_list_error, state.message),
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.error,
                         modifier = Modifier.padding(16.dp)
@@ -143,9 +150,9 @@ fun EventListScreen(
                 if (events.isEmpty()) {
                     AnimatedEmptyState(
                         icon = Icons.Default.Event,
-                        title = "No events yet",
-                        description = "Create your first event to start organizing your co-parenting schedule.",
-                        actionText = "Add Event",
+                        title = stringResource(R.string.event_list_empty_title),
+                        description = stringResource(R.string.event_list_empty_description),
+                        actionText = stringResource(R.string.event_list_empty_action),
                         onActionClick = onAddEventClick
                     )
                 } else {
@@ -210,7 +217,7 @@ private fun SwipeableEventCard(
             ) {
                 Icon(
                     imageVector = Icons.Default.Delete,
-                    contentDescription = "Delete",
+                    contentDescription = stringResource(R.string.event_delete),
                     tint = MaterialTheme.colorScheme.onError
                 )
             }
@@ -246,11 +253,16 @@ private fun EventCardContent(
                 )
             }
             Text(
-                text = "Date: ${event.startDateTime}",
+                text = stringResource(R.string.event_list_date, event.startDateTime.toString()),
                 style = MaterialTheme.typography.bodySmall
             )
+            val parentLabel = when (event.parentOwner) {
+                "mom" -> stringResource(R.string.event_preview_mom)
+                "dad" -> stringResource(R.string.event_preview_dad)
+                else -> event.parentOwner
+            }
             Text(
-                text = "Parent: ${event.parentOwner}",
+                text = stringResource(R.string.event_list_parent, parentLabel),
                 style = MaterialTheme.typography.bodySmall,
                 color = when (event.parentOwner) {
                     "mom" -> CoPlanlyColors.MomPink

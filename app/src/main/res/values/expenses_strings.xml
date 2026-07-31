@@ -51,4 +51,22 @@
     <string name="expense_field_date">Date</string>
     <string name="expense_date_confirm">OK</string>
     <string name="expense_date_cancel">Cancel</string>
+
+    <!-- Expense categories (labels for the ExpenseCategory enum) -->
+    <string name="expenses_category_education">Education</string>
+    <string name="expenses_category_medical">Medical</string>
+    <string name="expenses_category_clothing">Clothing</string>
+    <string name="expenses_category_food">Food</string>
+    <string name="expenses_category_activities">Activities</string>
+    <string name="expenses_category_transportation">Transportation</string>
+    <string name="expenses_category_toys">Toys</string>
+    <string name="expenses_category_household">Household</string>
+    <string name="expenses_category_other">Other</string>
+
+    <!-- Budget screen -->
+    <string name="budget_alerts_title">Alerts</string>
+    <string name="budget_alert_exceeded">Budget Exceeded: %1$s</string>
+    <string name="budget_alert_percent_spent">You have spent %1$d%% of your limit.</string>
+    <string name="budget_spent_of_limit">%1$s / %2$s</string>
+    <string name="budget_percent_used">%1$d%% used</string>
 </resources>

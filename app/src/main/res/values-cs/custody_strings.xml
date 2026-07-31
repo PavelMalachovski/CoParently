@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="custody_title">Plán péče</string>
+    <string name="custody_back">Zpět</string>
+    <string name="custody_save_button">Uložit plán péče</string>
+    <string name="custody_select_schedule_type">Vyberte typ rozvrhu</string>
+    <string name="custody_pattern_start_date">Datum začátku vzoru</string>
+    <string name="custody_start_date_hint">Toto je výchozí datum – vzor se bude opakovat od tohoto dne</string>
+    <string name="custody_who_starts_first">Kdo začíná první?</string>
+    <string name="custody_mom_starts_first">Máma začíná první</string>
+    <string name="custody_dad_starts_first">Táta začíná první</string>
+    <string name="custody_custom_pattern">Vlastní vzor</string>
+    <string name="custody_custom_pattern_hint">Klepnutím přiřaďte dny mámě (růžová). Zbývající dny připadnou tátovi (modrá).</string>
+    <string name="custody_week_abbrev">T%1$d</string>
+    <string name="custody_day_abbrev">D%1$d</string>
+    <string name="custody_week1_to_mom">1. týden → Máma</string>
+    <string name="custody_week2_to_mom">2. týden → Máma</string>
+    <string name="custody_preview">Náhled</string>
+    <string name="custody_next_14_days">Dalších 14 dní:</string>
+    <string name="custody_mom">Máma</string>
+    <string name="custody_dad">Táta</string>
+    <string name="custody_ok">OK</string>
+    <string name="custody_cancel">Zrušit</string>
+    <string name="custody_model_week_on_week_off">Střídání po týdnu</string>
+    <string name="custody_model_two_two_three">Schéma 2-2-3</string>
+    <string name="custody_model_three_four_four_three">Schéma 3-4-4-3</string>
+    <string name="custody_model_custom">Vlastní rozvrh</string>
+    <string name="custody_model_week_on_week_off_desc">Jeden rodič má dítě celý týden, pak se vystřídají.</string>
+    <string name="custody_model_two_two_three_desc">Vzor 2 dny, 2 dny, 3 dny. Častější střídání.</string>
+    <string name="custody_model_three_four_four_three_desc">Střídání 3 a 4 dnů. Vyvážený čas ve všední dny i o víkendu.</string>
+    <string name="custody_model_custom_desc">Vytvořte si vlastní vzor rozvrhu.</string>
+</resources>

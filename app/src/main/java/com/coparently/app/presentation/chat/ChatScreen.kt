@@ -29,8 +29,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.coparently.app.R
 import com.coparently.app.domain.model.Conversation
 import com.coparently.app.domain.model.Event
 import java.time.format.DateTimeFormatter
@@ -63,15 +65,18 @@ fun ChatScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(conversation?.title ?: "Chat") },
+                title = { Text(conversation?.title ?: stringResource(R.string.chat_title_fallback)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.chat_back))
                     }
                 },
                 actions = {
                     IconButton(onClick = { showEventPicker = true }) {
-                        Icon(Icons.Default.SwapHoriz, contentDescription = "Request change")
+                        Icon(
+                            Icons.Default.SwapHoriz,
+                            contentDescription = stringResource(R.string.chat_request_change)
+                        )
                     }
                 }
             )
@@ -147,18 +152,18 @@ private fun ChangeRequestEventPicker(
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Text(
-                text = "Request a change",
+                text = stringResource(R.string.chat_request_change_title),
                 style = MaterialTheme.typography.titleMedium
             )
             if (events.isEmpty()) {
                 Text(
-                    text = "No upcoming events to propose a change for.",
+                    text = stringResource(R.string.chat_no_upcoming_events),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             } else {
                 Text(
-                    text = "Pick the event you'd like to reschedule:",
+                    text = stringResource(R.string.chat_pick_event_to_reschedule),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

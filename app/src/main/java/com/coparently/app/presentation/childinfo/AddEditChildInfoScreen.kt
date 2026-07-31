@@ -10,8 +10,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.coparently.app.R
 import com.coparently.app.domain.model.*
 import com.coparently.app.presentation.childinfo.components.*
 import java.time.LocalDateTime
@@ -87,13 +89,19 @@ fun AddEditChildInfoScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Text(if (childInfoId == "new") "Add Child Info" else "Edit Child Info")
+                    Text(
+                        if (childInfoId == "new") {
+                            stringResource(R.string.childinfo_title_add)
+                        } else {
+                            stringResource(R.string.childinfo_title_edit)
+                        }
+                    )
                 },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back"
+                            contentDescription = stringResource(R.string.childinfo_back)
                         )
                     }
                 }
@@ -117,14 +125,14 @@ fun AddEditChildInfoScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Text(
-                        text = "Basic Information",
+                        text = stringResource(R.string.childinfo_section_basic),
                         style = MaterialTheme.typography.titleMedium
                     )
 
                     OutlinedTextField(
                         value = childName,
                         onValueChange = { childName = it },
-                        label = { Text("Child's Name *") },
+                        label = { Text(stringResource(R.string.childinfo_child_name_label)) },
                         modifier = Modifier.fillMaxWidth(),
                         enabled = !isSaving,
                         singleLine = true
@@ -138,9 +146,12 @@ fun AddEditChildInfoScreen(
                     ) {
                         Text(
                             text = if (dateOfBirth != null) {
-                                "Date of Birth: ${dateOfBirth!!.format(DateTimeFormatter.ofPattern("dd/MM/yyyy"))}"
+                                stringResource(
+                                    R.string.childinfo_dob_value,
+                                    dateOfBirth!!.format(DateTimeFormatter.ofPattern("dd/MM/yyyy"))
+                                )
                             } else {
-                                "Select Date of Birth"
+                                stringResource(R.string.childinfo_select_dob)
                             }
                         )
                     }
@@ -156,7 +167,7 @@ fun AddEditChildInfoScreen(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text(
-                        text = "Medications",
+                        text = stringResource(R.string.childinfo_section_medications),
                         style = MaterialTheme.typography.titleMedium
                     )
 
@@ -188,7 +199,7 @@ fun AddEditChildInfoScreen(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text(
-                        text = "Activities & Classes",
+                        text = stringResource(R.string.childinfo_section_activities),
                         style = MaterialTheme.typography.titleMedium
                     )
 
@@ -220,7 +231,7 @@ fun AddEditChildInfoScreen(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text(
-                        text = "Allergies",
+                        text = stringResource(R.string.childinfo_section_allergies),
                         style = MaterialTheme.typography.titleMedium
                     )
 
@@ -247,15 +258,15 @@ fun AddEditChildInfoScreen(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text(
-                        text = "Medical Notes",
+                        text = stringResource(R.string.childinfo_section_medical_notes),
                         style = MaterialTheme.typography.titleMedium
                     )
 
                     OutlinedTextField(
                         value = medicalNotes,
                         onValueChange = { medicalNotes = it },
-                        label = { Text("Additional medical information") },
-                        placeholder = { Text("Any other important medical information...") },
+                        label = { Text(stringResource(R.string.childinfo_medical_notes_label)) },
+                        placeholder = { Text(stringResource(R.string.childinfo_medical_notes_placeholder)) },
                         modifier = Modifier.fillMaxWidth(),
                         enabled = !isSaving,
                         minLines = 3,
@@ -273,7 +284,7 @@ fun AddEditChildInfoScreen(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text(
-                        text = "Emergency Contacts",
+                        text = stringResource(R.string.childinfo_section_emergency_contacts),
                         style = MaterialTheme.typography.titleMedium
                     )
 
@@ -305,7 +316,7 @@ fun AddEditChildInfoScreen(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text(
-                        text = "School Information",
+                        text = stringResource(R.string.childinfo_section_school),
                         style = MaterialTheme.typography.titleMedium
                     )
 
@@ -349,7 +360,13 @@ fun AddEditChildInfoScreen(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                 }
-                Text(if (childInfoId == "new") "Add Child" else "Save Changes")
+                Text(
+                    if (childInfoId == "new") {
+                        stringResource(R.string.childinfo_add_child_button)
+                    } else {
+                        stringResource(R.string.childinfo_save_changes)
+                    }
+                )
             }
 
             // Navigate back after save completes

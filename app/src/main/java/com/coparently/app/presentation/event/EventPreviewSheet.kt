@@ -134,7 +134,7 @@ fun EventPreviewSheet(
             event.imageUrl?.let { url ->
                 AsyncImage(
                     model = url,
-                    contentDescription = "Event photo",
+                    contentDescription = stringResource(R.string.event_preview_photo),
                     contentScale = ContentScale.Crop,
                     modifier = Modifier
                         .fillMaxWidth()

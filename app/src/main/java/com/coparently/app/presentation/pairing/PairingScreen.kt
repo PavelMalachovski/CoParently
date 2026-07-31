@@ -15,6 +15,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.compose.runtime.mutableStateOf
@@ -22,6 +23,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
+import com.coparently.app.R
 import com.coparently.app.presentation.common.ConfirmationDialog
 import kotlinx.coroutines.delay
 import java.util.concurrent.TimeUnit
@@ -71,12 +73,12 @@ fun PairingScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Co-Parent Pairing") },
+                title = { Text(stringResource(R.string.pairing_screen_title)) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back"
+                            contentDescription = stringResource(R.string.pairing_back)
                         )
                     }
                 }
@@ -97,7 +99,7 @@ fun PairingScreen(
                     modifier = Modifier.padding(16.dp)
                 ) {
                     Text(
-                        text = "Paired with",
+                        text = stringResource(R.string.pairing_paired_with_label),
                         style = MaterialTheme.typography.titleSmall
                     )
                     Text(
@@ -111,7 +113,7 @@ fun PairingScreen(
                             containerColor = MaterialTheme.colorScheme.error
                         )
                     ) {
-                        Text("Unpair")
+                        Text(stringResource(R.string.pairing_unpair_button))
                     }
                 }
             }
@@ -120,7 +122,7 @@ fun PairingScreen(
             OutlinedTextField(
                 value = uiState.invitationEmail,
                 onValueChange = viewModel::updateInvitationEmail,
-                label = { Text("Partner email") },
+                label = { Text(stringResource(R.string.pairing_partner_email_label)) },
                 modifier = Modifier.fillMaxWidth(),
                 enabled = !uiState.isLoading,
                 isError = uiState.emailError != null,
@@ -152,7 +154,7 @@ fun PairingScreen(
                     onClick = { viewModel.sendInvitation(onNavigateBack) },
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Send Email Invitation")
+                    Text(stringResource(R.string.pairing_send_email_invitation))
                 }
 
                 Spacer(modifier = Modifier.height(12.dp))
@@ -167,7 +169,7 @@ fun PairingScreen(
                         contentDescription = null,
                         modifier = Modifier.padding(end = 8.dp)
                     )
-                    Text("Share QR Code")
+                    Text(stringResource(R.string.pairing_share_qr_code))
                 }
 
                 Spacer(modifier = Modifier.height(12.dp))
@@ -188,7 +190,7 @@ fun PairingScreen(
                         contentDescription = null,
                         modifier = Modifier.padding(end = 8.dp)
                     )
-                    Text("Scan QR Code")
+                    Text(stringResource(R.string.pairing_scan_qr_code))
                 }
             }
         }
@@ -196,7 +198,7 @@ fun PairingScreen(
         if (uiState.pendingInvitations.isNotEmpty()) {
             Spacer(modifier = Modifier.height(32.dp))
             Text(
-                text = "Pending Invitations",
+                text = stringResource(R.string.pairing_pending_invitations_title),
                 style = MaterialTheme.typography.titleMedium
             )
 
@@ -217,7 +219,8 @@ fun PairingScreen(
                     ) {
                         Column {
                             Text(
-                                text = invitation["fromUserName"] as? String ?: "Unknown",
+                                text = invitation["fromUserName"] as? String
+                                    ?: stringResource(R.string.pairing_unknown_sender),
                                 style = MaterialTheme.typography.titleSmall
                             )
                             Text(
@@ -232,7 +235,7 @@ fun PairingScreen(
                                     showConfirmDialog = true
                                 }
                             ) {
-                                Text("Accept")
+                                Text(stringResource(R.string.pairing_accept_button))
                             }
                             TextButton(
                                 onClick = {
@@ -241,7 +244,7 @@ fun PairingScreen(
                                     )
                                 }
                             ) {
-                                Text("Reject")
+                                Text(stringResource(R.string.pairing_reject_button))
                             }
                         }
                     }
@@ -256,7 +259,7 @@ fun PairingScreen(
                     onDismissRequest = { viewModel.dismissQRCodeDialog() },
                     title = {
                         Text(
-                            text = "Co-Parent Invitation QR Code",
+                            text = stringResource(R.string.pairing_qr_dialog_title),
                             style = MaterialTheme.typography.headlineSmall
                         )
                     },
@@ -266,7 +269,7 @@ fun PairingScreen(
                             verticalArrangement = Arrangement.spacedBy(16.dp)
                         ) {
                             Text(
-                                text = "Share this QR code with your co-parent. They can scan it to accept your invitation.",
+                                text = stringResource(R.string.pairing_qr_dialog_message),
                                 style = MaterialTheme.typography.bodyMedium,
                                 textAlign = androidx.compose.ui.text.style.TextAlign.Center
                             )
@@ -283,7 +286,9 @@ fun PairingScreen(
                                 ) {
                                     Image(
                                         bitmap = qrBitmap.asImageBitmap(),
-                                        contentDescription = "Pairing QR Code",
+                                        contentDescription = stringResource(
+                                            R.string.pairing_qr_code_content_description
+                                        ),
                                         modifier = Modifier.fillMaxSize()
                                     )
                                 }
@@ -312,14 +317,14 @@ fun PairingScreen(
                                     verticalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
                                     Text(
-                                        text = "QR code has expired",
+                                        text = stringResource(R.string.pairing_qr_expired),
                                         style = MaterialTheme.typography.bodyMedium,
                                         color = MaterialTheme.colorScheme.error
                                     )
                                     Button(
                                         onClick = { viewModel.regenerateQRCode() }
                                     ) {
-                                        Text("Generate New QR Code")
+                                        Text(stringResource(R.string.pairing_generate_new_qr_code))
                                     }
                                 }
                             } else {
@@ -328,13 +333,19 @@ fun PairingScreen(
                                 val seconds = TimeUnit.MILLISECONDS.toSeconds(timeRemaining % TimeUnit.MINUTES.toMillis(1))
 
                                 val timeText = when {
-                                    hours > 0 -> "${hours}h ${minutes}m remaining"
-                                    minutes > 0 -> "${minutes}m ${seconds}s remaining"
-                                    else -> "${seconds}s remaining"
+                                    hours > 0 -> stringResource(
+                                        R.string.pairing_time_remaining_hours, hours, minutes
+                                    )
+                                    minutes > 0 -> stringResource(
+                                        R.string.pairing_time_remaining_minutes, minutes, seconds
+                                    )
+                                    else -> stringResource(
+                                        R.string.pairing_time_remaining_seconds, seconds
+                                    )
                                 }
 
                                 Text(
-                                    text = "Expires in: $timeText",
+                                    text = stringResource(R.string.pairing_expires_in, timeText),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = when {
                                         hours < 1 -> MaterialTheme.colorScheme.error
@@ -347,7 +358,7 @@ fun PairingScreen(
                     },
                     confirmButton = {
                         TextButton(onClick = { viewModel.dismissQRCodeDialog() }) {
-                            Text("Close")
+                            Text(stringResource(R.string.pairing_close))
                         }
                     }
                 )
@@ -356,14 +367,15 @@ fun PairingScreen(
 
         // Confirmation dialog for accepting pairing
         if (showConfirmDialog && invitationToAccept != null) {
-            val fromName = invitationToAccept?.get("fromUserName") as? String ?: "Unknown User"
+            val fromName = invitationToAccept?.get("fromUserName") as? String
+                ?: stringResource(R.string.pairing_unknown_user)
             val fromEmail = invitationToAccept?.get("fromUserEmail") as? String ?: ""
 
             ConfirmationDialog(
-                title = "Pair with Co-Parent?",
-                message = "Are you sure you want to pair with $fromName ($fromEmail)? This will allow you to share calendar events and communicate with them.",
-                confirmText = "Accept Pairing",
-                dismissText = "Cancel",
+                title = stringResource(R.string.pairing_confirm_title),
+                message = stringResource(R.string.pairing_confirm_message, fromName, fromEmail),
+                confirmText = stringResource(R.string.pairing_accept_pairing),
+                dismissText = stringResource(R.string.pairing_cancel),
                 onConfirm = {
                     invitationToAccept?.get("id")?.let { invId ->
                         viewModel.acceptInvitation(invId as String)
