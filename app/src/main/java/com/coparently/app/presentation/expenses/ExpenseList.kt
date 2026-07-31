@@ -57,6 +57,7 @@ private const val PAYER_TINT_ALPHA = 0.18f
  * @param expenses Expenses to show, already ordered
  * @param roleByUid Map of payer uid to "mom"/"dad"; a missing entry just omits the payer
  * @param onDelete Invoked with the swiped expense; null hides the affordance
+ * @param onExpenseClick Invoked when a row is tapped (opens the editor); null makes rows inert
  * @param modifier Modifier for the list
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -65,6 +66,7 @@ fun ExpenseList(
     expenses: List<Expense>,
     roleByUid: Map<String, String>,
     onDelete: ((Expense) -> Unit)? = null,
+    onExpenseClick: ((Expense) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     // Receipt being viewed full-screen; transient UI state, deliberately local.
@@ -80,6 +82,7 @@ fun ExpenseList(
                 ExpenseItem(
                     expense = expense,
                     payerRole = roleByUid[expense.paidBy],
+                    onClick = onExpenseClick?.let { { it(expense) } },
                     onReceiptClick = { url -> viewedReceiptUrl = url }
                 )
             }
@@ -102,21 +105,23 @@ fun ExpenseList(
 /**
  * A single expense row: who paid, what for, and how it splits.
  *
- * Deliberately NOT clickable as a whole — there is no expense-detail screen yet, and a row that
- * ripples but does nothing reads as a broken app. The receipt thumbnail is the one real
- * affordance here and stays tappable.
+ * The whole row opens the editor via [onClick] when one is provided; the receipt thumbnail keeps
+ * its own tap target for the full-screen viewer, so tapping the photo never leaks through to the
+ * editor.
  *
  * The amount alone cannot answer "is this settled?", which is the question co-parents actually
  * have, so the row states the payer and the split explicitly.
  *
  * @param expense Expense to render
  * @param payerRole "mom"/"dad", or null when the payer is not a known parent
+ * @param onClick Opens the expense editor; null leaves the row inert
  * @param onReceiptClick Opens the full-screen receipt viewer
  */
 @Composable
 fun ExpenseItem(
     expense: Expense,
     payerRole: String? = null,
+    onClick: (() -> Unit)? = null,
     onReceiptClick: (String) -> Unit = {}
 ) {
     val dateFormatter = remember { DateTimeFormatter.ofPattern("MMM d", Locale.getDefault()) }
@@ -159,7 +164,9 @@ fun ExpenseItem(
     Surface(
         shape = RoundedCornerShape(10.dp),
         color = MaterialTheme.colorScheme.surfaceContainerLow,
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 11.dp, vertical = 10.dp),

@@ -134,9 +134,11 @@ Data flow: UI → ViewModel → UseCase → Repository → Room (source of truth
 
 ## Known issues / do not "fix" silently
 
-- `Expense.currency` is a real per-expense field, but `calculateExpenseBalance` still does not
-  convert between currencies — a month mixing currencies shows a wrong total. This is a tracked
-  follow-up (mixed-currency months, spec §10); do not "fix" it by silently normalising currencies.
+- `Expense.currency` is a real per-expense field. A month mixing currencies is now summarised
+  **per currency** (`calculateExpenseBalancesByCurrency` → one `ExpenseSummaryHeader` per currency
+  on the Expenses screen; the Home "this month" tile joins per-currency subtotals). There is still
+  no FX conversion between currencies (spec §10) — deliberately: totals stay honest within each
+  currency rather than being normalised. Do not reintroduce a single cross-currency total.
 
 - `firestore.rules` (strict) was realigned with the real document schema (ISO **string**
   dates, presence-based key validation, `change_requests`/`expenses` collections added,

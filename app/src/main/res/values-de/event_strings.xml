@@ -79,6 +79,7 @@
     <string name="event_form_draft_restored">Entwurf wiederhergestellt</string>
     <string name="event_form_delete_dialog_title">Termin löschen</string>
     <string name="event_form_delete_dialog_message">Möchtest du diesen Termin wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.</string>
+    <string name="event_form_event_deleted">Termin gelöscht</string>
     <string name="event_form_not_found">Termin nicht gefunden</string>
     <string name="event_form_delete_failed">Termin konnte nicht gelöscht werden: %1$s</string>
     <string name="event_form_save_failed">Termin konnte nicht gespeichert werden: %1$s</string>

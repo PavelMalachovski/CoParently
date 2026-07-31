@@ -48,6 +48,7 @@ import com.kizitonwose.calendar.compose.HorizontalCalendar
 import com.kizitonwose.calendar.compose.rememberCalendarState
 import com.kizitonwose.calendar.core.CalendarDay
 import com.kizitonwose.calendar.core.DayPosition
+import com.kizitonwose.calendar.core.OutDateStyle
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.YearMonth
@@ -104,7 +105,11 @@ fun MonthView(
         startMonth = remember(anchorMonth) { anchorMonth.minusMonths(MONTH_PAGER_RANGE) },
         endMonth = remember(anchorMonth) { anchorMonth.plusMonths(MONTH_PAGER_RANGE) },
         firstVisibleMonth = selectedMonth,
-        firstDayOfWeek = firstDayOfWeek
+        firstDayOfWeek = firstDayOfWeek,
+        // Pad every month to a full 6-row grid. The library default (EndOfRow) gives months
+        // 5 or 6 rows, so their heights differ and paging between a short and a tall month
+        // looks uneven in one direction — a fixed 6-row grid makes left/right symmetric.
+        outDateStyle = OutDateStyle.EndOfGrid
     )
 
     // Propagate to the ViewModel only once the pager has fully settled. Reacting to

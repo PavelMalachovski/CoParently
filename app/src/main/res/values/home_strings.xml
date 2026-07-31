@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Home / Overview dashboard strings. -->
+<resources>
+    <string name="home_title">Overview</string>
+
+    <!-- Pairing call-to-action, shown while the account is not yet paired. -->
+    <string name="home_pairing_prompt">Pair with your co-parent to share the calendar, expenses and messages.</string>
+    <string name="home_pairing_cta">Pair with your co-parent</string>
+
+    <!-- Custody handover countdown card. -->
+    <string name="home_handover_today">Handover today</string>
+    <string name="home_handover_tomorrow">Handover tomorrow</string>
+    <plurals name="home_handover_in_days">
+        <item quantity="one">Handover in %1$d day</item>
+        <item quantity="other">Handover in %1$d days</item>
+    </plurals>
+    <!-- %1$s = from parent, %2$s = to parent, %3$s = formatted date -->
+    <string name="home_handover_route">%1$s → %2$s · %3$s</string>
+
+    <!-- Stat tiles. -->
+    <string name="home_stat_this_month">This month</string>
+    <string name="home_stat_unread">Unread</string>
+
+    <!-- Section headers. -->
+    <string name="home_section_upcoming">Upcoming</string>
+    <string name="home_section_recent_changes">Recent changes</string>
+
+    <!-- Recent-changes empty states. -->
+    <string name="home_recent_empty_paired">Nothing new from your co-parent yet. Changes they make will show up here.</string>
+    <string name="home_recent_empty_unpaired">Once you pair, changes your co-parent makes will show up here.</string>
+
+    <string name="home_weekly_summary">View weekly summary</string>
+
+    <!-- Activity feed labels. -->
+    <string name="home_activity_event_created">Co-parent added this event</string>
+    <string name="home_activity_event_updated">Co-parent updated this event</string>
+    <string name="home_activity_pickup_confirmed">Co-parent confirmed pickup</string>
+    <string name="home_activity_change_requested">Co-parent requested a change</string>
+
+    <!-- Parent identity labels. -->
+    <string name="home_parent_mom">Mom</string>
+    <string name="home_parent_dad">Dad</string>
+</resources>

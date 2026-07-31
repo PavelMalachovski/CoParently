@@ -165,4 +165,51 @@ class ExpenseBalanceTest {
         assertEquals(0.0, balance.momPaid, 0.001)
         assertEquals(0.0, balance.dadPaid, 0.001)
     }
+
+    @Test
+    fun `balances are computed per currency without cross-currency summing`() {
+        // A month mixing USD and CZK must not be added into one figure (749 + 15 = 764 would be
+        // meaningless) — each currency keeps its own honest total.
+        val balances = calculateExpenseBalancesByCurrency(
+            expenses = listOf(
+                expense("falco", 15.0, mom).copy(currency = "USD"),
+                expense("bowling", 749.0, dad).copy(currency = "CZK")
+            ),
+            currentUserId = mom,
+            roleByUid = roles
+        )
+
+        assertEquals(2, balances.size)
+        // Largest total leads: 749 CZK before 15 USD.
+        assertEquals("CZK", balances[0].currency)
+        assertEquals(749.0, balances[0].balance.total, 0.001)
+        assertEquals("USD", balances[1].currency)
+        assertEquals(15.0, balances[1].balance.total, 0.001)
+    }
+
+    @Test
+    fun `a single-currency month yields one balance`() {
+        val balances = calculateExpenseBalancesByCurrency(
+            expenses = listOf(
+                expense("dentist", 120.0, mom),
+                expense("school", 68.50, dad)
+            ),
+            currentUserId = mom,
+            roleByUid = roles
+        )
+
+        assertEquals(1, balances.size)
+        assertEquals(188.50, balances[0].balance.total, 0.001)
+    }
+
+    @Test
+    fun `no expenses yields no currency balances`() {
+        val balances = calculateExpenseBalancesByCurrency(
+            expenses = emptyList(),
+            currentUserId = mom,
+            roleByUid = roles
+        )
+
+        assertTrue(balances.isEmpty())
+    }
 }

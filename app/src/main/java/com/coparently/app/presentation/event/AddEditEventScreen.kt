@@ -569,12 +569,12 @@ fun AddEditEventScreen(
                         titleError = null
                     }
                 },
-                label = { Text("Event Title") },
-                placeholder = { Text("e.g., Soccer Practice") },
+                label = { Text(stringResource(R.string.event_form_field_title_label)) },
+                placeholder = { Text(stringResource(R.string.event_form_field_title_placeholder)) },
                 leadingIcon = {
                     Icon(
                         imageVector = Icons.Default.Title,
-                        contentDescription = "Event title icon"
+                        contentDescription = stringResource(R.string.event_form_cd_title_icon)
                     )
                 },
                 isError = titleError != null,
@@ -606,12 +606,12 @@ fun AddEditEventScreen(
                     description = it
                     validateDescription()
                 },
-                label = { Text("Description (Optional)") },
-                placeholder = { Text("Add details about the event...") },
+                label = { Text(stringResource(R.string.event_form_field_description_label)) },
+                placeholder = { Text(stringResource(R.string.event_form_field_description_placeholder)) },
                 leadingIcon = {
                     Icon(
                         imageVector = Icons.Default.Description,
-                        contentDescription = "Event description icon"
+                        contentDescription = stringResource(R.string.event_form_cd_description_icon)
                     )
                 },
                 isError = descriptionError != null,
@@ -642,7 +642,7 @@ fun AddEditEventScreen(
 
             // Parent Owner Selection with animated cards
             Text(
-                text = "Assigned To",
+                text = stringResource(R.string.event_form_assigned_to),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold
             )
@@ -651,7 +651,10 @@ fun AddEditEventScreen(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                listOf("mom" to "Mom", "dad" to "Dad").forEach { (value, label) ->
+                listOf(
+                    "mom" to stringResource(R.string.calendar_parent_mom),
+                    "dad" to stringResource(R.string.calendar_parent_dad)
+                ).forEach { (value, label) ->
                     val isSelected = parentOwner == value
                     val scale by animateFloatAsState(
                         targetValue = if (isSelected) 1.05f else 1f,
@@ -668,7 +671,14 @@ fun AddEditEventScreen(
                             .semantics {
                                 role = Role.RadioButton
                                 selected = isSelected
-                                contentDescription = "Assign to $label, ${if (isSelected) "selected" else "not selected"}"
+                                contentDescription = context.getString(
+                                    R.string.event_form_cd_assign_to,
+                                    label,
+                                    context.getString(
+                                        if (isSelected) R.string.event_form_cd_selected
+                                        else R.string.event_form_cd_not_selected
+                                    )
+                                )
                             }
                             .graphicsLayer {
                                 scaleX = scale
@@ -721,7 +731,7 @@ fun AddEditEventScreen(
                                     "dad" -> Icons.Default.Person
                                     else -> Icons.Default.Person
                                 },
-                                contentDescription = "$label icon",
+                                contentDescription = stringResource(R.string.event_form_cd_label_icon, label),
                                 tint = when (value) {
                                     "mom" -> CoPlanlyColors.MomPink
                                     "dad" -> CoPlanlyColors.DadBlue
@@ -742,7 +752,7 @@ fun AddEditEventScreen(
 
             // Event Type Selection
             Text(
-                text = "Event Type",
+                text = stringResource(R.string.event_form_event_type),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold
             )
@@ -753,11 +763,11 @@ fun AddEditEventScreen(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 val allTypes = listOf(
-                    "general" to "General",
-                    "medical" to "Medical",
-                    "school" to "School",
-                    "sports" to "Sports",
-                    "birthday" to "Birthday"
+                    "general" to stringResource(R.string.event_type_general),
+                    "medical" to stringResource(R.string.event_type_medical),
+                    "school" to stringResource(R.string.event_type_school),
+                    "sports" to stringResource(R.string.event_type_sports),
+                    "birthday" to stringResource(R.string.event_type_birthday)
                 ) + customEventTypes.map { it to it.replaceFirstChar { c -> c.uppercase() } }
 
                 allTypes.forEach { (value, label) ->
@@ -772,13 +782,20 @@ fun AddEditEventScreen(
                             if (eventType == value) {
                                 Icon(
                                     imageVector = Icons.Default.Check,
-                                    contentDescription = "Selected",
+                                    contentDescription = stringResource(R.string.event_form_cd_selected_icon),
                                     modifier = Modifier.size(dims.iconSize * 0.75f) // ~18dp for compact
                                 )
                             }
                         },
                         modifier = Modifier.semantics {
-                            contentDescription = "$label event type, ${if (eventType == value) "selected" else "not selected"}"
+                            contentDescription = context.getString(
+                                R.string.event_form_cd_event_type,
+                                label,
+                                context.getString(
+                                    if (eventType == value) R.string.event_form_cd_selected
+                                    else R.string.event_form_cd_not_selected
+                                )
+                            )
                         }
                     )
                 }
@@ -786,7 +803,7 @@ fun AddEditEventScreen(
 
             // Date & Time Section
             Text(
-                text = "Date & Time",
+                text = stringResource(R.string.event_form_date_time),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold
             )
@@ -798,7 +815,10 @@ fun AddEditEventScreen(
                     .defaultMinSize(minHeight = 48.dp) // Ensure minimum touch target
                     .semantics {
                         role = Role.Button
-                        contentDescription = "Select date, currently ${startDate.format(DateTimeFormatter.ofPattern("EEEE, MMMM dd, yyyy"))}"
+                        contentDescription = context.getString(
+                            R.string.event_form_cd_select_date,
+                            startDate.format(DateTimeFormatter.ofPattern("EEEE, MMMM dd, yyyy"))
+                        )
                     },
                 onClick = {
                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
@@ -818,12 +838,12 @@ fun AddEditEventScreen(
                     ) {
                         Icon(
                             imageVector = Icons.Default.CalendarMonth,
-                            contentDescription = "Calendar icon",
+                            contentDescription = stringResource(R.string.event_form_cd_calendar_icon),
                             tint = MaterialTheme.colorScheme.primary
                         )
                         Column {
                             Text(
-                                text = "Date",
+                                text = stringResource(R.string.event_form_date),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -837,7 +857,7 @@ fun AddEditEventScreen(
                     }
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                        contentDescription = "Navigate to date picker",
+                        contentDescription = stringResource(R.string.event_form_cd_navigate_date_picker),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
@@ -860,7 +880,7 @@ fun AddEditEventScreen(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Schedule,
-                            contentDescription = "Error",
+                            contentDescription = stringResource(R.string.event_form_cd_error),
                             tint = MaterialTheme.colorScheme.error,
                             modifier = Modifier.size(24.dp)
                         )
@@ -885,7 +905,10 @@ fun AddEditEventScreen(
                         .defaultMinSize(minHeight = 48.dp) // Ensure minimum touch target
                         .semantics {
                             role = Role.Button
-                            contentDescription = "Select start time, currently ${startTime.format(DateTimeFormatter.ofPattern("HH:mm"))}"
+                            contentDescription = context.getString(
+                                R.string.event_form_cd_select_start_time,
+                                startTime.format(DateTimeFormatter.ofPattern("HH:mm"))
+                            )
                         },
                     onClick = {
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
@@ -900,13 +923,13 @@ fun AddEditEventScreen(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Schedule,
-                            contentDescription = "Time picker icon",
+                            contentDescription = stringResource(R.string.event_form_cd_time_picker_icon),
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(dims.iconSize)
                         )
                         Spacer(modifier = Modifier.height(dims.paddingSmall))
                         Text(
-                            text = "Start Time",
+                            text = stringResource(R.string.event_form_start_time),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -924,7 +947,10 @@ fun AddEditEventScreen(
                         .defaultMinSize(minHeight = 48.dp) // Ensure minimum touch target
                         .semantics {
                             role = Role.Button
-                            contentDescription = "Select end time, currently ${endTime.format(DateTimeFormatter.ofPattern("HH:mm"))}"
+                            contentDescription = context.getString(
+                                R.string.event_form_cd_select_end_time,
+                                endTime.format(DateTimeFormatter.ofPattern("HH:mm"))
+                            )
                         },
                     onClick = {
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
@@ -939,13 +965,13 @@ fun AddEditEventScreen(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Schedule,
-                            contentDescription = "Time picker icon",
+                            contentDescription = stringResource(R.string.event_form_cd_time_picker_icon),
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(dims.iconSize)
                         )
                         Spacer(modifier = Modifier.height(dims.paddingSmall))
                         Text(
-                            text = "End Time",
+                            text = stringResource(R.string.event_form_end_time),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -959,7 +985,7 @@ fun AddEditEventScreen(
 
             // Repeat Section
             Text(
-                text = "Repeat",
+                text = stringResource(R.string.event_form_repeat),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold
             )
@@ -969,11 +995,11 @@ fun AddEditEventScreen(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 listOf(
-                    null to "None",
-                    "daily" to "Daily",
-                    "weekly" to "Weekly",
-                    "biweekly" to "Every 2 weeks",
-                    "monthly" to "Monthly"
+                    null to stringResource(R.string.event_repeat_none),
+                    "daily" to stringResource(R.string.event_repeat_daily),
+                    "weekly" to stringResource(R.string.event_repeat_weekly),
+                    "biweekly" to stringResource(R.string.event_repeat_biweekly),
+                    "monthly" to stringResource(R.string.event_repeat_monthly)
                 ).forEach { (value, label) ->
                     FilterChip(
                         selected = recurrencePattern == value,
@@ -987,7 +1013,7 @@ fun AddEditEventScreen(
                             if (recurrencePattern == value) {
                                 Icon(
                                     imageVector = Icons.Default.Check,
-                                    contentDescription = "Selected",
+                                    contentDescription = stringResource(R.string.event_form_cd_selected_icon),
                                     modifier = Modifier.size(dims.iconSize * 0.75f)
                                 )
                             }
@@ -1016,20 +1042,20 @@ fun AddEditEventScreen(
                     ) {
                         Column {
                             Text(
-                                text = "Repeat until",
+                                text = stringResource(R.string.event_form_repeat_until),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             Text(
                                 text = recurrenceEndDate?.format(
                                     DateTimeFormatter.ofPattern("EEEE, MMM dd, yyyy")
-                                ) ?: "Forever",
+                                ) ?: stringResource(R.string.event_form_repeat_forever),
                                 style = MaterialTheme.typography.bodyLarge
                             )
                         }
                         if (recurrenceEndDate != null) {
                             TextButton(onClick = { recurrenceEndDate = null }) {
-                                Text("Clear")
+                                Text(stringResource(R.string.event_form_clear))
                             }
                         }
                     }
@@ -1038,7 +1064,7 @@ fun AddEditEventScreen(
 
             // Reminder Section
             Text(
-                text = "Reminder",
+                text = stringResource(R.string.event_form_reminder),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold
             )
@@ -1067,7 +1093,7 @@ fun AddEditEventScreen(
                             if (reminderMinutes == value) {
                                 Icon(
                                     imageVector = Icons.Default.Check,
-                                    contentDescription = "Selected",
+                                    contentDescription = stringResource(R.string.event_form_cd_selected_icon),
                                     modifier = Modifier.size(dims.iconSize * 0.75f)
                                 )
                             }
@@ -1102,11 +1128,11 @@ fun AddEditEventScreen(
                         )
                         Column {
                             Text(
-                                text = "Private event",
+                                text = stringResource(R.string.event_form_private_title),
                                 style = MaterialTheme.typography.titleSmall
                             )
                             Text(
-                                text = "Only you can see this event",
+                                text = stringResource(R.string.event_form_private_description),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -1173,14 +1199,19 @@ fun AddEditEventScreen(
                             )
                             Column {
                                 Text(
-                                    text = "Pickup",
+                                    text = stringResource(R.string.event_form_pickup),
                                     style = MaterialTheme.typography.titleSmall
                                 )
                                 Text(
                                     text = if (confirmedBy != null) {
-                                        "Confirmed by ${confirmedBy.replaceFirstChar { it.uppercase() }}"
+                                        val confirmerName = when (confirmedBy) {
+                                            "mom" -> stringResource(R.string.calendar_parent_mom)
+                                            "dad" -> stringResource(R.string.calendar_parent_dad)
+                                            else -> confirmedBy.replaceFirstChar { it.uppercase() }
+                                        }
+                                        stringResource(R.string.event_form_pickup_confirmed_by, confirmerName)
                                     } else {
-                                        "Not confirmed yet"
+                                        stringResource(R.string.event_form_pickup_not_confirmed)
                                     },
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -1205,7 +1236,12 @@ fun AddEditEventScreen(
                                 }
                             }
                         ) {
-                            Text(if (confirmedBy != null) "Undo" else "Confirm pickup")
+                            Text(
+                                stringResource(
+                                    if (confirmedBy != null) R.string.event_form_pickup_undo
+                                    else R.string.event_form_pickup_confirm
+                                )
+                            )
                         }
                     }
                 }
@@ -1236,12 +1272,12 @@ fun AddEditEventScreen(
                         showRecurrenceEndPicker = false
                     }
                 ) {
-                    Text("OK")
+                    Text(stringResource(R.string.event_form_ok))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showRecurrenceEndPicker = false }) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.event_form_cancel))
                 }
             }
         ) {
@@ -1271,12 +1307,12 @@ fun AddEditEventScreen(
                         showDatePicker = false
                     }
                 ) {
-                    Text("OK")
+                    Text(stringResource(R.string.event_form_ok))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showDatePicker = false }) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.event_form_cancel))
                 }
             }
         ) {
@@ -1319,10 +1355,10 @@ fun AddEditEventScreen(
                 }
             },
             title = {
-                Text("Delete Event")
+                Text(stringResource(R.string.event_form_delete_dialog_title))
             },
             text = {
-                Text("Are you sure you want to delete this event? This action cannot be undone.")
+                Text(stringResource(R.string.event_form_delete_dialog_message))
             },
             confirmButton = {
                 TextButton(
@@ -1334,14 +1370,14 @@ fun AddEditEventScreen(
                                 event?.let {
                                     viewModel.deleteEvent(it)
                                     snackbarHostState.showSnackbar(
-                                        message = "Event deleted",
+                                        message = context.getString(R.string.event_form_event_deleted),
                                         duration = SnackbarDuration.Short
                                     )
                                     kotlinx.coroutines.delay(500)
                                     onSave() // Navigate back
                                 } ?: run {
                                     snackbarHostState.showSnackbar(
-                                        message = "Event not found",
+                                        message = context.getString(R.string.event_form_not_found),
                                         duration = SnackbarDuration.Short
                                     )
                                     isDeleting = false
@@ -1349,7 +1385,10 @@ fun AddEditEventScreen(
                                 }
                             } catch (e: Exception) {
                                 snackbarHostState.showSnackbar(
-                                    message = "Failed to delete event: ${e.message}",
+                                    message = context.getString(
+                                        R.string.event_form_delete_failed,
+                                        e.message ?: ""
+                                    ),
                                     duration = SnackbarDuration.Long
                                 )
                                 isDeleting = false
@@ -1359,7 +1398,7 @@ fun AddEditEventScreen(
                     },
                     enabled = !isDeleting
                 ) {
-                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                    Text(stringResource(R.string.event_delete), color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {
@@ -1369,7 +1408,7 @@ fun AddEditEventScreen(
                     },
                     enabled = !isDeleting
                 ) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.event_form_cancel))
                 }
             }
         )
@@ -1402,7 +1441,7 @@ private fun EventPhotoSection(
             verticalArrangement = Arrangement.spacedBy(dims.paddingSmall)
         ) {
             Text(
-                text = "Event photo",
+                text = stringResource(R.string.event_form_photo),
                 style = MaterialTheme.typography.titleSmall
             )
             if (displayImage == null) {
@@ -1413,13 +1452,13 @@ private fun EventPhotoSection(
                 ) {
                     Icon(Icons.Default.AddAPhoto, contentDescription = null)
                     Spacer(modifier = Modifier.size(dims.paddingSmall))
-                    Text("Attach photo")
+                    Text(stringResource(R.string.event_form_attach_photo))
                 }
             } else {
                 Box(modifier = Modifier.fillMaxWidth()) {
                     AsyncImage(
                         model = displayImage,
-                        contentDescription = "Event photo",
+                        contentDescription = stringResource(R.string.event_form_photo),
                         contentScale = ContentScale.Crop,
                         modifier = Modifier
                             .fillMaxWidth()
@@ -1433,14 +1472,17 @@ private fun EventPhotoSection(
                             .align(Alignment.TopEnd)
                             .padding(dims.paddingSmall)
                     ) {
-                        Icon(Icons.Default.Close, contentDescription = "Remove photo")
+                        Icon(
+                            Icons.Default.Close,
+                            contentDescription = stringResource(R.string.event_form_cd_remove_photo)
+                        )
                     }
                 }
                 TextButton(
                     onClick = onPickPhoto,
                     enabled = enabled
                 ) {
-                    Text("Change photo")
+                    Text(stringResource(R.string.event_form_change_photo))
                 }
             }
         }

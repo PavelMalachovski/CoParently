@@ -56,9 +56,10 @@ private const val SETTLED_EPSILON = 0.01
  * While unpaired the split bar and balance row are hidden: with one parent on record a
  * 100%-pink bar and a zero balance would be decoration pretending to be data.
  *
- * @param balance This month's paid/owed figures
+ * @param balance The selected month's paid/owed figures for one currency
  * @param currency ISO currency code for formatting
  * @param onSettleUp Invoked with a ready-to-send message when the user taps Settle up
+ * @param monthLabel Name of the month being shown, used in the header and settle-up draft
  * @param modifier Modifier for the card
  */
 @Composable
@@ -66,12 +67,10 @@ fun ExpenseSummaryHeader(
     balance: ExpenseBalance,
     currency: String,
     onSettleUp: (String) -> Unit,
+    monthLabel: String = defaultMonthLabel(),
     modifier: Modifier = Modifier
 ) {
     val format = remember(currency) { currencyFormat(currency) }
-    val monthLabel = LocalDate.now().month
-        .getDisplayName(TextStyle.FULL_STANDALONE, Locale.getDefault())
-        .replaceFirstChar { it.uppercase() }
 
     Card(
         modifier = modifier.fillMaxWidth(),
@@ -233,6 +232,12 @@ private fun BalanceRow(
         }
     }
 }
+
+/** The current month's standalone name, capitalised — the header's fallback when none is passed. */
+private fun defaultMonthLabel(): String =
+    LocalDate.now().month
+        .getDisplayName(TextStyle.FULL_STANDALONE, Locale.getDefault())
+        .replaceFirstChar { it.uppercase() }
 
 /** Currency formatter that tolerates an unknown code rather than crashing on it. */
 internal fun currencyFormat(currency: String): NumberFormat =

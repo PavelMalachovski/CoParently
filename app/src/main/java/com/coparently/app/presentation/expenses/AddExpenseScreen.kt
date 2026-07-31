@@ -28,6 +28,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AddAPhoto
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PhotoCamera
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
@@ -70,6 +71,7 @@ import androidx.core.content.FileProvider
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.coparently.app.R
+import com.coparently.app.domain.model.Expense
 import com.coparently.app.domain.model.ExpenseCategory
 import com.coparently.app.domain.money.SupportedCurrency
 import com.coparently.app.domain.receipts.ReceiptScan
@@ -77,14 +79,17 @@ import com.coparently.app.presentation.theme.CoPlanlyShapes
 import java.io.File
 import java.time.Instant
 import java.time.LocalDate
+import java.time.YearMonth
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddExpenseScreen(
     onBack: () -> Unit,
+    expenseId: String? = null,
     viewModel: ExpenseViewModel = hiltViewModel()
 ) {
     var title by remember { mutableStateOf("") }
@@ -94,13 +99,34 @@ fun AddExpenseScreen(
     var expanded by remember { mutableStateOf(false) }
     var receiptUri by remember { mutableStateOf<Uri?>(null) }
 
+    // The expense being edited (null in add mode). Kept whole so save can copy() it and preserve
+    // fields the form does not touch — id, payer, createdAt, split — instead of rebuilding it.
+    var editedExpense by remember { mutableStateOf<Expense?>(null) }
+
     val defaultCurrency by viewModel.defaultCurrency.collectAsState()
     var currency by remember { mutableStateOf<SupportedCurrency?>(null) }
     val effectiveCurrency = currency ?: defaultCurrency
 
     var date by remember { mutableStateOf(LocalDate.now()) }
     var showDatePicker by remember { mutableStateOf(false) }
+    var showOtherMonthWarning by remember { mutableStateOf(false) }
     val dateFormatter = remember { DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM) }
+
+    // In edit mode, load the expense once and prefill every field from it.
+    LaunchedEffect(expenseId) {
+        if (expenseId != null) {
+            viewModel.getExpense(expenseId)?.let { expense ->
+                editedExpense = expense
+                title = expense.title
+                amount = expense.amount.toString()
+                category = expense.category
+                notes = expense.notes.orEmpty()
+                date = expense.date
+                currency = SupportedCurrency.fromCode(expense.currency)
+                expense.receiptUrl?.let { receiptUri = Uri.parse(it) }
+            }
+        }
+    }
 
     val saveState by viewModel.saveState.collectAsState()
     val scanState by viewModel.scanState.collectAsState()
@@ -151,9 +177,13 @@ fun AddExpenseScreen(
     )
 
     // A fresh photo (camera or gallery) is the single trigger for OCR — both capture paths
-    // above end by setting receiptUri.
+    // above end by setting receiptUri. The existing receipt pre-loaded in edit mode is not a
+    // fresh photo (and is a remote URL OCR can't read), so it is deliberately skipped.
     LaunchedEffect(receiptUri) {
-        receiptUri?.let { viewModel.scanReceipt(it.toString()) }
+        val uri = receiptUri ?: return@LaunchedEffect
+        if (uri.toString() != editedExpense?.receiptUrl) {
+            viewModel.scanReceipt(uri.toString())
+        }
     }
 
     ReceiptScanEffect(
@@ -173,7 +203,13 @@ fun AddExpenseScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(R.string.expense_add_title)) },
+                title = {
+                    Text(
+                        stringResource(
+                            if (expenseId == null) R.string.expense_add_title else R.string.expense_edit_title
+                        )
+                    )
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack, enabled = !isSaving) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.budgets_back))
@@ -270,18 +306,39 @@ fun AddExpenseScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
+            val performSave = {
+                val original = editedExpense
+                if (original == null) {
+                    viewModel.addExpense(
+                        title = title,
+                        amount = requireNotNull(amountValue),
+                        category = category,
+                        currency = effectiveCurrency.code,
+                        date = date,
+                        notes = notes.takeIf { it.isNotBlank() },
+                        receiptImageUri = receiptUri?.toString()
+                    )
+                } else {
+                    viewModel.updateExpense(
+                        original = original,
+                        title = title,
+                        amount = requireNotNull(amountValue),
+                        category = category,
+                        currency = effectiveCurrency.code,
+                        date = date,
+                        notes = notes.takeIf { it.isNotBlank() },
+                        receiptImageUri = receiptUri?.toString()
+                    )
+                }
+            }
+
             Button(
                 onClick = {
                     if (isFormValid) {
-                        viewModel.addExpense(
-                            title = title,
-                            amount = requireNotNull(amountValue),
-                            category = category,
-                            currency = effectiveCurrency.code,
-                            date = date,
-                            notes = notes.takeIf { it.isNotBlank() },
-                            receiptImageUri = receiptUri?.toString()
-                        )
+                        // Saving an expense dated in another month files it there — and the list
+                        // only shows one month at a time — so confirm first instead of it
+                        // silently vanishing from the current month (a real receipt-scan bug).
+                        if (YearMonth.from(date) == YearMonth.now()) performSave() else showOtherMonthWarning = true
                     }
                 },
                 modifier = Modifier.fillMaxWidth(),
@@ -303,8 +360,53 @@ fun AddExpenseScreen(
                 onConfirm = { date = it },
                 onDismiss = { showDatePicker = false }
             )
+
+            OtherMonthWarningDialog(
+                visible = showOtherMonthWarning,
+                date = date,
+                onConfirm = {
+                    showOtherMonthWarning = false
+                    performSave()
+                },
+                onDismiss = { showOtherMonthWarning = false }
+            )
         }
     }
+}
+
+/**
+ * Confirmation shown when the expense's date falls outside the current month: saving is still
+ * allowed, but the user is told the expense will land under [date]'s month rather than silently
+ * disappearing from the current-month list.
+ */
+@Composable
+private fun OtherMonthWarningDialog(
+    visible: Boolean,
+    date: LocalDate,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    if (!visible) return
+
+    val monthLabel = remember(date) {
+        date.format(DateTimeFormatter.ofPattern("LLLL yyyy", Locale.getDefault()))
+            .replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() }
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.expense_date_other_month_title)) },
+        text = { Text(stringResource(R.string.expense_date_other_month_message, monthLabel)) },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text(stringResource(R.string.expense_date_other_month_confirm))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.expense_date_cancel))
+            }
+        }
+    )
 }
 
 /**

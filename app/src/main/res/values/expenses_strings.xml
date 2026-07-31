@@ -7,6 +7,7 @@
     <string name="expenses_summary_total">Total</string>
     <string name="expenses_receipt_photo">Receipt photo</string>
     <string name="expense_add_title">Add expense</string>
+    <string name="expense_edit_title">Edit expense</string>
     <string name="expense_field_title">Title</string>
     <string name="expense_field_amount">Amount</string>
     <string name="expense_field_category">Category</string>
@@ -51,6 +52,17 @@
     <string name="expense_field_date">Date</string>
     <string name="expense_date_confirm">OK</string>
     <string name="expense_date_cancel">Cancel</string>
+
+    <!-- Month navigator on the expense list -->
+    <string name="expenses_prev_month">Previous month</string>
+    <string name="expenses_next_month">Next month</string>
+    <string name="expenses_month_empty">No expenses in this month.</string>
+
+    <!-- Warning shown when saving an expense dated outside the current month -->
+    <string name="expense_date_other_month_title">Not in the current month</string>
+    <!-- %1$s = the expense's month, e.g. "October 2024" -->
+    <string name="expense_date_other_month_message">This expense is dated %1$s, so it won\'t show under the current month. Switch months on the Expenses screen to find it.</string>
+    <string name="expense_date_other_month_confirm">Save anyway</string>
 
     <!-- Expense categories (labels for the ExpenseCategory enum) -->
     <string name="expenses_category_education">Education</string>

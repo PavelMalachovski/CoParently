@@ -5,6 +5,7 @@
     <string name="expenses_summary_total">Итого</string>
     <string name="expenses_receipt_photo">Фото чека</string>
     <string name="expense_add_title">Добавить расход</string>
+    <string name="expense_edit_title">Редактировать расход</string>
     <string name="expense_field_title">Название</string>
     <string name="expense_field_amount">Сумма</string>
     <string name="expense_field_category">Категория</string>
@@ -47,6 +48,16 @@
     <string name="expense_field_date">Дата</string>
     <string name="expense_date_confirm">OK</string>
     <string name="expense_date_cancel">Отмена</string>
+
+    <!-- Month navigator on the expense list -->
+    <string name="expenses_prev_month">Предыдущий месяц</string>
+    <string name="expenses_next_month">Следующий месяц</string>
+    <string name="expenses_month_empty">В этом месяце расходов нет.</string>
+
+    <!-- Warning shown when saving an expense dated outside the current month -->
+    <string name="expense_date_other_month_title">Не в текущем месяце</string>
+    <string name="expense_date_other_month_message">Этот расход датирован %1$s, поэтому он не появится в текущем месяце. Чтобы найти его, переключите месяц на экране расходов.</string>
+    <string name="expense_date_other_month_confirm">Всё равно сохранить</string>
     <string name="expenses_category_education">Образование</string>
     <string name="expenses_category_medical">Здоровье</string>
     <string name="expenses_category_clothing">Одежда</string>

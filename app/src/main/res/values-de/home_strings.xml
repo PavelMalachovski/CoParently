@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Home / Overview dashboard strings. -->
+<resources>
+    <string name="home_title">Übersicht</string>
+
+    <string name="home_pairing_prompt">Verbinden Sie sich mit dem anderen Elternteil, um Kalender, Ausgaben und Nachrichten zu teilen.</string>
+    <string name="home_pairing_cta">Mit anderem Elternteil verbinden</string>
+
+    <string name="home_handover_today">Übergabe heute</string>
+    <string name="home_handover_tomorrow">Übergabe morgen</string>
+    <plurals name="home_handover_in_days">
+        <item quantity="one">Übergabe in %1$d Tag</item>
+        <item quantity="other">Übergabe in %1$d Tagen</item>
+    </plurals>
+    <string name="home_handover_route">%1$s → %2$s · %3$s</string>
+
+    <string name="home_stat_this_month">Diesen Monat</string>
+    <string name="home_stat_unread">Ungelesen</string>
+
+    <string name="home_section_upcoming">Anstehend</string>
+    <string name="home_section_recent_changes">Letzte Änderungen</string>
+
+    <string name="home_recent_empty_paired">Noch nichts Neues vom anderen Elternteil. Änderungen erscheinen hier.</string>
+    <string name="home_recent_empty_unpaired">Nach dem Verbinden erscheinen hier die Änderungen des anderen Elternteils.</string>
+
+    <string name="home_weekly_summary">Wochenübersicht anzeigen</string>
+
+    <string name="home_activity_event_created">Anderer Elternteil hat diesen Termin hinzugefügt</string>
+    <string name="home_activity_event_updated">Anderer Elternteil hat diesen Termin geändert</string>
+    <string name="home_activity_pickup_confirmed">Anderer Elternteil hat die Abholung bestätigt</string>
+    <string name="home_activity_change_requested">Anderer Elternteil hat eine Änderung angefragt</string>
+
+    <string name="home_parent_mom">Mama</string>
+    <string name="home_parent_dad">Papa</string>
+</resources>

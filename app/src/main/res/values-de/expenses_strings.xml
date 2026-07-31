@@ -5,6 +5,7 @@
     <string name="expenses_summary_total">Gesamt</string>
     <string name="expenses_receipt_photo">Belegfoto</string>
     <string name="expense_add_title">Ausgabe hinzufügen</string>
+    <string name="expense_edit_title">Ausgabe bearbeiten</string>
     <string name="expense_field_title">Titel</string>
     <string name="expense_field_amount">Betrag</string>
     <string name="expense_field_category">Kategorie</string>
@@ -45,6 +46,16 @@
     <string name="expense_field_date">Datum</string>
     <string name="expense_date_confirm">OK</string>
     <string name="expense_date_cancel">Abbrechen</string>
+
+    <!-- Month navigator on the expense list -->
+    <string name="expenses_prev_month">Voriger Monat</string>
+    <string name="expenses_next_month">Nächster Monat</string>
+    <string name="expenses_month_empty">Keine Ausgaben in diesem Monat.</string>
+
+    <!-- Warning shown when saving an expense dated outside the current month -->
+    <string name="expense_date_other_month_title">Nicht im aktuellen Monat</string>
+    <string name="expense_date_other_month_message">Diese Ausgabe ist auf %1$s datiert und erscheint daher nicht im aktuellen Monat. Wechseln Sie den Monat im Ausgaben-Bildschirm, um sie zu finden.</string>
+    <string name="expense_date_other_month_confirm">Trotzdem speichern</string>
     <string name="expenses_category_education">Bildung</string>
     <string name="expenses_category_medical">Gesundheit</string>
     <string name="expenses_category_clothing">Kleidung</string>

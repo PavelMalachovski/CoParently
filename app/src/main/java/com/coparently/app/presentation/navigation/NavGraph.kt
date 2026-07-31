@@ -128,8 +128,10 @@ fun NavGraph(
             // Home / overview dashboard — first screen (MVP 2)
             composable(
                 route = Screen.Home.route,
-                enterTransition = { fadeInSlideUp() },
-                exitTransition = { fadeOutSlideDown() }
+                enterTransition = { slideInFromRight() },
+                exitTransition = { slideOutToLeft() },
+                popEnterTransition = { slideInFromLeft() },
+                popExitTransition = { slideOutToRight() }
             ) {
                 com.coparently.app.presentation.home.HomeScreen(
                     onOpenEvent = { eventId ->
@@ -152,8 +154,10 @@ fun NavGraph(
 
             composable(
                 route = Screen.Calendar.route,
-                enterTransition = { fadeInSlideUp() },
-                exitTransition = { fadeOutSlideDown() }
+                enterTransition = { slideInFromRight() },
+                exitTransition = { slideOutToLeft() },
+                popEnterTransition = { slideInFromLeft() },
+                popExitTransition = { slideOutToRight() }
             ) {
                 CalendarScreen(
                     onEventClick = { eventId ->
@@ -499,6 +503,9 @@ fun NavGraph(
                     onAddExpense = {
                         navController.navigate(Screen.AddExpense.route)
                     },
+                    onEditExpense = { expenseId ->
+                        navController.navigate(Screen.EditExpense.createRoute(expenseId))
+                    },
                     onOpenBudgets = {
                         navController.navigate(Screen.Budgets.route)
                     },
@@ -524,6 +531,28 @@ fun NavGraph(
                     onBack = {
                         navController.popBackStack()
                     }
+                )
+            }
+
+            composable(
+                route = Screen.EditExpense.route,
+                arguments = listOf(
+                    navArgument(Screen.EditExpense.ARG_EXPENSE_ID) {
+                        type = NavType.StringType
+                    }
+                ),
+                enterTransition = { fadeInScaleUp() },
+                exitTransition = { fadeOutScaleDown() },
+                popEnterTransition = { fadeInScaleUp() },
+                popExitTransition = { fadeOutScaleDown() }
+            ) { backStackEntry ->
+                val expenseId = backStackEntry.arguments
+                    ?.getString(Screen.EditExpense.ARG_EXPENSE_ID) ?: return@composable
+                com.coparently.app.presentation.expenses.AddExpenseScreen(
+                    onBack = {
+                        navController.popBackStack()
+                    },
+                    expenseId = expenseId
                 )
             }
 
@@ -631,6 +660,11 @@ sealed class Screen(val route: String) {
     }
     data object Expenses : Screen("expenses")
     data object AddExpense : Screen("add_expense")
+    data object EditExpense : Screen("edit_expense/{expenseId}") {
+        const val ARG_EXPENSE_ID = "expenseId"
+
+        fun createRoute(expenseId: String): String = "edit_expense/$expenseId"
+    }
     data object Budgets : Screen("budgets")
 
     data object WeeklySummary : Screen("weekly_summary")

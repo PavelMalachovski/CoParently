@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material.icons.filled.Savings
@@ -33,12 +35,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.coparently.app.R
 import com.coparently.app.domain.model.Expense
 import com.coparently.app.presentation.common.animations.AnimatedEmptyState
 import kotlinx.coroutines.launch
+import java.time.YearMonth
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 /**
  * Expense list screen — a top-level bottom-navigation destination.
@@ -50,16 +56,17 @@ import kotlinx.coroutines.launch
 @Composable
 fun ExpenseScreen(
     onAddExpense: () -> Unit,
+    onEditExpense: (String) -> Unit = {},
     onOpenBudgets: (() -> Unit)? = null,
     onOpenSettings: (() -> Unit)? = null,
     onSettleUp: (String) -> Unit = {},
     viewModel: ExpenseViewModel = hiltViewModel()
 ) {
     val expenses by viewModel.expenses.collectAsState()
-    val monthExpenses by viewModel.expensesThisMonth.collectAsState()
-    val balance by viewModel.balance.collectAsState()
+    val monthExpenses by viewModel.monthExpenses.collectAsState()
+    val selectedMonth by viewModel.selectedMonth.collectAsState()
+    val balancesByCurrency by viewModel.balancesByCurrency.collectAsState()
     val roleByUid by viewModel.roleByUid.collectAsState()
-    val defaultCurrency by viewModel.defaultCurrency.collectAsState()
 
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -132,42 +139,111 @@ fun ExpenseScreen(
                     )
                 }
             } else {
-                ExpenseSummaryHeader(
-                    balance = balance,
-                    currency = monthExpenses.firstOrNull()?.currency ?: defaultCurrency.code,
-                    onSettleUp = onSettleUp,
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp)
+                MonthNavigator(
+                    month = selectedMonth,
+                    expenseCount = monthExpenses.size,
+                    onPreviousMonth = viewModel::showPreviousMonth,
+                    onNextMonth = viewModel::showNextMonth
                 )
 
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 14.dp, vertical = 6.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.Bottom
-                ) {
-                    Text(
-                        text = stringResource(R.string.expenses_this_month),
-                        style = MaterialTheme.typography.titleSmall
-                    )
-                    Text(
-                        text = pluralStringResource(
-                            R.plurals.expenses_count,
-                            monthExpenses.size,
-                            monthExpenses.size
-                        ),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                if (monthExpenses.isEmpty()) {
+                    // Other months may still hold expenses (e.g. an older receipt), so this is a
+                    // per-month empty note, not the global empty state handled above.
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = stringResource(R.string.expenses_month_empty),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                } else {
+                    val monthLabel = remember(selectedMonth) {
+                        selectedMonth.month
+                            .getDisplayName(java.time.format.TextStyle.FULL_STANDALONE, Locale.getDefault())
+                            .replaceFirstChar { it.uppercase() }
+                    }
+                    // One summary card per currency present this month — the app does no FX
+                    // conversion, so a mixed-currency month is shown as separate honest totals
+                    // rather than one wrong sum.
+                    balancesByCurrency.forEach { currencyBalance ->
+                        ExpenseSummaryHeader(
+                            balance = currencyBalance.balance,
+                            currency = currencyBalance.currency,
+                            onSettleUp = onSettleUp,
+                            monthLabel = monthLabel,
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp)
+                        )
+                    }
+
+                    ExpenseList(
+                        expenses = monthExpenses,
+                        roleByUid = roleByUid,
+                        onDelete = deleteWithUndo,
+                        onExpenseClick = { onEditExpense(it.id) },
+                        modifier = Modifier.weight(1f)
                     )
                 }
-
-                ExpenseList(
-                    expenses = monthExpenses,
-                    roleByUid = roleByUid,
-                    onDelete = deleteWithUndo,
-                    modifier = Modifier.weight(1f)
-                )
             }
+        }
+    }
+}
+
+/**
+ * Month switcher above the expense list: a back/forward pair around the selected month's name
+ * and its expense count. Lets the list reach months other than the current one, so an expense
+ * dated in the past (e.g. an older receipt) is findable instead of silently missing.
+ *
+ * @param month Month currently shown
+ * @param expenseCount Number of expenses in [month]
+ * @param onPreviousMonth Called to page one month back
+ * @param onNextMonth Called to page one month forward
+ */
+@Composable
+private fun MonthNavigator(
+    month: YearMonth,
+    expenseCount: Int,
+    onPreviousMonth: () -> Unit,
+    onNextMonth: () -> Unit
+) {
+    val label = remember(month) {
+        month.format(DateTimeFormatter.ofPattern("LLLL yyyy", Locale.getDefault()))
+            .replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() }
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 6.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        IconButton(onClick = onPreviousMonth) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+                contentDescription = stringResource(R.string.expenses_prev_month)
+            )
+        }
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.titleMedium,
+                textAlign = TextAlign.Center
+            )
+            Text(
+                text = pluralStringResource(R.plurals.expenses_count, expenseCount, expenseCount),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        IconButton(onClick = onNextMonth) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = stringResource(R.string.expenses_next_month)
+            )
         }
     }
 }

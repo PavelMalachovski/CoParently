@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Home / Overview dashboard strings. -->
+<resources>
+    <string name="home_title">Огляд</string>
+
+    <string name="home_pairing_prompt">З’єднайтеся з іншим із батьків, щоб ділити календар, витрати та повідомлення.</string>
+    <string name="home_pairing_cta">З’єднатися з іншим із батьків</string>
+
+    <string name="home_handover_today">Передача сьогодні</string>
+    <string name="home_handover_tomorrow">Передача завтра</string>
+    <plurals name="home_handover_in_days">
+        <item quantity="one">Передача через %1$d день</item>
+        <item quantity="few">Передача через %1$d дні</item>
+        <item quantity="many">Передача через %1$d днів</item>
+        <item quantity="other">Передача через %1$d дня</item>
+    </plurals>
+    <string name="home_handover_route">%1$s → %2$s · %3$s</string>
+
+    <string name="home_stat_this_month">Цього місяця</string>
+    <string name="home_stat_unread">Непрочитані</string>
+
+    <string name="home_section_upcoming">Найближче</string>
+    <string name="home_section_recent_changes">Останні зміни</string>
+
+    <string name="home_recent_empty_paired">Поки нічого нового від іншого з батьків. Їхні зміни з’являться тут.</string>
+    <string name="home_recent_empty_unpaired">Після з’єднання зміни іншого з батьків з’являться тут.</string>
+
+    <string name="home_weekly_summary">Переглянути тижневий підсумок</string>
+
+    <string name="home_activity_event_created">Інший із батьків додав цю подію</string>
+    <string name="home_activity_event_updated">Інший із батьків змінив цю подію</string>
+    <string name="home_activity_pickup_confirmed">Інший із батьків підтвердив, що забрав дитину</string>
+    <string name="home_activity_change_requested">Інший із батьків запросив зміну</string>
+
+    <string name="home_parent_mom">Мама</string>
+    <string name="home_parent_dad">Тато</string>
+</resources>

@@ -2,8 +2,8 @@ package com.coparently.app.presentation.expenses
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.coparently.app.domain.expenses.ExpenseBalance
-import com.coparently.app.domain.expenses.calculateExpenseBalance
+import com.coparently.app.domain.expenses.CurrencyBalance
+import com.coparently.app.domain.expenses.calculateExpenseBalancesByCurrency
 import com.coparently.app.domain.model.Expense
 import com.coparently.app.domain.model.ExpenseCategory
 import com.coparently.app.domain.model.ExpenseSummary
@@ -26,6 +26,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.YearMonth
 import java.util.UUID
 import javax.inject.Inject
 
@@ -108,32 +109,47 @@ class ExpenseViewModel @Inject constructor(
         .map { users -> users.associate { it.id to it.role } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), emptyMap())
 
-    /** Expenses dated within the current calendar month, newest first. */
-    val expensesThisMonth: StateFlow<List<Expense>> = expenses
-        .map { all ->
-            val today = LocalDate.now()
-            all.filter {
-                it.date.year == today.year && it.date.month == today.month
-            }.sortedByDescending { it.date }
-        }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), emptyList())
+    /**
+     * The month the list and balance are showing. Starts on the current month; the Expenses
+     * screen pages it back and forth so expenses dated in other months (e.g. an older receipt)
+     * are reachable instead of silently missing from the current-month-only view.
+     */
+    private val _selectedMonth = MutableStateFlow(YearMonth.now())
+    val selectedMonth: StateFlow<YearMonth> = _selectedMonth.asStateFlow()
+
+    /** Shows the month before the one currently selected. */
+    fun showPreviousMonth() {
+        _selectedMonth.value = _selectedMonth.value.minusMonths(1)
+    }
+
+    /** Shows the month after the one currently selected. */
+    fun showNextMonth() {
+        _selectedMonth.value = _selectedMonth.value.plusMonths(1)
+    }
+
+    /** Expenses dated within [selectedMonth], newest first. */
+    val monthExpenses: StateFlow<List<Expense>> = combine(expenses, _selectedMonth) { all, month ->
+        all.filter { YearMonth.from(it.date) == month }
+            .sortedByDescending { it.date }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), emptyList())
 
     /**
-     * This month's who-paid-what split and settle-up figure.
+     * The selected month's who-paid-what split and settle-up figure, one entry per currency.
      *
-     * Derived rather than stored: [calculateExpenseBalance] is pure, so the split bar cannot
-     * drift out of sync with the list it summarises.
+     * Derived rather than stored: [calculateExpenseBalancesByCurrency] is pure, so the split bars
+     * cannot drift out of sync with the list they summarise. Split by currency because the app
+     * does no FX conversion — a month mixing currencies must not be added into one wrong total.
      */
-    val balance: StateFlow<ExpenseBalance> = combine(
-        expensesThisMonth,
+    val balancesByCurrency: StateFlow<List<CurrencyBalance>> = combine(
+        monthExpenses,
         _currentUserId,
         roleByUid
     ) { monthExpenses, userId, roles ->
-        calculateExpenseBalance(monthExpenses, userId, roles)
+        calculateExpenseBalancesByCurrency(monthExpenses, userId, roles)
     }.stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS),
-        ExpenseBalance(0.0, 0.0, 0.0, 0.0, splitKnown = false)
+        emptyList()
     )
 
     private val _saveState = MutableStateFlow<ExpenseSaveState>(ExpenseSaveState.Idle)
@@ -216,6 +232,67 @@ class ExpenseViewModel @Inject constructor(
             expenseRepository.addExpense(expense)
 
             // Refresh summary
+            loadSummaryForMonth(date)
+            _saveState.value = ExpenseSaveState.Saved(warning)
+        }
+    }
+
+    /** Loads a single expense for the edit form, or null when it no longer exists. */
+    suspend fun getExpense(expenseId: String): Expense? = expenseRepository.getExpenseById(expenseId)
+
+    /**
+     * Saves edits to an existing expense.
+     *
+     * Follows the same field-preserving rule as event editing: the loaded [original] is kept and
+     * `copy()`-ed, so id, payer, createdAt, split and sync flags survive — rebuilding the expense
+     * from scratch would wipe them.
+     *
+     * [receiptImageUri] may be the expense's existing remote URL (kept as-is), a new local photo
+     * URI (uploaded, replacing the old one), or null (receipt removed). An upload failure keeps
+     * the previous receipt and surfaces a warning rather than losing the edit.
+     */
+    @Suppress("LongParameterList") // mirrors the Expense domain model fields
+    fun updateExpense(
+        original: Expense,
+        title: String,
+        amount: Double,
+        category: ExpenseCategory,
+        currency: String,
+        date: LocalDate = original.date,
+        notes: String? = null,
+        receiptImageUri: String? = null
+    ) {
+        if (_saveState.value is ExpenseSaveState.Saving) return
+
+        viewModelScope.launch {
+            _saveState.value = ExpenseSaveState.Saving
+
+            var warning: String? = null
+            val receiptUrl = when (receiptImageUri) {
+                null -> null
+                original.receiptUrl -> original.receiptUrl // unchanged remote photo, no re-upload
+                else -> try {
+                    receiptStorage.uploadReceipt(original.id, receiptImageUri)
+                } catch (
+                    @Suppress("TooGenericExceptionCaught") e: Exception
+                ) {
+                    android.util.Log.e("CoPlanlyUpload", "Receipt upload failed", e)
+                    warning = "Receipt upload failed — expense saved without the new receipt"
+                    original.receiptUrl
+                }
+            }
+
+            val updated = original.copy(
+                title = title,
+                amount = amount,
+                category = category,
+                currency = currency,
+                date = date,
+                receiptUrl = receiptUrl,
+                notes = notes
+            )
+            expenseRepository.updateExpense(updated)
+
             loadSummaryForMonth(date)
             _saveState.value = ExpenseSaveState.Saved(warning)
         }
