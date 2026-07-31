@@ -26,6 +26,18 @@ data class ExpenseBalance(
 }
 
 /**
+ * A single currency present in a period, paired with the [ExpenseBalance] computed from only the
+ * expenses in that currency.
+ *
+ * @property currency ISO 4217 code these figures are in
+ * @property balance Paid/owed figures for that currency's expenses alone
+ */
+data class CurrencyBalance(
+    val currency: String,
+    val balance: ExpenseBalance
+)
+
+/**
  * Works out the split bar and settle-up figure for a month of expenses.
  *
  * The money screen of a two-household app never said who paid; this is what makes "Mom paid
@@ -81,3 +93,28 @@ fun calculateExpenseBalance(
         splitKnown = splitKnown
     )
 }
+
+/**
+ * Splits [expenses] by currency and computes a separate [ExpenseBalance] for each.
+ *
+ * A month mixing, say, CZK and USD has no meaningful single total — the app does no FX
+ * conversion (spec §10) — so summing the raw amounts would show a wrong, currency-blind figure
+ * (e.g. "749 + 15 = 764"). Reporting one balance per currency keeps every total, split and
+ * settle-up figure honest within its own currency.
+ *
+ * @param expenses Expenses in the period, possibly in several currencies
+ * @param currentUserId Firebase uid of the signed-in parent
+ * @param roleByUid Map of uid to `"mom"`/`"dad"`; incomplete while unpaired
+ * @return One [CurrencyBalance] per currency present, largest total first; empty when there are
+ *   no expenses
+ */
+fun calculateExpenseBalancesByCurrency(
+    expenses: List<Expense>,
+    currentUserId: String,
+    roleByUid: Map<String, String>
+): List<CurrencyBalance> =
+    expenses.groupBy { it.currency }
+        .map { (currency, inCurrency) ->
+            CurrencyBalance(currency, calculateExpenseBalance(inCurrency, currentUserId, roleByUid))
+        }
+        .sortedByDescending { it.balance.total }

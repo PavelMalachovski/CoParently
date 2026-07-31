@@ -79,6 +79,7 @@
     <string name="event_form_draft_restored">Черновик восстановлен</string>
     <string name="event_form_delete_dialog_title">Удалить событие</string>
     <string name="event_form_delete_dialog_message">Вы уверены, что хотите удалить это событие? Действие нельзя отменить.</string>
+    <string name="event_form_event_deleted">Событие удалено</string>
     <string name="event_form_not_found">Событие не найдено</string>
     <string name="event_form_delete_failed">Не удалось удалить событие: %1$s</string>
     <string name="event_form_save_failed">Не удалось сохранить событие: %1$s</string>

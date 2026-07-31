@@ -5,6 +5,7 @@
     <string name="expenses_summary_total">Celkem</string>
     <string name="expenses_receipt_photo">Foto účtenky</string>
     <string name="expense_add_title">Přidat výdaj</string>
+    <string name="expense_edit_title">Upravit výdaj</string>
     <string name="expense_field_title">Název</string>
     <string name="expense_field_amount">Částka</string>
     <string name="expense_field_category">Kategorie</string>
@@ -46,6 +47,16 @@
     <string name="expense_field_date">Datum</string>
     <string name="expense_date_confirm">OK</string>
     <string name="expense_date_cancel">Zrušit</string>
+
+    <!-- Month navigator on the expense list -->
+    <string name="expenses_prev_month">Předchozí měsíc</string>
+    <string name="expenses_next_month">Následující měsíc</string>
+    <string name="expenses_month_empty">V tomto měsíci nejsou žádné výdaje.</string>
+
+    <!-- Warning shown when saving an expense dated outside the current month -->
+    <string name="expense_date_other_month_title">Není v aktuálním měsíci</string>
+    <string name="expense_date_other_month_message">Tento výdaj má datum %1$s, takže se v aktuálním měsíci nezobrazí. Najdete jej přepnutím měsíce na obrazovce výdajů.</string>
+    <string name="expense_date_other_month_confirm">Přesto uložit</string>
     <string name="expenses_category_education">Vzdělání</string>
     <string name="expenses_category_medical">Zdraví</string>
     <string name="expenses_category_clothing">Oblečení</string>

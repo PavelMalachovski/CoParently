@@ -79,6 +79,7 @@
     <string name="event_form_draft_restored">Koncept obnoven</string>
     <string name="event_form_delete_dialog_title">Smazat událost</string>
     <string name="event_form_delete_dialog_message">Opravdu chcete tuto událost smazat? Tuto akci nelze vrátit zpět.</string>
+    <string name="event_form_event_deleted">Událost smazána</string>
     <string name="event_form_not_found">Událost nenalezena</string>
     <string name="event_form_delete_failed">Nepodařilo se smazat událost: %1$s</string>
     <string name="event_form_save_failed">Nepodařilo se uložit událost: %1$s</string>

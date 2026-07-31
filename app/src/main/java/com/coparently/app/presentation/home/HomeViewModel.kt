@@ -47,8 +47,15 @@ data class ActivityItem(
     val isChangeRequest: Boolean
 )
 
-/** This month's shared spending total. */
-data class MonthSpend(val total: Double, val currency: String)
+/** A per-currency subtotal of this month's spending. */
+data class CurrencyAmount(val currency: String, val amount: Double)
+
+/**
+ * This month's shared spending, kept split by currency. The app does no FX conversion, so
+ * amounts in different currencies must never be added into one figure — [byCurrency] carries a
+ * separate subtotal for each, largest first.
+ */
+data class MonthSpend(val byCurrency: List<CurrencyAmount>)
 
 /**
  * The two repositories [HomeViewModel.monthSpend] is derived from, bundled into one
@@ -118,7 +125,7 @@ class HomeViewModel @Inject constructor(
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), emptyList())
 
-    /** This calendar month's total spend across all shared expenses. */
+    /** This calendar month's spend, one subtotal per currency (no cross-currency summing). */
     val monthSpend: StateFlow<MonthSpend> = combine(
         monthSpendDependencies.expenseRepository.getAllExpenses(),
         defaultCurrency
@@ -127,14 +134,16 @@ class HomeViewModel @Inject constructor(
         val inMonth = expenses.filter {
             it.date.year == month.year && it.date.month == month.month
         }
-        MonthSpend(
-            total = inMonth.sumOf { it.amount },
-            currency = inMonth.firstOrNull()?.currency ?: fallbackCurrency.code
-        )
+        val byCurrency = inMonth.groupBy { it.currency }
+            .map { (currency, group) -> CurrencyAmount(currency, group.sumOf { it.amount }) }
+            .sortedByDescending { it.amount }
+        // Keep a zero in the app's default currency when the month is empty, so the tile still
+        // renders a figure instead of blank.
+        MonthSpend(byCurrency.ifEmpty { listOf(CurrencyAmount(fallbackCurrency.code, 0.0)) })
     }.stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS),
-        MonthSpend(0.0, SupportedCurrency.DEFAULT.code)
+        MonthSpend(listOf(CurrencyAmount(SupportedCurrency.DEFAULT.code, 0.0)))
     )
 
     /** Total unread messages across all conversations. */

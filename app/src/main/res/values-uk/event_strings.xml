@@ -79,6 +79,7 @@
     <string name="event_form_draft_restored">Чернетку відновлено</string>
     <string name="event_form_delete_dialog_title">Видалити подію</string>
     <string name="event_form_delete_dialog_message">Ви впевнені, що хочете видалити цю подію? Цю дію не можна скасувати.</string>
+    <string name="event_form_event_deleted">Подію видалено</string>
     <string name="event_form_not_found">Подію не знайдено</string>
     <string name="event_form_delete_failed">Не вдалося видалити подію: %1$s</string>
     <string name="event_form_save_failed">Не вдалося зберегти подію: %1$s</string>

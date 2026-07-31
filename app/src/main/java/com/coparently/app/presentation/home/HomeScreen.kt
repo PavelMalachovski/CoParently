@@ -44,10 +44,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.coparently.app.R
 import com.coparently.app.domain.custody.HandoverInfo
 import com.coparently.app.domain.model.Event
 import com.coparently.app.presentation.theme.CoPlanlyColors
@@ -85,10 +88,10 @@ fun HomeScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Overview") },
+                title = { Text(stringResource(R.string.home_title)) },
                 actions = {
                     IconButton(onClick = onOpenSettings) {
-                        Icon(Icons.Default.Settings, contentDescription = "Settings")
+                        Icon(Icons.Default.Settings, contentDescription = stringResource(R.string.nav_settings))
                     }
                 }
             )
@@ -115,35 +118,37 @@ fun HomeScreen(
                     StatTile(
                         modifier = Modifier.weight(1f),
                         icon = Icons.Default.Payments,
-                        label = "This month",
-                        value = formatMoney(monthSpend.total, monthSpend.currency)
+                        label = stringResource(R.string.home_stat_this_month),
+                        value = monthSpend.byCurrency.joinToString(" · ") {
+                            formatMoney(it.amount, it.currency)
+                        }
                     )
                     StatTile(
                         modifier = Modifier.weight(1f),
                         icon = Icons.AutoMirrored.Filled.Chat,
-                        label = "Unread",
+                        label = stringResource(R.string.home_stat_unread),
                         value = unreadCount.toString()
                     )
                 }
             }
 
             if (upcomingEvents.isNotEmpty()) {
-                item { SectionHeader("Upcoming") }
+                item { SectionHeader(stringResource(R.string.home_section_upcoming)) }
                 items(upcomingEvents, key = { "up_${it.id}_${it.startDateTime}" }) { event ->
                     UpcomingEventRow(event = event, onClick = { onOpenEvent(event.id) })
                 }
             }
 
-            item { SectionHeader("Recent changes") }
+            item { SectionHeader(stringResource(R.string.home_section_recent_changes)) }
 
             if (recentChanges.isEmpty()) {
                 item {
                     Card(modifier = Modifier.fillMaxWidth()) {
                         Text(
                             text = if (paired) {
-                                "Nothing new from your co-parent yet. Changes they make will show up here."
+                                stringResource(R.string.home_recent_empty_paired)
                             } else {
-                                "Once you pair, changes your co-parent makes will show up here."
+                                stringResource(R.string.home_recent_empty_unpaired)
                             },
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -170,7 +175,7 @@ fun HomeScreen(
                 ) {
                     Icon(Icons.AutoMirrored.Filled.ViewList, contentDescription = null)
                     Spacer(modifier = Modifier.size(8.dp))
-                    Text("View weekly summary")
+                    Text(stringResource(R.string.home_weekly_summary))
                 }
             }
         }
@@ -194,12 +199,12 @@ private fun PairingCta(onNavigateToPairing: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Text(
-                text = "Pair with your co-parent to share the calendar, expenses and messages.",
+                text = stringResource(R.string.home_pairing_prompt),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Button(onClick = onNavigateToPairing, modifier = Modifier.fillMaxWidth()) {
-                Text("Pair with your co-parent")
+                Text(stringResource(R.string.home_pairing_cta))
             }
         }
     }
@@ -209,9 +214,13 @@ private fun PairingCta(onNavigateToPairing: () -> Unit) {
 private fun HandoverCard(info: HandoverInfo) {
     val toColor = parentColor(info.toParent)
     val countdown = when (info.daysUntil) {
-        0L -> "Handover today"
-        1L -> "Handover tomorrow"
-        else -> "Handover in ${info.daysUntil} days"
+        0L -> stringResource(R.string.home_handover_today)
+        1L -> stringResource(R.string.home_handover_tomorrow)
+        else -> pluralStringResource(
+            R.plurals.home_handover_in_days,
+            info.daysUntil.toInt(),
+            info.daysUntil.toInt()
+        )
     }
     Card(modifier = Modifier.fillMaxWidth()) {
         Row(
@@ -237,8 +246,12 @@ private fun HandoverCard(info: HandoverInfo) {
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    text = "${parentLabel(info.fromParent)} → ${parentLabel(info.toParent)} · " +
-                        info.date.format(handoverDateFormatter),
+                    text = stringResource(
+                        R.string.home_handover_route,
+                        stringResource(parentLabelRes(info.fromParent)),
+                        stringResource(parentLabelRes(info.toParent)),
+                        info.date.format(handoverDateFormatter)
+                    ),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -331,7 +344,7 @@ private fun ActivityRow(
             headlineContent = { Text(item.title) },
             supportingContent = {
                 Column {
-                    Text(item.kind.label())
+                    Text(stringResource(item.kind.labelRes()))
                     Text(
                         text = item.timestamp.format(activityFormatter),
                         style = MaterialTheme.typography.bodySmall,
@@ -343,10 +356,10 @@ private fun ActivityRow(
     }
 }
 
-private fun parentLabel(parent: String): String = when (parent) {
-    "mom" -> "Mom"
-    "dad" -> "Dad"
-    else -> parent.replaceFirstChar { it.uppercase() }
+private fun parentLabelRes(parent: String): Int = when (parent) {
+    "mom" -> R.string.home_parent_mom
+    "dad" -> R.string.home_parent_dad
+    else -> R.string.home_parent_mom
 }
 
 private fun parentColor(parent: String): Color = when (parent) {
@@ -368,9 +381,9 @@ private fun ActivityKind.icon(): ImageVector = when (this) {
     ActivityKind.CHANGE_REQUESTED -> Icons.Default.SwapHoriz
 }
 
-private fun ActivityKind.label(): String = when (this) {
-    ActivityKind.EVENT_CREATED -> "Co-parent added this event"
-    ActivityKind.EVENT_UPDATED -> "Co-parent updated this event"
-    ActivityKind.PICKUP_CONFIRMED -> "Co-parent confirmed pickup"
-    ActivityKind.CHANGE_REQUESTED -> "Co-parent requested a change"
+private fun ActivityKind.labelRes(): Int = when (this) {
+    ActivityKind.EVENT_CREATED -> R.string.home_activity_event_created
+    ActivityKind.EVENT_UPDATED -> R.string.home_activity_event_updated
+    ActivityKind.PICKUP_CONFIRMED -> R.string.home_activity_pickup_confirmed
+    ActivityKind.CHANGE_REQUESTED -> R.string.home_activity_change_requested
 }
