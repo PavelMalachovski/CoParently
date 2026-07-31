@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="currency_settings_title">Währung</string>
+    <string name="currency_settings_default">Standardwährung</string>
+    <string name="currency_settings_description">Wird für neue Ausgaben verwendet. Bei einer einzelnen Ausgabe kannst du sie ändern.</string>
+    <string name="currency_picker_title">Standardwährung wählen</string>
+    <string name="currency_picker_cancel">Abbrechen</string>
+    <string name="currency_selector_label">Währung</string>
+</resources>

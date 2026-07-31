@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="event_preview_edit">Upravit</string>
+    <string name="event_preview_delete">Smazat</string>
+    <string name="event_preview_private">Soukromá událost — vidíte ji jen vy</string>
+    <string name="event_preview_mom">Máma</string>
+    <string name="event_preview_dad">Táta</string>
+    <string name="event_form_save">Uložit událost</string>
+    <string name="event_deleted_message">Událost smazána</string>
+    <string name="event_deleted_undo">Zpět</string>
+    <string name="event_preview_photo">Fotka události</string>
+</resources>

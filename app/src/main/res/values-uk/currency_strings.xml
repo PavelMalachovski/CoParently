@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="currency_settings_title">Валюта</string>
+    <string name="currency_settings_default">Валюта за замовчуванням</string>
+    <string name="currency_settings_description">Використовується для нових витрат. Для окремої витрати її можна змінити.</string>
+    <string name="currency_picker_title">Виберіть валюту за замовчуванням</string>
+    <string name="currency_picker_cancel">Скасувати</string>
+    <string name="currency_selector_label">Валюта</string>
+</resources>
