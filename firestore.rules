@@ -22,10 +22,17 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
+    // A `users` document does not necessarily carry a `partnerId` key: FcmService writes
+    // `users/{uid}` with `set({fcmToken}, merge)`, which creates the document on accounts
+    // whose profile write never landed. Reading a missing key is an *evaluation error* in
+    // Rules, not null, and `exists()` only guards the missing-document case — so the read
+    // goes through `data.get('partnerId', '')`, which yields a value for every shape.
+    // Verified in firestore-tests/rules/is-partner-of.test.js.
     function isPartnerOf(userId) {
       return isAuthenticated() &&
              exists(/databases/$(database)/documents/users/$(userId)) &&
-             get(/databases/$(database)/documents/users/$(userId)).data.partnerId == request.auth.uid;
+             get(/databases/$(database)/documents/users/$(userId))
+               .data.get('partnerId', '') == request.auth.uid;
     }
 
     // Validate string field length (inclusive bounds).
