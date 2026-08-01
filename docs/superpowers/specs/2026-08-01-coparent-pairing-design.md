@@ -65,7 +65,8 @@ A user has at most one active invite. Opening the pairing screen reuses the exis
 unexpired document instead of creating a new one, so the code shown on screen never silently
 changes underneath a code the user already sent by WhatsApp.
 
-Code generation: 6 characters from a 32-symbol alphabet ≈ 1.07e9 combinations. Uniqueness is
+Code generation: 6 characters from a 31-symbol alphabet (`ABCDEFGHJKMNPQRSTUVWXYZ23456789`)
+≈ 8.9e8 combinations. Uniqueness is
 enforced by the accepting function querying `where('code','==',code).where('status','==','pending')`
 and rejecting when more than one document matches; generation retries on collision (checked
 client-side against the same query, best-effort — the function is the authority).
