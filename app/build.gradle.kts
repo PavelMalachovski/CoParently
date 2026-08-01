@@ -221,6 +221,10 @@ dependencies {
     implementation("com.google.firebase:firebase-config-ktx")
     implementation("com.google.firebase:firebase-storage-ktx")
 
+    // Callable Cloud Functions — pairing accept/unpair write both parents'
+    // user documents, which is only safe server-side.
+    implementation("com.google.firebase:firebase-functions-ktx")
+
     // Coil for async image loading in Compose (receipt photos)
     implementation("io.coil-kt:coil-compose:2.7.0")
 

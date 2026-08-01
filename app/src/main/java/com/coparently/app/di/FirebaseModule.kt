@@ -96,6 +96,18 @@ object FirebaseModule {
     }
 
     /**
+     * Provides Firebase Functions for the pairing callables.
+     *
+     * The functions are deployed to us-central1, which is the SDK default, so
+     * no explicit region is set here.
+     */
+    @Provides
+    @Singleton
+    fun provideFirebaseFunctions(): com.google.firebase.functions.FirebaseFunctions {
+        return com.google.firebase.functions.FirebaseFunctions.getInstance()
+    }
+
+    /**
      * Provides QR Code service for generating pairing QR codes.
      */
     @Provides
