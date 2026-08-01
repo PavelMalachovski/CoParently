@@ -6,11 +6,13 @@ import com.coparently.app.data.repository.CustodyModelRepository
 import com.coparently.app.domain.custody.HandoverCalculator
 import com.coparently.app.domain.custody.HandoverInfo
 import com.coparently.app.domain.model.Event
+import com.coparently.app.domain.model.PairingState
 import com.coparently.app.domain.money.SupportedCurrency
 import com.coparently.app.domain.repository.ChangeRequestRepository
 import com.coparently.app.domain.repository.EventRepository
 import com.coparently.app.domain.repository.ExpenseRepository
 import com.coparently.app.domain.repository.MessageRepository
+import com.coparently.app.domain.repository.PairingRepository
 import com.coparently.app.domain.repository.PreferencesRepository
 import com.coparently.app.domain.repository.UserRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -18,7 +20,6 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
@@ -73,6 +74,21 @@ data class MonthSpendDependencies @Inject constructor(
 )
 
 /**
+ * The two repositories that describe this account's identity and its co-parent link,
+ * bundled into one constructor-injected value for the same reason as
+ * [MonthSpendDependencies]: [HomeViewModel] was already at the constructor-parameter
+ * limit, and task 9 (the realtime pairing CTA) needed [PairingRepository] alongside the
+ * existing [UserRepository] — [UserRepository] feeds `_userId`/`_partnerId`, [PairingRepository]
+ * feeds [HomeViewModel.paired], and neither is used anywhere else in the class. Bundling
+ * keeps the real dependency count visible (no `@Suppress`, no widened detekt threshold)
+ * rather than hiding it behind a wider limit.
+ */
+data class HomeIdentityDependencies @Inject constructor(
+    val userRepository: UserRepository,
+    val pairingRepository: PairingRepository
+)
+
+/**
  * ViewModel for the home dashboard. Surfaces the at-a-glance co-parenting state:
  * the next custody handover, the next few events, this month's spend, unread
  * messages, and the recent changes the *other* parent made.
@@ -85,7 +101,7 @@ class HomeViewModel @Inject constructor(
     custodyModelRepository: CustodyModelRepository,
     monthSpendDependencies: MonthSpendDependencies,
     messageRepository: MessageRepository,
-    private val userRepository: UserRepository
+    homeIdentityDependencies: HomeIdentityDependencies
 ) : ViewModel() {
 
     /** App-wide default currency, used when the month has no expenses to take one from. */
@@ -94,20 +110,33 @@ class HomeViewModel @Inject constructor(
             .stateIn(viewModelScope, SharingStarted.Eagerly, SupportedCurrency.DEFAULT)
 
     private val _partnerId = MutableStateFlow<String?>(null)
-    private val _paired = MutableStateFlow(false)
     private val _userId = MutableStateFlow("")
 
     init {
         viewModelScope.launch {
+            val userRepository = homeIdentityDependencies.userRepository
             val user = userRepository.getCurrentUser()
             _userId.value = userRepository.getCurrentUserId().orEmpty()
             _partnerId.value = user?.partnerId?.takeIf { it.isNotEmpty() }
-            _paired.value = _partnerId.value != null
         }
     }
 
-    /** Whether the user has a paired co-parent (drives the empty state copy). */
-    val paired: StateFlow<Boolean> = _paired.asStateFlow()
+    /**
+     * Whether a co-parent is linked. Driven by the pairing repository's realtime state, so
+     * the CTA disappears the moment the other parent accepts — without the user reopening
+     * the screen.
+     *
+     * [PairingState.Loading] (the initial state, and what the repository falls back to if its
+     * Firestore listener fails permanently) is treated as "not paired" here. The two wrong
+     * answers are not symmetric: showing the invite card to someone who is actually paired is
+     * a one-frame cosmetic glitch that self-corrects on the next snapshot, while hiding it from
+     * someone who is not paired could leave them with no way to discover pairing for as long as
+     * the listener stays unhealthy. Between those, defaulting to "not paired" is the safer read
+     * of "unknown".
+     */
+    val paired: StateFlow<Boolean> = homeIdentityDependencies.pairingRepository.observePairingState()
+        .map { it is PairingState.Paired }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), false)
 
     /** Next custody handover, or null when no custody model is configured. */
     val nextHandover: StateFlow<HandoverInfo?> = custodyModelRepository.getActiveModel()
