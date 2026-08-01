@@ -467,6 +467,12 @@ exports.acceptPairingInvitation = functions.https.onCall(async (data, context) =
  * One-sided by product decision: no confirmation from the other parent is
  * required. Shared data (events, chat, expenses) is left untouched.
  *
+ * The decision of who to unlink is made and re-verified entirely inside the
+ * transaction (both docs are read via `tx.get`, never via a plain `get()`
+ * beforehand). Without that, a concurrent unpair/re-pair on the other side
+ * between this call's start and its commit could make this transaction blindly
+ * clear a partnerId the caller is no longer actually linked to.
+ *
  * @return {Promise<{unpairedFrom: string|null}>} The former partner's UID.
  */
 exports.unpairCoParent = functions.https.onCall(async (data, context) => {
@@ -476,32 +482,45 @@ exports.unpairCoParent = functions.https.onCall(async (data, context) => {
 
   const db = admin.firestore();
   const callerRef = db.collection('users').doc(context.auth.uid);
-  const callerSnap = await callerRef.get();
-  const partnerId = callerSnap.exists ? callerSnap.data().partnerId : null;
 
-  if (!partnerId) {
-    return {unpairedFrom: null};
-  }
+  const result = await db.runTransaction(async (tx) => {
+    const callerSnap = await tx.get(callerRef);
+    const partnerId = callerSnap.exists ? callerSnap.data().partnerId : null;
 
-  const partnerRef = db.collection('users').doc(partnerId);
-  await db.runTransaction(async (tx) => {
+    if (!partnerId) {
+      return {unpairedFrom: null};
+    }
+
+    const partnerRef = db.collection('users').doc(partnerId);
+    const partnerSnap = await tx.get(partnerRef);
+
+    // Re-verify the link is still mutually intact before clearing it. If the
+    // partner has already unpaired or re-paired with someone else, the link
+    // this call was asked to remove is already gone.
+    if (!partnerSnap.exists || partnerSnap.data().partnerId !== context.auth.uid) {
+      return {unpairedFrom: null};
+    }
+
     tx.update(callerRef, {partnerId: '', pairedAt: null});
     tx.update(partnerRef, {partnerId: '', pairedAt: null});
+
+    return {unpairedFrom: partnerId, callerName: callerSnap.data().name || 'Your co-parent'};
   });
 
-  const callerName = callerSnap.data().name || 'Your co-parent';
-  await db.collection('notification_queue').add({
-    targetUserId: partnerId,
-    data: {
-      type: 'pairing_removed',
-      title: 'Co-parent unlinked',
-      body: `${callerName} ended the co-parent link`,
-    },
-    status: 'pending',
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
-  });
+  if (result.unpairedFrom) {
+    await db.collection('notification_queue').add({
+      targetUserId: result.unpairedFrom,
+      data: {
+        type: 'pairing_removed',
+        title: 'Co-parent unlinked',
+        body: `${result.callerName} ended the co-parent link`,
+      },
+      status: 'pending',
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+  }
 
-  return {unpairedFrom: partnerId};
+  return {unpairedFrom: result.unpairedFrom};
 });
 
 /**
