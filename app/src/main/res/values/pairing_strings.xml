@@ -69,7 +69,7 @@
     <string name="pairing_new_code">New code</string>
     <string name="pairing_expires_in_hours">Valid for %1$d h %2$d min</string>
     <string name="pairing_expires_in_minutes">Valid for %1$d min</string>
-    <string name="pairing_code_expired_generate">Code expired — tap "New code"</string>
+    <string name="pairing_code_expired_generate">Code expired — tap “New code”</string>
     <string name="pairing_share_message">%1$s invites you to CoPlanly. Code: %2$s · %3$s</string>
     <!-- Code entry -->
     <string name="pairing_have_a_code">I have a code</string>
@@ -87,4 +87,7 @@
     <!-- Deep link confirmation -->
     <string name="pairing_link_confirm_title">Link with %1$s?</string>
     <string name="pairing_link_confirm_message">%1$s (%2$s) will see your shared calendar, chat and expenses.</string>
+    <!-- Deep link confirmation from a bare code (no sender identity known yet) -->
+    <string name="pairing_deep_link_confirm_title">Link with this invite code?</string>
+    <string name="pairing_deep_link_confirm_message">%1$s — the person who sent you this code will see your shared calendar, chat and expenses.</string>
 </resources>

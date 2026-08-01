@@ -3,10 +3,12 @@ package com.coparently.app.presentation.pairing
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
+import androidx.annotation.StringRes
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -29,6 +31,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -38,6 +42,8 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -59,6 +65,8 @@ import com.coparently.app.presentation.pairing.components.CodeEntryField
 import com.coparently.app.presentation.pairing.components.IncomingInviteCard
 import com.coparently.app.presentation.pairing.components.InviteCodeCard
 import com.coparently.app.presentation.pairing.components.PairedPartnerCard
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 
 /**
  * Co-parent pairing: hand over a code, scan a QR, open a shared link, or send
@@ -78,23 +86,33 @@ fun PairingScreen(
     val form by viewModel.form.collectAsState()
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
-    val actions = rememberNotPairedActions(context, clipboard)
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    val codeCopiedMessage = stringResource(R.string.pairing_code_copied)
+    val actions = rememberNotPairedActions(context, clipboard, snackbarHostState, scope, codeCopiedMessage)
 
-    var showUnpairConfirm by remember { mutableStateOf(false) }
-    var pendingDeepLinkCode by remember { mutableStateOf(prefilledCode) }
+    // rememberSaveable so a config change never silently drops a decision the
+    // user hasn't made yet, and keyed on prefilledCode so a second deep link
+    // re-arms the consent dialog instead of being swallowed by a stale value.
+    var showUnpairConfirm by rememberSaveable { mutableStateOf(false) }
+    var pendingDeepLinkCode by rememberSaveable(prefilledCode) { mutableStateOf(prefilledCode) }
 
     LaunchedEffect(prefilledCode) {
         prefilledCode?.let { viewModel.onCodeInputChange(it) }
     }
+    ActionErrorSnackbar(form.actionErrorRes, snackbarHostState, context, viewModel::consumeActionError)
 
-    Scaffold(topBar = { PairingTopBar(onNavigateBack) }) { padding ->
+    Scaffold(
+        topBar = { PairingTopBar(onNavigateBack) },
+        snackbarHost = { SnackbarHost(snackbarHostState) }
+    ) { padding ->
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(padding),
             contentPadding = PaddingValues(24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             when (val current = state) {
-                is PairingState.Loading -> loadingSection()
+                is PairingState.Loading -> loadingSection(form, viewModel, actions)
                 is PairingState.Paired -> pairedSection(current.partner) { showUnpairConfirm = true }
                 is PairingState.NotPaired -> notPairedSection(current, form, viewModel, actions)
             }
@@ -131,6 +149,26 @@ fun PairingScreen(
     }
 }
 
+/**
+ * Surfaces a field-less action failure (accept/reject/unpair/regenerate) as a
+ * snackbar exactly once, then reports it consumed so it doesn't reappear —
+ * without this, e.g. a failed `unpair()` would have nowhere to show at all.
+ */
+@Composable
+private fun ActionErrorSnackbar(
+    @StringRes actionErrorRes: Int?,
+    snackbarHostState: SnackbarHostState,
+    context: Context,
+    onConsumed: () -> Unit
+) {
+    LaunchedEffect(actionErrorRes) {
+        actionErrorRes?.let { res ->
+            snackbarHostState.showSnackbar(context.getString(res))
+            onConsumed()
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun PairingTopBar(onNavigateBack: () -> Unit) {
@@ -147,7 +185,7 @@ private fun PairingTopBar(onNavigateBack: () -> Unit) {
     )
 }
 
-/** The screen-level side effects the not-paired section needs but does not own itself. */
+/** The screen-level side effects the not-paired/loading form needs but does not own itself. */
 private data class NotPairedActions(
     val onShareInvite: (PairingInvite) -> Unit,
     val onCopyCode: (String) -> Unit,
@@ -155,14 +193,22 @@ private data class NotPairedActions(
 )
 
 @Composable
-private fun rememberNotPairedActions(context: Context, clipboard: ClipboardManager): NotPairedActions =
-    remember(context, clipboard) {
-        NotPairedActions(
-            onShareInvite = { invite -> context.startActivity(shareIntent(context, invite)) },
-            onCopyCode = { code -> clipboard.setText(AnnotatedString(code)) },
-            onScanQr = { context.startActivity(Intent(context, QRScannerActivity::class.java)) }
-        )
-    }
+private fun rememberNotPairedActions(
+    context: Context,
+    clipboard: ClipboardManager,
+    snackbarHostState: SnackbarHostState,
+    scope: CoroutineScope,
+    codeCopiedMessage: String
+): NotPairedActions = remember(context, clipboard, snackbarHostState, scope, codeCopiedMessage) {
+    NotPairedActions(
+        onShareInvite = { invite -> context.startActivity(shareIntent(context, invite)) },
+        onCopyCode = { code ->
+            clipboard.setText(AnnotatedString(code))
+            scope.launch { snackbarHostState.showSnackbar(codeCopiedMessage) }
+        },
+        onScanQr = { context.startActivity(Intent(context, QRScannerActivity::class.java)) }
+    )
+}
 
 /** Builds the share-sheet intent for an outstanding invite. */
 private fun shareIntent(context: Context, invite: PairingInvite): Intent {
@@ -179,14 +225,22 @@ private fun shareIntent(context: Context, invite: PairingInvite): Intent {
     return Intent.createChooser(sendIntent, context.getString(R.string.pairing_share_invite))
 }
 
-/** [PairingState.Loading] can be reached both on first subscription and after
- * a permanent failure — it is shown as a spinner only, with no dead end,
- * because the repository eventually re-emits [PairingState.NotPaired] or
- * [PairingState.Paired]. */
-private fun LazyListScope.loadingSection() {
-    item {
-        CircularProgressIndicator(Modifier.padding(32.dp))
-    }
+/**
+ * [PairingState.Loading] is reached both on first subscription and after a
+ * permanent Firestore failure — Task 5's flow re-emits it from `.catch`
+ * rather than terminating, so it is a real, possibly indefinite state, not
+ * just a brief flash. The spinner alone would be a dead end if the recovery
+ * never comes, so the code-entry, scan-QR and email paths render underneath
+ * it too — they only need [form] and the [viewModel] actions, never the
+ * active invite or incoming list that only [PairingState.NotPaired] carries.
+ */
+private fun LazyListScope.loadingSection(
+    form: PairingFormState,
+    viewModel: PairingViewModel,
+    actions: NotPairedActions
+) {
+    item { CircularProgressIndicator(Modifier.padding(32.dp)) }
+    formSection(form, viewModel, actions)
 }
 
 private fun LazyListScope.pairedSection(partner: PartnerSummary, onUnpairClick: () -> Unit) {
@@ -201,11 +255,8 @@ private fun LazyListScope.pairedSection(partner: PartnerSummary, onUnpairClick: 
 }
 
 /**
- * The not-paired state: the hero invite card (when one exists), the code
- * entry path, the QR scan shortcut, the email invite, and any incoming
- * invitations. The code-entry and email paths never depend on [current]
- * having an active invite, so they still render while the hero card is
- * empty or the repository is recovering from a transient failure.
+ * The not-paired state: the hero invite card (when one exists), the shared
+ * [formSection], and any incoming invitations.
  */
 private fun LazyListScope.notPairedSection(
     current: PairingState.NotPaired,
@@ -223,20 +274,10 @@ private fun LazyListScope.notPairedSection(
                 onRegenerate = viewModel::regenerateInvite
             )
         }
-        item { HorizontalDivider() }
+        item { OrDivider() }
     }
 
-    item {
-        CodeEntryField(
-            value = form.codeInput,
-            onValueChange = viewModel::onCodeInputChange,
-            onSubmit = viewModel::redeemCode,
-            errorText = form.errorRes?.let { stringResource(it) },
-            enabled = !form.isBusy
-        )
-    }
-    item { ScanQrButton(onClick = actions.onScanQr) }
-    item { EmailInviteSection(form = form, viewModel = viewModel) }
+    formSection(form, viewModel, actions)
 
     if (current.incoming.isNotEmpty()) {
         items(current.incoming, key = { it.id }) { invite ->
@@ -246,6 +287,44 @@ private fun LazyListScope.notPairedSection(
                 onReject = { viewModel.rejectIncoming(invite.id) }
             )
         }
+    }
+}
+
+/**
+ * The code-entry, scan-QR and email-invite path — the three ways to link
+ * accounts that never depend on this user's own invite existing. Shared by
+ * [loadingSection] and [notPairedSection] so the user always has one of
+ * these available regardless of which of those two states they're in.
+ */
+private fun LazyListScope.formSection(
+    form: PairingFormState,
+    viewModel: PairingViewModel,
+    actions: NotPairedActions
+) {
+    item {
+        CodeEntryField(
+            value = form.codeInput,
+            onValueChange = viewModel::onCodeInputChange,
+            onSubmit = viewModel::redeemCode,
+            errorText = form.codeErrorRes?.let { stringResource(it) },
+            enabled = !form.isBusy
+        )
+    }
+    item { ScanQrButton(onClick = actions.onScanQr) }
+    item { EmailInviteSection(form = form, viewModel = viewModel) }
+}
+
+/** A labelled divider between "share your code" and "enter a code you were given". */
+@Composable
+private fun OrDivider() {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        HorizontalDivider(modifier = Modifier.weight(1f))
+        Text(
+            text = stringResource(R.string.pairing_or),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        HorizontalDivider(modifier = Modifier.weight(1f))
     }
 }
 
@@ -298,7 +377,13 @@ private fun UnpairConfirmationDialog(
     )
 }
 
-/** Confirms redeeming a code carried by a `coplanly://pair` deep link. */
+/**
+ * Confirms redeeming a code carried by a `coplanly://pair` deep link. The
+ * sender's identity isn't known until the code is actually redeemed, so this
+ * uses its own code-specific copy rather than the name/email pair used
+ * elsewhere on this screen — filling that pair with the code and an empty
+ * string produced a malformed sentence ("4F7K2M () will see...").
+ */
 @Composable
 private fun DeepLinkConfirmationDialog(
     code: String,
@@ -306,8 +391,8 @@ private fun DeepLinkConfirmationDialog(
     onDismiss: () -> Unit
 ) {
     ConfirmationDialog(
-        title = stringResource(R.string.pairing_link_confirm_title, code),
-        message = stringResource(R.string.pairing_link_confirm_message, code, ""),
+        title = stringResource(R.string.pairing_deep_link_confirm_title),
+        message = stringResource(R.string.pairing_deep_link_confirm_message, code),
         confirmText = stringResource(R.string.pairing_link_accounts),
         dismissText = stringResource(R.string.pairing_cancel),
         onConfirm = onConfirm,

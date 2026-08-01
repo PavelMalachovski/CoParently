@@ -28,20 +28,31 @@ import javax.inject.Inject
  * Transient state of the pairing form — everything that is not the pairing
  * itself. Errors are string resource ids, never English literals, so the
  * screen renders them in the user's language.
+ *
+ * Errors are split by where they belong: [codeErrorRes] and [emailErrorRes]
+ * sit under their respective input field (validation, or a redeem/invite
+ * failure that concerns exactly what the user typed there), while
+ * [actionErrorRes] is for actions with no associated field — accepting or
+ * declining an incoming invite, unpairing, regenerating a code — and is
+ * meant to be surfaced once (e.g. a snackbar) and then cleared with
+ * [PairingViewModel.consumeActionError]. Without this split, a failed
+ * `unpair()` — which has no field to attach to — would have nowhere to
+ * show and the button would look dead.
  */
 data class PairingFormState(
     val codeInput: String = "",
     val emailInput: String = "",
     val isBusy: Boolean = false,
-    @StringRes val errorRes: Int? = null,
+    @StringRes val codeErrorRes: Int? = null,
     @StringRes val emailErrorRes: Int? = null,
+    @StringRes val actionErrorRes: Int? = null,
     val qrBitmap: Bitmap? = null,
     val showQrDialog: Boolean = false
 )
 
 /**
  * ViewModel for the pairing screen: exposes the realtime [PairingState] from
- * the repository plus the local form state, and forwards the five actions.
+ * the repository plus the local form state, and forwards its actions.
  */
 @HiltViewModel
 class PairingViewModel @Inject constructor(
@@ -65,12 +76,13 @@ class PairingViewModel @Inject constructor(
         viewModelScope.launch { pairingRepository.createOrReuseInviteCode() }
     }
 
-    /** Withdraws the current code and issues a fresh one. */
-    fun regenerateInvite() {
-        viewModelScope.launch {
-            pairingRepository.revokeActiveInvite()
-            pairingRepository.createOrReuseInviteCode()
-        }
+    /**
+     * Withdraws the current code and issues a fresh one. Has no field of its
+     * own, so a failure surfaces through [PairingFormState.actionErrorRes].
+     */
+    fun regenerateInvite() = launchAction {
+        val revoked = pairingRepository.revokeActiveInvite()
+        if (revoked.isSuccess) pairingRepository.createOrReuseInviteCode() else revoked
     }
 
     /**
@@ -82,23 +94,27 @@ class PairingViewModel @Inject constructor(
         val code = PairingUri.extractCode(raw)
             ?: raw.trim().uppercase().filter { it in InviteCodeGenerator.ALPHABET }
                 .take(InviteCodeGenerator.LENGTH)
-        _form.value = _form.value.copy(codeInput = code, errorRes = null)
+        _form.value = _form.value.copy(codeInput = code, codeErrorRes = null)
     }
 
+    /** Updates the email-invite field, clearing its previous validation error. */
     fun onEmailInputChange(email: String) {
-        _form.value = _form.value.copy(emailInput = email, emailErrorRes = null, errorRes = null)
+        _form.value = _form.value.copy(emailInput = email, emailErrorRes = null)
     }
 
     /** Redeems the code currently in the input field. */
     fun redeemCode() {
         val code = _form.value.codeInput
         if (!InviteCodeGenerator.isValid(code)) {
-            _form.value = _form.value.copy(errorRes = R.string.pairing_error_code_incomplete)
+            _form.value = _form.value.copy(codeErrorRes = R.string.pairing_error_code_incomplete)
             return
         }
-        launchAction { pairingRepository.redeem(code) }
+        launchAction(
+            onError = { res -> _form.value = _form.value.copy(codeErrorRes = res) }
+        ) { pairingRepository.redeem(code) }
     }
 
+    /** Sends an email invitation to the address currently in the email field. */
     fun sendEmailInvitation() {
         val email = _form.value.emailInput
         val validation = ValidationUtils.validateEmail(email)
@@ -106,18 +122,31 @@ class PairingViewModel @Inject constructor(
             _form.value = _form.value.copy(emailErrorRes = R.string.pairing_error_invalid_email)
             return
         }
-        launchAction(onSuccess = { _form.value = _form.value.copy(emailInput = "") }) {
-            pairingRepository.sendEmailInvitation(email).also { analyticsManager.logInvitationSent() }
-        }
+        launchAction(
+            onSuccess = {
+                analyticsManager.logInvitationSent()
+                _form.value = _form.value.copy(emailInput = "")
+            },
+            onError = { res -> _form.value = _form.value.copy(emailErrorRes = res) }
+        ) { pairingRepository.sendEmailInvitation(email) }
     }
 
+    /** Accepts an invitation addressed to this user. */
     fun acceptIncoming(invitationId: String) = launchAction(
         onSuccess = { analyticsManager.logInvitationAccepted() }
     ) { pairingRepository.acceptIncoming(invitationId) }
 
+    /**
+     * Declines an invitation addressed to this user. Has no field of its own,
+     * so a failure surfaces through [PairingFormState.actionErrorRes].
+     */
     fun rejectIncoming(invitationId: String) =
         launchAction { pairingRepository.rejectIncoming(invitationId) }
 
+    /**
+     * Ends the co-parent link. Has no field of its own, so a failure surfaces
+     * through [PairingFormState.actionErrorRes] rather than being silent.
+     */
     fun unpair() = launchAction { pairingRepository.unpair() }
 
     /** Renders the active invite's link as a QR bitmap and opens the dialog. */
@@ -133,26 +162,32 @@ class PairingViewModel @Inject constructor(
         }
     }
 
+    /** Closes the QR preview dialog and releases the bitmap. */
     fun dismissQr() {
         _form.value = _form.value.copy(showQrDialog = false, qrBitmap = null)
     }
 
+    /** Clears the two field-level errors, e.g. when the user starts over. */
     fun clearError() {
-        _form.value = _form.value.copy(errorRes = null, emailErrorRes = null)
+        _form.value = _form.value.copy(codeErrorRes = null, emailErrorRes = null)
+    }
+
+    /** Marks a field-less action error as shown; call once it has been presented (e.g. a snackbar). */
+    fun consumeActionError() {
+        _form.value = _form.value.copy(actionErrorRes = null)
     }
 
     private fun launchAction(
         onSuccess: () -> Unit = {},
+        onError: (Int) -> Unit = { res -> _form.value = _form.value.copy(actionErrorRes = res) },
         action: suspend () -> Result<*>
     ) {
-        _form.value = _form.value.copy(isBusy = true, errorRes = null)
+        _form.value = _form.value.copy(isBusy = true, actionErrorRes = null)
         viewModelScope.launch {
             val result = action()
-            _form.value = _form.value.copy(
-                isBusy = false,
-                errorRes = result.exceptionOrNull()?.let { messageFor(it) }
-            )
-            if (result.isSuccess) onSuccess()
+            _form.value = _form.value.copy(isBusy = false)
+            val failure = result.exceptionOrNull()
+            if (failure != null) onError(messageFor(failure)) else onSuccess()
         }
     }
 

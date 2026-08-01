@@ -84,4 +84,7 @@
     <!-- Deep link confirmation -->
     <string name="pairing_link_confirm_title">Пов’язати з %1$s?</string>
     <string name="pairing_link_confirm_message">%1$s (%2$s) побачить ваш спільний календар, чат і витрати.</string>
+    <!-- Deep link confirmation from a bare code (no sender identity known yet) -->
+    <string name="pairing_deep_link_confirm_title">Пов’язати акаунти за цим кодом?</string>
+    <string name="pairing_deep_link_confirm_message">%1$s — людина, яка надіслала вам цей код, побачить ваш спільний календар, чат і витрати.</string>
 </resources>

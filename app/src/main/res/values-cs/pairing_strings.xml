@@ -84,4 +84,7 @@
     <!-- Deep link confirmation -->
     <string name="pairing_link_confirm_title">Propojit s %1$s?</string>
     <string name="pairing_link_confirm_message">%1$s (%2$s) uvidí váš sdílený kalendář, chat a výdaje.</string>
+    <!-- Deep link confirmation from a bare code (no sender identity known yet) -->
+    <string name="pairing_deep_link_confirm_title">Propojit pomocí tohoto pozvánkového kódu?</string>
+    <string name="pairing_deep_link_confirm_message">%1$s — osoba, která vám tento kód poslala, uvidí váš sdílený kalendář, chat a výdaje.</string>
 </resources>

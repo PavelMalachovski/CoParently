@@ -106,14 +106,18 @@ fun InviteCodeCard(
     }
 }
 
-/** Live "valid for …" text, recomputed once a minute. */
+/**
+ * Live "valid for …" text, refreshed periodically until the code expires —
+ * the refresh loop then stops on its own instead of waking up forever to
+ * recompute an already-frozen "expired" string.
+ */
 @Composable
 private fun countdownText(expiresAtMillis: Long): String {
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(expiresAtMillis) {
-        while (true) {
-            now = System.currentTimeMillis()
+        while (now < expiresAtMillis) {
             delay(TimeUnit.SECONDS.toMillis(REFRESH_INTERVAL_SECONDS))
+            now = System.currentTimeMillis()
         }
     }
     val remaining = (expiresAtMillis - now).coerceAtLeast(0)

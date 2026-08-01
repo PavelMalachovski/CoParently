@@ -84,4 +84,7 @@
     <!-- Deep link confirmation -->
     <string name="pairing_link_confirm_title">Mit %1$s verknüpfen?</string>
     <string name="pairing_link_confirm_message">%1$s (%2$s) sieht dann Ihren gemeinsamen Kalender, Chat und Ausgaben.</string>
+    <!-- Deep link confirmation from a bare code (no sender identity known yet) -->
+    <string name="pairing_deep_link_confirm_title">Mit diesem Einladungscode verknüpfen?</string>
+    <string name="pairing_deep_link_confirm_message">%1$s — die Person, die Ihnen diesen Code geschickt hat, sieht dann Ihren gemeinsamen Kalender, Chat und Ausgaben.</string>
 </resources>

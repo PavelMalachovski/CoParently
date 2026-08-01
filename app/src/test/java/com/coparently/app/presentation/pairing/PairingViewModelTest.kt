@@ -8,9 +8,15 @@ import com.coparently.app.data.remote.firebase.QRCodeService
 import com.coparently.app.domain.model.PairingError
 import com.coparently.app.domain.model.PairingState
 import com.coparently.app.domain.repository.PairingRepository
+import com.coparently.app.utils.ValidationResult
+import com.coparently.app.utils.ValidationUtils
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.coVerifyOrder
+import io.mockk.every
 import io.mockk.mockk
+import io.mockk.mockkObject
+import io.mockk.unmockkObject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.flowOf
@@ -28,27 +34,55 @@ class PairingViewModelTest {
 
     private val dispatcher = StandardTestDispatcher()
     private lateinit var repository: PairingRepository
+    private lateinit var analyticsManager: AnalyticsManager
     private lateinit var viewModel: PairingViewModel
 
     @Before
     fun setUp() {
         Dispatchers.setMain(dispatcher)
+        // ValidationUtils.validateEmail() reads android.util.Patterns.EMAIL_ADDRESS, an
+        // Android framework field that is null on the plain-JVM unit-test classpath
+        // (isReturnDefaultValues only helps for stubbed methods, not a static field read).
+        // Mocking the object sidesteps that entirely; each email test stubs the one call
+        // it needs.
+        mockkObject(ValidationUtils)
         repository = mockk(relaxed = true)
+        analyticsManager = mockk(relaxed = true)
         coEvery { repository.observePairingState() } returns
             flowOf(PairingState.NotPaired())
         viewModel = PairingViewModel(
             pairingRepository = repository,
             qrCodeService = mockk<QRCodeService>(relaxed = true),
-            analyticsManager = mockk<AnalyticsManager>(relaxed = true)
+            analyticsManager = analyticsManager
         )
     }
 
     @After
-    fun tearDown() = Dispatchers.resetMain()
+    fun tearDown() {
+        Dispatchers.resetMain()
+        unmockkObject(ValidationUtils)
+    }
 
     @Test
-    fun `code input is upper-cased and trimmed to the code length`() = runTest(dispatcher) {
-        viewModel.onCodeInputChange("4f7k2mXX")
+    fun `code input is upper-cased, stripped of excluded characters and trimmed to the code length`() =
+        runTest(dispatcher) {
+            // '0' and 'O' are deliberately outside InviteCodeGenerator.ALPHABET (it omits
+            // O/0/I/1/L to stay unambiguous), so this exercises the filter, not just take(6).
+            viewModel.onCodeInputChange("4f0O7k2mXX")
+
+            assertEquals("4F7K2M", viewModel.form.value.codeInput)
+        }
+
+    @Test
+    fun `code input extracts the code from a pasted pairing URI`() = runTest(dispatcher) {
+        viewModel.onCodeInputChange("coplanly://pair?code=4F7K2M")
+
+        assertEquals("4F7K2M", viewModel.form.value.codeInput)
+    }
+
+    @Test
+    fun `code input extracts the code from pasted share text containing a pairing URI`() = runTest(dispatcher) {
+        viewModel.onCodeInputChange("Join me on CoPlanly! coplanly://pair?code=4F7K2M Talk soon")
 
         assertEquals("4F7K2M", viewModel.form.value.codeInput)
     }
@@ -62,7 +96,7 @@ class PairingViewModelTest {
     }
 
     @Test
-    fun `an already-paired failure maps to its own message`() = runTest(dispatcher) {
+    fun `an already-paired failure maps to its own message under the code field`() = runTest(dispatcher) {
         coEvery { repository.redeem("4F7K2M") } returns
             Result.failure(PairingException(PairingError.AlreadyPaired))
 
@@ -70,7 +104,93 @@ class PairingViewModelTest {
         viewModel.redeemCode()
         dispatcher.scheduler.advanceUntilIdle()
 
-        assertEquals(R.string.pairing_error_already_paired, viewModel.form.value.errorRes)
+        assertEquals(R.string.pairing_error_already_paired, viewModel.form.value.codeErrorRes)
+    }
+
+    @Test
+    fun `every PairingError maps to its own message`() = runTest(dispatcher) {
+        val cases = mapOf(
+            PairingError.NotFound to R.string.pairing_error_not_found,
+            PairingError.Expired to R.string.pairing_error_expired,
+            PairingError.NotPending to R.string.pairing_error_not_pending,
+            PairingError.SelfPairing to R.string.pairing_error_self_pairing,
+            PairingError.AlreadyPaired to R.string.pairing_error_already_paired,
+            PairingError.WrongRecipient to R.string.pairing_error_wrong_recipient,
+            PairingError.Network to R.string.pairing_error_network,
+            PairingError.Unknown("boom") to R.string.pairing_error_unknown
+        )
+
+        cases.forEach { (error, expectedRes) ->
+            coEvery { repository.redeem("4F7K2M") } returns Result.failure(PairingException(error))
+
+            viewModel.onCodeInputChange("4F7K2M")
+            viewModel.redeemCode()
+            dispatcher.scheduler.advanceUntilIdle()
+
+            assertEquals("mapping for $error", expectedRes, viewModel.form.value.codeErrorRes)
+        }
+    }
+
+    @Test
+    fun `a non-pairing exception falls back to the unknown-error message`() = runTest(dispatcher) {
+        coEvery { repository.redeem("4F7K2M") } returns Result.failure(RuntimeException("boom"))
+
+        viewModel.onCodeInputChange("4F7K2M")
+        viewModel.redeemCode()
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(R.string.pairing_error_unknown, viewModel.form.value.codeErrorRes)
+    }
+
+    @Test
+    fun `sending an invitation with an invalid email is rejected before touching the repository`() =
+        runTest(dispatcher) {
+            every { ValidationUtils.validateEmail("not-an-email") } returns
+                ValidationResult.Error("Invalid email format")
+
+            viewModel.onEmailInputChange("not-an-email")
+            viewModel.sendEmailInvitation()
+
+            assertEquals(R.string.pairing_error_invalid_email, viewModel.form.value.emailErrorRes)
+            coVerify(exactly = 0) { repository.sendEmailInvitation(any()) }
+        }
+
+    @Test
+    fun `a successful email invitation clears the field and logs once`() = runTest(dispatcher) {
+        every { ValidationUtils.validateEmail("other@example.com") } returns ValidationResult.Success
+        coEvery { repository.sendEmailInvitation("other@example.com") } returns Result.success(Unit)
+
+        viewModel.onEmailInputChange("other@example.com")
+        viewModel.sendEmailInvitation()
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals("", viewModel.form.value.emailInput)
+        coVerify(exactly = 1) { analyticsManager.logInvitationSent() }
+    }
+
+    @Test
+    fun `a failed email invitation surfaces under the email field and does not log`() = runTest(dispatcher) {
+        every { ValidationUtils.validateEmail("other@example.com") } returns ValidationResult.Success
+        coEvery { repository.sendEmailInvitation("other@example.com") } returns
+            Result.failure(PairingException(PairingError.Network))
+
+        viewModel.onEmailInputChange("other@example.com")
+        viewModel.sendEmailInvitation()
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(R.string.pairing_error_network, viewModel.form.value.emailErrorRes)
+        coVerify(exactly = 0) { analyticsManager.logInvitationSent() }
+    }
+
+    @Test
+    fun `regenerating an invite revokes before creating the replacement`() = runTest(dispatcher) {
+        viewModel.regenerateInvite()
+        dispatcher.scheduler.advanceUntilIdle()
+
+        coVerifyOrder {
+            repository.revokeActiveInvite()
+            repository.createOrReuseInviteCode()
+        }
     }
 
     @Test
