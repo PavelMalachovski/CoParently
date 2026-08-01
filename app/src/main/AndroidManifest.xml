@@ -109,6 +109,16 @@
             android:name="com.google.firebase.messaging.default_notification_channel_id"
             android:value="coparently_notifications" />
 
+        <!--
+          Default small icon FCM uses when it auto-displays a push from the
+          system tray (app backgrounded/killed) instead of going through
+          CoPlanlyMessagingService.onMessageReceived. Without this, that path
+          falls back to a framework default rather than our monochrome icon.
+        -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_notification" />
+
         <!-- Disable automatic initialization of Firebase Analytics (optional) -->
         <meta-data
             android:name="firebase_analytics_collection_deactivated"

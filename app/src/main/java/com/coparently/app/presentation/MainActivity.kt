@@ -220,10 +220,22 @@ class MainActivity : AppCompatActivity() {
      * The code is only pre-filled on the pairing screen — redeeming it still
      * needs an explicit confirmation, because a share link may have been
      * forwarded on to someone else.
+     *
+     * A `coplanly://pair` link with no `code` (e.g. the one a pairing-status
+     * push notification opens — see [com.coparently.app.data.remote.firebase.CoPlanlyMessagingService])
+     * still needs to land on the pairing screen, just without a prefill. Empty
+     * string is used as that "link present, no code" signal rather than null,
+     * because [NavGraph][com.coparently.app.presentation.navigation.NavGraph]'s
+     * deep-link effect only navigates when this flow holds a non-null value;
+     * null is reserved for "no pairing link is pending" so a plain app launch
+     * does not force a navigation. `Screen.Pairing.routeWithCode` already
+     * treats null and empty identically, so the pairing screen itself sees no
+     * difference from the existing code-less navigations (e.g. the Settings
+     * menu entry).
      */
     private fun readPairingCode(intent: Intent?) {
         val data = intent?.data ?: return
         if (!PairingUri.isPairingUri(data.scheme, data.host)) return
-        _pendingPairingCode.value = PairingUri.extractCode(data.toString())
+        _pendingPairingCode.value = PairingUri.extractCode(data.toString()).orEmpty()
     }
 }
