@@ -540,10 +540,6 @@
     <ID>NoEmptyFirstLineInMethodBlock:FamilyInsightsEngine.kt$FamilyInsightsEngine$ </ID>
     <ID>NoEmptyFirstLineInMethodBlock:PairingScreen.kt$ </ID>
     <ID>NoEmptyFirstLineInMethodBlock:PredictiveAnalytics.kt$PredictiveAnalytics$ </ID>
-    <ID>NoMultipleSpaces:Grade.kt$GradeScale.GPA_4$ </ID>
-    <ID>NoMultipleSpaces:Grade.kt$GradeScale.GPA_5$ </ID>
-    <ID>NoMultipleSpaces:Grade.kt$GradeScale.LETTER$ </ID>
-    <ID>NoMultipleSpaces:Grade.kt$GradeScale.PERCENTAGE$ </ID>
     <ID>NoMultipleSpaces:InsightsModels.kt$TimeDistribution$ </ID>
     <ID>NoUnusedImports:AnimatedTheme.kt$com.coparently.app.presentation.theme.AnimatedTheme.kt</ID>
     <ID>NoUnusedImports:AuthScreen.kt$com.coparently.app.presentation.auth.AuthScreen.kt</ID>
@@ -559,8 +555,6 @@
     <ID>NoUnusedImports:CustodySetupScreen.kt$com.coparently.app.presentation.custody.CustodySetupScreen.kt</ID>
     <ID>NoUnusedImports:DateRangeHelper.kt$com.coparently.app.presentation.calendar.DateRangeHelper.kt</ID>
     <ID>NoUnusedImports:DynamicTheme.kt$com.coparently.app.presentation.theme.DynamicTheme.kt</ID>
-    <ID>NoUnusedImports:EducationRepository.kt$com.coparently.app.domain.repository.EducationRepository.kt</ID>
-    <ID>NoUnusedImports:EducationRepositoryImpl.kt$com.coparently.app.data.repository.EducationRepositoryImpl.kt</ID>
     <ID>NoUnusedImports:EventSuggestionEngineUseCase.kt$com.coparently.app.domain.usecase.ai.EventSuggestionEngineUseCase.kt</ID>
     <ID>NoUnusedImports:EventViewModel.kt$com.coparently.app.presentation.event.EventViewModel.kt</ID>
     <ID>NoUnusedImports:FirestoreEventDataSource.kt$com.coparently.app.data.remote.firebase.FirestoreEventDataSource.kt</ID>
@@ -568,7 +562,6 @@
     <ID>NoUnusedImports:GoogleModule.kt$com.coparently.app.di.GoogleModule.kt</ID>
     <ID>NoUnusedImports:LoadingButton.kt$com.coparently.app.presentation.common.LoadingButton.kt</ID>
     <ID>NoUnusedImports:LoadingSkeleton.kt$com.coparently.app.presentation.common.animations.LoadingSkeleton.kt</ID>
-    <ID>NoUnusedImports:MedicalRepositoryImpl.kt$com.coparently.app.data.repository.MedicalRepositoryImpl.kt</ID>
     <ID>NoUnusedImports:MedicationEditor.kt$com.coparently.app.presentation.childinfo.components.MedicationEditor.kt</ID>
     <ID>NoUnusedImports:MessageRepositoryImpl.kt$com.coparently.app.data.repository.MessageRepositoryImpl.kt</ID>
     <ID>NoUnusedImports:MessagesList.kt$com.coparently.app.presentation.chat.MessagesList.kt</ID>
@@ -661,7 +654,6 @@
     <ID>PrintStackTrace:GoogleSignInService.kt$GoogleSignInService$e</ID>
     <ID>ReturnCount:ReminderWorker.kt$ReminderWorker$override suspend fun doWork(): Result</ID>
     <ID>SpacingAroundCurly:ChildInfoRepositoryImpl.kt$ChildInfoRepositoryImpl$}</ID>
-    <ID>SpacingAroundCurly:MedicalRepositoryImpl.kt$MedicalRepositoryImpl$}</ID>
     <ID>StringTemplate:FcmService.kt$FcmService$${action}</ID>
     <ID>TooGenericExceptionCaught:AddEditEventScreen.kt$e: Exception</ID>
     <ID>TooGenericExceptionCaught:AuthViewModel.kt$AuthViewModel$e: Exception</ID>
@@ -685,9 +677,7 @@
     <ID>TooGenericExceptionCaught:FeatureManager.kt$FeatureManager$e: Exception</ID>
     <ID>TooGenericExceptionCaught:FirebaseAuthService.kt$FirebaseAuthService$e: Exception</ID>
     <ID>TooGenericExceptionCaught:FirestoreChildInfoDataSource.kt$FirestoreChildInfoDataSource$e: Exception</ID>
-    <ID>TooGenericExceptionCaught:FirestoreEducationDataSource.kt$FirestoreEducationDataSource$e: Exception</ID>
     <ID>TooGenericExceptionCaught:FirestoreEventDataSource.kt$FirestoreEventDataSource$e: Exception</ID>
-    <ID>TooGenericExceptionCaught:FirestoreMedicalDataSource.kt$FirestoreMedicalDataSource$e: Exception</ID>
     <ID>TooGenericExceptionCaught:FirestoreUserDataSource.kt$FirestoreUserDataSource$e: Exception</ID>
     <ID>TooGenericExceptionCaught:GeminiAIService.kt$GeminiAIService$e: Exception</ID>
     <ID>TooGenericExceptionCaught:GoogleSignInService.kt$GoogleSignInService$e: Exception</ID>
@@ -712,8 +702,6 @@
     <ID>TooGenericExceptionThrown:GeminiAIService.kt$GeminiAIService$throw Exception("Empty response")</ID>
     <ID>TooManyFunctions:AIService.kt$AIService</ID>
     <ID>TooManyFunctions:ChildInfoDao.kt$ChildInfoDao</ID>
-    <ID>TooManyFunctions:EducationRepository.kt$EducationRepository</ID>
-    <ID>TooManyFunctions:EducationRepositoryImpl.kt$EducationRepositoryImpl : EducationRepository</ID>
     <ID>TooManyFunctions:EncryptedPreferences.kt$EncryptedPreferences</ID>
     <ID>TooManyFunctions:EventDao.kt$EventDao</ID>
     <ID>TooManyFunctions:EventViewModel.kt$EventViewModel : ViewModel</ID>
@@ -859,11 +847,8 @@
     <ID>Wrapping:CredentialManagerService.kt$CredentialManagerService$(</ID>
     <ID>Wrapping:EventDao.kt$EventDao$(</ID>
     <ID>Wrapping:GoogleCalendarApi.kt$GoogleCalendarApi$(</ID>
-    <ID>Wrapping:MedicalRecordDao.kt$MedicalRecordDao$(</ID>
-    <ID>Wrapping:MedicalRepositoryImpl.kt$MedicalRepositoryImpl$mapOf( "name" to it.name, "dosage" to it.dosage, "frequency" to it.frequency, "startDate" to it.startDate.format(dateFormatter), "endDate" to it.endDate?.format(dateFormatter), "notes" to it.notes )</ID>
     <ID>Wrapping:PairingScreen.kt$Text( text = uiState.emailError ?: "", color = MaterialTheme.colorScheme.error )</ID>
     <ID>Wrapping:PairingViewModel.kt$PairingViewModel$(</ID>
     <ID>Wrapping:PredictiveAnalytics.kt$PredictiveAnalytics$(</ID>
-    <ID>Wrapping:SchoolEventDao.kt$SchoolEventDao$(</ID>
   </CurrentIssues>
 </SmellBaseline>

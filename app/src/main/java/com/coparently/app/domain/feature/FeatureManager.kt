@@ -33,7 +33,6 @@ class FeatureManager @Inject constructor(
                 KEY_NEW_CALENDAR_UI to false,
                 KEY_CHAT_FEATURE to false,
                 KEY_EXPENSE_TRACKER to true,
-                KEY_MEDICAL_RECORDS to true,
                 KEY_CALENDAR_EXPERIMENT to "control"
             )
         )
@@ -74,12 +73,6 @@ class FeatureManager @Inject constructor(
      */
     val isExpenseTrackerEnabled: Boolean
         get() = getFeatureFlag(KEY_EXPENSE_TRACKER, true)
-
-    /**
-     * Checks if the medical records feature is enabled.
-     */
-    val isMedicalRecordsEnabled: Boolean
-        get() = getFeatureFlag(KEY_MEDICAL_RECORDS, true)
 
     /**
      * Gets a feature flag value with fallback to local preferences.
@@ -147,8 +140,7 @@ class FeatureManager @Inject constructor(
         return mapOf(
             "new_calendar_ui" to isNewCalendarEnabled,
             "chat_feature" to isChatEnabled,
-            "expense_tracker" to isExpenseTrackerEnabled,
-            "medical_records" to isMedicalRecordsEnabled
+            "expense_tracker" to isExpenseTrackerEnabled
         )
     }
 
@@ -159,7 +151,6 @@ class FeatureManager @Inject constructor(
         private const val KEY_NEW_CALENDAR_UI = "new_calendar_ui"
         private const val KEY_CHAT_FEATURE = "chat_feature"
         private const val KEY_EXPENSE_TRACKER = "expense_tracker"
-        private const val KEY_MEDICAL_RECORDS = "medical_records"
         private const val KEY_CALENDAR_EXPERIMENT = "calendar_experiment"
     }
 }

@@ -147,6 +147,16 @@ Data flow: UI → ViewModel → UseCase → Repository → Room (source of truth
   `firebase deploy --only firestore:rules,storage` — until then the live project runs
   whatever was last deployed and `change_requests` returns `PERMISSION_DENIED`.
   `firestore.rules.simple` remains as the permissive fallback.
+- **Medical records & education tracking were removed** (Aug 2026) — models, Room
+  entities/DAOs, `Medical`/`EducationRepository` + impls and the `medicalRecords`/
+  `allergies`/`grades`/`schoolEvents` Firestore data sources. None of it was ever bound in
+  `RepositoryModule` or reachable from a ViewModel/UseCase/screen, and the four collections
+  had no `firestore.rules` match blocks — the same dead-code shape as the deleted
+  `CoParentPairingService`. `.cursor/roadmap_final_summary.md` still lists them as future
+  ideas; they are **not** in the authoritative `docs/CoPlanly/MVP_phases.md`. If they are
+  ever revived, add the rules **before** wiring the UI and pin the document shape first —
+  the data sources took an untyped `Map<String, Any?>`, which is exactly how `expenses`
+  (`sharedWith`) and `budgets` (missing owner field) earned their `PERMISSION_DENIED` bugs.
 - `strings.xml` is **no longer gitignored** (older docs/audit §2.1 claim otherwise —
   stale). No secrets live in resources: the OAuth client secret is injected via
   BuildConfig (`GOOGLE_CLIENT_SECRET` gradle property / env var), `GEMINI_API_KEY`

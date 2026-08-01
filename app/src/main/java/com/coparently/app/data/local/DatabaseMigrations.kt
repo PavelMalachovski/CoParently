@@ -146,6 +146,23 @@ object DatabaseMigrations {
     }
 
     /**
+     * Migration from version 11 to 12.
+     * Drops the medical-records and education tables. Those features were never wired up:
+     * no repository binding, use case or screen ever referenced them, so no app code could
+     * write to the tables and they are guaranteed empty. Dropping them keeps the schema
+     * honest and removes a dead surface that would otherwise invite a re-wiring without
+     * the matching Firestore rules.
+     */
+    val MIGRATION_11_12 = object : Migration(11, 12) {
+        override fun migrate(database: SupportSQLiteDatabase) {
+            database.execSQL("DROP TABLE IF EXISTS medical_records")
+            database.execSQL("DROP TABLE IF EXISTS allergies")
+            database.execSQL("DROP TABLE IF EXISTS grades")
+            database.execSQL("DROP TABLE IF EXISTS school_events")
+        }
+    }
+
+    /**
      * List of all migrations in order.
      */
     val ALL_MIGRATIONS = arrayOf(
@@ -154,6 +171,7 @@ object DatabaseMigrations {
         MIGRATION_7_8,
         MIGRATION_8_9,
         MIGRATION_9_10,
-        MIGRATION_10_11
+        MIGRATION_10_11,
+        MIGRATION_11_12
     )
 }
