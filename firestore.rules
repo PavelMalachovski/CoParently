@@ -227,14 +227,18 @@ service cloud.firestore {
                         get(/databases/$(database)/documents/conversations/$(request.resource.data.conversationId))
                           .data.participants;
 
-      // Only the read flag is amended after the fact; content, sender, and conversation are immutable.
+      // Participants may only amend the read status; all other message fields are immutable.
       allow update: if isAuthenticated() &&
                       request.auth.uid in
                         get(/databases/$(database)/documents/conversations/$(resource.data.conversationId))
                           .data.participants &&
                       request.resource.data.content == resource.data.content &&
                       request.resource.data.senderId == resource.data.senderId &&
-                      request.resource.data.conversationId == resource.data.conversationId;
+                      request.resource.data.conversationId == resource.data.conversationId &&
+                      request.resource.data.senderName == resource.data.senderName &&
+                      request.resource.data.timestamp == resource.data.timestamp &&
+                      request.resource.data.attachments == resource.data.attachments &&
+                      request.resource.data.replyToMessageId == resource.data.replyToMessageId;
 
       allow delete: if false;
     }
