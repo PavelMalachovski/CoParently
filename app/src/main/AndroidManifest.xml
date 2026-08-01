@@ -30,10 +30,19 @@
             android:name=".presentation.MainActivity"
             android:exported="true"
             android:theme="@style/Theme.CoPlanly.Starting"
-            android:launchMode="singleTop">
+            android:launchMode="singleTask">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <!-- Pairing deep link. A custom scheme, not an App Link: the project
+                 owns no domain, so https links could never be verified. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="coplanly" android:host="pair" />
             </intent-filter>
         </activity>
 
@@ -42,18 +51,7 @@
             android:name=".presentation.pairing.QRScannerActivity"
             android:exported="true"
             android:theme="@style/Theme.CoPlanly"
-            android:screenOrientation="portrait">
-            <!-- Deeplink handling for QR invitation URLs -->
-            <intent-filter android:autoVerify="true">
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data
-                    android:scheme="https"
-                    android:host="coparently.app"
-                    android:pathPrefix="/pair" />
-            </intent-filter>
-        </activity>
+            android:screenOrientation="portrait" />
 
         <!--
           Persists the per-app language chosen via AppCompatDelegate.setApplicationLocales
