@@ -82,6 +82,12 @@ data class MonthSpendDependencies @Inject constructor(
  * feeds [HomeViewModel.paired], and neither is used anywhere else in the class. Bundling
  * keeps the real dependency count visible (no `@Suppress`, no widened detekt threshold)
  * rather than hiding it behind a wider limit.
+ *
+ * Unlike [MonthSpendDependencies], the two repositories here don't feed one shared
+ * computed value — they feed two independent flows. The grouping is by usage locality
+ * (both are otherwise-unused-elsewhere, single-consumer dependencies), not by shared
+ * purpose; don't take this as a precedent for bundling unrelated repositories together
+ * more broadly.
  */
 data class HomeIdentityDependencies @Inject constructor(
     val userRepository: UserRepository,
@@ -127,12 +133,17 @@ class HomeViewModel @Inject constructor(
      * the screen.
      *
      * [PairingState.Loading] (the initial state, and what the repository falls back to if its
-     * Firestore listener fails permanently) is treated as "not paired" here. The two wrong
-     * answers are not symmetric: showing the invite card to someone who is actually paired is
-     * a one-frame cosmetic glitch that self-corrects on the next snapshot, while hiding it from
-     * someone who is not paired could leave them with no way to discover pairing for as long as
-     * the listener stays unhealthy. Between those, defaulting to "not paired" is the safer read
-     * of "unknown".
+     * Firestore listener fails permanently) is treated as "not paired" here, i.e. this card
+     * shows. Note this is not the user's only route to pairing — Settings has its own
+     * unconditional "Co-Parent Pairing" entry (`SettingsScreen`, wired in `NavGraph`) that
+     * works regardless of this flow, so a stuck `Loading` state never makes pairing
+     * unreachable app-wide. The choice below is scoped to *this card* only: showing it to an
+     * already-paired user is a one-frame cosmetic glitch that self-corrects on the next
+     * snapshot, while hiding it from an unpaired user silently drops Home's primary, most
+     * visible invitation to pair — with nothing on this screen hinting that anything is
+     * wrong or that they should look in Settings instead. Between an occasional redundant
+     * card and a silently missing primary CTA, the former is the smaller cost, so "not
+     * paired" is what this flow defaults to while the real answer is unknown.
      */
     val paired: StateFlow<Boolean> = homeIdentityDependencies.pairingRepository.observePairingState()
         .map { it is PairingState.Paired }
