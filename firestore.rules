@@ -161,7 +161,12 @@ service cloud.firestore {
       allow update: if isAuthenticated() &&
                       resource.data.fromUserId == request.auth.uid &&
                       resource.data.status == 'pending' &&
-                      request.resource.data.status == 'cancelled';
+                      request.resource.data.status == 'cancelled' &&
+                      request.resource.data.code == resource.data.code &&
+                      request.resource.data.toEmail == resource.data.toEmail &&
+                      request.resource.data.expiresAt == resource.data.expiresAt &&
+                      request.resource.data.fromUserId == resource.data.fromUserId &&
+                      request.resource.data.createdAt == resource.data.createdAt;
 
       allow delete: if isAuthenticated() &&
                       resource.data.fromUserId == request.auth.uid;
@@ -194,12 +199,18 @@ service cloud.firestore {
     // blocks the collections are deny-by-default and pairing's auto-created
     // conversation fails to sync.
     match /conversations/{conversationId} {
-      allow read, update: if isAuthenticated() &&
-                            request.auth.uid in resource.data.participants;
+      allow read: if isAuthenticated() &&
+                    request.auth.uid in resource.data.participants;
+
+      allow update: if isAuthenticated() &&
+                      request.auth.uid in resource.data.participants &&
+                      request.resource.data.participants == resource.data.participants;
 
       allow create: if isAuthenticated() &&
                       request.auth.uid in request.resource.data.participants &&
-                      request.resource.data.participants.size() == 2;
+                      request.resource.data.participants.size() == 2 &&
+                      (isPartnerOf(request.resource.data.participants[0]) ||
+                       isPartnerOf(request.resource.data.participants[1]));
 
       allow delete: if false;
     }
@@ -216,10 +227,14 @@ service cloud.firestore {
                         get(/databases/$(database)/documents/conversations/$(request.resource.data.conversationId))
                           .data.participants;
 
-      // Only the read flag is amended after the fact; content is immutable.
+      // Only the read flag is amended after the fact; content, sender, and conversation are immutable.
       allow update: if isAuthenticated() &&
+                      request.auth.uid in
+                        get(/databases/$(database)/documents/conversations/$(resource.data.conversationId))
+                          .data.participants &&
                       request.resource.data.content == resource.data.content &&
-                      request.resource.data.senderId == resource.data.senderId;
+                      request.resource.data.senderId == resource.data.senderId &&
+                      request.resource.data.conversationId == resource.data.conversationId;
 
       allow delete: if false;
     }
