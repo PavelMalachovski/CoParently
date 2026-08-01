@@ -161,11 +161,20 @@ class ExpenseRepositoryImpl @Inject constructor(
             //
             // KNOWN GAP (not a transient failure): the `expenses` delete rule admits only the
             // creator, so a co-parent deleting a shared expense loses the local row while the
-            // remote document survives, and the next sync pulls it back. Widening that rule to
-            // `isPartnerOf` the way `update` does was tried and reverted — on a real device it
-            // made the *creator's own* delete return PERMISSION_DENIED (verified by A/B
-            // deploying both rule variants against the same flow), so the branch keeps the
-            // narrower rule it shipped with. See the final-review-fixes report.
+            // remote document survives, and the next sync pulls it back.
+            //
+            // Widening that rule to `isPartnerOf` the way `update` does was tried on this
+            // branch and reverted after a device sweep reported PERMISSION_DENIED on the
+            // *creator's own* delete. That attribution has since been disproved: under the
+            // exact reverted ruleset the creator's delete succeeds for every shape the
+            // creator's `users` document can have, and the two rulesets differ only for the
+            // co-parent. See firestore-tests/rules/expenses-delete-incident.test.js.
+            //
+            // A denial here is real but comes from document state, not from the rule clause,
+            // and reproduces under the shipped rules too: `resource` is null when the remote
+            // document never landed (pushToFirestore swallows a failed create), and the
+            // ownership read errors on documents written before `createdByFirebaseUid` was
+            // stamped. Both raise exactly the log line the sweep recorded.
             try {
                 firestoreExpenseDataSource.deleteExpense(expenseId)
             } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
