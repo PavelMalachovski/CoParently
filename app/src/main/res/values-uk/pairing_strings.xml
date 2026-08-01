@@ -44,4 +44,44 @@
     <string name="pairing_position_qr">Наведіть камеру на QR-код</string>
     <string name="pairing_qr_hint">Переконайтеся, що QR-код добре освітлений і повністю поміщається в рамку.</string>
     <string name="pairing_camera_preview">Попередній перегляд камери</string>
+
+    <!-- Pairing errors (Task 6) -->
+    <string name="pairing_error_not_found">Запрошення з таким кодом не знайдено.</string>
+    <string name="pairing_error_expired">Термін дії коду минув. Попросіть новий.</string>
+    <string name="pairing_error_not_pending">Це запрошення більше не активне.</string>
+    <string name="pairing_error_self_pairing">Це ваше власне запрошення.</string>
+    <string name="pairing_error_already_paired">Один з акаунтів уже має другого з батьків.</string>
+    <string name="pairing_error_wrong_recipient">Це запрошення надіслано на іншу електронну адресу.</string>
+    <string name="pairing_error_network">Немає з’єднання. Перевірте інтернет і спробуйте ще раз.</string>
+    <string name="pairing_error_unknown">Щось пішло не так. Спробуйте ще раз.</string>
+    <string name="pairing_error_code_incomplete">Введіть усі 6 символів коду.</string>
+    <string name="pairing_error_invalid_email">Введіть коректну електронну адресу.</string>
+
+    <!-- Invite code hero card -->
+    <string name="pairing_your_code_title">Ваш код запрошення</string>
+    <string name="pairing_your_code_hint">Передайте цей код другому з батьків. Дійсний 24 години.</string>
+    <string name="pairing_code_copied">Код скопійовано</string>
+    <string name="pairing_share_invite">Поділитися</string>
+    <string name="pairing_show_qr">Показати QR</string>
+    <string name="pairing_new_code">Новий код</string>
+    <string name="pairing_expires_in_hours">Дійсний ще %1$d год %2$d хв</string>
+    <string name="pairing_expires_in_minutes">Дійсний ще %1$d хв</string>
+    <string name="pairing_code_expired_generate">Код прострочено — натисніть «Новий код»</string>
+    <string name="pairing_share_message">%1$s запрошує вас до CoPlanly. Код: %2$s · %3$s</string>
+    <!-- Code entry -->
+    <string name="pairing_have_a_code">У мене є код</string>
+    <string name="pairing_code_field_label">Код запрошення</string>
+    <string name="pairing_link_accounts">Пов’язати акаунти</string>
+    <string name="pairing_or">або</string>
+    <!-- Email invite -->
+    <string name="pairing_invite_by_email">Запросити електронною поштою</string>
+    <!-- Paired state -->
+    <string name="pairing_paired_since">У парі з %1$s</string>
+    <string name="pairing_partner_email_unknown">Електронна пошта недоступна</string>
+    <string name="pairing_unpair_confirm_title">Розірвати зв’язок із другим із батьків?</string>
+    <string name="pairing_unpair_confirm_message">Ви перестанете ділитися календарем, чатом і витратами з %1$s. Дані, вже збережені на цьому телефоні, залишаться.</string>
+    <string name="pairing_unpair_confirm_action">Розʼєднати</string>
+    <!-- Deep link confirmation -->
+    <string name="pairing_link_confirm_title">Пов’язати з %1$s?</string>
+    <string name="pairing_link_confirm_message">%1$s (%2$s) побачить ваш спільний календар, чат і витрати.</string>
 </resources>

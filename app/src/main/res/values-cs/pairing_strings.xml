@@ -44,4 +44,44 @@
     <string name="pairing_position_qr">Umístěte QR kód do záběru kamery</string>
     <string name="pairing_qr_hint">Ujistěte se, že je QR kód dobře osvětlený a vejde se celý do rámečku.</string>
     <string name="pairing_camera_preview">Náhled kamery</string>
+
+    <!-- Pairing errors (Task 6) -->
+    <string name="pairing_error_not_found">Žádná pozvánka s tímto kódem nebyla nalezena.</string>
+    <string name="pairing_error_expired">Platnost kódu vypršela. Požádejte o nový.</string>
+    <string name="pairing_error_not_pending">Tato pozvánka již není aktivní.</string>
+    <string name="pairing_error_self_pairing">Toto je vaše vlastní pozvánka.</string>
+    <string name="pairing_error_already_paired">Jeden z účtů už má druhého rodiče.</string>
+    <string name="pairing_error_wrong_recipient">Tato pozvánka byla odeslána na jinou e-mailovou adresu.</string>
+    <string name="pairing_error_network">Žádné připojení. Zkontrolujte internet a zkuste to znovu.</string>
+    <string name="pairing_error_unknown">Něco se pokazilo. Zkuste to prosím znovu.</string>
+    <string name="pairing_error_code_incomplete">Zadejte všech 6 znaků kódu.</string>
+    <string name="pairing_error_invalid_email">Zadejte platnou e-mailovou adresu.</string>
+
+    <!-- Invite code hero card -->
+    <string name="pairing_your_code_title">Váš pozvánkový kód</string>
+    <string name="pairing_your_code_hint">Předejte tento kód druhému rodiči. Platí 24 hodin.</string>
+    <string name="pairing_code_copied">Kód zkopírován</string>
+    <string name="pairing_share_invite">Sdílet</string>
+    <string name="pairing_show_qr">Zobrazit QR</string>
+    <string name="pairing_new_code">Nový kód</string>
+    <string name="pairing_expires_in_hours">Platný ještě %1$d h %2$d min</string>
+    <string name="pairing_expires_in_minutes">Platný ještě %1$d min</string>
+    <string name="pairing_code_expired_generate">Kód vypršel — klepněte na „Nový kód“</string>
+    <string name="pairing_share_message">%1$s vás zve do CoPlanly. Kód: %2$s · %3$s</string>
+    <!-- Code entry -->
+    <string name="pairing_have_a_code">Mám kód</string>
+    <string name="pairing_code_field_label">Pozvánkový kód</string>
+    <string name="pairing_link_accounts">Propojit účty</string>
+    <string name="pairing_or">nebo</string>
+    <!-- Email invite -->
+    <string name="pairing_invite_by_email">Pozvat e-mailem</string>
+    <!-- Paired state -->
+    <string name="pairing_paired_since">Spárováno od %1$s</string>
+    <string name="pairing_partner_email_unknown">E-mail není k dispozici</string>
+    <string name="pairing_unpair_confirm_title">Zrušit propojení s druhým rodičem?</string>
+    <string name="pairing_unpair_confirm_message">Přestanete sdílet kalendář, chat a výdaje s %1$s. Data již uložená v telefonu zůstanou zachována.</string>
+    <string name="pairing_unpair_confirm_action">Odpojit</string>
+    <!-- Deep link confirmation -->
+    <string name="pairing_link_confirm_title">Propojit s %1$s?</string>
+    <string name="pairing_link_confirm_message">%1$s (%2$s) uvidí váš sdílený kalendář, chat a výdaje.</string>
 </resources>

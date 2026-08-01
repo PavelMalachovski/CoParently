@@ -44,4 +44,44 @@
     <string name="pairing_position_qr">Наведите камеру на QR-код</string>
     <string name="pairing_qr_hint">Убедитесь, что QR-код хорошо освещён и полностью помещается в рамку.</string>
     <string name="pairing_camera_preview">Предпросмотр камеры</string>
+
+    <!-- Pairing errors (Task 6) -->
+    <string name="pairing_error_not_found">Приглашение с таким кодом не найдено.</string>
+    <string name="pairing_error_expired">Код истёк. Попросите новый.</string>
+    <string name="pairing_error_not_pending">Это приглашение больше не активно.</string>
+    <string name="pairing_error_self_pairing">Это ваше собственное приглашение.</string>
+    <string name="pairing_error_already_paired">Один из аккаунтов уже связан со вторым родителем.</string>
+    <string name="pairing_error_wrong_recipient">Приглашение отправлено на другой адрес.</string>
+    <string name="pairing_error_network">Нет соединения. Проверьте интернет и попробуйте снова.</string>
+    <string name="pairing_error_unknown">Что-то пошло не так. Попробуйте ещё раз.</string>
+    <string name="pairing_error_code_incomplete">Введите все 6 символов кода.</string>
+    <string name="pairing_error_invalid_email">Введите корректный адрес email.</string>
+
+    <!-- Invite code hero card -->
+    <string name="pairing_your_code_title">Ваш код приглашения</string>
+    <string name="pairing_your_code_hint">Передайте код второму родителю. Действителен 24 часа.</string>
+    <string name="pairing_code_copied">Код скопирован</string>
+    <string name="pairing_share_invite">Поделиться</string>
+    <string name="pairing_show_qr">Показать QR</string>
+    <string name="pairing_new_code">Новый код</string>
+    <string name="pairing_expires_in_hours">Действителен ещё %1$d ч %2$d мин</string>
+    <string name="pairing_expires_in_minutes">Действителен ещё %1$d мин</string>
+    <string name="pairing_code_expired_generate">Код истёк — нажмите «Новый код»</string>
+    <string name="pairing_share_message">%1$s приглашает вас в CoPlanly. Код: %2$s · %3$s</string>
+    <!-- Code entry -->
+    <string name="pairing_have_a_code">У меня есть код</string>
+    <string name="pairing_code_field_label">Код приглашения</string>
+    <string name="pairing_link_accounts">Связать аккаунты</string>
+    <string name="pairing_or">или</string>
+    <!-- Email invite -->
+    <string name="pairing_invite_by_email">Пригласить по email</string>
+    <!-- Paired state -->
+    <string name="pairing_paired_since">Связаны с %1$s</string>
+    <string name="pairing_partner_email_unknown">Email недоступен</string>
+    <string name="pairing_unpair_confirm_title">Разорвать связь?</string>
+    <string name="pairing_unpair_confirm_message">Вы перестанете делиться календарём, чатом и расходами с %1$s. Данные на этом телефоне сохранятся.</string>
+    <string name="pairing_unpair_confirm_action">Отвязаться</string>
+    <!-- Deep link confirmation -->
+    <string name="pairing_link_confirm_title">Связаться с %1$s?</string>
+    <string name="pairing_link_confirm_message">%1$s (%2$s) увидит ваш общий календарь, чат и расходы.</string>
 </resources>
