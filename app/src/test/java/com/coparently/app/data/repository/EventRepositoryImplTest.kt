@@ -127,6 +127,68 @@ class EventRepositoryImplTest {
     }
 
     @Test
+    fun `updateEvent drops an ex-partner the unpair sweep already revoked`() = runTest {
+        // `unpairCoParent` narrowed the remote document, but the sweep never touches Room,
+        // so the local copy still lists uidB. Under the old widen-only rule this edit
+        // uploaded uidB straight back — the creator's own write is allowed by the events
+        // update rule, and the ex-partner's array-contains down-sync then picked the event
+        // back up, indefinitely. The audience must come from live pairing state instead.
+        signIn(uid = "uidA", partnerId = null)
+        val captured = slot<Map<String, Any?>>()
+        coEvery { firestoreEventDataSource.updateEvent(any(), capture(captured)) } returns Result.success(Unit)
+
+        repository.updateEvent(
+            baseDomain().copy(
+                createdByFirebaseUid = "uidA",
+                sharedWith = listOf("uidA", "uidB"),
+                syncedToFirestore = true
+            )
+        )
+
+        assertEquals(listOf("uidA"), captured.captured["sharedWith"])
+    }
+
+    @Test
+    fun `updateEvent replaces a former co-parent with the current one`() = runTest {
+        // uidA unpaired from uidB and re-paired with uidC. Intersecting the stored audience
+        // must still let the *new* co-parent in, or old events stay invisible to them.
+        signIn(uid = "uidA", partnerId = "uidC")
+        val captured = slot<Map<String, Any?>>()
+        coEvery { firestoreEventDataSource.updateEvent(any(), capture(captured)) } returns Result.success(Unit)
+
+        repository.updateEvent(
+            baseDomain().copy(
+                createdByFirebaseUid = "uidA",
+                sharedWith = listOf("uidA", "uidB"),
+                syncedToFirestore = true
+            )
+        )
+
+        assertEquals(listOf("uidA", "uidC"), captured.captured["sharedWith"])
+    }
+
+    @Test
+    fun `updateEvent converges the Room copy on the uploaded audience`() = runTest {
+        // Otherwise the stale audience survives locally until the next down-sync, which is
+        // exactly the window the server-side sweep cannot reach.
+        signIn(uid = "uidA", partnerId = null)
+        coEvery { firestoreEventDataSource.updateEvent(any(), any()) } returns Result.success(Unit)
+        val stored = mutableListOf<EventEntity>()
+        coEvery { eventDao.updateEvent(capture(stored)) } returns Unit
+
+        repository.updateEvent(
+            baseDomain().copy(
+                createdByFirebaseUid = "uidA",
+                sharedWith = listOf("uidA", "uidB"),
+                syncedToFirestore = true
+            )
+        )
+
+        val persisted = gson.fromJson(stored.last().sharedWithJson, Array<String>::class.java).toList()
+        assertEquals(listOf("uidA"), persisted)
+    }
+
+    @Test
     fun `private events are never pushed to Firestore`() = runTest {
         signIn(uid = "uidA", partnerId = "uidB")
 

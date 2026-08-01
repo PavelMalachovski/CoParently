@@ -81,6 +81,12 @@ class SyncService @Inject constructor(
         val partnerId = userDao.getUserById(userId)?.partnerId?.takeIf { it.isNotBlank() }
 
         for (entity in unsyncedEvents) {
+            val audience = shareTargets(
+                sharedWithJson = entity.sharedWithJson,
+                creatorUid = entity.createdByFirebaseUid,
+                userId = userId,
+                partnerId = partnerId
+            )
             val eventData = mapOf(
                 "id" to entity.id,
                 "title" to entity.title,
@@ -97,7 +103,7 @@ class SyncService @Inject constructor(
                 "createdAt" to entity.createdAt.format(formatter),
                 "updatedAt" to entity.updatedAt.format(formatter),
                 "createdByFirebaseUid" to entity.createdByFirebaseUid,
-                "sharedWith" to shareTargets(entity.sharedWithJson, userId, partnerId),
+                "sharedWith" to audience,
                 "lastModifiedBy" to entity.lastModifiedBy,
                 "permissions" to entity.permissions,
                 "imageUrl" to entity.imageUrl
@@ -108,7 +114,7 @@ class SyncService @Inject constructor(
                 eventDao.markAsSynced(entity.id)
 
                 // Notify everyone the event is shared with, except the uploader
-                for (recipientId in shareTargets(entity.sharedWithJson, userId, partnerId)) {
+                for (recipientId in audience) {
                     if (recipientId != userId) {
                         notifyEventUpdate(recipientId, entity.id, entity.title, "created")
                     }
@@ -179,21 +185,40 @@ class SyncService @Inject constructor(
     /**
      * Resolves the `sharedWith` audience for an event upload.
      *
-     * The stored [sharedWithJson] is honoured and only ever widened — never narrowed — with
-     * the uploader and their co-parent. Both must be present because the `events` read rule
-     * and [FirestoreEventDataSource.observeEventsSharedWith] are both keyed on this list: an
-     * event missing from it is invisible to the parent it belongs to, and the whole down-sync
-     * is only meaningful once co-parent events actually carry the reader's UID.
+     * The audience is the entitled set derived from live state — the uploader, the
+     * document's creator and the uploader's current co-parent — and the stored
+     * [sharedWithJson] is **intersected** with it, never unioned into it. All three
+     * entitled UIDs must be present because the `events` read rule and
+     * [FirestoreEventDataSource.observeEventsSharedWith] are both keyed on this list: an
+     * event missing from it is invisible to the parent it belongs to, and the whole
+     * down-sync is only meaningful once co-parent events actually carry the reader's UID.
+     *
+     * Intersecting is what makes `unpairCoParent`'s revocation survive this code path. The
+     * server sweep narrows the remote document but never the local Room copy, and this
+     * upload runs *before* the down-sync that would heal it — so under the previous
+     * widen-only rule every event still sitting `syncedToFirestore = false` at unpair time
+     * re-granted the ex-partner access on the very next sync. See
+     * `EventRepositoryImpl.shareTargets` for the same reasoning on the edit path.
      *
      * @param sharedWithJson The entity's stored JSON array of Firebase UIDs.
+     * @param creatorUid The entity's `createdByFirebaseUid`, or null if it never synced.
      * @param userId The uploading user's Firebase UID.
      * @param partnerId The co-parent's Firebase UID, or null when unpaired.
      */
-    private fun shareTargets(sharedWithJson: String, userId: String, partnerId: String?): List<String> {
+    private fun shareTargets(
+        sharedWithJson: String,
+        creatorUid: String?,
+        userId: String,
+        partnerId: String?
+    ): List<String> {
         val stored = runCatching {
             gson.fromJson(sharedWithJson, Array<String>::class.java)?.toList()
         }.getOrNull().orEmpty()
-        return (stored + userId + listOfNotNull(partnerId)).filter { it.isNotBlank() }.distinct()
+        val entitled = (listOf(userId) + listOfNotNull(creatorUid, partnerId))
+            .filter { it.isNotBlank() }
+            .distinct()
+        // Stored order first, so an unchanged audience keeps a stable field value.
+        return (stored.filter { it in entitled } + entitled).distinct()
     }
 
     /**
@@ -221,7 +246,7 @@ class SyncService @Inject constructor(
                 // SEPARATE CONCERN, deliberately not changed here: the co-parent is never
                 // added, so a paired parent cannot see child info the other created. That is
                 // a missing-visibility feature needing an audience policy of its own (the
-                // widen-only `shareTargets` above is the shape it would take), not the
+                // entitled-set `shareTargets` above is the shape it would take), not the
                 // data-corruption bug the UseLocal branch below fixes. Widening it silently
                 // would also change what the unpair sweep has to undo.
                 "sharedWith" to listOfNotNull(entity.createdByFirebaseUid, entity.lastModifiedBy).distinct()

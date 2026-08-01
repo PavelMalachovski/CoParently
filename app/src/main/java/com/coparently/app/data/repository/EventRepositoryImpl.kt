@@ -106,6 +106,12 @@ class EventRepositoryImpl @Inject constructor(
             val uid = event.createdByFirebaseUid ?: firebaseUser.uid
             val audience = shareTargets(event, uid, firebaseUser.uid)
             firestoreEventDataSource.updateEvent(event.id, event.toFirestoreMap(uid, audience))
+            // Converge the Room copy on what was uploaded. Without this the stale audience
+            // survives locally until the next down-sync, which is exactly the window the
+            // unpair sweep cannot reach.
+            if (event.sharedWith != audience) {
+                eventDao.updateEvent(event.copy(sharedWith = audience).toEntity())
+            }
         }
     }
 
@@ -154,14 +160,22 @@ class EventRepositoryImpl @Inject constructor(
     /**
      * Resolves the `sharedWith` audience for a remote event write.
      *
-     * The event's stored list is only ever widened — never narrowed — with the signed-in
-     * user, the document's creator and the signed-in user's co-parent. All three matter:
+     * The audience is the *entitled* set derived from live state: the signed-in user, the
+     * document's creator, and the signed-in user's current co-parent. All three matter —
      * `sharedWith` is what both the `events` read rule and
      * [FirestoreEventDataSource.observeEventsSharedWith] are keyed on, so a parent missing
-     * from the list simply cannot see the event. Widening (rather than recomputing) also
-     * means a co-parent editing an event never drops themselves or anybody else from it,
-     * which recomputing from the *creator's* pairing row would do whenever that row is not
-     * mirrored locally.
+     * from the list simply cannot see the event, and a co-parent editing an event must
+     * never drop the creator. Only the *current* user's pairing row is consulted, never the
+     * creator's, because that is the only one guaranteed to be mirrored locally.
+     *
+     * The event's stored list is **intersected** with that set rather than unioned into it.
+     * Unioning is what made `unpairCoParent`'s server-side revocation sweep undoable: the
+     * sweep narrows the remote document but never touches the local Room copy, so the very
+     * next edit re-uploaded the ex-partner and handed back read and `read_write` access for
+     * good. Intersecting means the audience can only ever contain people the *current*
+     * pairing state entitles, so it is correct on whichever device edits next — including
+     * the device that never called unpair and whose Room copy is still stale. Widening for
+     * a *new* co-parent still works, because the new partner is in the entitled set.
      *
      * @param event The event about to be written.
      * @param creatorUid The document's `createdByFirebaseUid`.
@@ -169,9 +183,11 @@ class EventRepositoryImpl @Inject constructor(
      */
     private suspend fun shareTargets(event: Event, creatorUid: String, currentUid: String): List<String> {
         val partnerId = userDao.getUserById(currentUid)?.partnerId
-        return (event.sharedWith + currentUid + creatorUid + listOfNotNull(partnerId))
+        val entitled = (listOf(currentUid, creatorUid) + listOfNotNull(partnerId))
             .filter { it.isNotBlank() }
             .distinct()
+        // Stored order first, so an unchanged audience keeps a stable field value.
+        return (event.sharedWith.filter { it in entitled } + entitled).distinct()
     }
 
     /**
