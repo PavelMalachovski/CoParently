@@ -2,6 +2,7 @@ package com.coparently.app.data.repository
 
 import com.coparently.app.data.local.dao.BudgetDao
 import com.coparently.app.data.local.dao.ExpenseDao
+import com.coparently.app.data.local.dao.UserDao
 import com.coparently.app.data.local.entity.BudgetEntity
 import com.coparently.app.data.remote.firebase.FirebaseAuthService
 import com.coparently.app.data.remote.firebase.FirestoreBudgetDataSource
@@ -23,6 +24,7 @@ import javax.inject.Singleton
 class BudgetRepositoryImpl @Inject constructor(
     private val budgetDao: BudgetDao,
     private val expenseDao: ExpenseDao,
+    private val userDao: UserDao,
     private val firebaseAuthService: FirebaseAuthService,
     private val firestoreBudgetDataSource: FirestoreBudgetDataSource
 ) : BudgetRepository {
@@ -103,12 +105,22 @@ class BudgetRepositoryImpl @Inject constructor(
                 "currency" to budget.currency,
                 "alertThreshold" to budget.alertThreshold,
                 "isActive" to budget.isActive,
+                // createdByFirebaseUid mirrors the expenses schema so the Firestore rules
+                // can gate ownership/partner-sharing consistently. Budgets have no
+                // `sharedWith` field — a budget is visible to the paired co-parent via the
+                // `isPartnerOf()` relationship, not a per-document list.
+                "createdByFirebaseUid" to firebaseUser.uid,
                 "createdAt" to budget.createdAt.format(dateTimeFormatter)
             )
-            firestoreBudgetDataSource.setBudget(budget.id, budgetData)
-
-            val syncedBudget = budget.copy(syncedToFirestore = true)
-            budgetDao.insertBudget(syncedBudget.toEntity())
+            // A rejected/failed sync must never crash the app — the budget is already
+            // saved locally and will re-sync later (same guard as ExpenseRepositoryImpl).
+            try {
+                firestoreBudgetDataSource.setBudget(budget.id, budgetData)
+                val syncedBudget = budget.copy(syncedToFirestore = true)
+                budgetDao.insertBudget(syncedBudget.toEntity())
+            } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+                android.util.Log.w("BudgetRepo", "Budget Firestore sync failed; kept locally", e)
+            }
         }
     }
 
@@ -121,12 +133,22 @@ class BudgetRepositoryImpl @Inject constructor(
 
         val firebaseUser = firebaseAuthService.getCurrentUser()
         if (firebaseUser != null) {
-            firestoreBudgetDataSource.deleteBudget(budgetId)
+            // Same guard as addBudget above: the row is already gone locally, and a
+            // rejected remote delete must not take down the app.
+            try {
+                firestoreBudgetDataSource.deleteBudget(budgetId)
+            } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+                android.util.Log.w("BudgetRepo", "Budget Firestore delete failed", e)
+            }
         }
     }
 
     override suspend fun syncWithFirestore() {
-        firestoreBudgetDataSource.getAllBudgets()
+        val firebaseUser = firebaseAuthService.getCurrentUser() ?: return
+        val partnerId = userDao.getUserById(firebaseUser.uid)?.partnerId
+        val creatorUids = listOfNotNull(firebaseUser.uid, partnerId)
+
+        firestoreBudgetDataSource.getAllBudgets(creatorUids)
             .catch { e -> android.util.Log.w("BudgetRepo", "Budget sync failed", e) }
             .collect { budgets ->
                 budgets.forEach { data ->

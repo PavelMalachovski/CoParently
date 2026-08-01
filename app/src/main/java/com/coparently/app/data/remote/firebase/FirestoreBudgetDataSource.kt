@@ -18,10 +18,25 @@ class FirestoreBudgetDataSource @Inject constructor(
     private val budgetsCollection = firestore.collection("budgets")
 
     /**
-     * Gets all budgets as a Flow.
+     * Gets budgets created by any of [creatorUids] (the current user, plus the paired
+     * co-parent when paired) as a Flow.
+     *
+     * An unfiltered collection query is rejected outright by `firestore.rules`: Firestore
+     * validates a *query* by checking whether its structure guarantees every possible
+     * result satisfies the security rule, not by inspecting the actual documents returned.
+     * Since the `budgets` read rule is keyed on `createdByFirebaseUid`, the query must
+     * filter on that same field for Firestore to accept it — mirroring
+     * [FirestoreExpenseDataSource.getAllExpenses].
+     *
+     * @param creatorUids Firebase UIDs whose budgets to include (1 when unpaired, 2 when paired)
      */
-    fun getAllBudgets(): Flow<List<Map<String, Any>>> = callbackFlow {
+    fun getAllBudgets(creatorUids: List<String>): Flow<List<Map<String, Any>>> = callbackFlow {
+        if (creatorUids.isEmpty()) {
+            close()
+            return@callbackFlow
+        }
         val subscription = budgetsCollection
+            .whereIn("createdByFirebaseUid", creatorUids)
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
                     close(error)

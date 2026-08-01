@@ -173,14 +173,36 @@ Data flow: UI → ViewModel → UseCase → Repository → Room (source of truth
   `firestore.rules.simple` the project ran on until the client's last write to another
   user's `users/{uid}` document was removed. `firestore.rules.simple` remains in the repo
   only as a historical fallback — it is no longer deployed.
-- The `budgets` Firestore collection has **no rule block at all** in either
-  `firestore.rules` or `firestore.rules.simple` — both fall through to a default/catch-all
-  deny, so `BudgetRepositoryImpl.syncWithFirestore()` (and the unfiltered
-  `FirestoreBudgetDataSource.getAllBudgets()` it calls) has never been able to read or
-  write Firestore, under either rules file. This predates the strict-rules deploy and is
-  not a regression from it — it is a tracked follow-up. Fixing it needs both a `budgets`
-  rule block (mirroring the `expenses` `isPartnerOf` pattern above) and a filtered query,
-  the same combination `expenses` needed.
+- The `budgets` collection now has a rule block (`firestore.rules`, gated on
+  `createdByFirebaseUid` + `isPartnerOf`, deployed live). The gap this closed was worse
+  than the pre-fix `expenses` bug: budget documents written by
+  `BudgetRepositoryImpl.addBudget()` carried **no owner field at all** — not even a wrong
+  one — so there was nothing a rule could gate on. The fix stamps `createdByFirebaseUid`
+  on write and filters `FirestoreBudgetDataSource.getAllBudgets()` on it via
+  `creatorUids`/`whereIn`, the same shape as `expenses`. `addBudget`/`deleteBudget` also
+  gained the same try/catch guard `ExpenseRepositoryImpl` has, since an uncaught
+  `PERMISSION_DENIED` (or any Firestore error) from an unguarded suspend call inside
+  `viewModelScope.launch` crashes the app, not just fails the sync. **Caveat:** any
+  `budgets` documents that synced to Firestore *before* this fix have no
+  `createdByFirebaseUid` field and will silently stop matching the filtered read query
+  (no error — they're just excluded from `whereIn`'s results). Room stays the source of
+  truth so nothing visibly disappears on the device that created them, but they won't
+  restore on a reinstall or a second device until re-saved. No backfill migration was run
+  as part of this fix.
+- A full audit (grep every `.collection(...)` call in `app/src/main/java` and
+  `functions/index.js`, diff against `firestore.rules`' match blocks) found two more
+  mismatches, both left as-is because neither is reachable in production:
+  - `FirestoreMedicalDataSource` (`medicalRecords`, `allergies`) and
+    `FirestoreEducationDataSource` (`grades`, `schoolEvents`) have no rule coverage, but
+    `MedicalRepositoryImpl`/`EducationRepositoryImpl` are never bound in
+    `RepositoryModule` and no ViewModel/UseCase references either interface — dead code
+    with the same shape as the `CoParentPairingService` Task 11 deleted. Decide (delete,
+    or wire up + add rules) before anyone binds them; don't add rules for unreachable
+    collections speculatively.
+  - `custody_schedules` has a rule block but no Firestore data source anywhere touches
+    it — `CustodyScheduleEntity`/`CustodyScheduleDao` are Room-only (the table name just
+    happens to match the rule's collection name). The rule is dead, not dangerous;
+    left in place rather than removed mid-pairing-feature-work.
 - `strings.xml` is **no longer gitignored** (older docs/audit §2.1 claim otherwise —
   stale). No secrets live in resources: the OAuth client secret is injected via
   BuildConfig (`GOOGLE_CLIENT_SECRET` gradle property / env var), `GEMINI_API_KEY`

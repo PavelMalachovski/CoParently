@@ -130,6 +130,35 @@ service cloud.firestore {
                       resource.data.createdByFirebaseUid == request.auth.uid;
     }
 
+    // ---- Budgets ---------------------------------------------------------
+    // Category spending limits, same posture as `expenses`: only the two paired
+    // parents involved may read/write. The document written by
+    // `BudgetRepositoryImpl.addBudget()` previously carried no owner field at all
+    // (not even a broken `sharedWith`), so an unfiltered query synced every user's
+    // budgets under the old permissive rules and would have been denied outright,
+    // structurally, by any non-trivial rule under the strict ones. Fixed the same
+    // way as `expenses`: the client now stamps `createdByFirebaseUid` on write and
+    // filters its read query on it; the rule gates on that field plus `isPartnerOf`.
+    match /budgets/{budgetId} {
+      allow read: if isAuthenticated() && (
+        resource.data.createdByFirebaseUid == request.auth.uid ||
+        isPartnerOf(resource.data.createdByFirebaseUid)
+      );
+
+      allow create: if isAuthenticated() &&
+                      request.resource.data.createdByFirebaseUid == request.auth.uid &&
+                      request.resource.data.keys().hasAll(
+                        ['category', 'monthlyLimit', 'createdByFirebaseUid']);
+
+      allow update: if isAuthenticated() && (
+        resource.data.createdByFirebaseUid == request.auth.uid ||
+        isPartnerOf(resource.data.createdByFirebaseUid)
+      ) && request.resource.data.createdByFirebaseUid == resource.data.createdByFirebaseUid;
+
+      allow delete: if isAuthenticated() &&
+                      resource.data.createdByFirebaseUid == request.auth.uid;
+    }
+
     // ---- Change requests ----------------------------------------------
     // Event change requests: only the requester or the addressee may access.
     match /change_requests/{requestId} {
