@@ -3,5 +3,7 @@
 # on Windows machines where core.autocrlf converts to CRLF.
 functions/**/*.js text eol=lf
 functions/**/*.json text eol=lf
+firestore-tests/**/*.js text eol=lf
+firestore-tests/**/*.json text eol=lf
 *.gradle text eol=lf
 *.gradle.kts text eol=lf

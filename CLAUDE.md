@@ -70,6 +70,15 @@ crash with "migration from 3 to 9 required but not found".
 ./gradlew lint detekt            # static analysis (detekt config in app/config/detekt)
 ```
 
+```bash
+cd functions && npm test && npm run lint    # Cloud Functions (mocha + eslint)
+cd firestore-tests && npm test              # firestore.rules against the local emulator
+```
+
+- **Never debug `firestore.rules` by deploying to production and watching a phone.** That
+  is how a broken `expenses` delete rule shipped once already. `firestore-tests/` runs the
+  rules offline against the Firestore emulator; add a case there first. See its README —
+  it needs a JDK 21+ on `PATH`, not just in `JAVA_HOME`.
 - Windows dev machine; Gradle wrapper works from Git Bash and PowerShell.
 - `google-services.json` is required for the Google Services plugin, but the build
   degrades gracefully if it is missing (see the conditional apply in `app/build.gradle.kts`).
