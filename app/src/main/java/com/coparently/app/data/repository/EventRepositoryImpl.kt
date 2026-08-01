@@ -1,6 +1,7 @@
 package com.coparently.app.data.repository
 
 import com.coparently.app.data.local.dao.EventDao
+import com.coparently.app.data.local.dao.UserDao
 import com.coparently.app.data.local.entity.EventEntity
 import com.coparently.app.data.remote.firebase.FirebaseAuthService
 import com.coparently.app.data.remote.firebase.FirestoreEventDataSource
@@ -26,6 +27,7 @@ import javax.inject.Singleton
 @Singleton
 class EventRepositoryImpl @Inject constructor(
     private val eventDao: EventDao,
+    private val userDao: UserDao,
     private val firebaseAuthService: FirebaseAuthService,
     private val firestoreEventDataSource: FirestoreEventDataSource
 ) : EventRepository {
@@ -78,9 +80,14 @@ class EventRepositoryImpl @Inject constructor(
 
         val firebaseUser = firebaseAuthService.getCurrentUser()
         if (firebaseUser != null && !event.syncedToFirestore && !event.isPrivate) {
-            firestoreEventDataSource.insertEvent(event.id, event.toFirestoreMap(firebaseUser.uid))
+            val audience = shareTargets(event, firebaseUser.uid, firebaseUser.uid)
+            firestoreEventDataSource.insertEvent(event.id, event.toFirestoreMap(firebaseUser.uid, audience))
 
-            val syncedEvent = event.copy(syncedToFirestore = true, createdByFirebaseUid = firebaseUser.uid)
+            val syncedEvent = event.copy(
+                syncedToFirestore = true,
+                createdByFirebaseUid = firebaseUser.uid,
+                sharedWith = audience
+            )
             eventDao.updateEvent(syncedEvent.toEntity())
         }
     }
@@ -97,7 +104,8 @@ class EventRepositoryImpl @Inject constructor(
             }
         } else {
             val uid = event.createdByFirebaseUid ?: firebaseUser.uid
-            firestoreEventDataSource.updateEvent(event.id, event.toFirestoreMap(uid))
+            val audience = shareTargets(event, uid, firebaseUser.uid)
+            firestoreEventDataSource.updateEvent(event.id, event.toFirestoreMap(uid, audience))
         }
     }
 
@@ -130,19 +138,47 @@ class EventRepositoryImpl @Inject constructor(
         entities.forEach { entity ->
             if (!entity.syncedToFirestore && !entity.isPrivate) {
                 val event = entity.toDomain()
-                firestoreEventDataSource.insertEvent(event.id, event.toFirestoreMap(firebaseUser.uid))
+                val audience = shareTargets(event, firebaseUser.uid, firebaseUser.uid)
+                firestoreEventDataSource.insertEvent(event.id, event.toFirestoreMap(firebaseUser.uid, audience))
 
-                val syncedEvent = event.copy(syncedToFirestore = true, createdByFirebaseUid = firebaseUser.uid)
+                val syncedEvent = event.copy(
+                    syncedToFirestore = true,
+                    createdByFirebaseUid = firebaseUser.uid,
+                    sharedWith = audience
+                )
                 eventDao.updateEvent(syncedEvent.toEntity())
             }
         }
     }
 
     /**
+     * Resolves the `sharedWith` audience for a remote event write.
+     *
+     * The event's stored list is only ever widened — never narrowed — with the signed-in
+     * user, the document's creator and the signed-in user's co-parent. All three matter:
+     * `sharedWith` is what both the `events` read rule and
+     * [FirestoreEventDataSource.observeEventsSharedWith] are keyed on, so a parent missing
+     * from the list simply cannot see the event. Widening (rather than recomputing) also
+     * means a co-parent editing an event never drops themselves or anybody else from it,
+     * which recomputing from the *creator's* pairing row would do whenever that row is not
+     * mirrored locally.
+     *
+     * @param event The event about to be written.
+     * @param creatorUid The document's `createdByFirebaseUid`.
+     * @param currentUid The signed-in user's Firebase UID.
+     */
+    private suspend fun shareTargets(event: Event, creatorUid: String, currentUid: String): List<String> {
+        val partnerId = userDao.getUserById(currentUid)?.partnerId
+        return (event.sharedWith + currentUid + creatorUid + listOfNotNull(partnerId))
+            .filter { it.isNotBlank() }
+            .distinct()
+    }
+
+    /**
      * Builds the Firestore document map for this event.
      * Single source of truth for the remote schema.
      */
-    private fun Event.toFirestoreMap(creatorUid: String): Map<String, Any?> {
+    private fun Event.toFirestoreMap(creatorUid: String, audience: List<String>): Map<String, Any?> {
         return mapOf(
             "id" to id,
             "title" to title,
@@ -159,7 +195,7 @@ class EventRepositoryImpl @Inject constructor(
             "createdAt" to createdAt.format(dateFormatter),
             "updatedAt" to updatedAt.format(dateFormatter),
             "createdByFirebaseUid" to creatorUid,
-            "sharedWith" to sharedWith,
+            "sharedWith" to audience,
             "lastModifiedBy" to (lastModifiedBy ?: creatorUid),
             "permissions" to permissions,
             "imageUrl" to (imageUrl ?: "")

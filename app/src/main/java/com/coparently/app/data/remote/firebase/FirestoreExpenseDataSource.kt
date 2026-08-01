@@ -26,8 +26,8 @@ class FirestoreExpenseDataSource @Inject constructor(
      * validates a *query* by checking whether its structure guarantees every possible
      * result satisfies the security rule, not by inspecting the actual documents returned.
      * Since the read rule is keyed on `createdByFirebaseUid`, the query must filter on that
-     * same field for Firestore to accept it — mirroring how events are queried by
-     * `parentOwner` in [FirestoreEventDataSource.observeEventsForParents].
+     * same field for Firestore to accept it — the same reasoning that makes
+     * [FirestoreEventDataSource.observeEventsSharedWith] filter on `sharedWith`.
      *
      * @param creatorUids Firebase UIDs whose expenses to include (1 when unpaired, 2 when paired)
      */
@@ -61,6 +61,19 @@ class FirestoreExpenseDataSource @Inject constructor(
      */
     suspend fun setExpense(expenseId: String, expenseData: Map<String, Any>) {
         expensesCollection.document(expenseId).set(expenseData).await()
+    }
+
+    /**
+     * Fetches a single expense document by id, or `null` if it doesn't exist.
+     *
+     * Used by [com.coparently.app.data.repository.ExpenseRepositoryImpl.updateExpense] to read
+     * back the existing `createdByFirebaseUid` before writing an update: `firestore.rules`
+     * requires that field to stay unchanged on update, so the write path must know its current
+     * value rather than re-stamping it with whichever parent happens to be editing.
+     */
+    suspend fun getExpense(expenseId: String): Map<String, Any>? {
+        val snapshot = expensesCollection.document(expenseId).get().await()
+        return if (snapshot.exists()) snapshot.data else null
     }
 
     /**

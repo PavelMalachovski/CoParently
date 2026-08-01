@@ -19,17 +19,17 @@
       "queryScope": "COLLECTION",
       "fields": [
         {
-          "fieldPath": "createdByFirebaseUid",
-          "order": "ASCENDING"
+          "fieldPath": "sharedWith",
+          "arrayConfig": "CONTAINS"
         },
         {
-          "fieldPath": "date",
-          "order": "DESCENDING"
+          "fieldPath": "startDateTime",
+          "order": "ASCENDING"
         }
       ]
     },
     {
-      "collectionGroup": "events",
+      "collectionGroup": "child_info",
       "queryScope": "COLLECTION",
       "fields": [
         {
@@ -37,8 +37,8 @@
           "arrayConfig": "CONTAINS"
         },
         {
-          "fieldPath": "date",
-          "order": "DESCENDING"
+          "fieldPath": "childName",
+          "order": "ASCENDING"
         }
       ]
     },
@@ -59,4 +59,3 @@
   ],
   "fieldOverrides": []
 }
-
