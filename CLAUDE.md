@@ -131,6 +131,30 @@ Data flow: UI → ViewModel → UseCase → Repository → Room (source of truth
     `ReceiptParser`, wired up in `AddExpenseScreen`/`ExpenseViewModel.scanReceipt`) — no
     receipt text or photo may be sent to Gemini or any other remote service without an
     explicit product decision.
+11. **Pairing writes never touch the other parent's user document from the client.**
+    Accepting an invitation and unpairing go through the `acceptPairingInvitation` /
+    `unpairCoParent` callables (`functions/index.js`) — `firestore.rules` allows a user
+    to write only their own `users/{uid}`, and the old client-side path is why the
+    permissive `firestore.rules.simple` had to be deployed. The strict rules are live
+    as of this change.
+12. **A Firestore list query needs a `where` filter matching whatever field the security
+    rule keys its `allow read` on.** Firestore validates a *query* by checking whether
+    its structure guarantees every possible result satisfies the rule — it does not
+    execute the rule per already-fetched document and drop the ones that fail. An
+    unfiltered collection query is rejected outright (`PERMISSION_DENIED`) the moment the
+    rule references a field the query doesn't constrain, even if, coincidentally, every
+    document in the collection would have passed. This is why
+    `FirestoreExpenseDataSource.getAllExpenses()` takes a `creatorUids` list and filters
+    with `.whereIn("createdByFirebaseUid", creatorUids)` — mirroring
+    `FirestoreEventDataSource.observeEventsForParents()` — instead of reading the whole
+    `expenses` collection. Also keep the rule's field names in sync with what the writer
+    actually sets: the expenses rule used to reference a `sharedWith` array that
+    `ExpenseRepositoryImpl.addExpense()` never writes (the model shares expenses via the
+    `partnerId` pairing relationship, not a per-document list), so the co-parent's own
+    expenses were unreadable even by document id until the rule was changed to
+    `isPartnerOf(resource.data.createdByFirebaseUid)`. A `whereIn`/`whereEqualTo` +
+    `orderBy` combination on different fields also needs a composite index
+    (`firestore.indexes.json`) — Firestore's error message links directly to the fix.
 
 ## Known issues / do not "fix" silently
 
@@ -143,10 +167,20 @@ Data flow: UI → ViewModel → UseCase → Repository → Room (source of truth
 - `firestore.rules` (strict) was realigned with the real document schema (ISO **string**
   dates, presence-based key validation, `change_requests`/`expenses` collections added,
   over-strict `lastModifiedBy`/`canModify` gates dropped) so it no longer rejects the app's
-  own writes. `firebase.json` deploys this file; it still needs an actual
-  `firebase deploy --only firestore:rules,storage` — until then the live project runs
-  whatever was last deployed and `change_requests` returns `PERMISSION_DENIED`.
-  `firestore.rules.simple` remains as the permissive fallback.
+  own writes, and now also covers `invitations`, `custody_schedules`, `conversations` and
+  `messages` for co-parent pairing and chat. It was deployed live to `coparently-a39c9`
+  as of this change (`firebase deploy --only firestore:rules`), replacing the permissive
+  `firestore.rules.simple` the project ran on until the client's last write to another
+  user's `users/{uid}` document was removed. `firestore.rules.simple` remains in the repo
+  only as a historical fallback — it is no longer deployed.
+- The `budgets` Firestore collection has **no rule block at all** in either
+  `firestore.rules` or `firestore.rules.simple` — both fall through to a default/catch-all
+  deny, so `BudgetRepositoryImpl.syncWithFirestore()` (and the unfiltered
+  `FirestoreBudgetDataSource.getAllBudgets()` it calls) has never been able to read or
+  write Firestore, under either rules file. This predates the strict-rules deploy and is
+  not a regression from it — it is a tracked follow-up. Fixing it needs both a `budgets`
+  rule block (mirroring the `expenses` `isPartnerOf` pattern above) and a filtered query,
+  the same combination `expenses` needed.
 - `strings.xml` is **no longer gitignored** (older docs/audit §2.1 claim otherwise —
   stale). No secrets live in resources: the OAuth client secret is injected via
   BuildConfig (`GOOGLE_CLIENT_SECRET` gradle property / env var), `GEMINI_API_KEY`

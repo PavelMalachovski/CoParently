@@ -153,11 +153,7 @@ class PairingViewModel @Inject constructor(
     fun showQr() {
         val invite = (state.value as? PairingState.NotPaired)?.activeInvite ?: return
         viewModelScope.launch {
-            val bitmap = qrCodeService.generatePairingQRCode(
-                invitationId = PairingUri.build(invite.code),
-                inviterName = invite.fromUserName,
-                inviterEmail = invite.fromUserEmail
-            )
+            val bitmap = qrCodeService.generatePairingQRCode(content = PairingUri.build(invite.code))
             _form.value = _form.value.copy(qrBitmap = bitmap, showQrDialog = bitmap != null)
         }
     }

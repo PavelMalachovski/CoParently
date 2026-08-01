@@ -59,33 +59,20 @@ class QRCodeService @Inject constructor() {
     }
 
     /**
-     * Generates a pairing invitation QR code with structured data.
+     * Generates a pairing invitation QR code.
      *
-     * @param invitationId Unique ID for the invitation
-     * @param inviterName Name of the person sending the invitation
-     * @param inviterEmail Email of the person sending the invitation
+     * Encodes [content] verbatim rather than wrapping it in app-specific JSON, so a
+     * `coplanly://pair?code=...` link scanned by any QR reader — not only this app's
+     * scanner — resolves directly to the pairing link.
+     *
+     * @param content The pairing URI to encode (see [com.coparently.app.domain.pairing.PairingUri.build])
      * @param width QR code width in pixels
      * @param height QR code height in pixels
      * @return Bitmap containing the pairing QR code, or null if generation fails
      */
     fun generatePairingQRCode(
-        invitationId: String,
-        inviterName: String,
-        inviterEmail: String,
+        content: String,
         width: Int = 512,
         height: Int = 512
-    ): Bitmap? {
-        // Create structured JSON content for the QR code
-        val qrContent = """
-            {
-                "type": "coparent_invitation",
-                "invitationId": "$invitationId",
-                "inviterName": "$inviterName",
-                "inviterEmail": "$inviterEmail",
-                "timestamp": ${System.currentTimeMillis()}
-            }
-        """.trimIndent()
-
-        return generateQRCode(qrContent, width, height)
-    }
+    ): Bitmap? = generateQRCode(content, width, height)
 }

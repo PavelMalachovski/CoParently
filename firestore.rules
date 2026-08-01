@@ -105,11 +105,17 @@ service cloud.firestore {
     }
 
     // ---- Expenses (receipt sync) --------------------------------------
-    // Only the two paired parents involved may read/write.
+    // Only the two paired parents involved may read/write. The document schema
+    // (ExpenseRepositoryImpl.addExpense) has no `sharedWith` field — expenses carry
+    // `splitBetween` for cost-splitting math, not visibility — so partner access is
+    // gated the same way as `users`: via the paired `partnerId` relationship, not a
+    // per-document list. An earlier version of this rule referenced `sharedWith` here,
+    // which never exists on an expense document, so the partner branch could never be
+    // true and the co-parent's expenses were unreadable even by document id.
     match /expenses/{expenseId} {
       allow read: if isAuthenticated() && (
         resource.data.createdByFirebaseUid == request.auth.uid ||
-        request.auth.uid in resource.data.sharedWith
+        isPartnerOf(resource.data.createdByFirebaseUid)
       );
 
       allow create: if isAuthenticated() &&
@@ -117,7 +123,7 @@ service cloud.firestore {
 
       allow update: if isAuthenticated() && (
         resource.data.createdByFirebaseUid == request.auth.uid ||
-        request.auth.uid in resource.data.sharedWith
+        isPartnerOf(resource.data.createdByFirebaseUid)
       ) && request.resource.data.createdByFirebaseUid == resource.data.createdByFirebaseUid;
 
       allow delete: if isAuthenticated() &&

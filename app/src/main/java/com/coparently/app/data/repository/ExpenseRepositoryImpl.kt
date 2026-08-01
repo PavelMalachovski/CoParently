@@ -1,6 +1,7 @@
 package com.coparently.app.data.repository
 
 import com.coparently.app.data.local.dao.ExpenseDao
+import com.coparently.app.data.local.dao.UserDao
 import com.coparently.app.data.local.entity.ExpenseEntity
 import com.coparently.app.data.remote.firebase.FirebaseAuthService
 import com.coparently.app.data.remote.firebase.FirestoreExpenseDataSource
@@ -23,6 +24,7 @@ import javax.inject.Singleton
 @Singleton
 class ExpenseRepositoryImpl @Inject constructor(
     private val expenseDao: ExpenseDao,
+    private val userDao: UserDao,
     private val firebaseAuthService: FirebaseAuthService,
     private val firestoreExpenseDataSource: FirestoreExpenseDataSource
 ) : ExpenseRepository {
@@ -132,7 +134,11 @@ class ExpenseRepositoryImpl @Inject constructor(
     }
 
     override suspend fun syncWithFirestore() {
-        firestoreExpenseDataSource.getAllExpenses()
+        val firebaseUser = firebaseAuthService.getCurrentUser() ?: return
+        val partnerId = userDao.getUserById(firebaseUser.uid)?.partnerId
+        val creatorUids = listOfNotNull(firebaseUser.uid, partnerId)
+
+        firestoreExpenseDataSource.getAllExpenses(creatorUids)
             .catch { e -> android.util.Log.w("ExpenseRepo", "Expense sync failed", e) }
             .collect { expenses ->
                 expenses.forEach { data ->

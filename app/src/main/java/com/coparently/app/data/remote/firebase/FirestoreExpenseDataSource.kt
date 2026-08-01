@@ -19,10 +19,25 @@ class FirestoreExpenseDataSource @Inject constructor(
     private val expensesCollection = firestore.collection("expenses")
 
     /**
-     * Gets all expenses as a Flow.
+     * Gets expenses created by any of [creatorUids] (the current user, plus the paired
+     * co-parent when paired) as a Flow.
+     *
+     * An unfiltered collection query is rejected outright by `firestore.rules`: Firestore
+     * validates a *query* by checking whether its structure guarantees every possible
+     * result satisfies the security rule, not by inspecting the actual documents returned.
+     * Since the read rule is keyed on `createdByFirebaseUid`, the query must filter on that
+     * same field for Firestore to accept it — mirroring how events are queried by
+     * `parentOwner` in [FirestoreEventDataSource.observeEventsForParents].
+     *
+     * @param creatorUids Firebase UIDs whose expenses to include (1 when unpaired, 2 when paired)
      */
-    fun getAllExpenses(): Flow<List<Map<String, Any>>> = callbackFlow {
+    fun getAllExpenses(creatorUids: List<String>): Flow<List<Map<String, Any>>> = callbackFlow {
+        if (creatorUids.isEmpty()) {
+            close()
+            return@callbackFlow
+        }
         val subscription = expensesCollection
+            .whereIn("createdByFirebaseUid", creatorUids)
             .orderBy("date", Query.Direction.DESCENDING)
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
