@@ -62,6 +62,19 @@ class FirestoreBudgetDataSource @Inject constructor(
     }
 
     /**
+     * Fetches a single budget document by id, or `null` if it doesn't exist.
+     *
+     * Used by [BudgetRepositoryImpl.updateBudget] to read back the existing
+     * `createdByFirebaseUid` before writing an update: `firestore.rules` requires that
+     * field to stay unchanged on update, so the write path must know its current value
+     * rather than re-stamping it with whichever user happens to be editing.
+     */
+    suspend fun getBudget(budgetId: String): Map<String, Any>? {
+        val snapshot = budgetsCollection.document(budgetId).get().await()
+        return if (snapshot.exists()) snapshot.data else null
+    }
+
+    /**
      * Deletes a budget from Firestore.
      */
     suspend fun deleteBudget(budgetId: String) {

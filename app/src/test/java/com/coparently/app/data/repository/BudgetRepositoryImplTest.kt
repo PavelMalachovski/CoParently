@@ -99,6 +99,32 @@ class BudgetRepositoryImplTest {
         org.junit.Assert.assertEquals("uidA", dataSlot.captured["createdByFirebaseUid"])
     }
 
+    @Test
+    fun `updateBudget preserves the existing owner instead of re-stamping the caller`() = runTest {
+        // uidB is editing a budget originally created by uidA (e.g. the paired co-parent).
+        // firestore.rules rejects an update whose createdByFirebaseUid differs from the
+        // stored document, so the write must keep "uidA", not switch to the caller "uidB".
+        val firebaseUser = mockk<FirebaseUser> { every { uid } returns "uidB" }
+        every { firebaseAuthService.getCurrentUser() } returns firebaseUser
+        coEvery { firestoreBudgetDataSource.getBudget("b1") } returns mapOf(
+            "id" to "b1",
+            "createdByFirebaseUid" to "uidA"
+        )
+        val dataSlot = io.mockk.slot<Map<String, Any>>()
+        coEvery { firestoreBudgetDataSource.setBudget(any(), capture(dataSlot)) } returns Unit
+
+        repository.updateBudget(
+            com.coparently.app.domain.model.Budget(
+                id = "b1",
+                category = com.coparently.app.domain.model.ExpenseCategory.OTHER,
+                monthlyLimit = 150.0
+            )
+        )
+
+        coVerify(exactly = 1) { firestoreBudgetDataSource.setBudget("b1", any()) }
+        org.junit.Assert.assertEquals("uidA", dataSlot.captured["createdByFirebaseUid"])
+    }
+
     private fun userEntity(id: String, partnerId: String?) = UserEntity(
         id = id,
         email = "$id@example.com",
