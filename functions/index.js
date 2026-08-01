@@ -62,15 +62,25 @@ exports.sendNotification = functions.firestore
           return null;
         }
 
-        // Подготовка сообщения для отправки
+        // Подготовка сообщения для отправки.
+        //
+        // Data-only: no top-level `notification` block. A message with one is
+        // auto-displayed by the OS from the system tray whenever the app is
+        // backgrounded or killed, and FCM never calls the app's
+        // onMessageReceived for it in that case - so the app's own
+        // notification-building code (deep links, icon, per-type notification
+        // id) would only ever run while the app happens to be in the
+        // foreground. A data-only message with android.priority "high" is
+        // delivered to onMessageReceived uniformly in all three app states,
+        // so the client is always the one deciding how to show it. title/body
+        // move into `data` since they were previously carried by the
+        // `notification` block alone.
         const message = {
           token: fcmToken,
-          notification: {
-            title: notificationData.data.title,
-            body: notificationData.data.body,
-          },
           data: {
           // Преобразуем все значения в строки (требование FCM)
+            title: notificationData.data.title,
+            body: notificationData.data.body,
             type: notificationData.data.type || 'general',
             eventId: notificationData.data.eventId || '',
             childInfoId: notificationData.data.childInfoId || '',
@@ -84,11 +94,6 @@ exports.sendNotification = functions.firestore
           },
           android: {
             priority: 'high',
-            notification: {
-              sound: 'default',
-              color: '#4CAF50',
-              channelId: 'coparently_notifications',
-            },
           },
         };
 
