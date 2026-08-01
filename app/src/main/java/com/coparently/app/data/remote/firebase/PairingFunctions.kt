@@ -3,6 +3,7 @@ package com.coparently.app.data.remote.firebase
 import com.coparently.app.domain.model.PairingError
 import com.google.firebase.functions.FirebaseFunctions
 import com.google.firebase.functions.FirebaseFunctionsException
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -21,17 +22,31 @@ class PairingFunctions @Inject constructor(
     /**
      * Redeems an invitation by [code] or by [invitationId] — exactly one.
      *
-     * @return the co-parent's Firebase UID on success.
+     * @return the co-parent's Firebase UID on success, or a [PairingException]-wrapped
+     *   [PairingError] on failure (a missing/blank `partnerId` in an otherwise successful
+     *   response is treated as [PairingError.Unknown], not silently coerced to an empty UID).
+     * @throws IllegalArgumentException if both or neither of [code] and [invitationId] are
+     *   given — this is a caller programming error, not a backend failure, so it is not
+     *   folded into the returned [Result].
      */
     suspend fun acceptInvitation(
         code: String? = null,
         invitationId: String? = null
     ): Result<String> {
+        require((code == null) != (invitationId == null)) {
+            "acceptInvitation requires exactly one of code or invitationId, got " +
+                "code=$code, invitationId=$invitationId"
+        }
         val payload = buildMap<String, Any> {
             code?.let { put("code", it) }
             invitationId?.let { put("invitationId", it) }
         }
-        return call("acceptPairingInvitation", payload) { it["partnerId"] as? String ?: "" }
+        return call("acceptPairingInvitation", payload) { data ->
+            val partnerId = data["partnerId"] as? String
+            checkNotNull(partnerId?.takeIf { it.isNotBlank() }) {
+                "acceptPairingInvitation succeeded but returned no partnerId"
+            }
+        }
     }
 
     /**
@@ -49,12 +64,17 @@ class PairingFunctions @Inject constructor(
     ): Result<T> = try {
         val result = functions.getHttpsCallable(name).call(payload).await()
         Result.success(parse((result.getData() as? Map<*, *>) ?: emptyMap<String, Any>()))
+    } catch (e: CancellationException) {
+        // Coroutine cancellation must propagate, not be reported as a pairing failure —
+        // otherwise navigating away mid-call surfaces a spurious error instead of the
+        // silent cancellation structured concurrency expects.
+        throw e
     } catch (
-        // Any backend failure becomes a typed PairingError; the caller decides
-        // how to surface it. Rethrowing would only crash the UI layer.
+        // Any remaining backend or parsing failure becomes a typed PairingError; the
+        // caller decides how to surface it. Rethrowing would only crash the UI layer.
         @Suppress("TooGenericExceptionCaught") e: Exception
     ) {
-        Result.failure(PairingException(toPairingError(e)))
+        Result.failure(PairingException(toPairingError(e), e))
     }
 
     companion object {
@@ -81,5 +101,6 @@ class PairingFunctions @Inject constructor(
     }
 }
 
-/** Carries a [PairingError] through `Result.failure`. */
-class PairingException(val error: PairingError) : Exception(error.toString())
+/** Carries a [PairingError] through `Result.failure`, keeping the original [cause] for logging. */
+class PairingException(val error: PairingError, cause: Throwable? = null) :
+    Exception(error.toString(), cause)
