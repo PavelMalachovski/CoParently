@@ -487,10 +487,99 @@ exports.acceptPairingInvitation = functions.https.onCall(async (data, context) =
 });
 
 /**
- * Removes the link between the caller and their co-parent.
+ * Collections whose visibility is a per-document `sharedWith` audience.
+ *
+ * These are the only two: `expenses` and `budgets` are gated on the *live* `isPartnerOf`
+ * relationship rather than a stored list, so clearing `partnerId` already revokes them.
+ * `conversations` membership is deliberately immutable — whether an ended co-parent link
+ * should also erase the chat history is a product decision, not a leak to close here.
+ */
+const SHARED_AUDIENCE_COLLECTIONS = ['events', 'child_info'];
+
+/** Firestore caps a batched write at 500 operations; stay clear of the edge. */
+const REVOCATION_BATCH_LIMIT = 400;
+
+/**
+ * Removes each of two former co-parents from the other's per-document `sharedWith` lists.
+ *
+ * `EventRepositoryImpl` and `SyncService` only ever *widen* `sharedWith`, so without this
+ * an ex-partner stayed in the audience of every event ever shared with them. Because
+ * `Event.permissions` defaults to `read_write`, the `events` update rule kept admitting
+ * them indefinitely — including on edits made long after the link ended. In an app for
+ * separated parents, unpair has to actually revoke something.
+ *
+ * Revocation is symmetric: it runs in both directions, so neither parent keeps access to
+ * documents the other created. Anything else would be a trap, since the person pressing
+ * unpair is usually the one who needs the boundary and has no way to ask the other side
+ * to press it too.
+ *
+ * A uid is never removed from a document it created. `sharedWith` is what
+ * `FirestoreEventDataSource.observeEventsSharedWith` and
+ * `FirestoreChildInfoDataSource.getChildInfoForParent` query on, so dropping the creator
+ * would hide the document from the parent it belongs to.
+ *
+ * Runs with Admin credentials, which is why this belongs on the server: a client sweep
+ * would only ever run on the device that pressed unpair, would be blocked by the `events`
+ * update rule on any document shared `read_only`, and would silently do nothing at all if
+ * that device were offline or the app uninstalled.
+ *
+ * @param {FirebaseFirestore.Firestore} db Firestore instance.
+ * @param {string} uidA One former co-parent.
+ * @param {string} uidB The other former co-parent.
+ * @return {Promise<number>} How many documents were narrowed.
+ */
+async function revokeSharedAudience(db, uidA, uidB) {
+  let revoked = 0;
+
+  for (const collection of SHARED_AUDIENCE_COLLECTIONS) {
+    for (const [reader, removed] of [[uidA, uidB], [uidB, uidA]]) {
+      const snap = await db.collection(collection)
+          .where('sharedWith', 'array-contains', reader)
+          .get();
+
+      let batch = db.batch();
+      let pending = 0;
+
+      for (const doc of snap.docs) {
+        const docData = doc.data();
+        if (docData.createdByFirebaseUid === removed) {
+          continue;
+        }
+        if (!(docData.sharedWith || []).includes(removed)) {
+          continue;
+        }
+
+        batch.update(doc.ref, {
+          sharedWith: admin.firestore.FieldValue.arrayRemove(removed),
+        });
+        pending++;
+        revoked++;
+
+        if (pending === REVOCATION_BATCH_LIMIT) {
+          await batch.commit();
+          batch = db.batch();
+          pending = 0;
+        }
+      }
+
+      if (pending > 0) {
+        await batch.commit();
+      }
+    }
+  }
+
+  return revoked;
+}
+
+exports.revokeSharedAudience = revokeSharedAudience;
+
+/**
+ * Removes the link between the caller and their co-parent, and revokes the access that
+ * link handed out.
  *
  * One-sided by product decision: no confirmation from the other parent is
- * required. Shared data (events, chat, expenses) is left untouched.
+ * required. Chat history and expenses are left as they are — see
+ * [SHARED_AUDIENCE_COLLECTIONS] for why.
  *
  * The decision of who to unlink is made and re-verified entirely inside the
  * transaction (both docs are read via `tx.get`, never via a plain `get()`
@@ -498,7 +587,19 @@ exports.acceptPairingInvitation = functions.https.onCall(async (data, context) =
  * between this call's start and its commit could make this transaction blindly
  * clear a partnerId the caller is no longer actually linked to.
  *
- * @return {Promise<{unpairedFrom: string|null}>} The former partner's UID.
+ * The audience sweep runs *after* the transaction, because it can touch an unbounded
+ * number of documents and a Firestore transaction cannot. That leaves a window where the
+ * link is gone but some documents still list the ex-partner, so the transaction records
+ * `pendingRevocationOf` on the caller and the sweep clears it only once it finishes. A
+ * partial failure therefore leaves: the link broken on both sides (the safety-critical
+ * half, and it is what the `expenses`/`budgets`/`notification_queue` rules gate on), some
+ * prefix of the documents narrowed, the rest still listing the ex-partner, and a marker
+ * that makes the next call resume the sweep. The call itself fails rather than reporting
+ * a success it did not achieve, so the user is told to retry instead of being left
+ * believing the boundary is in place.
+ *
+ * @return {Promise<{unpairedFrom: string|null, revokedDocuments: number}>} The former
+ *   partner's UID and how many documents the sweep narrowed.
  */
 exports.unpairCoParent = functions.https.onCall(async (data, context) => {
   if (!context.auth) {
@@ -510,10 +611,15 @@ exports.unpairCoParent = functions.https.onCall(async (data, context) => {
 
   const result = await db.runTransaction(async (tx) => {
     const callerSnap = await tx.get(callerRef);
-    const partnerId = callerSnap.exists ? callerSnap.data().partnerId : null;
+    const callerData = callerSnap.exists ? callerSnap.data() : {};
+    const partnerId = callerData.partnerId || null;
+    // Set by an earlier call whose sweep did not finish. Resuming it is the only way
+    // those documents ever get narrowed: once partnerId is cleared, nothing else
+    // remembers who the ex-partner was.
+    const unfinished = callerData.pendingRevocationOf || null;
 
     if (!partnerId) {
-      return {unpairedFrom: null};
+      return {unpairedFrom: null, revokeFrom: unfinished};
     }
 
     const partnerRef = db.collection('users').doc(partnerId);
@@ -527,17 +633,44 @@ exports.unpairCoParent = functions.https.onCall(async (data, context) => {
     // permanently "paired", with no way out: the unpair button would keep
     // succeeding and keep changing nothing.
     if (!partnerSnap.exists || partnerSnap.data().partnerId !== context.auth.uid) {
-      tx.update(callerRef, {partnerId: '', pairedAt: null});
+      tx.update(callerRef, {
+        partnerId: '', pairedAt: null, pendingRevocationOf: partnerId,
+      });
       // No notification: there is no intact link, and the other side either does
-      // not exist or is already paired with somebody else.
-      return {unpairedFrom: null};
+      // not exist or is already paired with somebody else. The sweep still runs —
+      // a half-torn link leaves the shared documents just as exposed.
+      return {unpairedFrom: null, revokeFrom: partnerId};
     }
 
-    tx.update(callerRef, {partnerId: '', pairedAt: null});
+    tx.update(callerRef, {
+      partnerId: '', pairedAt: null, pendingRevocationOf: partnerId,
+    });
     tx.update(partnerRef, {partnerId: '', pairedAt: null});
 
-    return {unpairedFrom: partnerId, callerName: callerSnap.data().name || 'Your co-parent'};
+    return {
+      unpairedFrom: partnerId,
+      callerName: callerData.name || 'Your co-parent',
+      revokeFrom: partnerId,
+    };
   });
+
+  let revokedDocuments = 0;
+  if (result.revokeFrom) {
+    try {
+      revokedDocuments = await revokeSharedAudience(
+          db, context.auth.uid, result.revokeFrom);
+      await callerRef.update({
+        pendingRevocationOf: admin.firestore.FieldValue.delete(),
+      });
+    } catch (err) {
+      console.error(
+          `Shared-audience revocation failed for ${context.auth.uid}`, err);
+      throw new functions.https.HttpsError(
+          'internal',
+          'Unpaired, but shared access was not fully revoked. Please try again.',
+          {reason: 'revocation-incomplete'});
+    }
+  }
 
   if (result.unpairedFrom) {
     await db.collection('notification_queue').add({
@@ -552,7 +685,7 @@ exports.unpairCoParent = functions.https.onCall(async (data, context) => {
     });
   }
 
-  return {unpairedFrom: result.unpairedFrom};
+  return {unpairedFrom: result.unpairedFrom, revokedDocuments: revokedDocuments};
 });
 
 /**
