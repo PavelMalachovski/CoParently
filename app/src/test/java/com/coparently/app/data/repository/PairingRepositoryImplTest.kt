@@ -1,15 +1,22 @@
 package com.coparently.app.data.repository
 
+import android.content.Context
+import app.cash.turbine.test
+import com.coparently.app.data.local.dao.UserDao
+import com.coparently.app.data.local.entity.UserEntity
 import com.coparently.app.data.remote.firebase.FirebaseAuthService
 import com.coparently.app.data.remote.firebase.PairingException
 import com.coparently.app.data.remote.firebase.PairingFunctions
 import com.coparently.app.domain.model.PairingError
+import com.coparently.app.domain.model.PairingState
+import com.coparently.app.domain.model.PartnerSummary
 import com.coparently.app.domain.repository.MessageRepository
 import com.google.android.gms.tasks.Tasks
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.firestore.CollectionReference
 import com.google.firebase.firestore.DocumentReference
 import com.google.firebase.firestore.DocumentSnapshot
+import com.google.firebase.firestore.EventListener
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.FirebaseFirestoreException
 import com.google.firebase.firestore.Query
@@ -18,8 +25,11 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.slot
 import io.mockk.verify
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
@@ -27,14 +37,18 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class PairingRepositoryImplTest {
 
     private lateinit var firestore: FirebaseFirestore
     private lateinit var authService: FirebaseAuthService
     private lateinit var pairingFunctions: PairingFunctions
     private lateinit var messageRepository: MessageRepository
+    private lateinit var userDao: UserDao
+    private lateinit var context: Context
     private lateinit var repository: PairingRepositoryImpl
 
+    private lateinit var usersCollection: CollectionReference
     private lateinit var invitationsCollection: CollectionReference
     private lateinit var invitationsQuery: Query
 
@@ -55,7 +69,7 @@ class PairingRepositoryImplTest {
         // addOnCompleteListener, and `.await()` on it hangs for real wall-clock time
         // instead of failing fast — that is what made the first version of this test
         // class hang for a full minute on "redeem normalizes the code...".
-        val usersCollection = mockk<CollectionReference>(relaxed = true)
+        usersCollection = mockk(relaxed = true)
         val userDocument = mockk<DocumentReference>(relaxed = true)
         val userSnapshot = mockk<DocumentSnapshot>(relaxed = true)
         every { firestore.collection("users") } returns usersCollection
@@ -71,12 +85,102 @@ class PairingRepositoryImplTest {
         every { invitationsCollection.whereEqualTo("fromUserId", any<String>()) } returns invitationsQuery
         every { invitationsQuery.whereEqualTo("status", any<String>()) } returns invitationsQuery
 
+        userDao = mockk(relaxed = true)
+        context = mockk(relaxed = true)
+        every { context.getString(any()) } returns "Co-parent"
+
         repository = PairingRepositoryImpl(
             firestore = firestore,
             authService = authService,
             pairingFunctions = pairingFunctions,
-            messageRepository = messageRepository
+            messageRepository = messageRepository,
+            userDao = userDao,
+            context = context
         )
+    }
+
+    // ---- observePairingState --------------------------------------------
+
+    @Test
+    fun `observePairingState emits Loading then NotPaired then Paired as the link is made`() = runTest {
+        val listeners = stubRealtimeListeners()
+
+        repository.observePairingState().test {
+            assertEquals(PairingState.Loading, awaitItem())
+            runCurrent()
+
+            listeners.emitInvites()
+            listeners.emitUser(userDoc(partnerId = ""))
+            assertEquals(PairingState.NotPaired(activeInvite = null, incoming = emptyList()), awaitItem())
+
+            listeners.emitUser(userDoc(partnerId = "u2", pairedAt = 123L))
+            assertEquals(
+                PairingState.Paired(
+                    PartnerSummary(id = "u2", name = "", email = "", pairedSinceMillis = 123L)
+                ),
+                awaitItem()
+            )
+
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `observePairingState mirrors the Paired transition into Room`() = runTest {
+        // Everything outside the pairing screen (chat, expenses, budgets, event sync) reads
+        // the link from Room, so the observed transition — not the redeem() call, which only
+        // ever runs on the accepting device — is what has to write it.
+        coEvery { userDao.getUserById("user-a") } returns userEntity(partnerId = null)
+        val listeners = stubRealtimeListeners()
+
+        repository.observePairingState().test {
+            assertEquals(PairingState.Loading, awaitItem())
+            runCurrent()
+            listeners.emitInvites()
+            listeners.emitUser(userDoc(partnerId = "u2", pairedAt = 123L))
+            awaitItem()
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        coVerify { userDao.updateUser(userEntity(partnerId = "u2")) }
+    }
+
+    @Test
+    fun `observePairingState clears partnerId in Room when the link ends`() = runTest {
+        coEvery { userDao.getUserById("user-a") } returns userEntity(partnerId = "u2")
+        val listeners = stubRealtimeListeners()
+
+        repository.observePairingState().test {
+            assertEquals(PairingState.Loading, awaitItem())
+            runCurrent()
+            listeners.emitInvites()
+            listeners.emitUser(userDoc(partnerId = ""))
+            awaitItem()
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        coVerify { userDao.updateUser(userEntity(partnerId = null)) }
+    }
+
+    @Test
+    fun `observePairingState stays Loading when the user-document listener errors`() = runTest {
+        // A failed read must never be reported as a fact about the link: forwarding the null
+        // snapshot would read downstream as partnerId == "" and flip a paired account to
+        // NotPaired, and a half-read snapshot would produce a Paired carrying a blank partner
+        // as if it were real.
+        val listeners = stubRealtimeListeners()
+
+        repository.observePairingState().test {
+            assertEquals(PairingState.Loading, awaitItem())
+            runCurrent()
+            listeners.emitInvites()
+            listeners.failUser(mockk<FirebaseFirestoreException>(relaxed = true))
+
+            expectNoEvents()
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        coVerify(exactly = 0) { userDao.updateUser(any()) }
     }
 
     // ---- redeem ---------------------------------------------------------
@@ -284,6 +388,80 @@ class PairingRepositoryImplTest {
     }
 
     // ---- test helpers ---------------------------------------------------
+
+    /**
+     * Handles for driving the three snapshot listeners `observePairingState` registers.
+     *
+     * The repository reads pairing state from realtime listeners, so a test can only move it
+     * by invoking the captured [EventListener]s directly — there is no request/response to
+     * stub. [emitInvites] satisfies the two invitation listeners the `combine` also waits on;
+     * without it no combined value is ever produced.
+     */
+    private class RealtimeListeners(
+        val user: () -> EventListener<DocumentSnapshot>,
+        val ownInvites: () -> EventListener<QuerySnapshot>,
+        val incomingInvites: () -> EventListener<QuerySnapshot>
+    ) {
+        fun emitUser(snapshot: DocumentSnapshot) = user().onEvent(snapshot, null)
+
+        fun failUser(error: FirebaseFirestoreException) = user().onEvent(null, error)
+
+        fun emitInvites() {
+            val empty = mockk<QuerySnapshot>(relaxed = true)
+            every { empty.documents } returns emptyList()
+            ownInvites().onEvent(empty, null)
+            incomingInvites().onEvent(empty, null)
+        }
+    }
+
+    private fun stubRealtimeListeners(): RealtimeListeners {
+        val firebaseUser = mockk<FirebaseUser>(relaxed = true)
+        every { firebaseUser.uid } returns "user-a"
+        every { firebaseUser.email } returns "a@example.com"
+        every { authService.getAuthStateFlow() } returns flowOf(firebaseUser)
+
+        val userListener = slot<EventListener<DocumentSnapshot>>()
+        val userDocument = mockk<DocumentReference>(relaxed = true)
+        every { usersCollection.document("user-a") } returns userDocument
+        every { userDocument.addSnapshotListener(capture(userListener)) } returns mockk(relaxed = true)
+
+        // Own invites are filtered by fromUserId; incoming ones by toEmail. Both land on the
+        // same relaxed `invitationsQuery`, so they are told apart by which where-clause built
+        // them rather than by the object itself.
+        val ownQuery = mockk<Query>(relaxed = true)
+        val incomingQuery = mockk<Query>(relaxed = true)
+        every { invitationsCollection.whereEqualTo("fromUserId", "user-a") } returns ownQuery
+        every { invitationsCollection.whereEqualTo("toEmail", "a@example.com") } returns incomingQuery
+        every { ownQuery.whereEqualTo("status", "pending") } returns ownQuery
+        every { incomingQuery.whereEqualTo("status", "pending") } returns incomingQuery
+
+        val ownListener = slot<EventListener<QuerySnapshot>>()
+        val incomingListener = slot<EventListener<QuerySnapshot>>()
+        every { ownQuery.addSnapshotListener(capture(ownListener)) } returns mockk(relaxed = true)
+        every { incomingQuery.addSnapshotListener(capture(incomingListener)) } returns mockk(relaxed = true)
+
+        return RealtimeListeners(
+            user = { userListener.captured },
+            ownInvites = { ownListener.captured },
+            incomingInvites = { incomingListener.captured }
+        )
+    }
+
+    private fun userDoc(partnerId: String, pairedAt: Long? = null): DocumentSnapshot {
+        val snapshot = mockk<DocumentSnapshot>(relaxed = true)
+        every { snapshot.getString("partnerId") } returns partnerId
+        every { snapshot.getLong("pairedAt") } returns pairedAt
+        return snapshot
+    }
+
+    private fun userEntity(partnerId: String?) = UserEntity(
+        id = "user-a",
+        email = "a@example.com",
+        name = "Alice",
+        role = "mom",
+        colorCode = "#FF4081",
+        partnerId = partnerId
+    )
 
     private fun stubOwnInvitesQuery(vararg docs: DocumentSnapshot) {
         val snapshot = mockk<QuerySnapshot>(relaxed = true)

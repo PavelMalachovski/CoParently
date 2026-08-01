@@ -1,6 +1,9 @@
 package com.coparently.app.data.repository
 
+import android.content.Context
 import android.util.Log
+import com.coparently.app.R
+import com.coparently.app.data.local.dao.UserDao
 import com.coparently.app.data.remote.firebase.FirebaseAuthService
 import com.coparently.app.data.remote.firebase.PairingException
 import com.coparently.app.data.remote.firebase.PairingFunctions
@@ -14,6 +17,7 @@ import com.coparently.app.domain.repository.MessageRepository
 import com.coparently.app.domain.repository.PairingRepository
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.awaitClose
@@ -25,10 +29,12 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.tasks.await
 import java.time.LocalDateTime
 import java.util.UUID
+import java.util.concurrent.atomic.AtomicReference
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -43,8 +49,18 @@ class PairingRepositoryImpl @Inject constructor(
     private val firestore: FirebaseFirestore,
     private val authService: FirebaseAuthService,
     private val pairingFunctions: PairingFunctions,
-    private val messageRepository: MessageRepository
+    private val messageRepository: MessageRepository,
+    private val userDao: UserDao,
+    // Application context only, for the localized conversation-title fallback. This is a
+    // repository, not a ViewModel, so it is allowed to resolve resources directly.
+    @ApplicationContext private val context: Context
 ) : PairingRepository {
+
+    /**
+     * The `(uid, partnerId)` pair last mirrored into Room by [onPairingStateObserved], so
+     * repeated emissions of an unchanged link do no work. Null means "nothing applied yet".
+     */
+    private val appliedPairing = AtomicReference<Pair<String, String?>?>(null)
 
     @OptIn(ExperimentalCoroutinesApi::class)
     override fun observePairingState(): Flow<PairingState> =
@@ -86,6 +102,10 @@ class PairingRepositoryImpl @Inject constructor(
             // first Firestore snapshot arrives.
             .onStart { emit(PairingState.Loading) }
             .distinctUntilChanged()
+            // Mirror every observed transition into Room. This hook, rather than the
+            // redeem/acceptIncoming call sites, is what makes both phones learn about the
+            // link: the inviter never calls anything, it only sees its own snapshot.
+            .onEach { onPairingStateObserved(it) }
             // A transient failure (offline with no cache, a rules mismatch before task 11
             // deploys) must not permanently end this flow — that would freeze the pairing
             // screen on stale content forever. Recover to Loading instead; the underlying
@@ -136,15 +156,14 @@ class PairingRepositoryImpl @Inject constructor(
         if (!InviteCodeGenerator.isValid(normalized)) {
             return Result.failure(PairingException(PairingError.NotFound))
         }
-        return pairingFunctions.acceptInvitation(code = normalized)
-            .onSuccess { partnerId -> ensureConversationWith(partnerId) }
-            .map { }
+        // Conversation creation deliberately does NOT hang off this call: it is driven by the
+        // observed Paired transition in [onPairingStateObserved] instead, so the inviter's
+        // phone — which never calls anything — ends up with a thread too.
+        return pairingFunctions.acceptInvitation(code = normalized).map { }
     }
 
     override suspend fun acceptIncoming(invitationId: String): Result<Unit> =
-        pairingFunctions.acceptInvitation(invitationId = invitationId)
-            .onSuccess { partnerId -> ensureConversationWith(partnerId) }
-            .map { }
+        pairingFunctions.acceptInvitation(invitationId = invitationId).map { }
 
     override suspend fun rejectIncoming(invitationId: String): Result<Unit> = runPairing {
         firestore.collection(INVITATIONS).document(invitationId)
@@ -154,13 +173,80 @@ class PairingRepositoryImpl @Inject constructor(
 
     override suspend fun unpair(): Result<Unit> = pairingFunctions.unpair().map { }
 
+    // ---- Local mirroring ------------------------------------------------
+
+    /**
+     * Mirrors an observed pairing transition into the local Room `users` row and, on a
+     * transition into [PairingState.Paired], makes sure the 1:1 conversation exists.
+     *
+     * Everything outside the pairing screen reads pairing from Room, not from Firestore:
+     * `ChatViewModel` decides between "open chat" and "go pair" from it, `ExpenseRepositoryImpl`
+     * and `BudgetRepositoryImpl` build their `creatorUids` filter from it, `SyncService` sizes
+     * the event audience with it, and `HomeViewModel` renders its CTA from it. Before this
+     * hook the only writer was `UserRepositoryImpl.syncWithFirestore()` behind a 15-minute
+     * `SyncWorker`, so both phones showed "Paired with X" while chat, expenses, budgets and
+     * events stayed unpaired for up to a quarter of an hour — and after an unpair, the
+     * ex-partner's UID stayed in `creatorUids` just as long.
+     *
+     * It hangs off the *observed* state rather than off [redeem]/[acceptIncoming] so it fires
+     * on both devices: the inviter's phone never calls anything, it learns about the pairing
+     * from its own snapshot listener. That is also why conversation creation moved here from
+     * those two call sites — previously only the accepting device created a thread.
+     *
+     * Best-effort by design: the pairing itself is already durable in Firestore, so a local
+     * write failure must never turn into a failed pairing. It is logged and swallowed, and
+     * the next emission (or the `SyncWorker`) retries.
+     */
+    private suspend fun onPairingStateObserved(state: PairingState) {
+        val uid = authService.getCurrentUser()?.uid ?: return
+        val partnerId = when (state) {
+            // Loading carries no information about the link — mirroring it would clear a
+            // perfectly good partnerId every time the flow recovers from a transient error.
+            PairingState.Loading -> return
+            is PairingState.NotPaired -> null
+            is PairingState.Paired -> state.partner.id.takeIf { it.isNotBlank() }
+        }
+        // NotPaired also re-emits whenever an invite list changes, so skip the work unless
+        // the link itself moved. Keyed by uid as well, so a different account signing in is
+        // never mistaken for "already applied".
+        if (appliedPairing.getAndSet(uid to partnerId) == uid to partnerId) return
+
+        try {
+            val local = userDao.getUserById(uid)
+            if (local != null && local.partnerId != partnerId) {
+                userDao.updateUser(local.copy(partnerId = partnerId))
+            }
+            if (partnerId != null) ensureConversationWith(partnerId)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (
+            @Suppress("TooGenericExceptionCaught") e: Exception
+        ) {
+            // Reset so the next emission retries rather than believing this one landed.
+            appliedPairing.set(null)
+            Log.w(TAG, "Failed to mirror the pairing transition into Room", e)
+        }
+    }
+
     // ---- Firestore plumbing -------------------------------------------
 
+    /**
+     * The user document, or nothing at all when the read fails.
+     *
+     * A failed read is deliberately *not* forwarded as a null snapshot. Downstream, a null
+     * snapshot reads as `partnerId == ""`, i.e. "definitely not paired" — so a transient
+     * error would have flipped a paired account to [PairingState.NotPaired] and offered it
+     * an invite to create, and a partially-read snapshot would have produced a
+     * [PairingState.Paired] carrying a blank partner as if it were real. Emitting nothing
+     * leaves the combined state where it was (or at [PairingState.Loading] if this is the
+     * first snapshot), and Firestore keeps retrying the listener on its own.
+     */
     private fun observeUserDocument(uid: String): Flow<DocumentSnapshot?> = callbackFlow {
         val registration = firestore.collection(USERS).document(uid)
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
                     Log.w(TAG, "User document listener failed for uid=$uid", error)
+                    return@addSnapshotListener
                 }
                 trySend(snapshot)
             }
@@ -189,7 +275,9 @@ class PairingRepositoryImpl @Inject constructor(
                 .whereEqualTo("status", STATUS_PENDING)
                 .addSnapshotListener { snapshot, error ->
                     if (error != null) {
-                        Log.w(TAG, "Incoming-invitations listener failed for email=$normalized", error)
+                        // The address itself is deliberately not logged — logcat is
+                        // readable by anyone with adb access to the device.
+                        Log.w(TAG, "Incoming-invitations listener failed", error)
                     }
                     trySend(snapshot?.documents.orEmpty().mapNotNull { it.toInvite() })
                 }
@@ -241,12 +329,15 @@ class PairingRepositoryImpl @Inject constructor(
      * Creates the 1:1 conversation after pairing, if one does not already exist for
      * this participant pair.
      *
+     * Driven by the observed [PairingState.Paired] transition in [onPairingStateObserved],
+     * so both parents get a thread — it used to hang off [redeem]/[acceptIncoming], which
+     * only ever run on the accepting device.
+     *
      * Best-effort: the pairing itself already succeeded server-side by the time this
-     * runs, so a failure here must not surface as a failure of [redeem] or
-     * [acceptIncoming] — it is logged and swallowed instead. This is safe because
-     * nothing depends on it having run: `ChatViewModel.startConversationWithPartner`
-     * creates the conversation on demand the first time either parent opens chat, using
-     * the same participant-pair lookup as here.
+     * runs, so a failure here must not surface as a failure of the pairing — it is logged
+     * and swallowed instead. This is safe because nothing depends on it having run:
+     * `ChatViewModel.startConversationWithPartner` creates the conversation on demand the
+     * first time either parent opens chat, using the same participant-pair lookup as here.
      */
     private suspend fun ensureConversationWith(partnerId: String) {
         val uid = authService.getCurrentUser()?.uid ?: return
@@ -257,11 +348,17 @@ class PairingRepositoryImpl @Inject constructor(
                 it.participants.toSet() == pair
             }
             if (alreadyExists) return
+            // The partner's display name titles the thread; their profile may not carry one
+            // yet, in which case a localized placeholder stands in.
+            val partnerName = firestore.collection(USERS).document(partnerId).get().await()
+                .getString("name")
+                .orEmpty()
+                .ifEmpty { context.getString(R.string.pairing_default_partner_name) }
             messageRepository.createConversation(
                 Conversation(
                     id = UUID.randomUUID().toString(),
                     participants = listOf(uid, partnerId),
-                    title = fetchPartnerName(partnerId),
+                    title = partnerName,
                     createdAt = LocalDateTime.now()
                 )
             )
@@ -272,12 +369,6 @@ class PairingRepositoryImpl @Inject constructor(
         ) {
             Log.w(TAG, "Failed to create the post-pairing conversation with $partnerId", e)
         }
-    }
-
-    /** Looks up the partner's display name for the conversation title. */
-    private suspend fun fetchPartnerName(partnerId: String): String {
-        val name = firestore.collection(USERS).document(partnerId).get().await().getString("name")
-        return name.orEmpty().ifEmpty { DEFAULT_PARTNER_NAME }
     }
 
     private fun requireUser() = authService.getCurrentUser()
@@ -347,7 +438,6 @@ class PairingRepositoryImpl @Inject constructor(
         const val STATUS_CANCELLED = "cancelled"
         const val CODE_TTL_MILLIS = 24L * 60 * 60 * 1000
         const val EMAIL_TTL_MILLIS = 7L * 24 * 60 * 60 * 1000
-        const val DEFAULT_PARTNER_NAME = "Co-parent"
         val EMAIL_REGEX = Regex("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$")
     }
 }

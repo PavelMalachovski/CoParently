@@ -62,4 +62,6 @@
     <!-- Deep link confirmation from a bare code (no sender identity known yet) -->
     <string name="pairing_deep_link_confirm_title">Связать аккаунты по этому коду?</string>
     <string name="pairing_deep_link_confirm_message">%1$s — человек, приславший вам этот код, увидит ваш общий календарь, чат и расходы.</string>
+    <!-- Fallback conversation title when the co-parent has no display name yet -->
+    <string name="pairing_default_partner_name">Второй родитель</string>
 </resources>
