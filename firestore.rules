@@ -126,8 +126,15 @@ service cloud.firestore {
         isPartnerOf(resource.data.createdByFirebaseUid)
       ) && request.resource.data.createdByFirebaseUid == resource.data.createdByFirebaseUid;
 
-      allow delete: if isAuthenticated() &&
-                      resource.data.createdByFirebaseUid == request.auth.uid;
+      // Symmetric with update: an expense is a record shared by exactly two paired
+      // parents, and update already lets either of them rewrite every field of it, so
+      // admitting only the creator on delete bought no protection while guaranteeing
+      // divergence — the co-parent's delete removed the local Room row, was rejected
+      // here, and the next sync pulled the document straight back.
+      allow delete: if isAuthenticated() && (
+        resource.data.createdByFirebaseUid == request.auth.uid ||
+        isPartnerOf(resource.data.createdByFirebaseUid)
+      );
     }
 
     // ---- Budgets ---------------------------------------------------------
@@ -220,10 +227,26 @@ service cloud.firestore {
     }
 
     // ---- Notification queue -------------------------------------------
-    // Drained by a Cloud Function; clients may only enqueue.
+    // Drained by the `sendNotification` Cloud Function; clients may only enqueue.
+    //
+    // A queued document carries `targetUserId` plus a free-form `data.title`/`data.body`
+    // that `sendNotification` now delivers data-only for the client to render verbatim.
+    // While `create` was open to any authenticated caller, anyone who learned another
+    // user's UID could push arbitrary notification text to them — a phishing primitive in
+    // an app about family conflict. A client may now only notify itself or its real
+    // co-parent, using the same `isPartnerOf` relationship the rest of this file gates on.
+    //
+    // The Cloud Functions that write here (`onEventCreated`, `onChildInfoUpdated`,
+    // `acceptPairingInvitation`, `unpairCoParent`) all use the Admin SDK, which bypasses
+    // security rules entirely, so this restriction does not affect them.
     match /notification_queue/{notificationId} {
       allow read: if false;
-      allow create: if isAuthenticated();
+      allow create: if isAuthenticated() &&
+                      'targetUserId' in request.resource.data &&
+                      (
+                        request.resource.data.targetUserId == request.auth.uid ||
+                        isPartnerOf(request.resource.data.targetUserId)
+                      );
       allow update, delete: if false;
     }
 
