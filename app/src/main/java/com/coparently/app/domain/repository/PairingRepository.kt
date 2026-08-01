@@ -1,5 +1,6 @@
 package com.coparently.app.domain.repository
 
+import com.coparently.app.domain.model.PairingError
 import com.coparently.app.domain.model.PairingInvite
 import com.coparently.app.domain.model.PairingState
 import kotlinx.coroutines.flow.Flow
@@ -15,21 +16,35 @@ interface PairingRepository {
     /**
      * Emits the current pairing state and every subsequent change, driven by
      * Firestore snapshot listeners — the inviting phone learns that its
-     * invitation was accepted without polling or a push.
+     * invitation was accepted without polling or a push. Recovers to
+     * [PairingState.Loading] rather than terminating if a transient Firestore
+     * error occurs (offline with no cache, a rules mismatch); it also emits
+     * [PairingState.Loading] whenever there is no signed-in user, including
+     * briefly on a cold start before Firebase Auth restores its session.
      */
     fun observePairingState(): Flow<PairingState>
 
     /**
-     * Returns this user's outstanding invite, creating one only when there is
-     * no pending, unexpired invite already. Reuse matters: a code the user has
-     * already sent by message must not silently stop working.
+     * Returns this user's outstanding code/QR/link invite, creating one only
+     * when there is no pending, unexpired one already. Reuse matters: a code
+     * the user has already sent by message must not silently stop working.
      */
     suspend fun createOrReuseInviteCode(): Result<PairingInvite>
 
-    /** Withdraws the active invite so its code stops working. */
+    /**
+     * Withdraws only this user's active code/QR/link invite (the one
+     * [createOrReuseInviteCode] returns) so that code stops working. Pending
+     * email invitations sent via [sendEmailInvitation] are a separate,
+     * longer-lived offer and are left untouched.
+     */
     suspend fun revokeActiveInvite(): Result<Unit>
 
-    /** Creates an invitation addressed to [email]. */
+    /**
+     * Creates an invitation addressed to [email]. Fails with a
+     * [com.coparently.app.data.remote.firebase.PairingException] wrapping
+     * [PairingError.Unknown] without writing anything if [email] is blank or
+     * not a plausible email address.
+     */
     suspend fun sendEmailInvitation(email: String): Result<Unit>
 
     /** Redeems an invitation by its short [code]. */
