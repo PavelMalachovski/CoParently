@@ -275,96 +275,6 @@ exports.onChildInfoUpdated = functions.firestore
     });
 
 /**
- * Cloud Function for processing QR code invitation acceptance.
- * Callable function that accepts QR invitation and pairs users.
- */
-exports.acceptQRInvitation = functions.https.onCall(async (data, context) => {
-  // Check authentication
-  if (!context.auth) {
-    throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
-  }
-
-  const {invitationId} = data;
-
-  if (!invitationId) {
-    throw new functions.https.HttpsError('invalid-argument', 'Invitation ID is required');
-  }
-
-  try {
-    // Get the invitation
-    const invitationDoc = await admin.firestore()
-        .collection('invitations')
-        .doc(invitationId)
-        .get();
-
-    if (!invitationDoc.exists) {
-      throw new functions.https.HttpsError('not-found', 'Invitation not found');
-    }
-
-    const invitation = invitationDoc.data();
-
-    // Check if invitation is for QR type and is pending
-    if (invitation.status !== 'pending') {
-      throw new functions.https.HttpsError('failed-precondition', 'Invitation is no longer valid');
-    }
-
-    // Check if current user is the recipient
-    if (invitation.toEmail !== context.auth.token.email) {
-      throw new functions.https.HttpsError('permission-denied', 'This invitation is not for you');
-    }
-
-    const fromUserId = invitation.fromUserId;
-    const acceptingUserId = context.auth.uid;
-
-    // Update both users with partner IDs
-    await admin.firestore()
-        .collection('users')
-        .doc(fromUserId)
-        .update({partnerId: acceptingUserId});
-
-    await admin.firestore()
-        .collection('users')
-        .doc(acceptingUserId)
-        .update({partnerId: fromUserId});
-
-    // Update invitation status
-    await admin.firestore()
-        .collection('invitations')
-        .doc(invitationId)
-        .update({status: 'accepted'});
-
-    // Send notification to the inviting user
-    const acceptingUserDoc = await admin.firestore()
-        .collection('users')
-        .doc(acceptingUserId)
-        .get();
-
-    if (acceptingUserDoc.exists) {
-      const acceptingUserData = acceptingUserDoc.data();
-
-      await admin.firestore()
-          .collection('notification_queue')
-          .add({
-            targetUserId: fromUserId,
-            data: {
-              title: 'Co-Parent Invitation Accepted',
-              body: `${acceptingUserData.name || 'Your co-parent'} accepted your invitation via QR code!`,
-              type: 'invitation_accepted',
-            },
-            status: 'pending',
-            createdAt: admin.firestore.FieldValue.serverTimestamp(),
-          });
-    }
-
-    console.log(`QR invitation ${invitationId} accepted by user ${acceptingUserId}`);
-    return {success: true};
-  } catch (error) {
-    console.error('Error accepting QR invitation:', error);
-    throw new functions.https.HttpsError('internal', 'Failed to accept invitation');
-  }
-});
-
-/**
  * Cloud Function for sending email invitations.
  * Triggered when a new invitation is created in Firestore.
  */
@@ -456,3 +366,181 @@ exports.sendEmailInvitation = functions.firestore
       }
     });
 
+/**
+ * Accepts a pairing invitation identified either by its short code or by its
+ * document id, and links the two parents.
+ *
+ * Runs server-side because linking writes BOTH user documents, and no Firestore
+ * rule can grant a client write access to another user's profile without
+ * granting it for every user.
+ *
+ * @param {{code?: string, invitationId?: string}} data Exactly one identifier.
+ * @return {Promise<{partnerId: string}>} The UID the caller is now paired with.
+ */
+exports.acceptPairingInvitation = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'Sign in first');
+  }
+
+  const code = data && data.code ? String(data.code).trim().toUpperCase() : null;
+  const invitationId = data && data.invitationId ? String(data.invitationId) : null;
+
+  if ((!code && !invitationId) || (code && invitationId)) {
+    throw new functions.https.HttpsError(
+        'invalid-argument',
+        'Provide exactly one of code or invitationId',
+    );
+  }
+
+  const db = admin.firestore();
+  const acceptingUserId = context.auth.uid;
+  const acceptingEmail = context.auth.token.email || '';
+
+  const inviteRef = await findInvitation(db, {code, invitationId});
+  const invite = (await inviteRef.get()).data();
+
+  if (invite.status !== 'pending') {
+    throw new functions.https.HttpsError(
+        'failed-precondition', 'Invitation is no longer pending',
+        {reason: 'invitation-not-pending'});
+  }
+  if (typeof invite.expiresAt === 'number' && invite.expiresAt < Date.now()) {
+    throw new functions.https.HttpsError(
+        'failed-precondition', 'Invitation has expired',
+        {reason: 'invitation-expired'});
+  }
+  if (invite.fromUserId === acceptingUserId) {
+    throw new functions.https.HttpsError(
+        'invalid-argument', 'You cannot accept your own invitation',
+        {reason: 'self-pairing'});
+  }
+  if (invite.toEmail && invite.toEmail !== acceptingEmail) {
+    throw new functions.https.HttpsError(
+        'permission-denied', 'This invitation is addressed to somebody else',
+        {reason: 'wrong-recipient'});
+  }
+
+  const inviterRef = db.collection('users').doc(invite.fromUserId);
+  const accepterRef = db.collection('users').doc(acceptingUserId);
+  const pairedAt = Date.now();
+
+  await db.runTransaction(async (tx) => {
+    const [inviterSnap, accepterSnap] = await Promise.all([
+      tx.get(inviterRef), tx.get(accepterRef),
+    ]);
+    if (!inviterSnap.exists || !accepterSnap.exists) {
+      throw new functions.https.HttpsError(
+          'not-found', 'User profile missing', {reason: 'not-found'});
+    }
+    if (hasPartner(inviterSnap) || hasPartner(accepterSnap)) {
+      throw new functions.https.HttpsError(
+          'failed-precondition', 'One of the accounts is already paired',
+          {reason: 'already-paired'});
+    }
+    tx.update(inviterRef, {partnerId: acceptingUserId, pairedAt});
+    tx.update(accepterRef, {partnerId: invite.fromUserId, pairedAt});
+    tx.update(inviteRef, {
+      status: 'accepted',
+      acceptedBy: acceptingUserId,
+      acceptedAt: pairedAt,
+    });
+  });
+
+  const accepterName = (await accepterRef.get()).data().name || 'Your co-parent';
+  await db.collection('notification_queue').add({
+    targetUserId: invite.fromUserId,
+    data: {
+      type: 'pairing_accepted',
+      title: 'Invitation accepted',
+      body: `${accepterName} is now your co-parent in CoPlanly`,
+    },
+    status: 'pending',
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+
+  return {partnerId: invite.fromUserId};
+});
+
+/**
+ * Removes the link between the caller and their co-parent.
+ *
+ * One-sided by product decision: no confirmation from the other parent is
+ * required. Shared data (events, chat, expenses) is left untouched.
+ *
+ * @return {Promise<{unpairedFrom: string|null}>} The former partner's UID.
+ */
+exports.unpairCoParent = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'Sign in first');
+  }
+
+  const db = admin.firestore();
+  const callerRef = db.collection('users').doc(context.auth.uid);
+  const callerSnap = await callerRef.get();
+  const partnerId = callerSnap.exists ? callerSnap.data().partnerId : null;
+
+  if (!partnerId) {
+    return {unpairedFrom: null};
+  }
+
+  const partnerRef = db.collection('users').doc(partnerId);
+  await db.runTransaction(async (tx) => {
+    tx.update(callerRef, {partnerId: '', pairedAt: null});
+    tx.update(partnerRef, {partnerId: '', pairedAt: null});
+  });
+
+  const callerName = callerSnap.data().name || 'Your co-parent';
+  await db.collection('notification_queue').add({
+    targetUserId: partnerId,
+    data: {
+      type: 'pairing_removed',
+      title: 'Co-parent unlinked',
+      body: `${callerName} ended the co-parent link`,
+    },
+    status: 'pending',
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+
+  return {unpairedFrom: partnerId};
+});
+
+/**
+ * Resolves an invitation reference from a code or a document id.
+ *
+ * @param {FirebaseFirestore.Firestore} db Firestore instance.
+ * @param {{code: ?string, invitationId: ?string}} ref Identifier.
+ * @return {Promise<FirebaseFirestore.DocumentReference>} The invitation.
+ */
+async function findInvitation(db, ref) {
+  if (ref.invitationId) {
+    const doc = await db.collection('invitations').doc(ref.invitationId).get();
+    if (!doc.exists) {
+      throw new functions.https.HttpsError(
+          'not-found', 'Invitation not found', {reason: 'not-found'});
+    }
+    return doc.ref;
+  }
+
+  const query = await db.collection('invitations')
+      .where('code', '==', ref.code)
+      .where('status', '==', 'pending')
+      .limit(2)
+      .get();
+
+  if (query.size !== 1) {
+    throw new functions.https.HttpsError(
+        'not-found', 'Invitation not found', {reason: 'not-found'});
+  }
+  return query.docs[0].ref;
+}
+
+/**
+ * Whether a user snapshot already carries a co-parent link.
+ *
+ * @param {FirebaseFirestore.DocumentSnapshot} snap User document.
+ * @return {boolean} True when partnerId is set and non-empty.
+ */
+function hasPartner(snap) {
+  const partnerId = snap.data().partnerId;
+  return typeof partnerId === 'string' && partnerId.length > 0;
+}
