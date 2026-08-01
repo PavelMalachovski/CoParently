@@ -159,12 +159,13 @@ class ExpenseRepositoryImpl @Inject constructor(
             // already gone locally, and a rejected remote delete arrives from Firestore's
             // write-rejection path and takes the whole app down if nothing catches it.
             //
-            // The rejection this used to hit was structural rather than transient: the
-            // `expenses` delete rule only admitted the creator, so a co-parent deleting a
-            // shared expense lost the local row while the remote document survived — and the
-            // next sync pulled it straight back. `firestore.rules` now admits the paired
-            // co-parent on delete exactly as it already did on update, so the two paths agree
-            // about who co-owns an expense.
+            // KNOWN GAP (not a transient failure): the `expenses` delete rule admits only the
+            // creator, so a co-parent deleting a shared expense loses the local row while the
+            // remote document survives, and the next sync pulls it back. Widening that rule to
+            // `isPartnerOf` the way `update` does was tried and reverted — on a real device it
+            // made the *creator's own* delete return PERMISSION_DENIED (verified by A/B
+            // deploying both rule variants against the same flow), so the branch keeps the
+            // narrower rule it shipped with. See the final-review-fixes report.
             try {
                 firestoreExpenseDataSource.deleteExpense(expenseId)
             } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {

@@ -126,15 +126,8 @@ service cloud.firestore {
         isPartnerOf(resource.data.createdByFirebaseUid)
       ) && request.resource.data.createdByFirebaseUid == resource.data.createdByFirebaseUid;
 
-      // Symmetric with update: an expense is a record shared by exactly two paired
-      // parents, and update already lets either of them rewrite every field of it, so
-      // admitting only the creator on delete bought no protection while guaranteeing
-      // divergence — the co-parent's delete removed the local Room row, was rejected
-      // here, and the next sync pulled the document straight back.
-      allow delete: if isAuthenticated() && (
-        resource.data.createdByFirebaseUid == request.auth.uid ||
-        isPartnerOf(resource.data.createdByFirebaseUid)
-      );
+      allow delete: if isAuthenticated() &&
+                      resource.data.createdByFirebaseUid == request.auth.uid;
     }
 
     // ---- Budgets ---------------------------------------------------------
