@@ -223,7 +223,7 @@ class MainActivity : AppCompatActivity() {
      */
     private fun readPairingCode(intent: Intent?) {
         val data = intent?.data ?: return
-        if (data.scheme != PairingUri.SCHEME || data.host != PairingUri.HOST) return
+        if (!PairingUri.isPairingUri(data.scheme, data.host)) return
         _pendingPairingCode.value = PairingUri.extractCode(data.toString())
     }
 }

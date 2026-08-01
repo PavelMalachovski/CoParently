@@ -17,6 +17,15 @@ object PairingUri {
     fun build(code: String): String = "$SCHEME://$HOST?code=$code"
 
     /**
+     * Whether [scheme] and [host] (as read off an incoming `Intent`'s
+     * `Uri`, e.g. `intent.data?.scheme` / `intent.data?.host`) identify a
+     * `coplanly://pair` link. Takes plain strings rather than `android.net.Uri`
+     * so this check has no Android dependency and can be unit-tested directly.
+     */
+    fun isPairingUri(scheme: String?, host: String?): Boolean =
+        scheme == SCHEME && host == HOST
+
+    /**
      * Extracts a valid invite code from [input], which may be a bare code, a
      * full pairing URI, or free text containing one (a pasted share message).
      *
