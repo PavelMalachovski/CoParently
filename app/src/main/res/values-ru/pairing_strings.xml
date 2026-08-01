@@ -3,47 +3,25 @@
     <!-- PairingScreen -->
     <string name="pairing_screen_title">Связывание родителей</string>
     <string name="pairing_back">Назад</string>
-    <string name="pairing_paired_with_label">Вы в паре с</string>
     <string name="pairing_unpair_button">Разорвать пару</string>
     <string name="pairing_partner_email_label">Эл. почта партнёра</string>
-    <string name="pairing_send_email_invitation">Отправить приглашение по эл. почте</string>
-    <string name="pairing_share_qr_code">Поделиться QR-кодом</string>
     <string name="pairing_scan_qr_code">Сканировать QR-код</string>
-    <string name="pairing_pending_invitations_title">Ожидающие приглашения</string>
     <string name="pairing_unknown_sender">Неизвестно</string>
     <string name="pairing_accept_button">Принять</string>
     <string name="pairing_reject_button">Отклонить</string>
     <string name="pairing_qr_dialog_title">QR-код приглашения для второго родителя</string>
     <string name="pairing_qr_dialog_message">Поделитесь этим QR-кодом со вторым родителем. Отсканировав его, он сможет принять ваше приглашение.</string>
     <string name="pairing_qr_code_content_description">QR-код для создания пары</string>
-    <string name="pairing_qr_expired">Срок действия QR-кода истёк</string>
-    <string name="pairing_generate_new_qr_code">Создать новый QR-код</string>
-    <string name="pairing_time_remaining_hours">Осталось %1$d ч %2$d мин</string>
-    <string name="pairing_time_remaining_minutes">Осталось %1$d мин %2$d с</string>
-    <string name="pairing_time_remaining_seconds">Осталось %1$d с</string>
-    <string name="pairing_expires_in">Истекает через: %1$s</string>
     <string name="pairing_close">Закрыть</string>
-    <string name="pairing_confirm_title">Создать пару со вторым родителем?</string>
-    <string name="pairing_confirm_message">Вы уверены, что хотите создать пару с %1$s (%2$s)? Вы сможете делиться событиями календаря и общаться друг с другом.</string>
-    <string name="pairing_accept_pairing">Создать пару</string>
     <string name="pairing_cancel">Отмена</string>
-    <string name="pairing_unknown_user">Неизвестный пользователь</string>
 
-    <!-- QRScannerActivity results -->
-    <string name="pairing_camera_permission_needed_result">Для сканирования QR-кодов требуется разрешение на использование камеры</string>
-    <string name="pairing_scanning_cancelled">Сканирование отменено</string>
-    <string name="pairing_invalid_qr_format">Неверный формат QR-кода</string>
-    <string name="pairing_error_processing_qr">Ошибка обработки QR-кода: %1$s</string>
-    <string name="pairing_qr_expired_ask_new">Срок действия QR-кода истёк. Попросите партнёра создать новый.</string>
-
-    <!-- QRScannerScreen -->
+    <!-- QrScannerScreen -->
     <string name="pairing_camera_permission_title">Требуется разрешение на использование камеры</string>
     <string name="pairing_camera_permission_message">Разрешите доступ к камере, чтобы сканировать QR-коды приглашений.</string>
+    <string name="pairing_camera_permission_denied_message">Доступ к камере запрещён. Включите его в настройках системы, чтобы сканировать QR-коды.</string>
+    <string name="pairing_open_app_settings">Открыть настройки</string>
     <string name="pairing_grant_permission">Предоставить разрешение</string>
-    <string name="pairing_processing_qr">Обработка QR-кода…</string>
-    <string name="pairing_position_qr">Наведите камеру на QR-код</string>
     <string name="pairing_qr_hint">Убедитесь, что QR-код хорошо освещён и полностью помещается в рамку.</string>
-    <string name="pairing_camera_preview">Предпросмотр камеры</string>
 
     <!-- Pairing errors (Task 6) -->
     <string name="pairing_error_not_found">Приглашение с таким кодом не найдено.</string>
@@ -81,9 +59,6 @@
     <string name="pairing_unpair_confirm_title">Разорвать связь?</string>
     <string name="pairing_unpair_confirm_message">Вы перестанете делиться календарём, чатом и расходами с %1$s. Данные на этом телефоне сохранятся.</string>
     <string name="pairing_unpair_confirm_action">Отвязаться</string>
-    <!-- Deep link confirmation -->
-    <string name="pairing_link_confirm_title">Связаться с %1$s?</string>
-    <string name="pairing_link_confirm_message">%1$s (%2$s) увидит ваш общий календарь, чат и расходы.</string>
     <!-- Deep link confirmation from a bare code (no sender identity known yet) -->
     <string name="pairing_deep_link_confirm_title">Связать аккаунты по этому коду?</string>
     <string name="pairing_deep_link_confirm_message">%1$s — человек, приславший вам этот код, увидит ваш общий календарь, чат и расходы.</string>

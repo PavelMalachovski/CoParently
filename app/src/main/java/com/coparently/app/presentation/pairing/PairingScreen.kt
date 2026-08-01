@@ -1,8 +1,12 @@
 package com.coparently.app.presentation.pairing
 
+import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.ActivityResultLauncher
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.StringRes
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
@@ -38,13 +42,13 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
@@ -65,7 +69,6 @@ import com.coparently.app.presentation.pairing.components.CodeEntryField
 import com.coparently.app.presentation.pairing.components.IncomingInviteCard
 import com.coparently.app.presentation.pairing.components.InviteCodeCard
 import com.coparently.app.presentation.pairing.components.PairedPartnerCard
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
 /**
@@ -89,13 +92,21 @@ fun PairingScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val codeCopiedMessage = stringResource(R.string.pairing_code_copied)
-    val actions = rememberNotPairedActions(context, clipboard, snackbarHostState, scope, codeCopiedMessage)
+    val qrScannerLauncher = rememberQrScannerLauncher(viewModel)
+    val actions = rememberNotPairedActions(
+        context = context,
+        clipboard = clipboard,
+        onCodeCopied = { scope.launch { snackbarHostState.showSnackbar(codeCopiedMessage) } },
+        onScanQr = { qrScannerLauncher.launch(Intent(context, QRScannerActivity::class.java)) }
+    )
 
     // rememberSaveable so a config change never silently drops a decision the
     // user hasn't made yet, and keyed on prefilledCode so a second deep link
     // re-arms the consent dialog instead of being swallowed by a stale value.
-    var showUnpairConfirm by rememberSaveable { mutableStateOf(false) }
-    var pendingDeepLinkCode by rememberSaveable(prefilledCode) { mutableStateOf(prefilledCode) }
+    // Held as MutableState (rather than `by`-delegated vars) so they can be
+    // passed by reference into UnpairFlow/DeepLinkFlow below.
+    val showUnpairConfirm = rememberSaveable { mutableStateOf(false) }
+    val pendingDeepLinkCode = rememberSaveable(prefilledCode) { mutableStateOf(prefilledCode) }
 
     LaunchedEffect(prefilledCode) {
         prefilledCode?.let { viewModel.onCodeInputChange(it) }
@@ -113,40 +124,50 @@ fun PairingScreen(
         ) {
             when (val current = state) {
                 is PairingState.Loading -> loadingSection(form, viewModel, actions)
-                is PairingState.Paired -> pairedSection(current.partner) { showUnpairConfirm = true }
+                is PairingState.Paired -> pairedSection(current.partner) { showUnpairConfirm.value = true }
                 is PairingState.NotPaired -> notPairedSection(current, form, viewModel, actions)
             }
         }
     }
 
-    if (showUnpairConfirm) {
-        val partnerName = (state as? PairingState.Paired)?.partner?.name.orEmpty()
-        UnpairConfirmationDialog(
-            partnerName = partnerName,
-            onConfirm = {
-                viewModel.unpair()
-                showUnpairConfirm = false
-            },
-            onDismiss = { showUnpairConfirm = false }
-        )
-    }
-
-    // A shared link may have been forwarded by a third party — never redeem it
-    // without the user saying yes.
-    pendingDeepLinkCode?.let { code ->
-        DeepLinkConfirmationDialog(
-            code = code,
-            onConfirm = {
-                viewModel.redeemCode()
-                pendingDeepLinkCode = null
-            },
-            onDismiss = { pendingDeepLinkCode = null }
-        )
-    }
+    UnpairFlow(state, showUnpairConfirm, viewModel::unpair)
+    DeepLinkFlow(pendingDeepLinkCode, viewModel::redeemCode)
 
     if (form.showQrDialog && form.qrBitmap != null) {
         QrDialog(bitmap = form.qrBitmap, onDismiss = viewModel::dismissQr)
     }
+}
+
+/** Confirms ending the co-parent link once [visible] is set, e.g. from the paired screen's danger action. */
+@Composable
+private fun UnpairFlow(state: PairingState, visible: MutableState<Boolean>, onUnpair: () -> Unit) {
+    if (!visible.value) return
+    UnpairConfirmationDialog(
+        partnerName = (state as? PairingState.Paired)?.partner?.name.orEmpty(),
+        onConfirm = {
+            onUnpair()
+            visible.value = false
+        },
+        onDismiss = { visible.value = false }
+    )
+}
+
+/**
+ * Confirms redeeming a code carried by a `coplanly://pair` deep link. A
+ * shared link may have been forwarded by a third party — never redeem it
+ * without the user saying yes.
+ */
+@Composable
+private fun DeepLinkFlow(pendingCode: MutableState<String?>, onRedeem: () -> Unit) {
+    val code = pendingCode.value ?: return
+    DeepLinkConfirmationDialog(
+        code = code,
+        onConfirm = {
+            onRedeem()
+            pendingCode.value = null
+        },
+        onDismiss = { pendingCode.value = null }
+    )
 }
 
 /**
@@ -185,6 +206,21 @@ private fun PairingTopBar(onNavigateBack: () -> Unit) {
     )
 }
 
+/**
+ * Launches [QRScannerActivity] and, on a successful scan, feeds the returned
+ * code straight into the redeem flow — the same path as typing it by hand.
+ */
+@Composable
+private fun rememberQrScannerLauncher(viewModel: PairingViewModel): ActivityResultLauncher<Intent> =
+    rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            result.data?.getStringExtra(QRScannerActivity.EXTRA_CODE)?.let { code ->
+                viewModel.onCodeInputChange(code)
+                viewModel.redeemCode()
+            }
+        }
+    }
+
 /** The screen-level side effects the not-paired/loading form needs but does not own itself. */
 private data class NotPairedActions(
     val onShareInvite: (PairingInvite) -> Unit,
@@ -196,17 +232,16 @@ private data class NotPairedActions(
 private fun rememberNotPairedActions(
     context: Context,
     clipboard: ClipboardManager,
-    snackbarHostState: SnackbarHostState,
-    scope: CoroutineScope,
-    codeCopiedMessage: String
-): NotPairedActions = remember(context, clipboard, snackbarHostState, scope, codeCopiedMessage) {
+    onCodeCopied: () -> Unit,
+    onScanQr: () -> Unit
+): NotPairedActions = remember(context, clipboard, onCodeCopied, onScanQr) {
     NotPairedActions(
         onShareInvite = { invite -> context.startActivity(shareIntent(context, invite)) },
         onCopyCode = { code ->
             clipboard.setText(AnnotatedString(code))
-            scope.launch { snackbarHostState.showSnackbar(codeCopiedMessage) }
+            onCodeCopied()
         },
-        onScanQr = { context.startActivity(Intent(context, QRScannerActivity::class.java)) }
+        onScanQr = onScanQr
     )
 }
 
