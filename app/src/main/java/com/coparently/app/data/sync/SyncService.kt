@@ -218,6 +218,12 @@ class SyncService @Inject constructor(
                 "updatedAt" to entity.updatedAt.format(formatter),
                 "createdByFirebaseUid" to entity.createdByFirebaseUid,
                 "lastModifiedBy" to entity.lastModifiedBy,
+                // SEPARATE CONCERN, deliberately not changed here: the co-parent is never
+                // added, so a paired parent cannot see child info the other created. That is
+                // a missing-visibility feature needing an audience policy of its own (the
+                // widen-only `shareTargets` above is the shape it would take), not the
+                // data-corruption bug the UseLocal branch below fixes. Widening it silently
+                // would also change what the unpair sweep has to undo.
                 "sharedWith" to listOfNotNull(entity.createdByFirebaseUid, entity.lastModifiedBy).distinct()
             )
 
@@ -250,7 +256,15 @@ class SyncService @Inject constructor(
 
                     when (resolution) {
                         is ConflictResolution.UseLocal -> {
-                            // Keep local, upload to remote
+                            // Keep local, upload to remote. This is a partial `update()`, not
+                            // a `set()`: `ChildInfoEntity` carries no `sharedWith`, so a full
+                            // overwrite from local state dropped the field entirely. The write
+                            // itself passed — the update rule reads the *old* `resource` — but
+                            // the resulting document was then invisible to
+                            // `getChildInfoForParent` for both parents and permanently
+                            // un-updatable, because `request.auth.uid in resource.data.sharedWith`
+                            // is a missing-field error from then on. The only way back was
+                            // deleting the document. Same reasoning as the events branch above.
                             val localData = mapOf(
                                 "id" to localEntity.id,
                                 "childName" to localEntity.childName,
@@ -266,7 +280,7 @@ class SyncService @Inject constructor(
                                 "createdByFirebaseUid" to localEntity.createdByFirebaseUid,
                                 "lastModifiedBy" to userId
                             )
-                            firestoreChildInfoDataSource.upsertChildInfo(localEntity.id, localData)
+                            firestoreChildInfoDataSource.updateChildInfo(localEntity.id, localData)
                             childInfoDao.markAsSynced(localEntity.id)
                         }
                         is ConflictResolution.UseRemote -> {
