@@ -466,7 +466,7 @@ describe('acceptPairingInvitation', () => {
 });
 ```
 
-Note: `sinon` is not yet a devDependency — add it in Step 3 together with the `test` script. Firestore behaviour beyond these two guards is verified on real devices in Task 12; stubbing the full Admin SDK transaction here costs more than it catches.
+Note: `sinon` is not yet a devDependency — add it in Step 3 together with the `test` script. Firestore behaviour beyond these two guards is verified on real devices in Task 11; stubbing the full Admin SDK transaction here costs more than it catches.
 
 - [ ] **Step 2: Run the tests and confirm they fail**
 
@@ -761,35 +761,55 @@ Replace the `match /invitations/{invitationId}` block with:
     }
 ```
 
-- [ ] **Step 2: Deploy the strict rules**
+- [ ] **Step 2: Add the missing chat rules**
 
-```bash
-firebase deploy --only firestore:rules --project coparently-a39c9
+The strict file has no `conversations` or `messages` block at all, so both collections are deny-by-default. Pairing creates a conversation as soon as two parents link (Task 5), so this file cannot ship without them. Add before the closing braces:
+
+```
+    // ---- Conversations & messages --------------------------------------
+    // 1:1 threads between the two paired parents. Deliberately minimal —
+    // the chat feature's own hardening is a separate spec; without these
+    // blocks the collections are deny-by-default and pairing's auto-created
+    // conversation fails to sync.
+    match /conversations/{conversationId} {
+      allow read, update: if isAuthenticated() &&
+                            request.auth.uid in resource.data.participants;
+
+      allow create: if isAuthenticated() &&
+                      request.auth.uid in request.resource.data.participants &&
+                      request.resource.data.participants.size() == 2;
+
+      allow delete: if false;
+    }
+
+    match /messages/{messageId} {
+      allow read: if isAuthenticated() &&
+                    request.auth.uid in
+                      get(/databases/$(database)/documents/conversations/$(resource.data.conversationId))
+                        .data.participants;
+
+      allow create: if isAuthenticated() &&
+                      request.resource.data.senderId == request.auth.uid &&
+                      request.auth.uid in
+                        get(/databases/$(database)/documents/conversations/$(request.resource.data.conversationId))
+                          .data.participants;
+
+      // Only the read flag is amended after the fact; content is immutable.
+      allow update: if isAuthenticated() &&
+                      request.resource.data.content == resource.data.content &&
+                      request.resource.data.senderId == resource.data.senderId;
+
+      allow delete: if false;
+    }
 ```
 
-Expected: `Deploy complete!`. This replaces whatever was deployed before (the permissive `firestore.rules.simple`), so from now on the app runs against the strict file — which is the point: the cross-user writes that used to require permissive rules are gone as of Task 2.
+**Do not deploy in this task.** The client still writes `users/{partnerId}` through `CoParentPairingService` until Task 11 removes it, so deploying the strict file now would break pairing on the two phones mid-plan. The deploy step lives in Task 11, after the client is clean.
 
-- [ ] **Step 3: Smoke-test that existing flows still work**
-
-Launch the app on the Pixel and confirm the calendar loads and an event can be created and saved (events rules are unchanged but this is the first time strict rules are live):
-
-```bash
-$env:Path="$env:LOCALAPPDATA\Android\Sdk\platform-tools;$env:Path"; adb -s adb-46061FDAS002YU-9SFSG6._adb-tls-connect._tcp logcat -c
-```
-
-Then use the app and check for permission errors:
-
-```bash
-$env:Path="$env:LOCALAPPDATA\Android\Sdk\platform-tools;$env:Path"; adb -s adb-46061FDAS002YU-9SFSG6._adb-tls-connect._tcp logcat -d | Select-String -Pattern "PERMISSION_DENIED"
-```
-
-Expected: no matches. If there are matches, note the collection and stop — a rules regression must be fixed before continuing rather than worked around.
-
-- [ ] **Step 4: Commit**
+- [ ] **Step 3: Commit**
 
 ```bash
 git add firestore.rules
-git commit -m "feat(rules): allow coded pairing invitations, restrict updates to withdrawal"
+git commit -m "feat(rules): allow coded pairing invitations, add chat collection rules"
 ```
 
 ---
@@ -1418,15 +1438,24 @@ git commit -m "feat(pairing): add PairingRepository with realtime state and invi
 
 ---
 
-### Task 6: PairingViewModel rewrite
+### Task 6: PairingViewModel, screen and strings
+
+The ViewModel and its only consumer ship together: the screen is the ViewModel's sole caller, so splitting them would leave the module non-compiling at a commit boundary and give the reviewer a ViewModel it cannot judge in use.
 
 **Files:**
 - Modify: `app/src/main/java/com/coparently/app/presentation/pairing/PairingViewModel.kt` (full rewrite, 583 → ~150 lines)
+- Modify: `app/src/main/java/com/coparently/app/presentation/pairing/PairingScreen.kt` (full rewrite)
+- Create: `app/src/main/java/com/coparently/app/presentation/pairing/components/InviteCodeCard.kt`
+- Create: `app/src/main/java/com/coparently/app/presentation/pairing/components/CodeEntryField.kt`
+- Create: `app/src/main/java/com/coparently/app/presentation/pairing/components/IncomingInviteCard.kt`
+- Create: `app/src/main/java/com/coparently/app/presentation/pairing/components/PairedPartnerCard.kt`
+- Modify: `app/src/main/res/values/pairing_strings.xml` and the `values-cs/`, `values-de/`, `values-ru/`, `values-uk/` variants
 - Test: `app/src/test/java/com/coparently/app/presentation/pairing/PairingViewModelTest.kt`
 
 **Interfaces:**
-- Consumes: `PairingRepository` (Task 5), `PairingError`/`PairingState` (Task 1), existing `QRCodeService`, `AnalyticsManager`.
+- Consumes: `PairingRepository` (Task 5), `PairingError`/`PairingState`/`PairingInvite`/`PartnerSummary`/`PairingUri` (Task 1), existing `QRCodeService`, `AnalyticsManager`, `ConfirmationDialog`.
 - Produces:
+  - `PairingScreen(onNavigateBack: () -> Unit, prefilledCode: String? = null, viewModel: PairingViewModel = hiltViewModel())` — `prefilledCode` is what Task 8's deep link uses
   - `PairingViewModel.state: StateFlow<PairingState>`
   - `PairingViewModel.form: StateFlow<PairingFormState>` where
     `data class PairingFormState(codeInput: String, emailInput: String, isBusy: Boolean, errorRes: Int?, emailErrorRes: Int?, qrBitmap: Bitmap?, showQrDialog: Boolean)`
@@ -1532,7 +1561,7 @@ Expected: compilation failure — the current `PairingViewModel` constructor tak
 
 - [ ] **Step 3: Add the error strings**
 
-These are needed by the ViewModel and are added in full (with translations) in Task 7. For now add just the English keys to `app/src/main/res/values/pairing_strings.xml` so the code compiles:
+These are needed by the ViewModel; the rest of the keys and all four translations follow in Steps 6–7 of this task. For now add just these English keys to `app/src/main/res/values/pairing_strings.xml` so the code compiles:
 
 ```xml
     <string name="pairing_error_not_found">No invitation matches that code.</string>
@@ -1734,38 +1763,15 @@ Add the one further key used above to `values/pairing_strings.xml`:
     <string name="pairing_error_invalid_email">Enter a valid email address.</string>
 ```
 
-- [ ] **Step 5: Run the tests and confirm they pass**
+- [ ] **Step 5: Run the ViewModel tests and confirm they pass**
 
 ```bash
 $env:JAVA_HOME='C:\Program Files\Android\Android Studio1\jbr'; ./gradlew testDebugUnitTest --tests "com.coparently.app.presentation.pairing.PairingViewModelTest"
 ```
 
-Expected: PASS, 4 tests. `PairingScreen.kt` will not compile yet — that is Task 7. If the module fails to build because of it, temporarily comment out the screen body is **not** acceptable; instead run Task 7 immediately after and commit both together if needed.
+Expected: PASS, 4 tests. `PairingScreen.kt` still references the old ViewModel API at this point — the remaining steps of this task rewrite it, and nothing is committed until the module builds again.
 
-- [ ] **Step 6: Commit**
-
-```bash
-git add app/src/main/java/com/coparently/app/presentation/pairing/PairingViewModel.kt app/src/test/java/com/coparently/app/presentation/pairing/PairingViewModelTest.kt app/src/main/res/values/pairing_strings.xml
-git commit -m "refactor(pairing): rebuild PairingViewModel on PairingRepository"
-```
-
----
-
-### Task 7: Pairing screen and strings
-
-**Files:**
-- Create: `app/src/main/java/com/coparently/app/presentation/pairing/components/InviteCodeCard.kt`
-- Create: `app/src/main/java/com/coparently/app/presentation/pairing/components/CodeEntryField.kt`
-- Create: `app/src/main/java/com/coparently/app/presentation/pairing/components/IncomingInviteCard.kt`
-- Create: `app/src/main/java/com/coparently/app/presentation/pairing/components/PairedPartnerCard.kt`
-- Modify: `app/src/main/java/com/coparently/app/presentation/pairing/PairingScreen.kt` (full rewrite)
-- Modify: `app/src/main/res/values/pairing_strings.xml` and `values-cs/`, `values-de/`, `values-ru/`, `values-uk/` variants
-
-**Interfaces:**
-- Consumes: `PairingViewModel.state`, `PairingViewModel.form` and its actions (Task 6); `PairingState`, `PairingInvite`, `PartnerSummary` (Task 1).
-- Produces: `PairingScreen(onNavigateBack: () -> Unit, prefilledCode: String? = null, viewModel: PairingViewModel = hiltViewModel())` — the `prefilledCode` parameter is what Task 9's deep link uses.
-
-- [ ] **Step 1: Add every new string to the base file**
+- [ ] **Step 6: Add every new string to the base file**
 
 Append to `app/src/main/res/values/pairing_strings.xml` (the error keys from Task 6 are already there):
 
@@ -1807,7 +1813,7 @@ Also fix the stale comment at the top of the file: `strings.xml` is tracked now 
      must also exist in values-cs, values-de, values-ru and values-uk. -->
 ```
 
-- [ ] **Step 2: Translate every new key into the four locales**
+- [ ] **Step 7: Translate every new key into the four locales**
 
 Add the same keys to `values-cs/pairing_strings.xml`, `values-de/pairing_strings.xml`, `values-ru/pairing_strings.xml`, `values-uk/pairing_strings.xml`. Russian, for example:
 
@@ -1847,7 +1853,7 @@ Add the same keys to `values-cs/pairing_strings.xml`, `values-de/pairing_strings
 
 Czech, German and Ukrainian get equivalent translations of the same key set. Do not leave any key missing — a missing key silently falls back to English at runtime and the `MissingTranslation` lint check is only a warning here.
 
-- [ ] **Step 3: Write the components**
+- [ ] **Step 8: Write the components**
 
 `components/InviteCodeCard.kt`:
 
@@ -2200,7 +2206,7 @@ private fun formatDate(millis: Long): String =
         .format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM))
 ```
 
-- [ ] **Step 4: Rewrite the screen**
+- [ ] **Step 9: Rewrite the screen**
 
 Replace `PairingScreen.kt` with a screen that switches on `PairingState` and delegates to the four components. The Unpair button sits alone at the bottom behind `ConfirmationDialog`; sharing uses `Intent.ACTION_SEND` built from `R.string.pairing_share_message` and `PairingUri.build(invite.code)`; copy uses `LocalClipboardManager`. The deep-link confirmation dialog is wired here, driven by the `prefilledCode` parameter:
 
@@ -2481,24 +2487,24 @@ fun PairingScreen(
 }
 ```
 
-- [ ] **Step 5: Build and check lint**
+- [ ] **Step 10: Build, test and check lint**
 
 ```bash
-$env:JAVA_HOME='C:\Program Files\Android\Android Studio1\jbr'; ./gradlew assembleDebug lint detekt
+$env:JAVA_HOME='C:\Program Files\Android\Android Studio1\jbr'; ./gradlew assembleDebug testDebugUnitTest lint detekt
 ```
 
-Expected: BUILD SUCCESSFUL. Resolve any `MissingTranslation` warnings by adding the missing keys rather than suppressing them.
+Expected: BUILD SUCCESSFUL, all unit tests green. Resolve any `MissingTranslation` warnings by adding the missing keys rather than suppressing them.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 11: Commit**
 
 ```bash
-git add app/src/main/java/com/coparently/app/presentation/pairing app/src/main/res/values/pairing_strings.xml app/src/main/res/values-cs/pairing_strings.xml app/src/main/res/values-de/pairing_strings.xml app/src/main/res/values-ru/pairing_strings.xml app/src/main/res/values-uk/pairing_strings.xml
-git commit -m "feat(pairing): rebuild the pairing screen around invite codes"
+git add app/src/main/java/com/coparently/app/presentation/pairing app/src/test/java/com/coparently/app/presentation/pairing app/src/main/res/values/pairing_strings.xml app/src/main/res/values-cs/pairing_strings.xml app/src/main/res/values-de/pairing_strings.xml app/src/main/res/values-ru/pairing_strings.xml app/src/main/res/values-uk/pairing_strings.xml
+git commit -m "feat(pairing): rebuild the pairing ViewModel and screen around invite codes"
 ```
 
 ---
 
-### Task 8: A QR scanner with an actual camera
+### Task 7: A QR scanner with an actual camera
 
 **Files:**
 - Modify: `app/build.gradle.kts` (CameraX dependencies)
@@ -2796,7 +2802,7 @@ git commit -m "feat(pairing): replace the QR scanner placeholder with a CameraX 
 
 ---
 
-### Task 9: Deep link `coplanly://pair?code=…`
+### Task 8: Deep link `coplanly://pair?code=…`
 
 **Files:**
 - Modify: `app/src/main/AndroidManifest.xml:30-56`
@@ -2804,7 +2810,7 @@ git commit -m "feat(pairing): replace the QR scanner placeholder with a CameraX 
 - Modify: `app/src/main/java/com/coparently/app/presentation/navigation/NavGraph.kt:404-416` and the `Screen.Pairing` definition at line 620
 
 **Interfaces:**
-- Consumes: `PairingUri` (Task 1), `PairingScreen(prefilledCode = …)` (Task 7).
+- Consumes: `PairingUri` (Task 1), `PairingScreen(prefilledCode = …)` (Task 6).
 - Produces: `Screen.Pairing.route = "pairing?code={code}"`, `Screen.Pairing.ARG_CODE = "code"`, `Screen.Pairing.routeWithCode(code: String?): String`.
 
 - [ ] **Step 1: Update the manifest**
@@ -2922,7 +2928,7 @@ git commit -m "feat(pairing): route coplanly://pair deep links to the pairing sc
 
 ---
 
-### Task 10: Make the Home pairing CTA reactive
+### Task 9: Make the Home pairing CTA reactive
 
 `HomeScreen` already renders a `PairingCta` when unpaired, but `HomeViewModel.paired` is read once in `init` and never updates — so after pairing on this phone the banner stays, and after being paired from the other phone it never clears.
 
@@ -2967,7 +2973,7 @@ git commit -m "fix(home): drive the pairing CTA from realtime pairing state"
 
 ---
 
-### Task 11: Pairing push notifications
+### Task 10: Pairing push notifications
 
 **Files:**
 - Modify: `app/src/main/java/com/coparently/app/data/remote/firebase/CoPlanlyMessagingService.kt:34-95`
@@ -3069,7 +3075,7 @@ git commit -m "fix(notifications): stop double-posting pushes and deep-link pair
 
 ---
 
-### Task 12: Remove the superseded code and run the acceptance pass
+### Task 11: Deploy the rules, remove the superseded code, run the acceptance pass
 
 **Files:**
 - Modify: `app/src/main/java/com/coparently/app/data/remote/firebase/CoParentPairingService.kt`
@@ -3108,7 +3114,31 @@ Expected: BUILD SUCCESSFUL, all unit tests green, no new detekt or lint errors. 
 cd functions; npm test; npm run lint
 ```
 
-- [ ] **Step 4: Two-phone acceptance run**
+- [ ] **Step 4: Deploy the strict Firestore rules**
+
+This is the first point at which the client no longer writes another user's document, so the strict file from Task 3 can finally go live and replace the permissive `firestore.rules.simple` that the project has been running on.
+
+```bash
+firebase deploy --only firestore:rules --project coparently-a39c9
+```
+
+Expected: `Deploy complete!`.
+
+Then install the build on both phones and check for permission regressions across the app — calendar, chat, expenses — not only pairing:
+
+```bash
+$env:Path="$env:LOCALAPPDATA\Android\Sdk\platform-tools;$env:Path"; adb -s adb-46061FDAS002YU-9SFSG6._adb-tls-connect._tcp logcat -c
+```
+
+Use the app, then:
+
+```bash
+$env:Path="$env:LOCALAPPDATA\Android\Sdk\platform-tools;$env:Path"; adb -s adb-46061FDAS002YU-9SFSG6._adb-tls-connect._tcp logcat -d | Select-String -Pattern "PERMISSION_DENIED"
+```
+
+Expected: no matches. If a collection is denied, fix the rule for it — do not roll back to `firestore.rules.simple` and do not work around it in the client.
+
+- [ ] **Step 5: Two-phone acceptance run**
 
 Install on both:
 
@@ -3133,7 +3163,7 @@ For any step needing `adb shell input`, first check the app has focus — both d
 $env:Path="$env:LOCALAPPDATA\Android\Sdk\platform-tools;$env:Path"; adb -s adb-RZGL424E9DY-DpsmkB._adb-tls-connect._tcp shell dumpsys window | Select-String -Pattern "mCurrentFocus"
 ```
 
-- [ ] **Step 5: Update CLAUDE.md**
+- [ ] **Step 6: Update CLAUDE.md**
 
 Add to the "Things that are easy to get wrong" list:
 
@@ -3148,7 +3178,7 @@ Add to the "Things that are easy to get wrong" list:
 
 And in "Known issues", strike the sentence saying strict rules still need deploying, replacing it with the deployed state.
 
-- [ ] **Step 6: Commit and open the PR**
+- [ ] **Step 7: Commit and open the PR**
 
 ```bash
 git add -A
@@ -3179,19 +3209,24 @@ gh pr create --title "feat(pairing): finish co-parent pairing (code, QR, link, e
 | `PairingFunctions` + error mapping | 4 |
 | Realtime `users/{uid}` listener | 5 |
 | Conversation created on pairing | 5 (`ensureConversationWith`) |
-| Rebuilt screen, four components | 7 |
-| CameraX QR scanner | 8 |
-| `coplanly://pair` deep link, dead App Link removed | 9 |
-| Home discoverability | 10 |
-| Pairing pushes, double-notification fix, real icon | 11 |
-| Strings in five locales | 6 (errors), 7 (rest) |
+| Rebuilt screen, four components | 6 |
+| CameraX QR scanner | 7 |
+| `coplanly://pair` deep link, dead App Link removed | 8 |
+| Home discoverability | 9 |
+| Pairing pushes, double-notification fix, real icon | 10 |
+| Strings in five locales | 6 |
 | Unit tests | 1, 5, 6 |
 | Cloud Function tests | 2 |
-| Manual two-phone run | 12 |
+| Strict rules deployed | 11 |
+| Manual two-phone run | 11 |
 | Out of scope items | not implemented anywhere — correct |
 
 `FirebaseErrorMapper.kt` from the spec's file table is **not** created as a separate file: the duplicated `when` block it was meant to hold now lives as `PairingFunctions.toPairingError` (Firebase side) and `PairingViewModel.messageFor` (resource side), which is where each half actually belongs. The spec's intent — map the error once, return a resource id, no English literals in the ViewModel — is met.
 
-**Type consistency** — `PairingInvite.expiresAtMillis` is used under that name in Tasks 1, 5, 7. `PairingError` cases are spelled identically in Tasks 1, 4, 6. `EXTRA_CODE` is defined in Task 8 and consumed in Task 8 Step 4. `Screen.Pairing.routeWithCode` is defined and used in Task 9. `PairingViewModel.onCodeInputChange` / `redeemCode` are defined in Task 6 and called in Tasks 7 and 8.
+**Type consistency** — `PairingInvite.expiresAtMillis` is used under that name in Tasks 1, 5, 6. `PairingError` cases are spelled identically in Tasks 1, 4, 6. `EXTRA_CODE` is defined and consumed inside Task 7. `Screen.Pairing.routeWithCode` is defined and used in Task 8. `PairingViewModel.onCodeInputChange` / `redeemCode` are defined in Task 6 and called in Tasks 7 and 8.
 
-**Known follow-ups, deliberately not in this plan** — the chat and change-request defects found during exploration (`ChatViewModel` flows built from constructor-time values, `MessageRepositoryImpl.syncWithFirestore` nesting infinite collects, missing `conversations`/`messages` Firestore rules) belong to spec C. Custody sharing belongs to spec B.
+**Known follow-ups, deliberately not in this plan** — the chat and change-request defects found during exploration (`ChatViewModel` flows built from constructor-time values, `MessageRepositoryImpl.syncWithFirestore` nesting infinite collects) belong to spec C. Custody sharing belongs to spec B. The `conversations`/`messages` Firestore rules are the one chat item pulled forward into Task 3: pairing auto-creates a conversation, so the strict rules file cannot be deployed without them.
+
+**Amendments made before execution** (agreed with the project owner):
+1. Task 3 no longer deploys the rules — it only edits the file, and adds the missing `conversations`/`messages` blocks. The deploy moved to Task 11 Step 4, because until then the client still writes `users/{partnerId}` and the two test phones would break mid-plan.
+2. The original Tasks 6 (ViewModel) and 7 (screen) are merged into Task 6, and later tasks are renumbered down by one (11 tasks total). Splitting them left the module non-compiling at a commit boundary.
