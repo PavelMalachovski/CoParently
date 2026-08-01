@@ -30,6 +30,59 @@ admin.initializeApp();
  *   error: string (optional)
  * }
  */
+/**
+ * Builds the FCM message for a queued notification.
+ *
+ * Data-only: no top-level `notification` block. A message carrying one is auto-displayed
+ * by the OS from the system tray whenever the app is backgrounded or killed, and FCM never
+ * calls the app's onMessageReceived in that case — so the app's own notification-building
+ * code (deep links, icon, per-type notification id) would only ever run while the app
+ * happens to be in the foreground. A data-only message with android.priority 'high' is
+ * delivered to onMessageReceived uniformly in all three app states, so the client always
+ * decides how to render it. title/body therefore live in `data`.
+ *
+ * FCM requires every `data` value to be a string and rejects the whole message otherwise.
+ * `title` and `body` used to be copied through unconverted, which made them the only two
+ * values that were never coerced: a queue document with a missing or non-string title made
+ * `admin.messaging().send` throw and the push was lost. Every value is coerced here,
+ * `title`/`body` included, and absent keys become '' rather than the string 'undefined'.
+ *
+ * @param {string} token The recipient's FCM registration token.
+ * @param {Object} data The queued `data` payload.
+ * @return {Object} A message ready for `admin.messaging().send`.
+ */
+function buildFcmMessage(token, data) {
+  const payload = data || {};
+  const stringified = Object.keys(payload).reduce((acc, key) => {
+    acc[key] = payload[key] === null || payload[key] === undefined ?
+      '' :
+      String(payload[key]);
+    return acc;
+  }, {});
+
+  return {
+    token: token,
+    data: Object.assign(
+        {
+          title: '',
+          body: '',
+          type: 'general',
+          eventId: '',
+          childInfoId: '',
+        },
+        stringified,
+        // A present-but-empty type must still fall back to 'general', matching the
+        // previous `notificationData.data.type || 'general'` behaviour.
+        stringified.type ? {} : {type: 'general'},
+    ),
+    android: {
+      priority: 'high',
+    },
+  };
+}
+
+exports.buildFcmMessage = buildFcmMessage;
+
 exports.sendNotification = functions.firestore
     .document('notification_queue/{notificationId}')
     .onCreate(async (snap, context) => {
@@ -62,40 +115,7 @@ exports.sendNotification = functions.firestore
           return null;
         }
 
-        // Подготовка сообщения для отправки.
-        //
-        // Data-only: no top-level `notification` block. A message with one is
-        // auto-displayed by the OS from the system tray whenever the app is
-        // backgrounded or killed, and FCM never calls the app's
-        // onMessageReceived for it in that case - so the app's own
-        // notification-building code (deep links, icon, per-type notification
-        // id) would only ever run while the app happens to be in the
-        // foreground. A data-only message with android.priority "high" is
-        // delivered to onMessageReceived uniformly in all three app states,
-        // so the client is always the one deciding how to show it. title/body
-        // move into `data` since they were previously carried by the
-        // `notification` block alone.
-        const message = {
-          token: fcmToken,
-          data: {
-          // Преобразуем все значения в строки (требование FCM)
-            title: notificationData.data.title,
-            body: notificationData.data.body,
-            type: notificationData.data.type || 'general',
-            eventId: notificationData.data.eventId || '',
-            childInfoId: notificationData.data.childInfoId || '',
-            // Добавляем любые другие данные
-            ...Object.keys(notificationData.data)
-                .filter((key) => !['title', 'body'].includes(key))
-                .reduce((acc, key) => {
-                  acc[key] = String(notificationData.data[key]);
-                  return acc;
-                }, {}),
-          },
-          android: {
-            priority: 'high',
-          },
-        };
+        const message = buildFcmMessage(fcmToken, notificationData.data);
 
         // Отправка уведомления
         const response = await admin.messaging().send(message);
@@ -501,8 +521,15 @@ exports.unpairCoParent = functions.https.onCall(async (data, context) => {
 
     // Re-verify the link is still mutually intact before clearing it. If the
     // partner has already unpaired or re-paired with someone else, the link
-    // this call was asked to remove is already gone.
+    // this call was asked to remove is already gone from their side — but the
+    // caller is still pointing at them, so clear the caller's own half.
+    // Returning without doing so left anyone whose ex deleted their account
+    // permanently "paired", with no way out: the unpair button would keep
+    // succeeding and keep changing nothing.
     if (!partnerSnap.exists || partnerSnap.data().partnerId !== context.auth.uid) {
+      tx.update(callerRef, {partnerId: '', pairedAt: null});
+      // No notification: there is no intact link, and the other side either does
+      // not exist or is already paired with somebody else.
       return {unpairedFrom: null};
     }
 
