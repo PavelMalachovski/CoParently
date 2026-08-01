@@ -7,15 +7,17 @@ import com.coparently.app.data.repository.ChildInfoRepositoryImpl
 import com.coparently.app.data.repository.EventRepositoryImpl
 import com.coparently.app.data.repository.ExpenseRepositoryImpl
 import com.coparently.app.data.repository.MessageRepositoryImpl
+import com.coparently.app.data.repository.PairingRepositoryImpl
 import com.coparently.app.data.repository.PreferencesRepositoryImpl
 import com.coparently.app.domain.repository.BudgetRepository
 import com.coparently.app.domain.repository.ChangeRequestRepository
 import com.coparently.app.domain.repository.ChildInfoRepository
+import com.coparently.app.domain.repository.EventImageStorage
 import com.coparently.app.domain.repository.EventRepository
 import com.coparently.app.domain.repository.ExpenseRepository
 import com.coparently.app.domain.repository.MessageRepository
+import com.coparently.app.domain.repository.PairingRepository
 import com.coparently.app.domain.repository.PreferencesRepository
-import com.coparently.app.domain.repository.EventImageStorage
 import com.coparently.app.domain.repository.ReceiptStorage
 import dagger.Binds
 import dagger.Module
@@ -110,5 +112,12 @@ abstract class RepositoryModule {
     abstract fun bindEventImageStorage(
         firebaseImageStorage: FirebaseImageStorage
     ): EventImageStorage
+
+    /** Binds the Firestore-backed pairing repository. */
+    @Binds
+    @Singleton
+    abstract fun bindPairingRepository(
+        pairingRepositoryImpl: PairingRepositoryImpl
+    ): PairingRepository
 }
 

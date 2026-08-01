@@ -156,17 +156,29 @@ service cloud.firestore {
                       isValidLength(request.resource.data.code, 6, 6) &&
                       request.resource.data.status == 'pending';
 
-      // Clients may only withdraw their own invite; accept/reject go through
-      // the callable, which bypasses rules with Admin credentials.
+      // The inviter may withdraw their own invite (status -> cancelled); the
+      // addressed recipient may decline it (status -> rejected). Accept goes
+      // through the callable, which bypasses rules with Admin credentials.
       allow update: if isAuthenticated() &&
-                      resource.data.fromUserId == request.auth.uid &&
-                      resource.data.status == 'pending' &&
-                      request.resource.data.status == 'cancelled' &&
-                      request.resource.data.code == resource.data.code &&
-                      request.resource.data.toEmail == resource.data.toEmail &&
-                      request.resource.data.expiresAt == resource.data.expiresAt &&
-                      request.resource.data.fromUserId == resource.data.fromUserId &&
-                      request.resource.data.createdAt == resource.data.createdAt;
+                      (
+                        (resource.data.fromUserId == request.auth.uid &&
+                         resource.data.status == 'pending' &&
+                         request.resource.data.status == 'cancelled' &&
+                         request.resource.data.code == resource.data.code &&
+                         request.resource.data.toEmail == resource.data.toEmail &&
+                         request.resource.data.expiresAt == resource.data.expiresAt &&
+                         request.resource.data.fromUserId == resource.data.fromUserId &&
+                         request.resource.data.createdAt == resource.data.createdAt) ||
+                        (request.auth.token.email != null &&
+                         resource.data.toEmail == request.auth.token.email &&
+                         resource.data.status == 'pending' &&
+                         request.resource.data.status == 'rejected' &&
+                         request.resource.data.code == resource.data.code &&
+                         request.resource.data.toEmail == resource.data.toEmail &&
+                         request.resource.data.expiresAt == resource.data.expiresAt &&
+                         request.resource.data.fromUserId == resource.data.fromUserId &&
+                         request.resource.data.createdAt == resource.data.createdAt)
+                      );
 
       allow delete: if isAuthenticated() &&
                       resource.data.fromUserId == request.auth.uid;
