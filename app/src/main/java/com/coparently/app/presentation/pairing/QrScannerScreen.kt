@@ -7,6 +7,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.provider.Settings
+import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.OptIn
@@ -251,9 +252,15 @@ private fun buildAnalysis(session: ScannerSession): ImageAnalysis {
 }
 
 /**
- * Analyses a single frame. [imageProxy] is closed on every path — either
- * immediately (nothing to analyze) or once ML Kit's task completes,
- * regardless of success or failure — so CameraX is never starved of buffers.
+ * Analyses a single frame. [imageProxy] is closed on every path — immediately when there
+ * is nothing to analyze, once ML Kit's task completes on the happy path, and in the catch
+ * below when handing the frame to ML Kit throws synchronously.
+ *
+ * That last path matters: with [ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST] CameraX will not
+ * deliver another frame until the current proxy is closed, so a single unclosed proxy
+ * stalls the analyzer permanently and the user is left staring at a frozen preview with no
+ * error. [InputImage.fromMediaImage] rejects unsupported formats and a closed [BarcodeScanner]
+ * throws from `process`, both synchronously — neither reaches `addOnCompleteListener`.
  */
 @OptIn(ExperimentalGetImage::class)
 private fun analyzeFrame(imageProxy: ImageProxy, session: ScannerSession) {
@@ -266,11 +273,22 @@ private fun analyzeFrame(imageProxy: ImageProxy, session: ScannerSession) {
         imageProxy.close()
         return
     }
-    val input = InputImage.fromMediaImage(mediaImage, imageProxy.imageInfo.rotationDegrees)
-    session.scanner.process(input)
-        .addOnSuccessListener { barcodes -> handleBarcodes(barcodes, session) }
-        .addOnCompleteListener { imageProxy.close() }
+    try {
+        val input = InputImage.fromMediaImage(mediaImage, imageProxy.imageInfo.rotationDegrees)
+        session.scanner.process(input)
+            .addOnSuccessListener { barcodes -> handleBarcodes(barcodes, session) }
+            .addOnCompleteListener { imageProxy.close() }
+    } catch (
+        // Narrow on purpose: only the synchronous hand-off is guarded, and the frame is
+        // dropped rather than the scanner being torn down, so the next frame retries.
+        @Suppress("TooGenericExceptionCaught") e: Exception
+    ) {
+        Log.w(TAG, "Dropping a frame the barcode scanner rejected", e)
+        imageProxy.close()
+    }
 }
+
+private const val TAG = "QrScannerScreen"
 
 /** Delivers the first valid pairing code found, claiming [ScannerSession.delivered] atomically so it fires once. */
 private fun handleBarcodes(barcodes: List<Barcode>, session: ScannerSession) {

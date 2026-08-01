@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -68,7 +69,14 @@ class PairingViewModel @Inject constructor(
     val form: StateFlow<PairingFormState> = _form.asStateFlow()
 
     init {
-        refreshInvite()
+        viewModelScope.launch {
+            // Only mint a code once the account is known to be unpaired. Minting one
+            // unconditionally left an already-paired account holding a live 24-hour invite:
+            // harmless while the callable rejects it, but the document stays redeemable and
+            // becomes live again the moment the user unpairs.
+            state.first { it !is PairingState.Loading }
+            if (state.value is PairingState.NotPaired) refreshInvite()
+        }
     }
 
     /** Ensures an invite code exists so the hero card always has one to show. */

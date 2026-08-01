@@ -46,10 +46,17 @@
             </intent-filter>
         </activity>
 
-        <!-- QR Scanner Activity -->
+        <!--
+          QR Scanner Activity.
+
+          Not exported: it has no intent-filter and is only ever started explicitly from
+          within the app. While it was exported, any installed app could launch it and
+          collect the scanned invite code from setResult() — an invite code is a bearer
+          credential for the whole family's calendar, chat and finances.
+        -->
         <activity
             android:name=".presentation.pairing.QRScannerActivity"
-            android:exported="true"
+            android:exported="false"
             android:theme="@style/Theme.CoPlanly"
             android:screenOrientation="portrait" />
 
