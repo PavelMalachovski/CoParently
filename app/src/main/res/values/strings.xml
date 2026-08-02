@@ -50,9 +50,9 @@
     <string name="settings_sign_out">Sign Out</string>
     <string name="settings_syncing">Syncing…</string>
     <string name="settings_theme">Theme</string>
-    <string name="settings_theme_system">default</string>
-    <string name="settings_theme_light">light</string>
-    <string name="settings_theme_dark">dark</string>
+    <string name="settings_theme_system">System</string>
+    <string name="settings_theme_light">Light</string>
+    <string name="settings_theme_dark">Dark</string>
     <string name="settings_theme_description">Choose your preferred theme</string>
     <string name="settings_notifications">Notifications</string>
     <string name="settings_push_notifications">Push Notifications</string>

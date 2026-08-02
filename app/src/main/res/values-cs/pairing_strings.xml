@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- PairingScreen -->
-    <string name="pairing_screen_title">Párování rodičů</string>
+    <string name="pairing_screen_title">Propojit s druhým rodičem</string>
     <string name="pairing_back">Zpět</string>
     <string name="pairing_unpair_button">Zrušit párování</string>
     <string name="pairing_partner_email_label">E-mail partnera</string>
@@ -9,10 +9,7 @@
     <string name="pairing_unknown_sender">Neznámý</string>
     <string name="pairing_accept_button">Přijmout</string>
     <string name="pairing_reject_button">Odmítnout</string>
-    <string name="pairing_qr_dialog_title">QR kód pozvánky pro druhého rodiče</string>
-    <string name="pairing_qr_dialog_message">Sdílejte tento QR kód s druhým rodičem. Jeho naskenováním může přijmout vaši pozvánku.</string>
     <string name="pairing_qr_code_content_description">QR kód pro párování</string>
-    <string name="pairing_close">Zavřít</string>
     <string name="pairing_cancel">Zrušit</string>
 
     <!-- QrScannerScreen -->
@@ -37,10 +34,8 @@
 
     <!-- Invite code hero card -->
     <string name="pairing_your_code_title">Váš pozvánkový kód</string>
-    <string name="pairing_your_code_hint">Předejte tento kód druhému rodiči. Platí 24 hodin.</string>
     <string name="pairing_code_copied">Kód zkopírován</string>
     <string name="pairing_share_invite">Sdílet</string>
-    <string name="pairing_show_qr">Zobrazit QR</string>
     <string name="pairing_new_code">Nový kód</string>
     <string name="pairing_expires_in_hours">Platný ještě %1$d h %2$d min</string>
     <string name="pairing_expires_in_minutes">Platný ještě %1$d min</string>
@@ -50,7 +45,6 @@
     <string name="pairing_have_a_code">Mám kód</string>
     <string name="pairing_code_field_label">Pozvánkový kód</string>
     <string name="pairing_link_accounts">Propojit účty</string>
-    <string name="pairing_or">nebo</string>
     <!-- Email invite -->
     <string name="pairing_invite_by_email">Pozvat e-mailem</string>
     <!-- Paired state -->
@@ -64,4 +58,14 @@
     <string name="pairing_deep_link_confirm_message">%1$s — osoba, která vám tento kód poslala, uvidí váš sdílený kalendář, chat a výdaje.</string>
     <!-- Fallback conversation title when the co-parent has no display name yet -->
     <string name="pairing_default_partner_name">Spolurodič</string>
+
+    <!-- Two explicit pairing modes, the tap-to-copy code, and the trust panel. -->
+    <string name="pairing_mode_share">Sdílet můj kód</string>
+    <string name="pairing_mode_enter">Zadat kód</string>
+    <string name="pairing_copy_code">Kopírovat kód</string>
+    <string name="pairing_tap_to_copy_and_expiry">Klepnutím zkopírujete · %1$s</string>
+    <string name="pairing_share_link">Sdílet odkaz</string>
+    <string name="pairing_email_invite">Pozvat e-mailem</string>
+    <string name="pairing_trust_title">Co se propojením sdílí</string>
+    <string name="pairing_trust_body">Sdílený kalendář a rozvrh péče, sdílené výdaje a zůstatky a chat. Soukromé události nikdy neopustí vaše zařízení. Propojení můžete kdykoli zrušit.</string>
 </resources>

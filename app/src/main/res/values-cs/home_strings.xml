@@ -1,36 +1,49 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Home / Overview dashboard strings. -->
+<!-- Home dashboard strings. -->
 <resources>
-    <string name="home_title">Přehled</string>
+    <string name="home_title">Domů</string>
 
     <string name="home_pairing_prompt">Propojte se s druhým rodičem a sdílejte kalendář, výdaje a zprávy.</string>
     <string name="home_pairing_cta">Propojit s druhým rodičem</string>
 
-    <string name="home_handover_today">Předání dnes</string>
-    <string name="home_handover_tomorrow">Předání zítra</string>
-    <plurals name="home_handover_in_days">
-        <item quantity="one">Předání za %1$d den</item>
-        <item quantity="few">Předání za %1$d dny</item>
-        <item quantity="many">Předání za %1$d dní</item>
-        <item quantity="other">Předání za %1$d dní</item>
+    <string name="home_handover_current">Dnes s: %1$s</string>
+    <string name="home_handover_hero_today">Předání (%1$s) dnes</string>
+    <string name="home_handover_hero_tomorrow">Předání (%1$s) zítra</string>
+    <plurals name="home_handover_hero_in_days">
+        <item quantity="one">Předání (%1$s) za %2$d den</item>
+        <item quantity="few">Předání (%1$s) za %2$d dny</item>
+        <item quantity="many">Předání (%1$s) za %2$d dní</item>
+        <item quantity="other">Předání (%1$s) za %2$d dní</item>
     </plurals>
-    <string name="home_handover_route">%1$s → %2$s · %3$s</string>
+    <string name="home_handover_review">Zkontrolovat</string>
 
-    <string name="home_stat_this_month">Tento měsíc</string>
-    <string name="home_stat_unread">Nepřečtené</string>
+    <plurals name="home_stat_unread_count">
+        <item quantity="one">%1$d nepřečtená</item>
+        <item quantity="few">%1$d nepřečtené</item>
+        <item quantity="many">%1$d nepřečtených</item>
+        <item quantity="other">%1$d nepřečtených</item>
+    </plurals>
+    <string name="home_stat_open_chat">Otevřít chat →</string>
+    <string name="home_stat_owed_to_you">Dluží vám %1$s →</string>
+    <string name="home_stat_you_owe">Dlužíte %1$s →</string>
+    <string name="home_stat_settled">Vyrovnáno →</string>
 
-    <string name="home_section_upcoming">Nadcházející</string>
+    <string name="home_section_this_week">Tento týden</string>
     <string name="home_section_recent_changes">Nedávné změny</string>
+    <string name="home_section_partner_changed">Změny: %1$s</string>
+
+    <string name="home_timeline_meta">%1$s · den rodiče %2$s</string>
 
     <string name="home_recent_empty_paired">Zatím nic nového od druhého rodiče. Jeho změny se zobrazí zde.</string>
     <string name="home_recent_empty_unpaired">Po propojení se zde zobrazí změny druhého rodiče.</string>
 
     <string name="home_weekly_summary">Zobrazit týdenní přehled</string>
 
-    <string name="home_activity_event_created">Druhý rodič přidal tuto událost</string>
-    <string name="home_activity_event_updated">Druhý rodič upravil tuto událost</string>
-    <string name="home_activity_pickup_confirmed">Druhý rodič potvrdil vyzvednutí</string>
-    <string name="home_activity_change_requested">Druhý rodič požádal o změnu</string>
+    <string name="home_activity_event_created">Přidáno: %1$s</string>
+    <string name="home_activity_event_updated">Upraveno: %1$s</string>
+    <string name="home_activity_pickup_confirmed">Potvrzeno vyzvednutí: %1$s</string>
+    <string name="home_activity_change_requested">Žádost o změnu: %1$s</string>
+    <string name="home_activity_review">Zkontrolovat</string>
 
     <string name="home_parent_mom">Máma</string>
     <string name="home_parent_dad">Táta</string>

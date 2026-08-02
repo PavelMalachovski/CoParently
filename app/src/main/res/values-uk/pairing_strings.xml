@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- PairingScreen -->
-    <string name="pairing_screen_title">Створення пари батьків</string>
+    <string name="pairing_screen_title">З’єднатися з іншим із батьків</string>
     <string name="pairing_back">Назад</string>
     <string name="pairing_unpair_button">Розірвати пару</string>
     <string name="pairing_partner_email_label">Ел. пошта партнера</string>
@@ -9,10 +9,7 @@
     <string name="pairing_unknown_sender">Невідомо</string>
     <string name="pairing_accept_button">Прийняти</string>
     <string name="pairing_reject_button">Відхилити</string>
-    <string name="pairing_qr_dialog_title">QR-код запрошення для другого з батьків</string>
-    <string name="pairing_qr_dialog_message">Поділіться цим QR-кодом із другим із батьків. Відсканувавши його, він зможе прийняти ваше запрошення.</string>
     <string name="pairing_qr_code_content_description">QR-код для створення пари</string>
-    <string name="pairing_close">Закрити</string>
     <string name="pairing_cancel">Скасувати</string>
 
     <!-- QrScannerScreen -->
@@ -37,10 +34,8 @@
 
     <!-- Invite code hero card -->
     <string name="pairing_your_code_title">Ваш код запрошення</string>
-    <string name="pairing_your_code_hint">Передайте цей код другому з батьків. Дійсний 24 години.</string>
     <string name="pairing_code_copied">Код скопійовано</string>
     <string name="pairing_share_invite">Поділитися</string>
-    <string name="pairing_show_qr">Показати QR</string>
     <string name="pairing_new_code">Новий код</string>
     <string name="pairing_expires_in_hours">Дійсний ще %1$d год %2$d хв</string>
     <string name="pairing_expires_in_minutes">Дійсний ще %1$d хв</string>
@@ -50,7 +45,6 @@
     <string name="pairing_have_a_code">У мене є код</string>
     <string name="pairing_code_field_label">Код запрошення</string>
     <string name="pairing_link_accounts">Пов’язати акаунти</string>
-    <string name="pairing_or">або</string>
     <!-- Email invite -->
     <string name="pairing_invite_by_email">Запросити електронною поштою</string>
     <!-- Paired state -->
@@ -64,4 +58,14 @@
     <string name="pairing_deep_link_confirm_message">%1$s — людина, яка надіслала вам цей код, побачить ваш спільний календар, чат і витрати.</string>
     <!-- Fallback conversation title when the co-parent has no display name yet -->
     <string name="pairing_default_partner_name">Другий з батьків</string>
+
+    <!-- Two explicit pairing modes, the tap-to-copy code, and the trust panel. -->
+    <string name="pairing_mode_share">Мій код</string>
+    <string name="pairing_mode_enter">Ввести код</string>
+    <string name="pairing_copy_code">Скопіювати код</string>
+    <string name="pairing_tap_to_copy_and_expiry">Натисніть, щоб скопіювати · %1$s</string>
+    <string name="pairing_share_link">Надіслати посилання</string>
+    <string name="pairing_email_invite">Ел. поштою</string>
+    <string name="pairing_trust_title">Що стає спільним</string>
+    <string name="pairing_trust_body">Спільний календар і графік опіки, спільні витрати та баланси, а також чат. Приватні події ніколи не залишають ваш пристрій. Зв’язок можна розірвати будь-коли.</string>
 </resources>

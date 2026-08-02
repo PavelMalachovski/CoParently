@@ -10,26 +10,33 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.coparently.app.R
 import com.coparently.app.domain.expenses.ExpenseBalance
+import com.coparently.app.presentation.common.PillChip
 import com.coparently.app.presentation.theme.CoPlanlyColors
+import com.coparently.app.presentation.theme.ParentColors
 import com.coparently.app.utils.LightDarkPreviews
 import com.coparently.app.utils.PreviewWrapper
 import java.text.NumberFormat
@@ -45,13 +52,23 @@ private val SPLIT_BAR_HEIGHT = 8.dp
 /** Below this the balance is treated as settled — sub-cent drift is not a debt. */
 private const val SETTLED_EPSILON = 0.01
 
+/** Tint strength of the strip behind the settle-up row. */
+private const val BALANCE_STRIP_ALPHA = 0.12f
+
 /**
- * Month header for the Expenses screen: total spend, who paid what, and who owes whom.
+ * Month header for the Expenses screen: which month, total spend, who paid what, and who owes
+ * whom — in one card.
  *
  * Replaces a horizontal row of category cards that carried no Mom/Dad semantics at all — in a
  * two-household product the money screen never answered the question co-parents actually have,
  * which is "are we square?". The pink/blue split bar reuses the calendar's colour language
  * rather than inventing a second one.
+ *
+ * The August 2026 refresh folded the standalone month navigator into this card: the screen used
+ * to stack an app bar, a month navigator and this summary — three headers before the first
+ * expense row, leaving the list about 40% of the screen. [monthNavigation] supplies the
+ * switcher; pass null on the second and subsequent cards of a mixed-currency month, so one
+ * switcher governs them all.
  *
  * While unpaired the split bar and balance row are hidden: with one parent on record a
  * 100%-pink bar and a zero balance would be decoration pretending to be data.
@@ -61,46 +78,58 @@ private const val SETTLED_EPSILON = 0.01
  * @param onSettleUp Invoked with a ready-to-send message when the user taps Settle up
  * @param monthLabel Name of the month being shown, used in the header and settle-up draft
  * @param modifier Modifier for the card
+ * @param monthNavigation Month switcher to render at the top of the card, or null for none
  */
 @Composable
+@Suppress("LongParameterList") // one card, one parameter per thing it displays
 fun ExpenseSummaryHeader(
     balance: ExpenseBalance,
     currency: String,
     onSettleUp: (String) -> Unit,
     monthLabel: String = defaultMonthLabel(),
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    monthNavigation: MonthNavigation? = null
 ) {
     val format = remember(currency) { currencyFormat(currency) }
 
     Card(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
         )
     ) {
-        Column(modifier = Modifier.padding(14.dp)) {
-            Text(
-                text = stringResource(R.string.expenses_month_shared_spend, monthLabel),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Text(
-                text = format.format(balance.total),
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(top = 4.dp)
-            )
+        Column(modifier = Modifier.padding(16.dp)) {
+            if (monthNavigation != null) {
+                MonthSwitcherBar(
+                    navigation = monthNavigation,
+                    modifier = Modifier.padding(bottom = 10.dp)
+                )
+            }
+
+            Row(verticalAlignment = Alignment.Bottom) {
+                Text(
+                    text = format.format(balance.total),
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = stringResource(R.string.expenses_shared_spend),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 10.dp, bottom = 4.dp)
+                )
+            }
 
             if (balance.splitKnown) {
                 SplitBar(
                     momShare = balance.momShareOfPaid,
-                    modifier = Modifier.padding(top = 12.dp)
+                    modifier = Modifier.padding(top = 10.dp)
                 )
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 8.dp),
+                        .padding(top = 6.dp),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Text(
@@ -109,7 +138,7 @@ fun ExpenseSummaryHeader(
                             format.format(balance.momPaid)
                         ),
                         style = MaterialTheme.typography.labelMedium,
-                        color = CoPlanlyColors.MomPink
+                        color = ParentColors.text("mom")
                     )
                     Text(
                         text = stringResource(
@@ -117,11 +146,10 @@ fun ExpenseSummaryHeader(
                             format.format(balance.dadPaid)
                         ),
                         style = MaterialTheme.typography.labelMedium,
-                        color = CoPlanlyColors.DadBlue
+                        color = ParentColors.text("dad")
                     )
                 }
 
-                HorizontalDivider(modifier = Modifier.padding(top = 12.dp))
                 BalanceRow(
                     balance = balance,
                     format = format,
@@ -130,6 +158,70 @@ fun ExpenseSummaryHeader(
                     modifier = Modifier.padding(top = 12.dp)
                 )
             }
+        }
+    }
+}
+
+/**
+ * Which month the summary is showing and how to page it.
+ *
+ * @property label Month name and year, already formatted and capitalised
+ * @property expenseCount Number of expenses in that month
+ * @property onPrevious Pages one month back
+ * @property onNext Pages one month forward
+ */
+data class MonthNavigation(
+    val label: String,
+    val expenseCount: Int,
+    val onPrevious: () -> Unit,
+    val onNext: () -> Unit
+)
+
+/**
+ * The month switcher: back/forward around "August 2026 · 5 expenses".
+ *
+ * Normally rendered inside the summary card. `ExpenseScreen` also uses it standalone for a
+ * month with no expenses, which has no summary card to sit in but still has to be pageable.
+ *
+ * @param navigation Month being shown and how to page it
+ * @param modifier Modifier for the row
+ */
+@Composable
+internal fun MonthSwitcherBar(navigation: MonthNavigation, modifier: Modifier = Modifier) {
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        IconButton(onClick = navigation.onPrevious, modifier = Modifier.size(32.dp)) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+                contentDescription = stringResource(R.string.expenses_prev_month),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Text(
+            text = stringResource(
+                R.string.expenses_month_and_count,
+                navigation.label,
+                pluralStringResource(
+                    R.plurals.expenses_count,
+                    navigation.expenseCount,
+                    navigation.expenseCount
+                )
+            ),
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.SemiBold,
+            textAlign = TextAlign.Center,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f)
+        )
+        IconButton(onClick = navigation.onNext, modifier = Modifier.size(32.dp)) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = stringResource(R.string.expenses_next_month),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }
@@ -163,7 +255,11 @@ private fun SplitBar(momShare: Float, modifier: Modifier = Modifier) {
 }
 
 /**
- * "Dad owes you $29.85" plus the Settle up action.
+ * "Dad owes you $29.85" plus the Settle up action, on its own tinted strip.
+ *
+ * The strip and the filled chip are the August 2026 refresh: this line answers the question the
+ * screen exists for, and it used to sit below a divider as plain text next to an outlined
+ * button — quieter than the row of numbers above it.
  *
  * Settle up only drafts a message — see [ExpenseScreen]. Sending is left to the user, because
  * a message to the other parent is theirs to send.
@@ -185,10 +281,12 @@ private fun BalanceRow(
         net > 0 -> stringResource(R.string.expenses_balance_owed_to_you, amount)
         else -> stringResource(R.string.expenses_balance_you_owe, amount)
     }
-    val dotColor = when {
+    // Settled is a neutral fact, being owed is good news, owing is a nudge — but never an
+    // error: owing your co-parent for half the school shoes is not a failure state.
+    val accent = when {
         settled -> MaterialTheme.colorScheme.outline
-        net > 0 -> CoPlanlyColors.BrandAccent
-        else -> CoPlanlyColors.MomPink
+        net > 0 -> MaterialTheme.colorScheme.tertiary
+        else -> MaterialTheme.colorScheme.primary
     }
     val draft = if (net > 0) {
         stringResource(R.string.expenses_settle_up_message_owed, amount, monthLabel)
@@ -197,38 +295,35 @@ private fun BalanceRow(
     }
 
     Row(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(accent.copy(alpha = BALANCE_STRIP_ALPHA))
+            .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(9.dp)
     ) {
-        Box(
-            modifier = Modifier
-                .size(8.dp)
-                .clip(CircleShape)
-                .background(dotColor)
+        Icon(
+            imageVector = Icons.Default.AccountBalanceWallet,
+            contentDescription = null,
+            tint = accent,
+            modifier = Modifier.size(18.dp)
         )
         Text(
             text = label,
             style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f)
         )
         if (!settled) {
-            OutlinedButton(
-                onClick = { onSettleUp(draft) },
-                shape = RoundedCornerShape(11.dp),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(
-                    horizontal = 10.dp,
-                    vertical = 2.dp
-                )
-            ) {
-                Text(
-                    text = stringResource(R.string.expenses_settle_up),
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
+            PillChip(
+                label = stringResource(R.string.expenses_settle_up),
+                container = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+                onClick = { onSettleUp(draft) }
+            )
         }
     }
 }

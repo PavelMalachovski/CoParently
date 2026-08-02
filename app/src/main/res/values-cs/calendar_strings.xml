@@ -23,12 +23,8 @@
     <string name="calendar_viewmode_day">Den</string>
     <string name="calendar_filters_button">Filtry</string>
     <string name="calendar_today_button">Dnes</string>
-    <string name="calendar_subtitle_today">%1$s · dnes</string>
 
     <!-- Legend under the month grid -->
-    <string name="calendar_legend_mom">Máma</string>
-    <string name="calendar_legend_dad">Táta</string>
-    <string name="calendar_legend_vacation">Prázdniny</string>
 
     <!-- Parent filter, shown inside the Filters sheet -->
     <string name="calendar_filter_show">Zobrazit</string>
@@ -46,7 +42,6 @@
     <string name="calendar_dialog_cancel">Zrušit</string>
 
     <!-- Top bar action icons -->
-    <string name="calendar_weekly_summary">Týdenní přehled</string>
     <string name="calendar_change_requests">Žádosti o změnu</string>
 
     <!-- Filters sheet: event types, custom type creation, holiday switch -->
@@ -71,7 +66,6 @@
         <item quantity="other">%1$d událostí</item>
     </plurals>
     <string name="calendar_day_click_label">Zobrazit události pro %1$s</string>
-    <string name="calendar_legend_description">Legenda: růžová je Máma, modrá je Táta, tyrkysový proužek označuje školní prázdniny</string>
 
     <!-- Day/week grid accessibility -->
     <string name="calendar_time_slot_description">Časový blok %1$s dne %2$s. Klepnutím přidáte událost.</string>
@@ -85,4 +79,17 @@
     <string name="calendar_event_pickup_confirmed">Vyzvednutí potvrdil(a) %1$s</string>
     <string name="calendar_resize_start_handle">Změna času začátku. Táhněte nahoru nebo dolů (po 15 minutách).</string>
     <string name="calendar_resize_end_handle">Změna času konce. Táhněte nahoru nebo dolů (po 15 minutách).</string>
+
+    <!-- Inline change-request banner, view-mode menu and the day agenda card. -->
+    <plurals name="calendar_change_requests_banner">
+        <item quantity="one">%1$d žádost o změnu od druhého rodiče</item>
+        <item quantity="few">%1$d žádosti o změnu od druhého rodiče</item>
+        <item quantity="many">%1$d žádostí o změnu od druhého rodiče</item>
+        <item quantity="other">%1$d žádostí o změnu od druhého rodiče</item>
+    </plurals>
+    <string name="calendar_change_requests_review">Zkontrolovat</string>
+    <string name="calendar_change_view_mode">Změnit zobrazení</string>
+    <string name="calendar_agenda_header_with_custody">%1$s · den rodiče %2$s</string>
+    <string name="calendar_agenda_empty">Nic naplánováno.</string>
+    <string name="calendar_agenda_time_range">%1$s–%2$s</string>
 </resources>

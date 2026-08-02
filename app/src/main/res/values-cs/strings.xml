@@ -50,9 +50,9 @@
     <string name="settings_sign_out">Odhlásit se</string>
     <string name="settings_syncing">Synchronizace…</string>
     <string name="settings_theme">Téma</string>
-    <string name="settings_theme_system">systémové</string>
-    <string name="settings_theme_light">světlé</string>
-    <string name="settings_theme_dark">tmavé</string>
+    <string name="settings_theme_system">Systémové</string>
+    <string name="settings_theme_light">Světlé</string>
+    <string name="settings_theme_dark">Tmavé</string>
     <string name="settings_theme_description">Vyberte preferované téma</string>
     <string name="settings_notifications">Oznámení</string>
     <string name="settings_push_notifications">Push oznámení</string>

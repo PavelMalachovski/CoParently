@@ -9,7 +9,6 @@
     <string name="chat_messages_empty_title">No messages yet</string>
     <string name="chat_messages_empty_description">Start the conversation by sending a message to your co-parent.</string>
     <string name="chat_type_message">Type a message…</string>
-    <string name="chat_attach">Attach</string>
     <string name="chat_send">Send</string>
     <string name="chat_status_sending">Sending</string>
     <string name="chat_status_error">Error</string>
@@ -40,4 +39,9 @@
     </plurals>
     <!-- Visible badge text once the unread count passes the display cap, e.g. "99+". -->
     <string name="chat_unread_count_overflow">%1$d+</string>
+
+    <!-- Composer action chips and day separators (Aug 2026 design refresh). -->
+    <string name="chat_templates">Templates</string>
+    <string name="chat_day_today">Today</string>
+    <string name="chat_day_yesterday">Yesterday</string>
 </resources>

@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -25,13 +24,23 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.coparently.app.R
 
+/**
+ * The message composer.
+ *
+ * The leading `+` this used to carry is gone. It was captioned "attach" but opened message
+ * templates — the August 2026 audit's clearest "icon promises one thing, does another". The
+ * templates now live in a labelled chip above this row (see `ChatScreen`), and a real attach
+ * button will land with attachments themselves rather than ahead of them.
+ *
+ * @param onSendMessage Called with the composed text when the user sends
+ * @param modifier Modifier for the row
+ * @param initialText Seed text for the composer. Keyed on the value so arriving with a new
+ *   draft replaces the field, while ordinary recomposition leaves what the user typed alone.
+ */
 @Composable
 fun MessageInput(
     onSendMessage: (String) -> Unit,
-    onAttachClick: () -> Unit,
     modifier: Modifier = Modifier,
-    // Seed text for the composer. Keyed on the value so arriving with a new draft replaces
-    // the field, while ordinary recomposition leaves what the user has typed alone.
     initialText: String = ""
 ) {
     var text by remember(initialText) { mutableStateOf(initialText) }
@@ -39,23 +48,15 @@ fun MessageInput(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(8.dp),
+            .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        IconButton(onClick = onAttachClick) {
-            Icon(
-                imageVector = Icons.Default.Add,
-                contentDescription = stringResource(R.string.chat_attach),
-                tint = MaterialTheme.colorScheme.primary
-            )
-        }
-
         OutlinedTextField(
             value = text,
             onValueChange = { text = it },
             modifier = Modifier
                 .weight(1f)
-                .padding(horizontal = 8.dp),
+                .padding(end = 8.dp),
             placeholder = { Text(stringResource(R.string.chat_type_message)) },
             shape = RoundedCornerShape(24.dp),
             colors = TextFieldDefaults.colors(

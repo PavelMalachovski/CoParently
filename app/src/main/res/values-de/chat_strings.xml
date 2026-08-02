@@ -7,7 +7,6 @@
     <string name="chat_messages_empty_title">Noch keine Nachrichten</string>
     <string name="chat_messages_empty_description">Beginne die Unterhaltung, indem du dem anderen Elternteil eine Nachricht sendest.</string>
     <string name="chat_type_message">Nachricht schreiben…</string>
-    <string name="chat_attach">Anhängen</string>
     <string name="chat_send">Senden</string>
     <string name="chat_status_sending">Wird gesendet</string>
     <string name="chat_status_error">Fehler</string>
@@ -38,4 +37,9 @@
     </plurals>
     <!-- Visible badge text once the unread count passes the display cap, e.g. "99+". -->
     <string name="chat_unread_count_overflow">%1$d+</string>
+
+    <!-- Composer action chips and day separators (Aug 2026 design refresh). -->
+    <string name="chat_templates">Vorlagen</string>
+    <string name="chat_day_today">Heute</string>
+    <string name="chat_day_yesterday">Gestern</string>
 </resources>

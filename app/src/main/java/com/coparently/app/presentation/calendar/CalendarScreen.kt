@@ -57,11 +57,13 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.coparently.app.R
 import com.coparently.app.domain.holidays.CzechHolidays
 import com.coparently.app.domain.holidays.Holiday
+import com.coparently.app.domain.model.Event
 import com.coparently.app.presentation.calendar.components.CalendarHeader
-import com.coparently.app.presentation.calendar.components.CalendarLegend
-import com.coparently.app.presentation.calendar.components.CalendarViewModeBar
+import com.coparently.app.presentation.calendar.components.ChangeRequestBanner
 import com.coparently.app.presentation.calendar.components.CustodyRibbon
+import com.coparently.app.presentation.calendar.components.DayAgendaCard
 import com.coparently.app.presentation.calendar.components.EventTypeFilterSheet
+import com.coparently.app.presentation.calendar.components.VacationBanner
 import com.coparently.app.presentation.event.EventUiState
 import com.coparently.app.presentation.event.EventViewModel
 import com.coparently.app.presentation.theme.dimensions
@@ -70,6 +72,7 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.YearMonth
 import java.time.ZoneId
+import java.util.Locale
 
 /**
  * Computes the event query range for a view mode and selected date.
@@ -108,9 +111,59 @@ internal fun queryRangeFor(
 }
 
 /**
+ * Events covering [date], including multi-day and overnight spans, in start order.
+ *
+ * Mirrors the month grid's own per-cell filter so the agenda card under the grid can never
+ * disagree with the dots above it about which day an event belongs to.
+ *
+ * @param events Events already filtered by parent and type
+ * @param date The day to collect
+ */
+internal fun eventsOn(events: List<Event>, date: LocalDate): List<Event> {
+    val dayStart = date.atStartOfDay()
+    val dayEnd = date.plusDays(1).atStartOfDay()
+    return events
+        .filter { event ->
+            val end = event.endDateTime ?: event.startDateTime
+            event.startDateTime < dayEnd && end >= dayStart
+        }
+        .sortedBy { it.startDateTime }
+}
+
+/**
+ * The month's school vacation as one label, or null when the month has none.
+ *
+ * Picks the vacation covering the most days of [month] — a month straddling two of them (late
+ * August into September, say) gets the one it is mostly in rather than an arbitrary first.
+ *
+ * @param holidays Holidays for the visible range, keyed by date
+ * @param month The month on screen
+ */
+@Composable
+private fun rememberVacationLabel(
+    holidays: Map<LocalDate, Holiday>,
+    month: YearMonth
+): String? {
+    val czech = Locale.getDefault().language == "cs"
+    return remember(holidays, month, czech) {
+        holidays.values
+            .filter { it.isSchoolVacation && YearMonth.from(it.date) == month }
+            .groupingBy { if (czech) it.nameCs else it.nameEn }
+            .eachCount()
+            .maxByOrNull { it.value }
+            ?.key
+    }
+}
+
+/**
  * Main calendar screen showing calendar view with events.
  * Supports Month, Week and Day view modes with parent and event type filters,
  * Czech holidays and custody indication.
+ *
+ * Restructured by the August 2026 design review: the header is one row (its four actions and
+ * the segmented view-mode bar under it are now a title menu, a Today pill and one Filters
+ * chip), change requests and school vacation surface as labelled banners over the grid, and
+ * the month cells carry event dots with the selected day's titles listed underneath.
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -119,7 +172,6 @@ fun CalendarScreen(
     onAddEventClick: (LocalDate?, Int?) -> Unit,
     onSettingsClick: (() -> Unit)? = null,
     onChangeRequestsClick: (() -> Unit)? = null,
-    onWeeklySummaryClick: (() -> Unit)? = null,
     eventViewModel: EventViewModel = hiltViewModel(),
     calendarViewModel: CalendarViewModel = hiltViewModel(),
     changeRequestViewModel: com.coparently.app.presentation.changerequests.ChangeRequestViewModel = hiltViewModel()
@@ -266,11 +318,14 @@ fun CalendarScreen(
         topBar = {
             CalendarHeader(
                 selectedDate = selectedDate,
+                viewMode = viewMode,
+                onViewModeChange = { mode -> calendarViewModel.setViewMode(mode) },
                 onNavigateToToday = { calendarViewModel.setSelectedDate(LocalDate.now()) },
-                onSettingsClick = onSettingsClick,
-                onChangeRequestsClick = onChangeRequestsClick,
-                pendingChangeRequests = pendingChangeRequests,
-                onWeeklySummaryClick = onWeeklySummaryClick
+                onFiltersClick = { showTypeFilters = true },
+                filtersActive = parentFilter != ParentFilter.BOTH ||
+                    hiddenEventTypes.isNotEmpty() ||
+                    !showHolidays,
+                onSettingsClick = onSettingsClick
             )
         },
         snackbarHost = {
@@ -350,15 +405,32 @@ fun CalendarScreen(
             Column(
                 modifier = Modifier.fillMaxSize()
             ) {
-                // View mode + the entry point to every filter (parent and event type).
-                CalendarViewModeBar(
-                    viewMode = viewMode,
-                    onViewModeChange = { mode -> calendarViewModel.setViewMode(mode) },
-                    onFiltersClick = { showTypeFilters = true },
-                    filtersActive = parentFilter != ParentFilter.BOTH ||
-                        hiddenEventTypes.isNotEmpty() ||
-                        !showHolidays
-                )
+                // School vacation, stated once for the month instead of a teal strip under
+                // every single cell — in July and August that was all 31 of them.
+                if (viewMode == CalendarViewMode.MONTH) {
+                    val vacationLabel = rememberVacationLabel(holidays, YearMonth.from(selectedDate))
+                    if (vacationLabel != null) {
+                        VacationBanner(
+                            label = vacationLabel,
+                            modifier = Modifier.padding(
+                                horizontal = dims.paddingMedium,
+                                vertical = dims.paddingSmall / 2
+                            )
+                        )
+                    }
+                }
+
+                // Change requests as a labelled banner rather than a badged glyph in the bar.
+                if (pendingChangeRequests > 0 && onChangeRequestsClick != null) {
+                    ChangeRequestBanner(
+                        pendingCount = pendingChangeRequests,
+                        onReview = onChangeRequestsClick,
+                        modifier = Modifier.padding(
+                            horizontal = dims.paddingMedium,
+                            vertical = dims.paddingSmall / 2
+                        )
+                    )
+                }
 
                 // Today's custody ribbon. Shown in month and day view; week view carries its own
                 // full-width custody band above the day headers instead.
@@ -440,9 +512,13 @@ fun CalendarScreen(
                                     selectedDate = selectedDate,
                                     events = filteredEvents,
                                     getCustody = getCustody,
+                                    // Selects the day so the agenda card below fills in.
+                                    // Tapping used to jump straight into Day view, which was
+                                    // the only way to read a cell's events at all — now the
+                                    // month view answers that itself, and Day is a deliberate
+                                    // choice from the title menu.
                                     onDayClick = { clickedDate ->
                                         calendarViewModel.setSelectedDate(clickedDate)
-                                        calendarViewModel.setViewMode(CalendarViewMode.DAY)
                                     },
                                     onMonthChange = { newMonth ->
                                         calendarViewModel.setSelectedDate(newMonth.atDay(1))
@@ -454,12 +530,22 @@ fun CalendarScreen(
                     }
                 }
 
-                // Legend shares its line with the FAB, which floats over the end side. Month
-                // only: week and day have no vacation strip and no custody fill to explain.
+                // The selected day's events, under the grid. This is the other half of
+                // replacing per-cell event chips with dots: the dots give the count, this
+                // gives the titles — and it replaces the legend, whose Mom/Dad/vacation
+                // keys are now spelled out in words by this card and the vacation banner.
                 if (viewMode == CalendarViewMode.MONTH) {
-                    CalendarLegend(
+                    val agendaEvents = remember(filteredEvents, selectedDate) {
+                        eventsOn(filteredEvents, selectedDate)
+                    }
+                    DayAgendaCard(
+                        date = selectedDate,
+                        events = agendaEvents,
+                        custody = getCustody(selectedDate),
+                        onEventClick = { eventId -> previewEventId = eventId },
                         modifier = Modifier.padding(
                             start = dims.paddingMedium,
+                            // Clears the FAB, which floats over the end side.
                             end = 72.dp,
                             bottom = dims.paddingMedium
                         )

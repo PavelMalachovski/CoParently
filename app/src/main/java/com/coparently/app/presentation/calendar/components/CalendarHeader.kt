@@ -1,34 +1,35 @@
 package com.coparently.app.presentation.calendar.components
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ViewList
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.SwapHoriz
-import androidx.compose.material3.Badge
-import androidx.compose.material3.BadgedBox
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -42,54 +43,49 @@ import java.time.LocalDate
 import java.time.YearMonth
 
 /**
- * Calendar screen header.
+ * Calendar screen header — one row.
  *
- * Two rows rather than three: the title carries a labelled subtitle ("Sat 25 · today") instead
- * of a bare day number floating in the actions, and view-mode selection moved out of a dropdown
- * on the title into an explicit segmented row ([CalendarViewModeBar]) below.
+ * Reworked by the August 2026 design review, which found four actions in the bar plus a
+ * permanent 44dp segmented row underneath, two of them unlabelled glyphs whose meaning you had
+ * to already know (`view_list` = weekly summary, `swap_horiz` = change requests).
  *
- * All four actions are kept. The change-requests badge in particular signals work waiting on the
- * user, so it stays visible rather than moving into an overflow.
+ * What is left: the month title, which is now itself the view-mode control (tap for
+ * Month/Week/Day), a labelled "Today" pill, one labelled Filters action, and the gear that
+ * every top-level screen carries. Change requests moved to an inline banner over the grid,
+ * where there is room to say what is waiting; the weekly summary keeps its single entry point
+ * on Home rather than a second unlabelled one here.
  *
- * @param selectedDate Currently selected date to display month/year
+ * @param selectedDate Currently selected date, whose month and year title the screen
+ * @param viewMode Current calendar view mode, shown in the title menu
+ * @param onViewModeChange Called with the mode picked from the title menu
  * @param onNavigateToToday Callback when user taps "Today"
+ * @param onFiltersClick Opens the filter sheet
+ * @param filtersActive Whether any filter is narrowing the calendar
  * @param onSettingsClick Optional callback for settings button, null to hide button
- * @param onChangeRequestsClick Optional callback for the change-requests inbox, null to hide button
- * @param pendingChangeRequests Number of pending incoming change requests (badge on the inbox icon)
- * @param onWeeklySummaryClick Optional callback for the weekly summary, null to hide button
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
+@Suppress("LongParameterList") // header actions are this component's API surface
 fun CalendarHeader(
     selectedDate: LocalDate,
+    viewMode: CalendarViewMode,
+    onViewModeChange: (CalendarViewMode) -> Unit,
     onNavigateToToday: () -> Unit,
-    onSettingsClick: (() -> Unit)? = null,
-    onChangeRequestsClick: (() -> Unit)? = null,
-    pendingChangeRequests: Int = 0,
-    onWeeklySummaryClick: (() -> Unit)? = null
+    onFiltersClick: () -> Unit,
+    filtersActive: Boolean = false,
+    onSettingsClick: (() -> Unit)? = null
 ) {
     TopAppBar(
-        title = { MonthTitle(selectedDate = selectedDate) },
+        title = {
+            MonthTitle(
+                selectedDate = selectedDate,
+                viewMode = viewMode,
+                onViewModeChange = onViewModeChange
+            )
+        },
         actions = {
             TodayButton(onClick = onNavigateToToday)
-
-            onWeeklySummaryClick?.let { onClick ->
-                IconButton(onClick = onClick) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ViewList,
-                        contentDescription = stringResource(R.string.calendar_weekly_summary),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-
-            onChangeRequestsClick?.let { onClick ->
-                ChangeRequestsButton(
-                    pendingCount = pendingChangeRequests,
-                    onClick = onClick
-                )
-            }
-
+            FiltersButton(onClick = onFiltersClick, active = filtersActive)
             onSettingsClick?.let { onClick ->
                 SettingsButton(onClick = onClick)
             }
@@ -98,14 +94,19 @@ fun CalendarHeader(
 }
 
 /**
- * "July 2026" over a labelled subtitle.
+ * "July 2026 ▾" — the title doubles as the view-mode picker.
  *
- * The subtitle is what the bare `25` in the actions used to be: a day number with no word
- * attached. Spelling it out ("Sat 25 · today") costs one line of small text and removes the
- * guesswork.
+ * Month/Week/Day used to occupy a permanent segmented row under the bar, spending a fixed 44dp
+ * of a phone screen on a setting most people change rarely. Folding it into the title costs one
+ * tap when you do want it and gives the grid the row back when you don't.
  */
 @Composable
-private fun MonthTitle(selectedDate: LocalDate) {
+private fun MonthTitle(
+    selectedDate: LocalDate,
+    viewMode: CalendarViewMode,
+    onViewModeChange: (CalendarViewMode) -> Unit
+) {
+    var menuOpen by remember { mutableStateOf(false) }
     val yearMonth = YearMonth.from(selectedDate)
     val monthLabel = "${
         yearMonth.month.getDisplayName(
@@ -114,32 +115,72 @@ private fun MonthTitle(selectedDate: LocalDate) {
         ).replaceFirstChar { it.uppercase() }
     } ${yearMonth.year}"
 
-    val isToday = selectedDate == LocalDate.now()
-    val dayLabel = selectedDate.format(
-        java.time.format.DateTimeFormatter.ofPattern("EEE d", java.util.Locale.getDefault())
-    )
-    val subtitle = if (isToday) {
-        stringResource(R.string.calendar_subtitle_today, dayLabel)
-    } else {
-        dayLabel
+    Box {
+        Row(
+            modifier = Modifier
+                .clip(RoundedCornerShape(8.dp))
+                .clickable { menuOpen = true }
+                .padding(end = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = monthLabel,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Icon(
+                imageVector = Icons.Default.ExpandMore,
+                contentDescription = stringResource(R.string.calendar_change_view_mode),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+            CalendarViewMode.entries.forEach { mode ->
+                DropdownMenuItem(
+                    text = { Text(viewModeLabel(mode)) },
+                    onClick = {
+                        menuOpen = false
+                        onViewModeChange(mode)
+                    },
+                    leadingIcon = {
+                        if (mode == viewMode) {
+                            Icon(Icons.Default.Check, contentDescription = null)
+                        }
+                    }
+                )
+            }
+        }
     }
+}
 
-    Column {
-        Text(
-            text = monthLabel,
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-        Text(
-            text = subtitle,
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-    }
+/**
+ * The single labelled filter action, replacing the segmented row's trailing chip.
+ *
+ * @param onClick Opens the filter sheet
+ * @param active Whether any filter is currently narrowing the calendar
+ */
+@Composable
+private fun FiltersButton(onClick: () -> Unit, active: Boolean) {
+    FilterChip(
+        selected = active,
+        onClick = onClick,
+        label = {
+            Text(
+                text = stringResource(R.string.calendar_filters_button),
+                style = MaterialTheme.typography.labelMedium
+            )
+        },
+        leadingIcon = {
+            Icon(
+                imageVector = Icons.Default.FilterList,
+                contentDescription = null,
+                modifier = Modifier.size(16.dp)
+            )
+        },
+        modifier = Modifier.padding(end = 4.dp)
+    )
 }
 
 /**
@@ -164,107 +205,12 @@ private fun TodayButton(onClick: () -> Unit) {
     }
 }
 
-/**
- * View-mode segments plus the Filters entry point.
- *
- * The three modes used to hide behind a chevron on the title; making them a segmented row shows
- * the current mode without a tap and removes one level of indirection. Filters (parent and event
- * type) sits on the same line, which is what lets the header collapse from three rows to two.
- *
- * @param viewMode Current calendar view mode
- * @param onViewModeChange Callback when a mode is selected
- * @param onFiltersClick Opens the filter sheet
- * @param filtersActive Whether any filter is narrowing the calendar (dot on the button)
- * @param modifier Modifier for the row
- */
-@Composable
-fun CalendarViewModeBar(
-    viewMode: CalendarViewMode,
-    onViewModeChange: (CalendarViewMode) -> Unit,
-    onFiltersClick: () -> Unit,
-    filtersActive: Boolean = false,
-    modifier: Modifier = Modifier
-) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 14.dp, vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        SingleChoiceSegmentedButtonRow(modifier = Modifier.weight(1f)) {
-            CalendarViewMode.entries.forEachIndexed { index, mode ->
-                SegmentedButton(
-                    selected = mode == viewMode,
-                    onClick = { onViewModeChange(mode) },
-                    shape = SegmentedButtonDefaults.itemShape(
-                        index = index,
-                        count = CalendarViewMode.entries.size
-                    ),
-                    label = {
-                        Text(
-                            text = viewModeLabel(mode),
-                            style = MaterialTheme.typography.labelMedium
-                        )
-                    }
-                )
-            }
-        }
-
-        FilterChip(
-            selected = filtersActive,
-            onClick = onFiltersClick,
-            label = {
-                Text(
-                    text = stringResource(R.string.calendar_filters_button),
-                    style = MaterialTheme.typography.labelMedium
-                )
-            },
-            leadingIcon = {
-                Icon(
-                    imageVector = Icons.Default.FilterList,
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp)
-                )
-            }
-        )
-    }
-}
-
 /** Display label for a calendar view mode. */
 @Composable
 private fun viewModeLabel(mode: CalendarViewMode): String = when (mode) {
     CalendarViewMode.MONTH -> stringResource(R.string.calendar_viewmode_month)
     CalendarViewMode.WEEK -> stringResource(R.string.calendar_viewmode_week)
     CalendarViewMode.DAY -> stringResource(R.string.calendar_viewmode_day)
-}
-
-/**
- * Change-requests inbox button with a badge for pending incoming requests.
- *
- * @param pendingCount Number of pending incoming requests; badge hidden when zero
- * @param onClick Callback when button is clicked
- */
-@Composable
-private fun ChangeRequestsButton(
-    pendingCount: Int,
-    onClick: () -> Unit
-) {
-    IconButton(onClick = onClick) {
-        BadgedBox(
-            badge = {
-                if (pendingCount > 0) {
-                    Badge { Text(pendingCount.toString()) }
-                }
-            }
-        ) {
-            Icon(
-                imageVector = Icons.Default.SwapHoriz,
-                contentDescription = stringResource(R.string.calendar_change_requests),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
 }
 
 /**
@@ -287,40 +233,29 @@ private fun SettingsButton(onClick: () -> Unit) {
 @Composable
 private fun CalendarHeaderTodayPreview() {
     PreviewWrapper {
-        Column {
-            CalendarHeader(
-                selectedDate = LocalDate.now(),
-                onNavigateToToday = {},
-                onSettingsClick = {},
-                onChangeRequestsClick = {},
-                pendingChangeRequests = 2,
-                onWeeklySummaryClick = {}
-            )
-            CalendarViewModeBar(
-                viewMode = CalendarViewMode.MONTH,
-                onViewModeChange = {},
-                onFiltersClick = {}
-            )
-        }
+        CalendarHeader(
+            selectedDate = LocalDate.now(),
+            viewMode = CalendarViewMode.MONTH,
+            onViewModeChange = {},
+            onNavigateToToday = {},
+            onFiltersClick = {},
+            onSettingsClick = {}
+        )
     }
 }
 
-@Preview(name = "Other day selected, week mode", showBackground = true)
+@Preview(name = "Week mode, filters active", showBackground = true)
 @Composable
 private fun CalendarHeaderWeekPreview() {
     PreviewWrapper {
-        Column {
-            CalendarHeader(
-                selectedDate = LocalDate.of(2026, 7, 20),
-                onNavigateToToday = {},
-                onSettingsClick = {}
-            )
-            CalendarViewModeBar(
-                viewMode = CalendarViewMode.WEEK,
-                onViewModeChange = {},
-                onFiltersClick = {},
-                filtersActive = true
-            )
-        }
+        CalendarHeader(
+            selectedDate = LocalDate.of(2026, 7, 20),
+            viewMode = CalendarViewMode.WEEK,
+            onViewModeChange = {},
+            onNavigateToToday = {},
+            onFiltersClick = {},
+            filtersActive = true,
+            onSettingsClick = {}
+        )
     }
 }

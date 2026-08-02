@@ -19,11 +19,7 @@
     <string name="calendar_viewmode_day">День</string>
     <string name="calendar_filters_button">Фільтри</string>
     <string name="calendar_today_button">Сьогодні</string>
-    <string name="calendar_subtitle_today">%1$s · сьогодні</string>
 
-    <string name="calendar_legend_mom">Мама</string>
-    <string name="calendar_legend_dad">Тато</string>
-    <string name="calendar_legend_vacation">Канікули</string>
 
     <string name="calendar_filter_show">Показати</string>
     <string name="calendar_filter_both">Обидва</string>
@@ -36,7 +32,6 @@
     <string name="calendar_dialog_ok">OK</string>
     <string name="calendar_dialog_cancel">Скасувати</string>
 
-    <string name="calendar_weekly_summary">Тижневий огляд</string>
     <string name="calendar_change_requests">Запити на зміну</string>
 
     <string name="calendar_filter_event_types">Типи подій</string>
@@ -59,7 +54,6 @@
         <item quantity="other">%1$d події</item>
     </plurals>
     <string name="calendar_day_click_label">Показати події за %1$s</string>
-    <string name="calendar_legend_description">Легенда: рожевий — мама, синій — тато, бірюзова смужка позначає шкільні канікули</string>
 
     <string name="calendar_time_slot_description">Час %1$s, %2$s. Натисніть, щоб додати подію.</string>
     <string name="calendar_event_chip_description">Подія %1$s. %2$s</string>
@@ -72,4 +66,17 @@
     <string name="calendar_event_pickup_confirmed">Забір підтверджено: %1$s</string>
     <string name="calendar_resize_start_handle">Змінити час початку. Тягніть вгору або вниз (крок 15 хвилин).</string>
     <string name="calendar_resize_end_handle">Змінити час завершення. Тягніть вгору або вниз (крок 15 хвилин).</string>
+
+    <!-- Inline change-request banner, view-mode menu and the day agenda card. -->
+    <plurals name="calendar_change_requests_banner">
+        <item quantity="one">%1$d запит на зміну від іншого з батьків</item>
+        <item quantity="few">%1$d запити на зміну від іншого з батьків</item>
+        <item quantity="many">%1$d запитів на зміну від іншого з батьків</item>
+        <item quantity="other">%1$d запитів на зміну від іншого з батьків</item>
+    </plurals>
+    <string name="calendar_change_requests_review">Переглянути</string>
+    <string name="calendar_change_view_mode">Змінити вигляд</string>
+    <string name="calendar_agenda_header_with_custody">%1$s · день, коли дитина з %2$s</string>
+    <string name="calendar_agenda_empty">Нічого не заплановано.</string>
+    <string name="calendar_agenda_time_range">%1$s–%2$s</string>
 </resources>

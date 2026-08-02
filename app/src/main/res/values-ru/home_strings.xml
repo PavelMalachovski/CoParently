@@ -1,36 +1,49 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Home / Overview dashboard strings. -->
+<!-- Home dashboard strings. -->
 <resources>
-    <string name="home_title">Обзор</string>
+    <string name="home_title">Главная</string>
 
     <string name="home_pairing_prompt">Свяжитесь со вторым родителем, чтобы делить календарь, расходы и сообщения.</string>
     <string name="home_pairing_cta">Связаться со вторым родителем</string>
 
-    <string name="home_handover_today">Передача сегодня</string>
-    <string name="home_handover_tomorrow">Передача завтра</string>
-    <plurals name="home_handover_in_days">
-        <item quantity="one">Передача через %1$d день</item>
-        <item quantity="few">Передача через %1$d дня</item>
-        <item quantity="many">Передача через %1$d дней</item>
-        <item quantity="other">Передача через %1$d дня</item>
+    <string name="home_handover_current">Сегодня с: %1$s</string>
+    <string name="home_handover_hero_today">Передача (%1$s) сегодня</string>
+    <string name="home_handover_hero_tomorrow">Передача (%1$s) завтра</string>
+    <plurals name="home_handover_hero_in_days">
+        <item quantity="one">Передача (%1$s) через %2$d день</item>
+        <item quantity="few">Передача (%1$s) через %2$d дня</item>
+        <item quantity="many">Передача (%1$s) через %2$d дней</item>
+        <item quantity="other">Передача (%1$s) через %2$d дня</item>
     </plurals>
-    <string name="home_handover_route">%1$s → %2$s · %3$s</string>
+    <string name="home_handover_review">Посмотреть</string>
 
-    <string name="home_stat_this_month">В этом месяце</string>
-    <string name="home_stat_unread">Непрочитанные</string>
+    <plurals name="home_stat_unread_count">
+        <item quantity="one">%1$d непрочитанное</item>
+        <item quantity="few">%1$d непрочитанных</item>
+        <item quantity="many">%1$d непрочитанных</item>
+        <item quantity="other">%1$d непрочитанных</item>
+    </plurals>
+    <string name="home_stat_open_chat">Открыть чат →</string>
+    <string name="home_stat_owed_to_you">Вам должны %1$s →</string>
+    <string name="home_stat_you_owe">Вы должны %1$s →</string>
+    <string name="home_stat_settled">Всё улажено →</string>
 
-    <string name="home_section_upcoming">Предстоящее</string>
+    <string name="home_section_this_week">На этой неделе</string>
     <string name="home_section_recent_changes">Недавние изменения</string>
+    <string name="home_section_partner_changed">Изменения: %1$s</string>
+
+    <string name="home_timeline_meta">%1$s · день родителя %2$s</string>
 
     <string name="home_recent_empty_paired">Пока ничего нового от второго родителя. Их изменения появятся здесь.</string>
     <string name="home_recent_empty_unpaired">После связывания изменения второго родителя появятся здесь.</string>
 
     <string name="home_weekly_summary">Сводка за неделю</string>
 
-    <string name="home_activity_event_created">Второй родитель добавил это событие</string>
-    <string name="home_activity_event_updated">Второй родитель изменил это событие</string>
-    <string name="home_activity_pickup_confirmed">Второй родитель подтвердил, что забрал ребёнка</string>
-    <string name="home_activity_change_requested">Второй родитель запросил изменение</string>
+    <string name="home_activity_event_created">Добавлено: %1$s</string>
+    <string name="home_activity_event_updated">Изменено: %1$s</string>
+    <string name="home_activity_pickup_confirmed">Подтверждён приём: %1$s</string>
+    <string name="home_activity_change_requested">Запрошено изменение: %1$s</string>
+    <string name="home_activity_review">Посмотреть</string>
 
     <string name="home_parent_mom">Мама</string>
     <string name="home_parent_dad">Папа</string>

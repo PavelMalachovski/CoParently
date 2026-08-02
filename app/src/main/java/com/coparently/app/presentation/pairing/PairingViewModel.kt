@@ -49,8 +49,7 @@ data class PairingFormState(
     @StringRes val codeErrorRes: Int? = null,
     @StringRes val emailErrorRes: Int? = null,
     @StringRes val actionErrorRes: Int? = null,
-    val qrBitmap: Bitmap? = null,
-    val showQrDialog: Boolean = false
+    val qrBitmap: Bitmap? = null
 )
 
 /**
@@ -170,18 +169,18 @@ class PairingViewModel @Inject constructor(
      */
     fun unpair() = launchAction { pairingRepository.unpair() }
 
-    /** Renders the active invite's link as a QR bitmap and opens the dialog. */
+    /**
+     * Renders the active invite's link as a QR bitmap.
+     *
+     * The QR used to live behind a dialog this opened; it is now shown inline on the pairing
+     * screen, so this is called as soon as there is a code to encode rather than on a tap.
+     */
     fun showQr() {
         val invite = (state.value as? PairingState.NotPaired)?.activeInvite ?: return
         viewModelScope.launch {
             val bitmap = qrCodeService.generatePairingQRCode(content = PairingUri.build(invite.code))
-            _form.value = _form.value.copy(qrBitmap = bitmap, showQrDialog = bitmap != null)
+            _form.value = _form.value.copy(qrBitmap = bitmap)
         }
-    }
-
-    /** Closes the QR preview dialog and releases the bitmap. */
-    fun dismissQr() {
-        _form.value = _form.value.copy(showQrDialog = false, qrBitmap = null)
     }
 
     /** Clears the two field-level errors, e.g. when the user starts over. */

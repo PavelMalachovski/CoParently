@@ -13,6 +13,44 @@ Gemini for AI features.
 which is the historical original plan). MVP 1 is complete; MVP 2 (receipts, change requests,
 dashboards) is next. The latest full audit lives in `docs/AUDIT-2026-07.md`.
 
+## Design refresh (August 2026) — implemented, keep consistent
+
+Second pass over the six main screens, from a Claude Design audit. It builds on (does not
+replace) the July 2026 overhaul below — those invariants still hold except where noted here.
+
+1. **Shared UI primitives** live in `presentation/common/DesignSystem.kt`: `SectionGroup`
+   (one tonal container per run of rows, dividers inserted for you), `SectionRow` (icon,
+   title, status/value, **at most one** trailing control), `GroupLabel`, `PillChip`. Home,
+   Settings, Expenses and Chat all render through these — do not reintroduce
+   `Card { ListItem { … } }` per row, which is what the audit called "double surfaces".
+2. **Parent colours go through `presentation/theme/ParentColors.kt`**: `fill()` for dots,
+   bars and tints; `text()` for anything that is a foreground (it picks the theme-aware
+   `*Light`/`*Dark` partner). The raw `MomPink`/`DadBlue` are fill-only — using them as text
+   fails AA. The luminance test lives in `ParentColors`, not copy-pasted per screen.
+3. **Colours come from `MaterialTheme.colorScheme`, not literal hex.** The prototype was
+   authored in dark and its palette *is* `DarkColorScheme`, so every value has a role
+   (`#1F1F25` = `surfaceContainer`, `#C2C1FF` = `primary`, …). Using roles is what keeps
+   light theme working on the redesigned screens.
+4. **Settings is four labelled groups** — Family, Sync, App, Account, in that order (Family
+   first: it is the product, and it used to sit below the sync cards that depend on it).
+   Google Calendar's actions expand from its row rather than stacking buttons in a card.
+5. **Calendar header is one row**: title (which *is* the Month/Week/Day picker), Today,
+   Filters, gear. Change requests and school vacation are inline banners over the grid
+   (`components/CalendarBanners.kt`), not a badged glyph and a per-day teal strip. Month
+   cells carry event **dots**; the selected day's titles go in the `DayAgendaCard` below,
+   and tapping a day selects it rather than jumping to Day view.
+6. **Weekly summary has exactly one entry point** — the button at the bottom of Home. The
+   unlabelled `view_list` action is gone from the calendar header; don't add a second route.
+7. **The Chat tab renders the thread in place** when there is exactly one conversation
+   (`ConversationsScreen` composes `ChatScreen` with `onBack = null`). Do not "fix" this by
+   navigating instead: that drops the tab route, hides the bottom bar, and makes Back bounce
+   off a list that immediately forwards again.
+8. **No affordance may promise a feature that doesn't exist.** The composer's `+` was
+   captioned "attach" and opened message templates; templates are now a labelled chip and
+   there is no attach button until attachments actually ship.
+9. **New user-facing strings go into all five locales** (`values`, `values-cs`, `values-de`,
+   `values-ru`, `values-uk`) in the same commit — see "Localization" below.
+
 ## UX/UI overhaul (July 2026 design review) — implemented, keep consistent
 
 Direction agreed after a live walkthrough and shipped on `feature/ux-overhaul`.
@@ -23,8 +61,10 @@ When touching the UI, keep these invariants:
    those routes (`BottomNavDestination.topLevelRoutes`); detail screens hide it and keep
    an up-arrow. **Settings is NOT a tab** — it opens from a gear action in each top-level
    screen's top bar and is a detail screen (`onNavigateUp = popBackStack`, bottom bar
-   hidden). Budgets open from an Expenses top-bar action. `QuickActionsBottomSheet` was
-   dead code and is gone.
+   hidden). `QuickActionsBottomSheet` was dead code and is gone.
+   *(Aug 2026: budgets no longer open from an unlabelled Expenses top-bar action — they are
+   a chip strip on the Expenses screen itself. Tab switches, including Home's stat-tile deep
+   links, go through `NavHostController.navigateToTab` so they share one back-stack policy.)*
 2. **Toolchain**: compileSdk/targetSdk 36, Kotlin 2.1 (+ `kotlin.plugin.compose`),
    Compose BOM 2025.10 (Material 3 1.4 / M3 Expressive), Room 2.7.2 (2.6.x kapt breaks on
    Kotlin 2.x metadata), Navigation 2.9.3, Hilt 2.56.2, predictive back on.

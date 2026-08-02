@@ -1,18 +1,13 @@
 package com.coparently.app.presentation.expenses
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ReceiptLong
-import androidx.compose.material.icons.filled.Savings
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
@@ -33,9 +28,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.coparently.app.R
@@ -49,24 +42,39 @@ import java.util.Locale
 /**
  * Expense list screen — a top-level bottom-navigation destination.
  *
- * Leads with the month's who-paid-what split and settle-up balance, then this month's
- * expenses; budgets open from the top-bar action.
+ * Leads with one card carrying the month, the who-paid-what split and the settle-up balance,
+ * then a strip of budget chips, then this month's expenses.
+ *
+ * The August 2026 refresh merged the standalone month navigator into the summary card (the
+ * screen used to spend three stacked headers before the first row) and surfaced budgets here
+ * instead of leaving them behind an unlabelled top-bar icon.
+ *
+ * @param onAddExpense Opens the add-expense form
+ * @param onEditExpense Opens an expense for editing
+ * @param onOpenBudgets Opens the budgets screen; null hides the budget affordances
+ * @param onOpenSettings Opens settings
+ * @param onSettleUp Called with a drafted settle-up message, which the user then sends
+ * @param viewModel Expense state
+ * @param budgetViewModel Budget state, for the chip strip
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
+@Suppress("LongParameterList") // one callback per navigation target this screen offers
 fun ExpenseScreen(
     onAddExpense: () -> Unit,
     onEditExpense: (String) -> Unit = {},
     onOpenBudgets: (() -> Unit)? = null,
     onOpenSettings: (() -> Unit)? = null,
     onSettleUp: (String) -> Unit = {},
-    viewModel: ExpenseViewModel = hiltViewModel()
+    viewModel: ExpenseViewModel = hiltViewModel(),
+    budgetViewModel: BudgetViewModel = hiltViewModel()
 ) {
     val expenses by viewModel.expenses.collectAsState()
     val monthExpenses by viewModel.monthExpenses.collectAsState()
     val selectedMonth by viewModel.selectedMonth.collectAsState()
     val balancesByCurrency by viewModel.balancesByCurrency.collectAsState()
     val roleByUid by viewModel.roleByUid.collectAsState()
+    val budgets by budgetViewModel.budgets.collectAsState()
 
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -97,14 +105,9 @@ fun ExpenseScreen(
             TopAppBar(
                 title = { Text(stringResource(R.string.expenses_title)) },
                 actions = {
-                    onOpenBudgets?.let { openBudgets ->
-                        IconButton(onClick = openBudgets) {
-                            Icon(
-                                imageVector = Icons.Default.Savings,
-                                contentDescription = stringResource(R.string.expenses_open_budgets)
-                            )
-                        }
-                    }
+                    // Budgets used to live behind an unlabelled piggy-bank icon here. They are
+                    // now visible on the screen itself as a chip strip, so this action is gone
+                    // rather than duplicated.
                     onOpenSettings?.let { openSettings ->
                         IconButton(onClick = openSettings) {
                             Icon(
@@ -139,16 +142,22 @@ fun ExpenseScreen(
                     )
                 }
             } else {
-                MonthNavigator(
-                    month = selectedMonth,
+                val monthNavigation = MonthNavigation(
+                    label = rememberMonthLabel(selectedMonth),
                     expenseCount = monthExpenses.size,
-                    onPreviousMonth = viewModel::showPreviousMonth,
-                    onNextMonth = viewModel::showNextMonth
+                    onPrevious = viewModel::showPreviousMonth,
+                    onNext = viewModel::showNextMonth
                 )
 
                 if (monthExpenses.isEmpty()) {
-                    // Other months may still hold expenses (e.g. an older receipt), so this is a
-                    // per-month empty note, not the global empty state handled above.
+                    // The switcher has to stay reachable, or a month with no expenses becomes a
+                    // dead end you cannot page out of. Other months may still hold expenses
+                    // (e.g. an older receipt), so this is a per-month empty note, not the
+                    // global empty state handled above.
+                    MonthSwitcherBar(
+                        navigation = monthNavigation,
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
+                    )
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -169,15 +178,24 @@ fun ExpenseScreen(
                     }
                     // One summary card per currency present this month — the app does no FX
                     // conversion, so a mixed-currency month is shown as separate honest totals
-                    // rather than one wrong sum.
-                    balancesByCurrency.forEach { currencyBalance ->
+                    // rather than one wrong sum. Only the first card carries the month
+                    // switcher; repeating it per currency would switch the same month N times.
+                    balancesByCurrency.forEachIndexed { index, currencyBalance ->
                         ExpenseSummaryHeader(
                             balance = currencyBalance.balance,
                             currency = currencyBalance.currency,
                             onSettleUp = onSettleUp,
                             monthLabel = monthLabel,
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp)
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp),
+                            monthNavigation = monthNavigation.takeIf { index == 0 }
                         )
+                    }
+
+                    onOpenBudgets?.let { openBudgets ->
+                        val progress = remember(budgets, monthExpenses) {
+                            budgetProgress(budgets, monthExpenses)
+                        }
+                        BudgetChips(progress = progress, onOpenBudgets = openBudgets)
                     }
 
                     ExpenseList(
@@ -193,57 +211,9 @@ fun ExpenseScreen(
     }
 }
 
-/**
- * Month switcher above the expense list: a back/forward pair around the selected month's name
- * and its expense count. Lets the list reach months other than the current one, so an expense
- * dated in the past (e.g. an older receipt) is findable instead of silently missing.
- *
- * @param month Month currently shown
- * @param expenseCount Number of expenses in [month]
- * @param onPreviousMonth Called to page one month back
- * @param onNextMonth Called to page one month forward
- */
+/** The selected month formatted as "August 2026", capitalised for the current locale. */
 @Composable
-private fun MonthNavigator(
-    month: YearMonth,
-    expenseCount: Int,
-    onPreviousMonth: () -> Unit,
-    onNextMonth: () -> Unit
-) {
-    val label = remember(month) {
-        month.format(DateTimeFormatter.ofPattern("LLLL yyyy", Locale.getDefault()))
-            .replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() }
-    }
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 6.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        IconButton(onClick = onPreviousMonth) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
-                contentDescription = stringResource(R.string.expenses_prev_month)
-            )
-        }
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.titleMedium,
-                textAlign = TextAlign.Center
-            )
-            Text(
-                text = pluralStringResource(R.plurals.expenses_count, expenseCount, expenseCount),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-        IconButton(onClick = onNextMonth) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                contentDescription = stringResource(R.string.expenses_next_month)
-            )
-        }
-    }
+private fun rememberMonthLabel(month: YearMonth): String = remember(month) {
+    month.format(DateTimeFormatter.ofPattern("LLLL yyyy", Locale.getDefault()))
+        .replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() }
 }

@@ -2,7 +2,6 @@ package com.coparently.app.presentation.chat
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -48,20 +47,38 @@ import com.coparently.app.presentation.common.animations.AnimatedEmptyState
 import java.time.format.DateTimeFormatter
 
 /**
- * The conversation list, and the single entry point into a chat with the co-parent.
+ * The Chat tab: the conversation list, and the single entry point into a chat with the co-parent.
  *
  * The "is there a co-parent" decision belongs to the ViewModel, not here: at the moment of
  * a tap the pairing state may still be resolving, and treating that as "not paired" would
  * either bounce the user to pairing for an account that *is* paired or — as it used to —
  * do nothing at all. The screen just starts the action, shows progress while it resolves,
  * and renders whatever [ChatEvent] comes back.
+ *
+ * With a **single** conversation — the shape of the product for essentially every user, since
+ * there is one co-parent — the August 2026 design refresh renders that thread directly instead
+ * of a one-row list you have to tap through. The list only appears once there is genuinely a
+ * choice to make. The thread is composed in place rather than navigated to, deliberately:
+ * navigating would leave the tab route behind, hide the bottom bar, and make Back bounce off a
+ * list that immediately forwards again. Staying on the `conversations` route keeps the tab a tab.
+ *
+ * @param onConversationClick Opens a conversation by id (used when the list is shown)
+ * @param onNavigateToPairing Sends an unpaired user to pairing
+ * @param onOpenSettings Opens settings from the tab's gear action
+ * @param draft Composer text carried in from elsewhere (e.g. a settle-up message)
+ * @param onRequestChangeForEvent Starts a change request from the inlined thread, given the event
+ *   and the conversation the resulting message should be posted back to
+ * @param viewModel Chat state
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
+@Suppress("LongParameterList") // one callback per navigation target this tab offers
 fun ConversationsScreen(
     onConversationClick: (String) -> Unit,
     onNavigateToPairing: () -> Unit,
     onOpenSettings: () -> Unit,
+    draft: String = "",
+    onRequestChangeForEvent: (eventId: String, conversationId: String) -> Unit = { _, _ -> },
     viewModel: ChatViewModel = hiltViewModel()
 ) {
     val conversations by viewModel.conversations.collectAsState()
@@ -90,6 +107,24 @@ fun ConversationsScreen(
                 ChatEvent.CoParentLinkPending -> snackbarHostState.showSnackbar(linkPendingMessage)
             }
         }
+    }
+
+    // One co-parent means one conversation, so the list would be a single row standing in front
+    // of the only thread there is. Compose the thread here instead. Declared after the event
+    // collector above so that stays mounted in both shapes.
+    val onlyConversation = conversations.singleOrNull()
+    if (onlyConversation != null) {
+        ChatScreen(
+            conversationId = onlyConversation.id,
+            // No back arrow: this *is* the tab, there is nothing above it to return to.
+            onBack = null,
+            draft = draft,
+            onRequestChangeForEvent = { eventId ->
+                onRequestChangeForEvent(eventId, onlyConversation.id)
+            },
+            onOpenSettings = onOpenSettings
+        )
+        return
     }
 
     val startChat: () -> Unit = {

@@ -23,4 +23,14 @@
     <string name="settings_about_tagline">Sdílený kalendář pro střídavou péči</string>
     <string name="settings_version">Verze %1$s</string>
     <string name="settings_navigate">Otevřít</string>
+
+    <!-- Group headers for the four settings sections. -->
+    <string name="settings_group_family">RODINA</string>
+    <string name="settings_group_sync">SYNCHRONIZACE</string>
+    <string name="settings_group_app">APLIKACE</string>
+    <string name="settings_group_account">ÚČET</string>
+
+    <!-- Co-parent sync status line. %1$s = time of the last successful sync. -->
+    <string name="settings_sync_idle">Aktuální</string>
+    <string name="settings_sync_last">Synchronizováno v %1$s</string>
 </resources>

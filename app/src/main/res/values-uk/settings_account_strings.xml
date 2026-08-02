@@ -23,4 +23,14 @@
     <string name="settings_about_tagline">Спільний календар для спільного батьківства</string>
     <string name="settings_version">Версія %1$s</string>
     <string name="settings_navigate">Відкрити</string>
+
+    <!-- Group headers for the four settings sections. -->
+    <string name="settings_group_family">СІМ’Я</string>
+    <string name="settings_group_sync">СИНХРОНІЗАЦІЯ</string>
+    <string name="settings_group_app">ЗАСТОСУНОК</string>
+    <string name="settings_group_account">АКАУНТ</string>
+
+    <!-- Co-parent sync status line. %1$s = time of the last successful sync. -->
+    <string name="settings_sync_idle">Усе актуально</string>
+    <string name="settings_sync_last">Синхронізовано о %1$s</string>
 </resources>

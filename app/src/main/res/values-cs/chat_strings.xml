@@ -7,7 +7,6 @@
     <string name="chat_messages_empty_title">Zatím žádné zprávy</string>
     <string name="chat_messages_empty_description">Začněte konverzaci odesláním zprávy druhému rodiči.</string>
     <string name="chat_type_message">Napište zprávu…</string>
-    <string name="chat_attach">Přiložit</string>
     <string name="chat_send">Odeslat</string>
     <string name="chat_status_sending">Odesílání</string>
     <string name="chat_status_error">Chyba</string>
@@ -44,4 +43,9 @@
     </plurals>
     <!-- Visible badge text once the unread count passes the display cap, e.g. "99+". -->
     <string name="chat_unread_count_overflow">%1$d+</string>
+
+    <!-- Composer action chips and day separators (Aug 2026 design refresh). -->
+    <string name="chat_templates">Šablony</string>
+    <string name="chat_day_today">Dnes</string>
+    <string name="chat_day_yesterday">Včera</string>
 </resources>
