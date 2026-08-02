@@ -81,6 +81,8 @@ class MessageRepositoryReadStateTest {
         coEvery { messageDao.getConversationById(any()) } returns null
         every { messageDao.getMessages(any()) } returns flowOf(emptyList())
         every { messageDao.observeConversationById(any()) } returns flowOf(null)
+        // A mark is the newest message's timestamp, so every mark test needs a thread.
+        coEvery { messageDao.getMessagesOnce(any()) } returns listOf(messageRow(OLDER), messageRow(NEWEST))
 
         conversationDocument = mockk(relaxed = true)
         conversationsCollection = mockk(relaxed = true)
@@ -137,6 +139,19 @@ class MessageRepositoryReadStateTest {
         assertEquals(setOf(first), documentIds.toSet())
     }
 
+    @Test
+    fun `the shared conversation document carries no title`() = runTest {
+        val document = slot<Map<String, Any>>()
+
+        repository.ensureConversation(UID_A, UID_B, "Anna")
+
+        coVerify { firestoreMessageDataSource.setConversation(any(), capture(document)) }
+        // `title` is this device's name for the *other* parent. Writing it to a document both
+        // parents read made each of them relabel the other's thread with their own name, and
+        // flip it back on the next open. It is derived locally instead.
+        assertFalse(document.captured.containsKey("title"))
+    }
+
     // ---- the marks: what reaches Room ------------------------------------
 
     @Test
@@ -154,8 +169,8 @@ class MessageRepositoryReadStateTest {
             stored.captured.lastReadAtJson.contains("\"$UID_B\":500")
         )
         assertTrue(
-            "this user's mark must be written",
-            stored.captured.lastReadAtJson.contains("\"$UID_A\"")
+            "this user's mark must be the newest message's timestamp",
+            stored.captured.lastReadAtJson.contains("\"$UID_A\":${NEWEST.toEpochMillis()}")
         )
         assertEquals("delivery marks are untouched by markRead", "{}", stored.captured.lastDeliveredAtJson)
     }
@@ -183,6 +198,47 @@ class MessageRepositoryReadStateTest {
         repository.markRead(CONVERSATION, UID_A)
 
         coVerify(exactly = 1) { messageDao.insertConversation(any()) }
+    }
+
+    @Test
+    fun `the read mark is the newest message's timestamp, not the device clock`() = runTest {
+        coEvery { messageDao.getConversationById(CONVERSATION) } returns conversationRow()
+        val remoteMark = slot<Long>()
+
+        repository.markRead(CONVERSATION, UID_A)
+
+        coVerify { firestoreMessageDataSource.markRead(CONVERSATION, UID_A, capture(remoteMark)) }
+        assertEquals(NEWEST.toEpochMillis(), remoteMark.captured)
+        // A clock-derived mark reads ~now. That is what makes a device whose clock is briefly
+        // set forward unrecoverable: the monotonic merge keeps the far-future mark for good
+        // and that user's unread count is zero from then on. The thread cannot outrun itself.
+        assertTrue(remoteMark.captured < System.currentTimeMillis())
+    }
+
+    @Test
+    fun `the delivery mark comes from the same place as the read mark`() = runTest {
+        coEvery { messageDao.getConversationById(CONVERSATION) } returns conversationRow()
+        val remoteMark = slot<Long>()
+
+        repository.markDelivered(CONVERSATION, UID_A)
+
+        coVerify { firestoreMessageDataSource.markDelivered(CONVERSATION, UID_A, capture(remoteMark)) }
+        assertEquals(NEWEST.toEpochMillis(), remoteMark.captured)
+    }
+
+    @Test
+    fun `an empty thread records no mark at all`() = runTest {
+        coEvery { messageDao.getConversationById(CONVERSATION) } returns conversationRow()
+        coEvery { messageDao.getMessagesOnce(CONVERSATION) } returns emptyList()
+
+        repository.markRead(CONVERSATION, UID_A)
+        repository.markDelivered(CONVERSATION, UID_A)
+
+        // "Read up to here" says nothing when there is no here. A zero or a clock reading
+        // would both be claims the thread cannot support.
+        coVerify(exactly = 0) { messageDao.insertConversation(any()) }
+        coVerify(exactly = 0) { firestoreMessageDataSource.markRead(any(), any(), any()) }
+        coVerify(exactly = 0) { firestoreMessageDataSource.markDelivered(any(), any(), any()) }
     }
 
     // ---- the marks: what reaches Firestore -------------------------------
@@ -309,6 +365,69 @@ class MessageRepositoryReadStateTest {
         assertFalse(stored.captured.archived)
     }
 
+    @Test
+    fun `a stale remote mark does not pull the local one backwards`() = runTest {
+        coEvery { messageDao.getConversationById(CONVERSATION) } returns conversationRow(
+            lastReadAtJson = """{"$UID_A":900}""",
+            lastDeliveredAtJson = """{"$UID_A":800}"""
+        )
+        // The key is present but behind — a mark this device wrote that has not round-tripped
+        // yet. An implementation reading "remote wins whenever the key is there" passes the
+        // absent-map test above and regresses the mark on every echo; this is what catches it.
+        every { firestoreMessageDataSource.observeConversation(CONVERSATION) } returns flowOf(
+            mapOf(
+                "id" to CONVERSATION,
+                "participants" to listOf(UID_A, UID_B),
+                "createdAt" to CREATED_AT,
+                "lastReadAt" to mapOf(UID_A to 100L),
+                "lastDeliveredAt" to mapOf(UID_A to 100L)
+            )
+        )
+        val stored = slot<ConversationEntity>()
+
+        repository.observeConversation(CONVERSATION).toList()
+
+        coVerify { messageDao.insertConversation(capture(stored)) }
+        assertTrue(stored.captured.lastReadAtJson.contains("\"$UID_A\":900"))
+        assertTrue(stored.captured.lastDeliveredAtJson.contains("\"$UID_A\":800"))
+    }
+
+    @Test
+    fun `a remote title never overwrites this device's own`() = runTest {
+        coEvery { messageDao.getConversationById(CONVERSATION) } returns conversationRow()
+        every { firestoreMessageDataSource.observeConversation(CONVERSATION) } returns flowOf(
+            mapOf(
+                "id" to CONVERSATION,
+                "participants" to listOf(UID_A, UID_B),
+                // A document written before the title stopped being shared, carrying the
+                // *other* device's name for its partner — which is this user's own name.
+                "title" to "Me, seen from the other phone",
+                "createdAt" to CREATED_AT
+            )
+        )
+        val stored = slot<ConversationEntity>()
+
+        repository.observeConversation(CONVERSATION).toList()
+
+        coVerify { messageDao.insertConversation(capture(stored)) }
+        assertEquals("Anna", stored.captured.title)
+    }
+
+    private fun messageRow(at: LocalDateTime) = MessageEntity(
+        id = "message-$at",
+        conversationId = CONVERSATION,
+        senderId = UID_B,
+        senderName = "Bob",
+        content = "hello",
+        timestamp = at,
+        messageType = "TEXT",
+        attachmentsJson = "[]",
+        isRead = false,
+        replyToMessageId = null,
+        syncedToFirestore = true,
+        status = "SENT"
+    )
+
     private fun conversationRow(
         lastReadAtJson: String = "{}",
         lastDeliveredAtJson: String = "{}"
@@ -343,5 +462,9 @@ class MessageRepositoryReadStateTest {
         const val AT_MILLIS = 1_754_000_000_000L
         const val CREATED_AT = "2026-08-01T10:00:00"
         val TIMESTAMP: LocalDateTime = LocalDateTime.of(2026, 8, 1, 12, 0)
+
+        /** Two message timestamps well in the past, so a clock-derived mark is distinguishable. */
+        val OLDER: LocalDateTime = LocalDateTime.of(2026, 7, 1, 9, 0)
+        val NEWEST: LocalDateTime = LocalDateTime.of(2026, 7, 1, 9, 30)
     }
 }

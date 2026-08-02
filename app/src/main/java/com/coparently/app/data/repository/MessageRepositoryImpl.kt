@@ -4,6 +4,7 @@ import android.util.Log
 import com.coparently.app.data.local.dao.MessageDao
 import com.coparently.app.data.remote.firebase.FirebaseAuthService
 import com.coparently.app.data.remote.firebase.FirestoreMessageDataSource
+import com.coparently.app.domain.chat.ChatReadState
 import com.coparently.app.domain.chat.ConversationKey
 import com.coparently.app.domain.model.Conversation
 import com.coparently.app.domain.model.Message
@@ -118,13 +119,16 @@ class MessageRepositoryImpl @Inject constructor(
         )
         messageDao.insertConversation(conversation.toEntity())
 
+        // `title` is deliberately absent from the shared document. It is *this* device's
+        // name for the other parent, so writing it to a document both parents read made each
+        // of them relabel the other's thread with their own name on every open, flip-flopping
+        // forever. Each device derives its own title from the partner's profile instead.
         runRemote("ensureConversation", conversationId) {
             firestoreMessageDataSource.setConversation(
                 conversationId,
                 mapOf(
                     "id" to conversationId,
                     "participants" to participants,
-                    "title" to conversation.title,
                     "archived" to conversation.archived,
                     "createdAt" to conversation.createdAt.toIsoString()
                 )
@@ -172,9 +176,11 @@ class MessageRepositoryImpl @Inject constructor(
     }
 
     override suspend fun markRead(conversationId: String, myUid: String) {
-        val atMillis = System.currentTimeMillis()
+        val atMillis = newestMessageMillis(conversationId) ?: return
         updateConversation(conversationId) { conversation ->
-            conversation.copy(lastReadAt = conversation.lastReadAt.advanced(myUid, atMillis))
+            conversation.copy(
+                lastReadAt = ChatReadState.advancedMark(conversation.lastReadAt, myUid, atMillis)
+            )
         }
         runRemote("markRead", conversationId) {
             firestoreMessageDataSource.markRead(conversationId, myUid, atMillis)
@@ -182,9 +188,11 @@ class MessageRepositoryImpl @Inject constructor(
     }
 
     override suspend fun markDelivered(conversationId: String, myUid: String) {
-        val atMillis = System.currentTimeMillis()
+        val atMillis = newestMessageMillis(conversationId) ?: return
         updateConversation(conversationId) { conversation ->
-            conversation.copy(lastDeliveredAt = conversation.lastDeliveredAt.advanced(myUid, atMillis))
+            conversation.copy(
+                lastDeliveredAt = ChatReadState.advancedMark(conversation.lastDeliveredAt, myUid, atMillis)
+            )
         }
         runRemote("markDelivered", conversationId) {
             firestoreMessageDataSource.markDelivered(conversationId, myUid, atMillis)
@@ -217,9 +225,16 @@ class MessageRepositoryImpl @Inject constructor(
         val merged = Conversation(
             id = conversationId,
             participants = remote.stringList("participants").ifEmpty { local?.participants.orEmpty() },
-            title = (remote["title"] as? String).orEmpty().ifEmpty { local?.title.orEmpty() },
-            lastReadAt = mergeMarks(local?.lastReadAt, remote.markMap("lastReadAt")),
-            lastDeliveredAt = mergeMarks(local?.lastDeliveredAt, remote.markMap("lastDeliveredAt")),
+            // Local first: the title is this device's name for the other parent and is not
+            // shared. The remote value is only a fallback for a document written before that
+            // was true, and for a device that has no local row yet.
+            title = local?.title?.takeIf { it.isNotBlank() }
+                ?: (remote["title"] as? String).orEmpty(),
+            lastReadAt = ChatReadState.mergeMarks(local?.lastReadAt, remote.markMap("lastReadAt")),
+            lastDeliveredAt = ChatReadState.mergeMarks(
+                local?.lastDeliveredAt,
+                remote.markMap("lastDeliveredAt")
+            ),
             lastMessageAtMillis = maxOfNullable(local?.lastMessageAtMillis, remote.longOrNull("lastMessageAt")),
             // Archiving is one-way: once a legacy thread has been merged away it stays merged,
             // whichever copy learns about it first.
@@ -227,6 +242,10 @@ class MessageRepositoryImpl @Inject constructor(
             createdAt = remote.dateTimeOrNull("createdAt") ?: local?.createdAt ?: LocalDateTime.now(),
             syncedToFirestore = true
         )
+        // Firestore echoes back every write this device makes, including its own marks, so
+        // most snapshots carry nothing new. Writing the row anyway would tick Room's
+        // invalidation tracker and re-emit to every observer for no reason.
+        if (merged == local) return
         messageDao.insertConversation(merged.toEntity())
     }
 
@@ -258,8 +277,27 @@ class MessageRepositoryImpl @Inject constructor(
         transform: (Conversation) -> Conversation
     ) {
         val local = messageDao.getConversationById(conversationId)?.toDomain() ?: return
-        messageDao.insertConversation(transform(local).toEntity())
+        val updated = transform(local)
+        if (updated == local) return
+        messageDao.insertConversation(updated.toEntity())
     }
+
+    /**
+     * The timestamp of the newest message this device holds for [conversationId], or `null`
+     * when the thread is empty.
+     *
+     * This — not the wall clock — is what a mark is set to. "Read up to here" is a statement
+     * about a position in the thread, and it is compared against message timestamps by
+     * `ChatReadState`, so taking it from the reader's clock mixed two different clocks into
+     * one comparison. A device whose clock was briefly set forward would write a far-future
+     * mark that the monotonic merge then preserved forever, permanently zeroing that user's
+     * unread count with no way back. A message-derived mark cannot outrun the thread.
+     *
+     * `maxOf` rather than "the last row", so the value does not depend on the query's
+     * ordering staying what it is today.
+     */
+    private suspend fun newestMessageMillis(conversationId: String): Long? =
+        messageDao.getMessagesOnce(conversationId).maxOfOrNull { it.timestamp.toEpochMillis() }
 
     /**
      * Advances the conversation's ordering timestamp after [senderId] sent a message.
@@ -273,7 +311,7 @@ class MessageRepositoryImpl @Inject constructor(
         updateConversation(conversationId) { conversation ->
             conversation.copy(
                 lastMessageAtMillis = maxOfNullable(conversation.lastMessageAtMillis, atMillis),
-                lastReadAt = conversation.lastReadAt.advanced(senderId, atMillis)
+                lastReadAt = ChatReadState.advancedMark(conversation.lastReadAt, senderId, atMillis)
             )
         }
     }

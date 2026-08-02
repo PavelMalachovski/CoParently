@@ -1,5 +1,6 @@
 package com.coparently.app.presentation.home
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.coparently.app.data.repository.CustodyModelRepository
@@ -218,7 +219,10 @@ class HomeViewModel @Inject constructor(
                 }
             }
         }
-        .catch { emit(0) }
+        .catch { e ->
+            Log.w(TAG, "Home unread count failed; showing zero", e)
+            emit(0)
+        }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), 0)
 
     /**
@@ -289,6 +293,7 @@ class HomeViewModel @Inject constructor(
         const val MAX_UPCOMING = 3
         const val LOOKAHEAD_DAYS = 60L
         const val STOP_TIMEOUT_MS = 5000L
+        const val TAG = "HomeViewModel"
         val NEAR_THRESHOLD: Duration = Duration.ofSeconds(2)
     }
 }

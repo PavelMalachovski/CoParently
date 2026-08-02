@@ -50,6 +50,34 @@ object ChatReadState {
     }
 
     /**
+     * [marks] with [uid]'s mark moved forward to [atMillis] — never backwards.
+     *
+     * A mark answers "read/delivered up to here", so lowering it would claim a message that
+     * has already been accounted for is new again.
+     */
+    fun advancedMark(marks: Map<String, Long>, uid: String, atMillis: Long): Map<String, Long> =
+        marks + (uid to maxOf(marks[uid] ?: Long.MIN_VALUE, atMillis))
+
+    /**
+     * Per-uid maximum of a local and a remote mark map.
+     *
+     * The larger value is always the newer truth, which makes merging safe in both
+     * directions: a remote copy that predates the marks, or that has not yet caught up with
+     * a write this device just made, cannot pull read state backwards — and neither can a
+     * stale local copy hold back what the other parent has since recorded.
+     *
+     * @param local This device's marks, or null when it holds no row yet.
+     * @param remote The marks on the remote document.
+     */
+    fun mergeMarks(local: Map<String, Long>?, remote: Map<String, Long>): Map<String, Long> {
+        val merged = (local ?: emptyMap()).toMutableMap()
+        remote.forEach { (uid, mark) ->
+            merged[uid] = maxOf(merged[uid] ?: Long.MIN_VALUE, mark)
+        }
+        return merged
+    }
+
+    /**
      * The message's timestamp as epoch millis.
      *
      * `Message.timestamp` is a naive `LocalDateTime` — it was written as `LocalDateTime.now()`

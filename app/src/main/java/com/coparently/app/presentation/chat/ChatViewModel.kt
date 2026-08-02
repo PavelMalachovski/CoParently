@@ -25,6 +25,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
@@ -164,6 +165,25 @@ class ChatViewModel @Inject constructor(
     }
 
     /**
+     * Logs a failed observer and lets the flow continue with a fallback value.
+     *
+     * The `stateIn` flows below are not launched through [launchGuarded] and have no failure
+     * boundary of their own: an exception reaching `stateIn` cancels [viewModelScope], which
+     * on an unhandled path terminates the process. The repository already contains remote
+     * failures, so what this catches is a local one — but the screen surviving with stale
+     * data beats the app dying.
+     *
+     * @param operation Short description, used as the log context.
+     * @param cause The failure.
+     * @param fallback What to emit in place of the failed value.
+     */
+    private suspend fun failSoft(operation: String, cause: Throwable, fallback: suspend () -> Unit) {
+        if (cause is CancellationException) throw cause
+        Log.w(TAG, "Chat flow failed: $operation", cause)
+        fallback()
+    }
+
+    /**
      * The co-parent thread, as a single-element list while it exists.
      *
      * There is exactly one conversation per account pair and its id is a pure function of
@@ -187,6 +207,7 @@ class ChatViewModel @Inject constructor(
                     messageRepository.observeConversation(conversationId).map { listOfNotNull(it) }
                 }
             }
+            .catch { e -> failSoft("observe conversation", e) { emit(emptyList()) } }
             .stateIn(
                 scope = viewModelScope,
                 started = SharingStarted.WhileSubscribed(SUBSCRIPTION_TIMEOUT_MS),
@@ -205,6 +226,7 @@ class ChatViewModel @Inject constructor(
         .flatMapLatest { conversationId ->
             if (conversationId == null) flowOf(emptyList()) else messageRepository.observeMessages(conversationId)
         }
+        .catch { e -> failSoft("observe messages", e) { emit(emptyList()) } }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(SUBSCRIPTION_TIMEOUT_MS),

@@ -1,5 +1,6 @@
 package com.coparently.app.data.repository
 
+import app.cash.turbine.test
 import com.coparently.app.data.local.dao.MessageDao
 import com.coparently.app.data.local.entity.ConversationEntity
 import com.coparently.app.data.local.entity.MessageEntity
@@ -17,6 +18,7 @@ import io.mockk.unmockkStatic
 import io.mockk.verify
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.toList
@@ -172,6 +174,38 @@ class MessageRepositorySyncFailureTest {
             assertEquals(CONVERSATION_ID, conversation?.id)
             coVerify(exactly = 0) { messageDao.insertConversation(any()) }
         }
+
+    // ---- the two observers are independent, not nested -------------------
+
+    @Test
+    fun `the conversation observer never subscribes to the messages listener`() = runTest {
+        // The defect this whole task exists to undo was a message flow collected *inside*
+        // the conversation collector. Every other stub here is a finite flow, so a nested
+        // implementation would still terminate and every other assertion would still hold —
+        // a never-completing messages source is what makes the nesting fatal, and the
+        // verify below catches it even if it somehow were not.
+        every { firestoreMessageDataSource.getMessages(any()) } returns MutableSharedFlow()
+
+        repository.observeConversation(CONVERSATION_ID).test {
+            assertEquals(CONVERSATION_ID, awaitItem()?.id)
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        verify(exactly = 0) { firestoreMessageDataSource.getMessages(any()) }
+    }
+
+    @Test
+    fun `the messages observer never subscribes to the conversation listener`() = runTest {
+        every { firestoreMessageDataSource.observeConversation(any()) } returns MutableSharedFlow()
+        every { firestoreMessageDataSource.getMessages(CONVERSATION_ID) } returns flowOf(emptyList())
+
+        repository.observeMessages(CONVERSATION_ID).test {
+            assertEquals(1, awaitItem().size)
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        verify(exactly = 0) { firestoreMessageDataSource.observeConversation(any()) }
+    }
 
     private fun missingIndex() = FirebaseFirestoreException(
         "The query requires an index.",

@@ -183,25 +183,6 @@ internal fun LocalDateTime.toIsoString(): String = format(chatDateFormatter)
 internal fun LocalDateTime.toEpochMillis(): Long =
     atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
 
-/** The map with [uid]'s mark moved forward to [atMillis], never backwards. */
-internal fun Map<String, Long>.advanced(uid: String, atMillis: Long): Map<String, Long> =
-    this + (uid to maxOf(this[uid] ?: Long.MIN_VALUE, atMillis))
-
-/**
- * Per-uid maximum of two mark maps.
- *
- * A mark is a monotonic epoch timestamp, so the larger value is always the newer truth.
- * That makes merging safe in both directions and is what stops a remote copy that predates
- * the marks — or has not yet caught up with a local write — from resetting read state.
- */
-internal fun mergeMarks(local: Map<String, Long>?, remote: Map<String, Long>): Map<String, Long> {
-    val merged = (local ?: emptyMap()).toMutableMap()
-    remote.forEach { (uid, mark) ->
-        merged[uid] = maxOf(merged[uid] ?: Long.MIN_VALUE, mark)
-    }
-    return merged
-}
-
 /** The larger of two nullable Longs, or whichever one is present. */
 internal fun maxOfNullable(a: Long?, b: Long?): Long? = when {
     a == null -> b
