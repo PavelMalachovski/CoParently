@@ -40,6 +40,16 @@ service cloud.firestore {
       return str is string && str.size() >= minLen && str.size() <= maxLen;
     }
 
+    // True when the map at `key` differs between `before` and `after` in at most the
+    // caller's own uid. `get(key, {})` is load-bearing: a conversation created before
+    // this change has no such field, and reading a missing key in Firestore Rules is an
+    // evaluation error rather than null — the same hazard that already bit `isPartnerOf`
+    // in this file.
+    function ownMarkOnly(before, after, key) {
+      return after.get(key, {}).diff(before.get(key, {}))
+                  .affectedKeys().hasOnly([request.auth.uid]);
+    }
+
     // ---- Users ---------------------------------------------------------
     // Users can read/write their own profile and read their partner's profile.
     match /users/{userId} {
@@ -272,9 +282,14 @@ service cloud.firestore {
       allow read: if isAuthenticated() &&
                     request.auth.uid in resource.data.participants;
 
+      // A participant may amend only their own read/delivery mark. Without this, either
+      // parent could write the other's `lastReadAt` and mark their own messages as read
+      // on the recipient's behalf.
       allow update: if isAuthenticated() &&
                       request.auth.uid in resource.data.participants &&
-                      request.resource.data.participants == resource.data.participants;
+                      request.resource.data.participants == resource.data.participants &&
+                      ownMarkOnly(resource.data, request.resource.data, 'lastReadAt') &&
+                      ownMarkOnly(resource.data, request.resource.data, 'lastDeliveredAt');
 
       allow create: if isAuthenticated() &&
                       request.auth.uid in request.resource.data.participants &&
