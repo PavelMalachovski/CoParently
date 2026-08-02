@@ -79,23 +79,12 @@ Task 7: minor (deferred unless cheap): two concurrent listener chains on the sam
 Task 7: fix round 1/5 (2 addressed, 0 open; commits 1b14157..2128bc2). Czech "many" corrected to genitive singular - textually identical to "few" by genuine Czech morphology, not copy-paste, and distinct in case from "other". NavGraph 492 -> 491 via rememberChatUnreadCount() called from the same composition position, so the Activity store owner still resolves.
 Task 7: complete (commits 19e7798..2128bc2, review clean)
 
----
-
-## How to resume this work in a fresh session
-
-Everything needed is committed:
-
-- Spec: `docs/superpowers/specs/2026-08-02-chat-sync-design.md`
-- Plan: `docs/superpowers/plans/2026-08-02-chat-sync.md` (9 tasks)
-- This file: the ledger, copied out of the git-ignored `.superpowers/sdd/` scratch so it survives.
-
-Resume with the `superpowers:subagent-driven-development` skill pointed at the plan. Tasks with a
-`complete` line above are done - do not re-dispatch them. Task reports live in
-`.superpowers/sdd/2026-08-02-chat-sync/` on this machine only; they are useful but not required,
-because every completed task names its commits and those are in git.
-
-State at the time of writing: C1 Tasks 1-7 complete and reviewed, Task 8 (chat push) implemented
-and awaiting its review, Task 9 (deploy + two-phone acceptance) not started. The preceding pairing
-spec (`2026-08-01-coparent-pairing`) is fully complete and its rules, indexes and Cloud Functions
-are deployed to coparently-a39c9. Nothing from THIS chat plan is deployed yet - Task 9 owns that,
-and until it runs, the legacy-conversation merge is a no-op by design.
+Task 8: review approved the server side in detail - v1 API, named preview constant, data-only payload intact, sibling intent-filter (avoids the scheme/host cross-product trap), distinct notification ids AND request codes, timestamp verified against ChatMappers as a naive ISO string. Suppression logic judged BETTER than the brief's pseudocode: the Number.isFinite/Date.now fallback stops a parse failure from reading as "already read".
+Task 8: 1 Important - the tap lands on the Chat LIST, not the thread. notifyOfChatMessage already puts conversationId in the payload and buildFcmMessage forwards every data key, so the phone receives it; the client discards it. Screen.Chat.createRoute(conversationId, draft) already exists. The "parallel mechanism" rationale does not hold - PairingUri.build itself carries an optional ?code= parameter.
+Task 8: minor (deferred): no test pins participants.size() > 2 (find picks the first non-sender only); MessageType.IMAGE/VOICE will push an empty-body notification once anything sends them.
+Task 8: fix round 1/5 (1 addressed, 0 open; commits 9932782..7f740b2; unit 328 -> 338, functions 43 -> 44). ChatUri carries the id; an absent/blank id degrades to the list, verified by test.
+Task 8: CARRY INTO TASK 9 - a crafted coplanly://chat?conversationId=<foreign id> link opens an EMPTY thread client-side, and the real protection is the conversations/messages read rules requiring participation. Those rules are NOT yet deployed for this chat plan. Confirm during the Task 9 deploy that a foreign id is denied server-side.
+Task 8: unproven (accepted): the with-id deep link was never exercised on a device - the implementer correctly refused, because opening it would open the owner's real Chat thread, which is forbidden. Covered by ChatUriTest/ChatDeepLinkRouteTest only.
+Task 8: minor (deferred): extractConversationId checks blankness on the still-percent-encoded string, so a percent-encoded all-whitespace id would pass through as an id (harmless empty thread).
+Task 8: complete (commits 2128bc2..7f740b2, review clean)
+ALL C1 TASKS 1-8 COMPLETE. Remaining: Task 9 (deploy rules/indexes/function, six-scenario two-phone acceptance, CLAUDE.md).
