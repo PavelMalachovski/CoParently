@@ -254,7 +254,7 @@ class ConversationMigratorTest {
         senderId = UID_A,
         senderName = "Anna",
         content = "hi",
-        timestamp = CREATED_AT,
+        sentAtMillis = SENT_AT_MILLIS,
         messageType = "TEXT",
         status = "SENT"
     )
@@ -265,5 +265,8 @@ class ConversationMigratorTest {
         const val LEGACY_ID = "random-uuid-legacy"
         val CANONICAL_ID = ConversationKey.of(UID_A, UID_B)
         val CREATED_AT: LocalDateTime = LocalDateTime.of(2026, 7, 1, 9, 0)
+
+        /** 2026-07-01T09:00:00Z, as a message send instant. */
+        const val SENT_AT_MILLIS = 1_782_896_400_000L
     }
 }

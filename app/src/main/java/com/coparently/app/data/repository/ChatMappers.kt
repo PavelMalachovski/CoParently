@@ -68,7 +68,7 @@ internal fun MessageEntity.toDomain(): Message = Message(
     senderId = senderId,
     senderName = senderName,
     content = content,
-    timestamp = timestamp,
+    sentAtMillis = sentAtMillis,
     messageType = MessageType.valueOf(messageType),
     attachments = gson.fromJson(attachmentsJson, stringListType) ?: emptyList(),
     isRead = isRead,
@@ -85,7 +85,7 @@ internal fun Message.toEntity(): MessageEntity = MessageEntity(
     senderId = senderId,
     senderName = senderName,
     content = content,
-    timestamp = timestamp,
+    sentAtMillis = sentAtMillis,
     messageType = messageType.name,
     attachmentsJson = gson.toJson(attachments),
     isRead = isRead,
@@ -97,6 +97,11 @@ internal fun Message.toEntity(): MessageEntity = MessageEntity(
 /**
  * The domain message as a Firestore document.
  *
+ * `timestamp` is written as a **number** — epoch millis, the same unit as the conversation's
+ * read/delivered marks. It used to be a naive ISO string with no offset, which two devices in
+ * different timezones could not agree on. The field keeps its name so a build that predates
+ * this change still finds it, and so the `messages` composite index still applies.
+ *
  * The send status is deliberately absent: it describes this device's own write, and both
  * of its promoted values (`DELIVERED`, `READ`) are derived at render time from the
  * conversation's marks rather than stored anywhere.
@@ -107,7 +112,7 @@ internal fun Message.toFirestoreMap(): Map<String, Any> = mapOf(
     "senderId" to senderId,
     "senderName" to senderName,
     "content" to content,
-    "timestamp" to timestamp.format(chatDateFormatter),
+    "timestamp" to sentAtMillis,
     "messageType" to messageType.name,
     "attachments" to attachments,
     "isRead" to isRead,
@@ -125,8 +130,8 @@ internal fun Map<String, Any>.toMessageOrNull(): Message? {
     if (id == null || conversationId == null) return null
 
     val senderId = this["senderId"] as? String
-    val timestamp = dateTimeOrNull("timestamp")
-    if (senderId == null || timestamp == null) return null
+    val sentAtMillis = sentAtMillisOrNull("timestamp")
+    if (senderId == null || sentAtMillis == null) return null
 
     return Message(
         id = id,
@@ -134,7 +139,7 @@ internal fun Map<String, Any>.toMessageOrNull(): Message? {
         senderId = senderId,
         senderName = (this["senderName"] as? String).orEmpty(),
         content = (this["content"] as? String).orEmpty(),
-        timestamp = timestamp,
+        sentAtMillis = sentAtMillis,
         messageType = runCatching {
             MessageType.valueOf(this["messageType"] as? String ?: MessageType.TEXT.name)
         }.getOrDefault(MessageType.TEXT),
@@ -171,17 +176,31 @@ internal fun Map<String, Any>.dateTimeOrNull(key: String): LocalDateTime? =
         runCatching { LocalDateTime.parse(it, chatDateFormatter) }.getOrNull()
     }
 
+/**
+ * A message document's send time as epoch millis, in either wire format, or `null` when it
+ * carries neither.
+ *
+ * A **number** is epoch millis and needs no interpretation — that is what this app writes now.
+ * A **string** is the naive ISO local date-time the previous format used: it carries no offset,
+ * so the reading device's own zone is the best available reading of it, and the same one the
+ * app applied to these documents until now.
+ *
+ * Both branches are needed because both exist: documents written before this change, and
+ * documents a co-parent's phone is still writing while it runs an older build.
+ */
+internal fun Map<String, Any>.sentAtMillisOrNull(key: String): Long? = when (val value = this[key]) {
+    is Number -> value.toLong()
+    is String -> runCatching {
+        LocalDateTime.parse(value, chatDateFormatter)
+            .atZone(ZoneId.systemDefault())
+            .toInstant()
+            .toEpochMilli()
+    }.getOrNull()
+    else -> null
+}
+
 /** The date-time as an ISO local date-time string, matching what the documents carry. */
 internal fun LocalDateTime.toIsoString(): String = format(chatDateFormatter)
-
-/**
- * The date-time as epoch millis, in the device's own zone.
- *
- * `Message.timestamp` is a naive `LocalDateTime` written on the sending device, so this is
- * only exact while both parents share a timezone — see `ChatReadState` for what skew costs.
- */
-internal fun LocalDateTime.toEpochMillis(): Long =
-    atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
 
 /** The larger of two nullable Longs, or whichever one is present. */
 internal fun maxOfNullable(a: Long?, b: Long?): Long? = when {

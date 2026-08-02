@@ -66,11 +66,11 @@ interface MessageDao {
     suspend fun archiveConversation(id: String)
 
     // Messages
-    @Query("SELECT * FROM messages WHERE conversationId = :conversationId ORDER BY timestamp ASC")
+    @Query("SELECT * FROM messages WHERE conversationId = :conversationId ORDER BY sentAtMillis ASC")
     fun getMessages(conversationId: String): Flow<List<MessageEntity>>
 
     /** One-shot read of a conversation's messages, oldest first — used by the legacy-conversation merge. */
-    @Query("SELECT * FROM messages WHERE conversationId = :conversationId ORDER BY timestamp ASC")
+    @Query("SELECT * FROM messages WHERE conversationId = :conversationId ORDER BY sentAtMillis ASC")
     suspend fun getMessagesOnce(conversationId: String): List<MessageEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)

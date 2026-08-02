@@ -431,7 +431,7 @@ class ChatViewModel @Inject constructor(
                 senderId = userId,
                 senderName = senderName,
                 content = content,
-                timestamp = LocalDateTime.now(),
+                sentAtMillis = System.currentTimeMillis(),
                 messageType = type,
                 attachments = attachments,
                 status = MessageSendStatus.SENDING

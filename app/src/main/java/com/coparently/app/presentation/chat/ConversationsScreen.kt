@@ -204,7 +204,7 @@ fun ConversationItem(
 
                 conversation.lastMessage?.let { msg ->
                     Text(
-                        text = msg.timestamp.format(timeFormatter),
+                        text = formatSentAt(msg.sentAtMillis, timeFormatter),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

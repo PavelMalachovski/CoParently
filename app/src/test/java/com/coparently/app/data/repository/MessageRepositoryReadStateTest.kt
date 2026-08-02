@@ -36,7 +36,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import java.time.LocalDateTime
-import java.time.ZoneId
 
 /**
  * Unit tests for the read/delivery marks and the deterministic conversation the chat
@@ -170,7 +169,7 @@ class MessageRepositoryReadStateTest {
         )
         assertTrue(
             "this user's mark must be the newest message's timestamp",
-            stored.captured.lastReadAtJson.contains("\"$UID_A\":${NEWEST.toEpochMillis()}")
+            stored.captured.lastReadAtJson.contains("\"$UID_A\":$NEWEST")
         )
         assertEquals("delivery marks are untouched by markRead", "{}", stored.captured.lastDeliveredAtJson)
     }
@@ -208,7 +207,7 @@ class MessageRepositoryReadStateTest {
         repository.markRead(CONVERSATION, UID_A)
 
         coVerify { firestoreMessageDataSource.markRead(CONVERSATION, UID_A, capture(remoteMark)) }
-        assertEquals(NEWEST.toEpochMillis(), remoteMark.captured)
+        assertEquals(NEWEST, remoteMark.captured)
         // A clock-derived mark reads ~now. That is what makes a device whose clock is briefly
         // set forward unrecoverable: the monotonic merge keeps the far-future mark for good
         // and that user's unread count is zero from then on. The thread cannot outrun itself.
@@ -223,7 +222,7 @@ class MessageRepositoryReadStateTest {
         repository.markDelivered(CONVERSATION, UID_A)
 
         coVerify { firestoreMessageDataSource.markDelivered(CONVERSATION, UID_A, capture(remoteMark)) }
-        assertEquals(NEWEST.toEpochMillis(), remoteMark.captured)
+        assertEquals(NEWEST, remoteMark.captured)
     }
 
     @Test
@@ -294,14 +293,14 @@ class MessageRepositoryReadStateTest {
             coVerify(exactly = 1) {
                 firestoreMessageDataSource.sendMessage(MESSAGE_ID, any(), capture(sentAt))
             }
-            assertEquals(messageMillis(), sentAt.captured)
+            assertEquals(SENT_AT_MILLIS, sentAt.captured)
 
             coVerify { messageDao.insertMessage(capture(messages)) }
             assertEquals(MessageSendStatus.SENT.name, messages.last().status)
             assertTrue(messages.last().syncedToFirestore)
 
             coVerify { messageDao.insertConversation(capture(conversations)) }
-            assertEquals(messageMillis(), conversations.last().lastMessageAtMillis)
+            assertEquals(SENT_AT_MILLIS, conversations.last().lastMessageAtMillis)
         }
 
     @Test
@@ -413,13 +412,13 @@ class MessageRepositoryReadStateTest {
         assertEquals("Anna", stored.captured.title)
     }
 
-    private fun messageRow(at: LocalDateTime) = MessageEntity(
+    private fun messageRow(at: Long) = MessageEntity(
         id = "message-$at",
         conversationId = CONVERSATION,
         senderId = UID_B,
         senderName = "Bob",
         content = "hello",
-        timestamp = at,
+        sentAtMillis = at,
         messageType = "TEXT",
         attachmentsJson = "[]",
         isRead = false,
@@ -446,13 +445,10 @@ class MessageRepositoryReadStateTest {
         senderId = UID_A,
         senderName = "Anna",
         content = "See you at 5",
-        timestamp = TIMESTAMP,
+        sentAtMillis = SENT_AT_MILLIS,
         messageType = MessageType.TEXT,
         status = MessageSendStatus.SENDING
     )
-
-    private fun messageMillis(): Long =
-        TIMESTAMP.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
 
     private companion object {
         const val UID_A = "uidA"
@@ -461,10 +457,18 @@ class MessageRepositoryReadStateTest {
         const val MESSAGE_ID = "message-1"
         const val AT_MILLIS = 1_754_000_000_000L
         const val CREATED_AT = "2026-08-01T10:00:00"
+
+        /** The conversation's own creation time, which is still a local date-time. */
         val TIMESTAMP: LocalDateTime = LocalDateTime.of(2026, 8, 1, 12, 0)
 
-        /** Two message timestamps well in the past, so a clock-derived mark is distinguishable. */
-        val OLDER: LocalDateTime = LocalDateTime.of(2026, 7, 1, 9, 0)
-        val NEWEST: LocalDateTime = LocalDateTime.of(2026, 7, 1, 9, 30)
+        /** 2026-08-01T10:00:00Z — the message under test's send instant. */
+        const val SENT_AT_MILLIS = 1_785_578_400_000L
+
+        /**
+         * Two send instants (2026-06-21T00:00Z and ten minutes later) well in the past, so a
+         * clock-derived mark is distinguishable from a message-derived one.
+         */
+        const val OLDER = 1_782_000_000_000L
+        const val NEWEST = 1_782_000_600_000L
     }
 }

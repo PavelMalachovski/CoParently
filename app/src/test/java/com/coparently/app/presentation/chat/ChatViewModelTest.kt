@@ -34,7 +34,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import java.time.LocalDateTime
-import java.time.ZoneId
 
 /**
  * Unit tests for [ChatViewModel]'s session-dependent state.
@@ -309,7 +308,7 @@ class ChatViewModelTest {
     @Test
     fun `my message is rendered READ once the other parent's read mark passes it`() = runTest {
         pairingState.value = PairingState.Paired(partner())
-        conversationInRoom.value = existingThread().copy(lastReadAt = mapOf(PARTNER to epochMillisAfter(TIMESTAMP)))
+        conversationInRoom.value = existingThread().copy(lastReadAt = mapOf(PARTNER to AFTER_SENT_AT_MILLIS))
         val myMessage = message().copy(senderId = UID, status = MessageSendStatus.SENT)
         every { messageRepository.observeMessages(CONVERSATION) } returns flowOf(listOf(myMessage))
         val viewModel = createViewModel()
@@ -326,7 +325,7 @@ class ChatViewModelTest {
     fun `my message is rendered DELIVERED when only the delivery mark has passed it`() = runTest {
         pairingState.value = PairingState.Paired(partner())
         conversationInRoom.value =
-            existingThread().copy(lastDeliveredAt = mapOf(PARTNER to epochMillisAfter(TIMESTAMP)))
+            existingThread().copy(lastDeliveredAt = mapOf(PARTNER to AFTER_SENT_AT_MILLIS))
         val myMessage = message().copy(senderId = UID, status = MessageSendStatus.SENT)
         every { messageRepository.observeMessages(CONVERSATION) } returns flowOf(listOf(myMessage))
         val viewModel = createViewModel()
@@ -373,7 +372,7 @@ class ChatViewModelTest {
     @Test
     fun `unread count is zero once my read mark passes the co-parent's message`() = runTest {
         pairingState.value = PairingState.Paired(partner())
-        conversationInRoom.value = existingThread().copy(lastReadAt = mapOf(UID to epochMillisAfter(TIMESTAMP)))
+        conversationInRoom.value = existingThread().copy(lastReadAt = mapOf(UID to AFTER_SENT_AT_MILLIS))
         every { messageRepository.observeMessages(CONVERSATION) } returns flowOf(listOf(message()))
         val viewModel = createViewModel()
 
@@ -382,10 +381,6 @@ class ChatViewModelTest {
             assertEquals(0, expectMostRecentItem())
         }
     }
-
-    /** A millisecond mark after [timestamp], the same way [ChatReadState] reads a timestamp. */
-    private fun epochMillisAfter(timestamp: LocalDateTime): Long =
-        timestamp.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli() + 1_000L
 
     private fun createViewModel(): ChatViewModel {
         val eventRepository = mockk<EventRepository> {
@@ -418,7 +413,7 @@ class ChatViewModelTest {
         senderId = PARTNER,
         senderName = "Bob Novak",
         content = "Can we swap Friday?",
-        timestamp = TIMESTAMP,
+        sentAtMillis = SENT_AT_MILLIS,
         messageType = MessageType.TEXT
     )
 
@@ -429,6 +424,14 @@ class ChatViewModelTest {
         /** What `ConversationKey.of(UID, PARTNER)` derives; kept literal so the test pins it. */
         const val CONVERSATION = "user-a__user-b"
         const val OTHER_CONVERSATION = "conversation-2"
+
+        /** The conversation's creation time, which is still a local date-time. */
         val TIMESTAMP: LocalDateTime = LocalDateTime.of(2026, 8, 1, 12, 0)
+
+        /** 2026-08-01T10:00:00Z — the test message's send instant. */
+        const val SENT_AT_MILLIS = 1_785_578_400_000L
+
+        /** A mark a second past the message, so it covers it. */
+        const val AFTER_SENT_AT_MILLIS = SENT_AT_MILLIS + 1_000L
     }
 }

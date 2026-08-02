@@ -793,6 +793,29 @@ function hasPartner(snap) {
 const CHAT_MESSAGE_PREVIEW_LENGTH = 120;
 
 /**
+ * A chat message document's `timestamp` as epoch millis, in either wire format.
+ *
+ * A **number** is epoch millis already — that is what `Message.toFirestoreMap` writes now, the
+ * same unit the read marks use, and the only form two devices in different timezones can agree
+ * on. A **string** is the naive `DateTimeFormatter.ISO_LOCAL_DATE_TIME` value the previous
+ * format used: it carries no offset, so `Date.parse` reads it in this runtime's own timezone
+ * (UTC on Cloud Functions), which is the best available reading of a value that never recorded
+ * where it was written. Both are accepted because both exist — documents written before the
+ * change, and documents a phone still running an older build keeps writing.
+ *
+ * Returns `NaN` for anything unreadable, so the caller's `Number.isFinite` fallback still
+ * covers it.
+ *
+ * @param {*} timestamp The document's `timestamp` field, of whatever type it happens to be.
+ * @return {number} Epoch millis, or `NaN`.
+ */
+function sentAtMillisOf(timestamp) {
+  if (typeof timestamp === 'number') return timestamp;
+  if (typeof timestamp === 'string') return Date.parse(timestamp);
+  return NaN;
+}
+
+/**
  * Queues a push notification for the other participant when a chat message is created,
  * unless they have already read past it.
  *
@@ -816,16 +839,10 @@ const CHAT_MESSAGE_PREVIEW_LENGTH = 120;
  * `0` here so a never-read conversation always favours notifying rather than silently
  * swallowing the very first message.
  *
- * `message.timestamp` is the naive `LocalDateTime` string `Message.toFirestoreMap` writes
- * (`DateTimeFormatter.ISO_LOCAL_DATE_TIME`, no zone offset — see `ChatMappers.kt`), not an
- * epoch number the way the marks are stored. `Date.parse` treats a date-time string with no
- * offset as local time in the *runtime's own* timezone, so the recovered instant is only
- * exact when the sender's device and this function's runtime agree on offset — the same
- * accepted skew `LocalDateTime.toEpochMillis()` already documents for this project, not a
- * new one introduced here. A timestamp that fails to parse falls back to "now" rather than
- * to epoch `0`: falling back to `0` would make a malformed value look "already read" against
- * a never-read conversation's own `0` default and silently swallow the push instead of
- * sending one.
+ * `message.timestamp` comes in either wire format — see [sentAtMillisOf]. A timestamp that
+ * cannot be read at all falls back to "now" rather than to epoch `0`: falling back to `0`
+ * would make an unreadable value look "already read" against a never-read conversation's own
+ * `0` default and silently swallow the push instead of sending one.
  *
  * Only the first non-sender uid in `participants` is ever notified. `ConversationKey.of`
  * only ever produces a two-uid conversation today, so a third participant is unreachable in
@@ -858,7 +875,7 @@ async function notifyOfChatMessage(db, message) {
   if (!recipient) return;
 
   const readMark = (conversation.lastReadAt || {})[recipient] || 0;
-  const parsedTimestamp = Date.parse(message.timestamp);
+  const parsedTimestamp = sentAtMillisOf(message.timestamp);
   const sentAt = Number.isFinite(parsedTimestamp) ? parsedTimestamp : Date.now();
   if (readMark >= sentAt) return;
 

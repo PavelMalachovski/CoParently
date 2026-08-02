@@ -4,17 +4,8 @@ import com.coparently.app.domain.model.Message
 import com.coparently.app.domain.model.MessageSendStatus
 import org.junit.Assert.assertEquals
 import org.junit.Test
-import java.time.LocalDateTime
-import java.time.ZoneId
 
 class ChatReadStateTest {
-
-    private val zone: ZoneId = ZoneId.systemDefault()
-
-    private fun at(millis: Long) = LocalDateTime.ofInstant(
-        java.time.Instant.ofEpochMilli(millis),
-        zone
-    )
 
     private fun message(id: String, sender: String, millis: Long) = Message(
         id = id,
@@ -22,7 +13,7 @@ class ChatReadStateTest {
         senderId = sender,
         senderName = sender,
         content = "hello",
-        timestamp = at(millis),
+        sentAtMillis = millis,
         status = MessageSendStatus.SENT
     )
 

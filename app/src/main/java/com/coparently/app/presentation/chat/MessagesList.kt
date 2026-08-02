@@ -166,7 +166,7 @@ fun MessageItem(
                 )
 
                 Text(
-                    text = message.timestamp.format(timeFormatter),
+                    text = formatSentAt(message.sentAtMillis, timeFormatter),
                     color = if (isCurrentUser) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f)
                     else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                     style = MaterialTheme.typography.labelSmall,

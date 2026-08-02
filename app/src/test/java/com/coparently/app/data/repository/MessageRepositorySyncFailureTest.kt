@@ -145,6 +145,8 @@ class MessageRepositorySyncFailureTest {
                     "senderId" to UID,
                     "senderName" to "Mom",
                     "content" to "See you at 5",
+                    // A legacy string timestamp: documents in this format still exist and must
+                    // still mirror. See `ChatMappersWireFormatTest` for both formats in detail.
                     "timestamp" to "2026-08-01T10:05:00",
                     "messageType" to "TEXT",
                     "attachments" to emptyList<String>(),
@@ -228,7 +230,7 @@ class MessageRepositorySyncFailureTest {
             senderId = UID,
             senderName = "Mom",
             content = "Already in Room",
-            timestamp = TIMESTAMP,
+            sentAtMillis = SENT_AT_MILLIS,
             messageType = "TEXT",
             attachmentsJson = "[]",
             isRead = false,
@@ -242,6 +244,11 @@ class MessageRepositorySyncFailureTest {
         const val UID = "uidA"
         const val CONVERSATION_ID = "conv-1"
         const val LOCAL_MESSAGE_ID = "local-1"
+
+        /** The conversation's creation time, which is still a local date-time. */
         val TIMESTAMP: LocalDateTime = LocalDateTime.of(2026, 8, 1, 10, 0)
+
+        /** 2026-08-01T10:00:00Z, as a message send instant. */
+        const val SENT_AT_MILLIS = 1_785_578_400_000L
     }
 }

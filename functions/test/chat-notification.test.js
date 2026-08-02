@@ -217,6 +217,66 @@ describe('notifyOfChatMessage', () => {
     assert.strictEqual(db._added[0].data.data.title, 'CoPlanly');
   });
 
+  it('reads a numeric timestamp, which is what the app writes now', async () => {
+    // Epoch millis, the same unit as the marks. `Date.parse` returns NaN for a number, which
+    // used to send every message straight to the "unreadable, notify anyway" fallback and so
+    // defeated the suppression rule entirely.
+    const sentAt = 1785578400000;
+    const db = fakeDb({participants: ['alice', 'bob'], lastReadAt: {bob: sentAt - 1}});
+    const message = {
+      conversationId: 'alice__bob', senderId: 'alice', senderName: 'Alice',
+      content: 'Hi', timestamp: sentAt,
+    };
+
+    await notifyOfChatMessage(db, message);
+
+    assert.strictEqual(db._added.length, 1);
+  });
+
+  it('suppresses on a numeric timestamp the recipient has already read past', async () => {
+    // The half that a NaN fallback would have hidden: with the timestamp unreadable the code
+    // substituted `Date.now()`, which no real mark ever reaches, so nothing was ever suppressed.
+    const sentAt = 1785578400000;
+    const db = fakeDb({participants: ['alice', 'bob'], lastReadAt: {bob: sentAt}});
+    const message = {
+      conversationId: 'alice__bob', senderId: 'alice', senderName: 'Alice',
+      content: 'Hi', timestamp: sentAt,
+    };
+
+    await notifyOfChatMessage(db, message);
+
+    assert.deepStrictEqual(db._added, []);
+  });
+
+  it('still reads a legacy string timestamp', async () => {
+    // Documents written before send times became instants, and documents a phone on an older
+    // build keeps writing, both carry a naive ISO local date-time.
+    const timestamp = '2026-08-02T10:00:00';
+    const db = fakeDb({participants: ['alice', 'bob'], lastReadAt: {bob: Date.parse(timestamp)}});
+    const message = {
+      conversationId: 'alice__bob', senderId: 'alice', senderName: 'Alice',
+      content: 'Hi', timestamp,
+    };
+
+    await notifyOfChatMessage(db, message);
+
+    assert.deepStrictEqual(db._added, []);
+  });
+
+  it('notifies rather than silently suppressing when the timestamp is of an unusable type', async () => {
+    // Neither a number nor a string: unreadable, so it must take the "notify anyway" fallback
+    // rather than compare against a garbage instant.
+    const db = fakeDb({participants: ['alice', 'bob']});
+    const message = {
+      conversationId: 'alice__bob', senderId: 'alice', senderName: 'Alice',
+      content: 'Hi', timestamp: {seconds: 1785578400},
+    };
+
+    await notifyOfChatMessage(db, message);
+
+    assert.strictEqual(db._added.length, 1);
+  });
+
   it('notifies rather than silently suppressing when the timestamp fails to parse', async () => {
     // A malformed timestamp must not fall back to epoch 0 - that would make it look
     // "already read" against a never-read conversation's default 0 mark.

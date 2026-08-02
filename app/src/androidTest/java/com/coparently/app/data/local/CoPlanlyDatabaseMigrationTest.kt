@@ -4,26 +4,32 @@ import androidx.room.testing.MigrationTestHelper
 import androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.time.ZoneOffset
+import java.util.TimeZone
 
 /**
- * Runs [DatabaseMigrations.MIGRATION_11_12] against a real SQLite database and validates the
- * result against the exported schema, using [MigrationTestHelper].
+ * Runs the table-rebuilding migrations against a real SQLite database and validates the result
+ * against the exported schema, using [MigrationTestHelper].
  *
- * `MIGRATION_11_12` is the first migration in this project that rebuilds a table (drop +
- * recreate) rather than `ALTER TABLE ... ADD COLUMN` — a table rebuild can lose or misalign
- * rows in a way an additive migration cannot. Before this test, its only validation was a
- * single cold launch on the project owner's phone over his real messages: a check that, had it
- * failed, would have failed on his data. `runMigrationsAndValidate`'s `validateDroppedTables`
- * flag validates the rebuilt `conversations` table against `12.json` byte-for-byte — the same
- * column-name/affinity/notNull/primary-key comparison Room itself runs at app startup — so a
- * mismatch is caught here, on a throwaway test database, instead of there.
+ * [DatabaseMigrations.MIGRATION_11_12] and [DatabaseMigrations.MIGRATION_12_13] are the only
+ * migrations in this project that rebuild a table (drop + recreate) rather than
+ * `ALTER TABLE ... ADD COLUMN` — a table rebuild can lose or misalign rows in a way an additive
+ * migration cannot, and 12-to-13 additionally *rewrites* every message's send time. Before this
+ * test, `MIGRATION_11_12`'s only validation was a single cold launch on the project owner's
+ * phone over his real messages: a check that, had it failed, would have failed on his data.
+ * `runMigrationsAndValidate`'s `validateDroppedTables` flag validates the rebuilt table against
+ * the exported schema byte-for-byte — the same column-name/affinity/notNull/primary-key
+ * comparison Room itself runs at app startup — so a mismatch is caught here, on a throwaway
+ * test database, instead of there.
  */
 @RunWith(AndroidJUnit4::class)
 class CoPlanlyDatabaseMigrationTest {
@@ -35,6 +41,26 @@ class CoPlanlyDatabaseMigrationTest {
         emptyList(),
         FrameworkSQLiteOpenHelperFactory()
     )
+
+    private lateinit var originalZone: TimeZone
+
+    /**
+     * `MIGRATION_12_13` reads stored wall clocks in the device's own zone, so the expected
+     * instants below are only literals if the zone is one. A fixed offset, not a named zone, so
+     * no DST transition can blur what a given wall clock means — and a half-hour one no device
+     * or emulator running this suite is plausibly set to, so a test that passes here cannot be
+     * passing merely because the forced zone happened to match the machine's own.
+     */
+    @Before
+    fun fixDefaultZone() {
+        originalZone = TimeZone.getDefault()
+        TimeZone.setDefault(TimeZone.getTimeZone(ZoneOffset.ofHoursMinutes(5, 30)))
+    }
+
+    @After
+    fun restoreDefaultZone() {
+        TimeZone.setDefault(originalZone)
+    }
 
     /**
      * A conversation row written against the v11 schema — including a non-default
@@ -140,9 +166,120 @@ class CoPlanlyDatabaseMigrationTest {
         migrated.close()
     }
 
+    /**
+     * Every message must survive 12-to-13 with its send time converted — not defaulted, not
+     * dropped — from the wall clock it was stored as to the instant that wall clock named on
+     * this device.
+     *
+     * The three rows cover what `DateTimeFormatter.ISO_LOCAL_DATE_TIME` actually writes: no
+     * fraction at whole seconds, and up to nine digits otherwise. A row per format matters
+     * because a conversion that only understands one of them would fail on the others.
+     */
+    @Test
+    fun migrate12To13_convertsEveryStoredWallClockToItsInstant() {
+        helper.createDatabase(TEST_DB, VERSION_12).apply {
+            execSQL(
+                """
+                INSERT INTO messages
+                    (id, conversationId, senderId, senderName, content, timestamp, messageType,
+                     attachmentsJson, isRead, replyToMessageId, syncedToFirestore, status)
+                VALUES
+                    ('msg-1', 'uidA__uidB', 'uidA', 'Anna', 'See you at 5',
+                     '2026-08-01T12:00:00', 'TEXT', '[]', 0, NULL, 1, 'SENT'),
+                    ('msg-2', 'uidA__uidB', 'uidB', 'Bob', 'On my way',
+                     '2026-08-01T12:00:00.123', 'TEXT', '["photo"]', 1, 'msg-1', 0, NULL),
+                    ('msg-3', 'uidA__uidB', 'uidA', 'Anna', 'Thanks',
+                     '2026-08-01T12:00:00.123456789', 'TEXT', '[]', 0, NULL, 1, 'SENDING')
+                """.trimIndent()
+            )
+            close()
+        }
+
+        val migrated = helper.runMigrationsAndValidate(
+            TEST_DB,
+            VERSION_13,
+            true,
+            DatabaseMigrations.MIGRATION_12_13
+        )
+
+        val cursor = migrated.query("SELECT * FROM messages ORDER BY id ASC")
+        assertEquals("no message may be lost by the rebuild", 3, cursor.count)
+
+        // 12:00 at UTC+05:30 is 06:30 UTC.
+        assertTrue(cursor.moveToFirst())
+        assertEquals("msg-1", cursor.getString(cursor.getColumnIndexOrThrow("id")))
+        assertEquals(
+            NOON_AT_PLUS_FIVE_THIRTY_MILLIS,
+            cursor.getLong(cursor.getColumnIndexOrThrow("sentAtMillis"))
+        )
+        // Every other column carries over untouched.
+        assertEquals("uidA__uidB", cursor.getString(cursor.getColumnIndexOrThrow("conversationId")))
+        assertEquals("uidA", cursor.getString(cursor.getColumnIndexOrThrow("senderId")))
+        assertEquals("Anna", cursor.getString(cursor.getColumnIndexOrThrow("senderName")))
+        assertEquals("See you at 5", cursor.getString(cursor.getColumnIndexOrThrow("content")))
+        assertEquals("TEXT", cursor.getString(cursor.getColumnIndexOrThrow("messageType")))
+        assertEquals("[]", cursor.getString(cursor.getColumnIndexOrThrow("attachmentsJson")))
+        assertEquals(0, cursor.getInt(cursor.getColumnIndexOrThrow("isRead")))
+        assertNull(cursor.getString(cursor.getColumnIndexOrThrow("replyToMessageId")))
+        assertEquals(1, cursor.getInt(cursor.getColumnIndexOrThrow("syncedToFirestore")))
+        assertEquals("SENT", cursor.getString(cursor.getColumnIndexOrThrow("status")))
+
+        // Sub-second precision is kept to the millisecond and truncated below it.
+        assertTrue(cursor.moveToNext())
+        assertEquals("msg-2", cursor.getString(cursor.getColumnIndexOrThrow("id")))
+        assertEquals(
+            NOON_AT_PLUS_FIVE_THIRTY_MILLIS + 123,
+            cursor.getLong(cursor.getColumnIndexOrThrow("sentAtMillis"))
+        )
+        assertEquals("""["photo"]""", cursor.getString(cursor.getColumnIndexOrThrow("attachmentsJson")))
+        assertEquals(1, cursor.getInt(cursor.getColumnIndexOrThrow("isRead")))
+        assertEquals("msg-1", cursor.getString(cursor.getColumnIndexOrThrow("replyToMessageId")))
+        assertNull("a null status must stay null", cursor.getString(cursor.getColumnIndexOrThrow("status")))
+
+        assertTrue(cursor.moveToNext())
+        assertEquals("msg-3", cursor.getString(cursor.getColumnIndexOrThrow("id")))
+        assertEquals(
+            NOON_AT_PLUS_FIVE_THIRTY_MILLIS + 123,
+            cursor.getLong(cursor.getColumnIndexOrThrow("sentAtMillis"))
+        )
+        assertEquals("SENDING", cursor.getString(cursor.getColumnIndexOrThrow("status")))
+
+        // The naive column is gone, not merely ignored.
+        assertEquals(-1, cursor.getColumnIndex("timestamp"))
+
+        cursor.close()
+        migrated.close()
+    }
+
+    /**
+     * An empty `messages` table is the common case for a fresh install that has never chatted,
+     * and a rebuild driven by a per-row loop is exactly the shape that can trip over one.
+     */
+    @Test
+    fun migrate12To13_handlesAnEmptyMessagesTable() {
+        helper.createDatabase(TEST_DB, VERSION_12).close()
+
+        val migrated = helper.runMigrationsAndValidate(
+            TEST_DB,
+            VERSION_13,
+            true,
+            DatabaseMigrations.MIGRATION_12_13
+        )
+
+        val cursor = migrated.query("SELECT * FROM messages")
+        assertEquals(0, cursor.count)
+
+        cursor.close()
+        migrated.close()
+    }
+
     private companion object {
         const val TEST_DB = "coplanly-migration-test.db"
         const val VERSION_11 = 11
         const val VERSION_12 = 12
+        const val VERSION_13 = 13
+
+        /** 2026-08-01T12:00:00 at UTC+05:30, i.e. 06:30:00Z. */
+        const val NOON_AT_PLUS_FIVE_THIRTY_MILLIS = 1_785_565_800_000L
     }
 }

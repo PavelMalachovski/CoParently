@@ -154,7 +154,7 @@ class MessageRepositoryImpl @Inject constructor(
             return
         }
 
-        val sentAtMillis = message.timestamp.toEpochMillis()
+        val sentAtMillis = message.sentAtMillis
         try {
             firestoreMessageDataSource.sendMessage(
                 message.id,
@@ -297,7 +297,7 @@ class MessageRepositoryImpl @Inject constructor(
      * ordering staying what it is today.
      */
     private suspend fun newestMessageMillis(conversationId: String): Long? =
-        messageDao.getMessagesOnce(conversationId).maxOfOrNull { it.timestamp.toEpochMillis() }
+        messageDao.getMessagesOnce(conversationId).maxOfOrNull { it.sentAtMillis }
 
     /**
      * Advances the conversation's ordering timestamp after [senderId] sent a message.

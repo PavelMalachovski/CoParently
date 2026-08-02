@@ -2,6 +2,9 @@ package com.coparently.app.data.local
 
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import java.time.LocalDateTime
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 /**
  * Database migrations for CoPlanly database.
@@ -192,6 +195,109 @@ object DatabaseMigrations {
     }
 
     /**
+     * Migration from version 12 to 13.
+     *
+     * `messages.timestamp` was a naive wall-clock string — the sending device's local time,
+     * with no offset — which cannot be compared against the conversation's read/delivered
+     * marks once the two parents are in different timezones. It becomes `sentAtMillis`, an
+     * instant. SQLite cannot change a column's declared type in place, so the table is rebuilt
+     * the same way [MIGRATION_11_12] rebuilt `conversations`.
+     *
+     * **The conversion is deliberately done in Kotlin, not in SQL.** SQLite could express it as
+     * `strftime('%s', timestamp, 'utc')`, but that parser accepts only up to three fractional
+     * second digits and yields `NULL` for anything else, while the stored values come from
+     * `DateTimeFormatter.ISO_LOCAL_DATE_TIME`, which writes up to nine — every sub-second value
+     * would silently become `NULL` in a `NOT NULL` column. `strftime` also truncates to whole
+     * seconds. Reading each row back through `java.time` instead is the exact inverse of what
+     * wrote it, and reuses the same "interpret in this device's own zone" rule the app applied
+     * to these rows until now — which is the correct rule here, because it is the same device
+     * that wrote them.
+     *
+     * The rows are copied in bulk first and their instants written afterwards, so a value that
+     * cannot be read back can only cost that message its position in the thread, never the
+     * message itself.
+     */
+    val MIGRATION_12_13 = object : Migration(12, 13) {
+        override fun migrate(database: SupportSQLiteDatabase) {
+            database.execSQL(
+                """
+                CREATE TABLE messages_new (
+                    id TEXT NOT NULL PRIMARY KEY,
+                    conversationId TEXT NOT NULL,
+                    senderId TEXT NOT NULL,
+                    senderName TEXT NOT NULL,
+                    content TEXT NOT NULL,
+                    sentAtMillis INTEGER NOT NULL,
+                    messageType TEXT NOT NULL,
+                    attachmentsJson TEXT NOT NULL,
+                    isRead INTEGER NOT NULL,
+                    replyToMessageId TEXT,
+                    syncedToFirestore INTEGER NOT NULL,
+                    status TEXT DEFAULT 'SENT'
+                )
+                """.trimIndent()
+            )
+            database.execSQL(
+                """
+                INSERT INTO messages_new
+                    (id, conversationId, senderId, senderName, content, sentAtMillis,
+                     messageType, attachmentsJson, isRead, replyToMessageId,
+                     syncedToFirestore, status)
+                SELECT id, conversationId, senderId, senderName, content, 0,
+                       messageType, attachmentsJson, isRead, replyToMessageId,
+                       syncedToFirestore, status
+                FROM messages
+                """.trimIndent()
+            )
+
+            // Read every wall clock out first, then write the instants back: iterating a cursor
+            // over `messages` while writing to `messages_new` in the same transaction is safe
+            // today, but nothing about this migration needs to depend on that.
+            val instants = mutableListOf<Pair<String, Long>>()
+            database.query("SELECT id, timestamp FROM messages").use { cursor ->
+                while (cursor.moveToNext()) {
+                    val id = cursor.getString(0) ?: continue
+                    instants += id to wallClockToEpochMillis(cursor.getString(1))
+                }
+            }
+            instants.forEach { (id, sentAtMillis) ->
+                database.execSQL(
+                    "UPDATE messages_new SET sentAtMillis = ? WHERE id = ?",
+                    arrayOf<Any>(sentAtMillis, id)
+                )
+            }
+
+            database.execSQL("DROP TABLE messages")
+            database.execSQL("ALTER TABLE messages_new RENAME TO messages")
+        }
+    }
+
+    /**
+     * A schema-12 `messages.timestamp` as epoch millis, interpreted in this device's own zone.
+     *
+     * The stored value is a naive `LocalDateTime` written by `Converters.fromLocalDateTime` on
+     * *this* device, so this device's current zone is the right — and only — one to read it in.
+     *
+     * A value that cannot be read at all falls back to the epoch rather than dropping the row
+     * or inventing "now": the message stays in the thread, at the top of it, where it is
+     * visible and can never masquerade as new. This is not expected to happen — every row was
+     * written by `DateTimeFormatter.ISO_LOCAL_DATE_TIME` — and losing a message would be far
+     * worse than misplacing one.
+     */
+    internal fun wallClockToEpochMillis(stored: String?): Long {
+        if (stored == null) return UNREADABLE_SENT_AT_MILLIS
+        return runCatching {
+            LocalDateTime.parse(stored, DateTimeFormatter.ISO_LOCAL_DATE_TIME)
+                .atZone(ZoneId.systemDefault())
+                .toInstant()
+                .toEpochMilli()
+        }.getOrDefault(UNREADABLE_SENT_AT_MILLIS)
+    }
+
+    /** Where a message whose stored wall clock cannot be parsed lands. */
+    private const val UNREADABLE_SENT_AT_MILLIS = 0L
+
+    /**
      * List of all migrations in order.
      */
     val ALL_MIGRATIONS = arrayOf(
@@ -201,6 +307,7 @@ object DatabaseMigrations {
         MIGRATION_8_9,
         MIGRATION_9_10,
         MIGRATION_10_11,
-        MIGRATION_11_12
+        MIGRATION_11_12,
+        MIGRATION_12_13
     )
 }

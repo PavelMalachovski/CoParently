@@ -140,7 +140,7 @@ class RequestChangeViewModel @Inject constructor(
                 senderId = senderId,
                 senderName = senderName,
                 content = content,
-                timestamp = LocalDateTime.now(),
+                sentAtMillis = System.currentTimeMillis(),
                 messageType = com.coparently.app.domain.model.MessageType.EVENT_LINK,
                 attachments = listOf(event.id),
                 status = com.coparently.app.domain.model.MessageSendStatus.SENDING
