@@ -285,6 +285,25 @@ class ChatViewModelTest {
         coVerify(exactly = 0) { messageRepository.markDelivered(any(), any()) }
     }
 
+    @Test
+    fun `resolving an existing thread from the FAB does not mark its unread messages read`() = runTest {
+        // The FAB's job is to reuse an existing thread rather than create a second one, so the
+        // conversation it resolves routinely already holds real unread messages from the
+        // co-parent. Resolving the id — via startConversationWithPartner/openConversationWith —
+        // is a different event from the ChatScreen actually opening the thread, and must not by
+        // itself be enough to tell the co-parent "I read this."
+        pairingState.value = PairingState.Paired(partner())
+        conversationInRoom.value = existingThread()
+        every { messageRepository.observeMessages(CONVERSATION) } returns flowOf(listOf(message()))
+        val viewModel = createViewModel()
+
+        viewModel.startConversationWithPartner { }
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { messageRepository.markRead(any(), any()) }
+        coVerify(exactly = 0) { messageRepository.markDelivered(any(), any()) }
+    }
+
     // ---- 1f: my own messages render the tick the conversation's marks support -----------
 
     @Test

@@ -19,6 +19,7 @@ import com.coparently.app.domain.repository.UserRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -29,10 +30,12 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.retry
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
@@ -98,6 +101,19 @@ class ChatViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val _currentConversationId = MutableStateFlow<String?>(null)
+
+    /**
+     * The conversation [onThreadOpened] most recently opened, or `null` while nothing is
+     * actually on screen. This is deliberately a *separate* signal from
+     * [_currentConversationId]: the latter is also set by [openConversationWith] merely to
+     * resolve or create the thread for navigation — the "start a conversation" FAB routinely
+     * resolves an *existing* thread that already holds real unread messages from the
+     * co-parent, and resolving its id must not by itself tell the co-parent "I read this."
+     * Only [onThreadOpened] — called when the ChatScreen composable is actually displayed —
+     * may advance this, and [onThreadClosed] clears it so the read/delivered collector below
+     * stops re-asserting marks for a thread no longer on screen.
+     */
+    private val _openedConversationId = MutableStateFlow<String?>(null)
 
     private val _events = MutableSharedFlow<ChatEvent>(extraBufferCapacity = 1)
 
@@ -219,9 +235,11 @@ class ChatViewModel @Inject constructor(
     /**
      * The selected conversation's raw messages, tagged with the id they belong to.
      *
-     * Cold and unshared on purpose: [messages] and the read/delivered collector in `init`
-     * each get their own independent subscription to this, so a failure caught by one
-     * cannot silently starve the other. Same reason [conversations] gives for using
+     * Backs [messages] only — the read/delivered collector in `init` subscribes to
+     * [openedThreadMessages] instead, which is keyed by a separate signal that only
+     * [onThreadOpened] sets, precisely so that setting *this* id (also done by
+     * [openConversationWith], merely to resolve/create a thread for navigation) can never by
+     * itself cause a mark to be written. Same reason [conversations] gives for using
      * `flatMapLatest` over `combine` applies here — the id is null at construction time by
      * definition, so a `combine` version would subscribe to `observeMessages("")` once and
      * a thread's messages could never appear at all.
@@ -274,13 +292,20 @@ class ChatViewModel @Inject constructor(
      * [ChatReadState.unreadCount] rather than anything summed across a list. Kept as an
      * independent subscription from [messages] — mirroring `HomeViewModel.unreadCount`'s
      * Home-tile figure — so a failure in one cannot blank the other.
+     *
+     * The inner `observeMessages` subscription is keyed on the conversation *id*
+     * (`distinctUntilChanged`), not on [conversations] itself: [conversations] re-emits on
+     * every `lastReadAt`/`lastDeliveredAt` write — which, with this task, now includes every
+     * mark this ViewModel writes — and restarting the messages subscription on each of those
+     * would be pure churn, since the id it is keyed on has not actually changed.
      */
     @OptIn(ExperimentalCoroutinesApi::class)
     val unreadCount: StateFlow<Int> = combine(
-        conversations.flatMapLatest { convs ->
-            val conversationId = convs.firstOrNull()?.id
-            if (conversationId == null) flowOf(emptyList()) else messageRepository.observeMessages(conversationId)
-        },
+        conversations.map { it.firstOrNull()?.id }
+            .distinctUntilChanged()
+            .flatMapLatest { conversationId ->
+                if (conversationId == null) flowOf(emptyList()) else messageRepository.observeMessages(conversationId)
+            },
         conversations,
         currentUserId
     ) { rawMessages, convs, myUid ->
@@ -293,17 +318,47 @@ class ChatViewModel @Inject constructor(
             initialValue = 0
         )
 
+    /**
+     * The *opened* thread's raw messages — same shape as [currentThreadMessages], but keyed
+     * by [_openedConversationId] rather than [_currentConversationId]. This is what the
+     * read/delivered collector below subscribes to, so resolving a conversation id for
+     * navigation (`openConversationWith`) can never be mistaken for the thread actually being
+     * on screen.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private val openedThreadMessages: Flow<Pair<String?, List<Message>>> = _openedConversationId
+        .flatMapLatest { conversationId ->
+            val raw = if (conversationId == null) {
+                flowOf(emptyList())
+            } else {
+                messageRepository.observeMessages(conversationId)
+            }
+            raw.map { conversationId to it }
+        }
+
     init {
-        // Re-asserts the read/delivered marks every time the open thread's messages change —
-        // not only when the thread is first opened. A one-shot mark on open alone misses two
-        // cases: Room not having ingested any messages yet (fresh install, right after
-        // pairing, right after a database wipe — the repository's newest-message lookup is
-        // null then and writes nothing), and a message arriving from the co-parent while the
-        // thread stays open, which must clear the badge and advance the tick without the user
-        // leaving and re-entering the screen.
+        // Re-asserts the read/delivered marks every time the *opened* thread's messages
+        // change — not only when the thread is first opened. A one-shot mark on open alone
+        // misses two cases: Room not having ingested any messages yet (fresh install, right
+        // after pairing, right after a database wipe — the repository's newest-message lookup
+        // is null then and writes nothing), and a message arriving from the co-parent while
+        // the thread stays open, which must clear the badge and advance the tick without the
+        // user leaving and re-entering the screen.
+        //
+        // `retry` rather than `catch`-and-stop: unlike `messages`/`conversations`/
+        // `unreadCount`, this collector has no `stateIn` behind it to fall back on — if a
+        // transient failure (e.g. a Room hiccup) were allowed to end the flow, the auto
+        // re-assert would silently stay dead for the rest of this ViewModel's life with no
+        // way to notice. Retrying re-subscribes from `_openedConversationId`'s current value,
+        // so it heals once the underlying cause clears.
         launchGuarded("re-assert read/delivered marks") {
-            currentThreadMessages
-                .catch { e -> failSoft("re-assert read/delivered marks", e) {} }
+            openedThreadMessages
+                .retry { cause ->
+                    if (cause is CancellationException) throw cause
+                    Log.w(TAG, "Re-assert read/delivered marks failed; retrying", cause)
+                    delay(MARK_RETRY_DELAY_MS)
+                    true
+                }
                 .collect { (conversationId, _) ->
                     if (conversationId == null) return@collect
                     val userId = currentUserId.value
@@ -336,14 +391,29 @@ class ChatViewModel @Inject constructor(
     /**
      * Called when the chat thread screen is displayed for [conversationId].
      *
-     * Only selects which conversation's messages this ViewModel observes. The `init`
-     * collector above is where `markRead`/`markDelivered` are actually written — deriving
-     * them from the messages flow itself, rather than firing a single call right here, is
-     * what lets the mark land once Room has actually ingested the thread's messages instead
-     * of being lost on a fresh install or right after pairing.
+     * Selects which conversation's messages this ViewModel observes, and — separately —
+     * marks the thread as actually open via [_openedConversationId]. The `init` collector is
+     * where `markRead`/`markDelivered` are actually written, keyed off that second signal:
+     * deriving them from the messages flow itself, rather than firing a single call right
+     * here, is what lets the mark land once Room has actually ingested the thread's messages
+     * instead of being lost on a fresh install or right after pairing.
      */
     fun onThreadOpened(conversationId: String) {
         _currentConversationId.value = conversationId
+        _openedConversationId.value = conversationId
+    }
+
+    /**
+     * Called when the chat thread screen leaves composition.
+     *
+     * Clears [_openedConversationId] so the read/delivered collector stops re-asserting
+     * marks for a thread that is no longer on screen — most of the time this ViewModel is
+     * cleared along with the screen anyway (it is scoped to the nav back stack entry), but a
+     * configuration change disposes and recomposes the screen while the same ViewModel
+     * instance survives, and this keeps that window from being treated as "still open."
+     */
+    fun onThreadClosed() {
+        _openedConversationId.value = null
     }
 
     fun sendMessage(content: String, type: MessageType = MessageType.TEXT, attachments: List<String> = emptyList()) {
@@ -494,5 +564,8 @@ class ChatViewModel @Inject constructor(
          * enough for a cold Firestore listener, short enough that the user gets an answer.
          */
         const val RESOLVE_TIMEOUT_MS = 5000L
+
+        /** Backoff before retrying the read/delivered re-assert collector after a failure. */
+        const val MARK_RETRY_DELAY_MS = 2000L
     }
 }
