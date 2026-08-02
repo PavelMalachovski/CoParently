@@ -12,10 +12,10 @@ import kotlinx.coroutines.flow.Flow
 /**
  * Data Access Object for messages and conversations.
  *
- * Over detekt's `TooManyFunctions` threshold for interfaces by one, and deliberately so.
- * [getActiveConversations], [getMessagesOnce] and [repointMessages] are what the
- * legacy-conversation merge (a later task) needs; [observeConversationById] is the
- * Room-backed half of the conversation observer. The old `markConversationAsRead` and the
+ * Over detekt's `TooManyFunctions` threshold for interfaces, and deliberately so.
+ * [getActiveConversations], [getMessagesOnce], [repointMessages] and [archiveConversation] are
+ * what the legacy-conversation merge (`ConversationMigrator`) needs; [observeConversationById]
+ * is the Room-backed half of the conversation observer. The old `markConversationAsRead` and the
  * unfiltered `getConversationsOrdered` were both removed as read state stopped living in a
  * stored counter and the account-wide conversation list went away with the sync loop.
  * Splitting messages and conversations into two DAOs would satisfy the threshold but is a
@@ -52,6 +52,18 @@ interface MessageDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertConversation(conversation: ConversationEntity)
+
+    /**
+     * Flips `archived` to `true` for one conversation and nothing else — used by the
+     * legacy-conversation merge.
+     *
+     * Deliberately a targeted `UPDATE`, not a read-modify-write through [insertConversation].
+     * The domain `Conversation`/[ConversationEntity] round trip
+     * (`toDomain()`/`toEntity()` in `ChatMappers`) has no field for [ConversationEntity.lastMessageId],
+     * so rebuilding the row from the domain model on every archive would silently null it out.
+     */
+    @Query("UPDATE conversations SET archived = 1 WHERE id = :id")
+    suspend fun archiveConversation(id: String)
 
     // Messages
     @Query("SELECT * FROM messages WHERE conversationId = :conversationId ORDER BY timestamp ASC")

@@ -26,11 +26,12 @@ import java.time.LocalDateTime
  * Everything here runs over mocked [MessageDao] and [FirestoreMessageDataSource] instances, so
  * these tests prove the *orchestration*: which conversations are picked as candidates, in what
  * order local and remote writes happen, that the canonical conversation is never a candidate,
- * that an unrelated pair is left alone, and that a second run against the resulting (now
- * archived) state makes no further calls at all. They do not — and cannot — prove that the
- * `messages` document a real re-point targets is actually writable; that permission boundary is
- * covered separately, against the Firestore emulator, in
- * `firestore-tests/rules/conversations-messages.test.js`.
+ * that an unrelated pair is left alone, that a second run against the resulting (now archived)
+ * state makes no further calls at all, and that a message Room does not know about but Firestore
+ * does is still found and re-pointed. They do not — and cannot — prove that the `messages`
+ * document a real re-point targets is actually writable, or that its destination is constrained
+ * to the canonical conversation; that permission boundary is covered separately, against the
+ * Firestore emulator, in `firestore-tests/rules/conversations-messages.test.js`.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class ConversationMigratorTest {
@@ -49,6 +50,11 @@ class ConversationMigratorTest {
         messageDao = mockk(relaxed = true)
         firestoreMessageDataSource = mockk(relaxed = true)
         migrator = ConversationMigrator(messageDao, firestoreMessageDataSource)
+
+        // The remote message-id read defaults to "nothing extra beyond what Room already
+        // knows" unless a test says otherwise, so existing local-only scenarios do not need to
+        // restate it.
+        coEvery { firestoreMessageDataSource.fetchMessageIds(any()) } returns emptySet()
     }
 
     @After
@@ -62,16 +68,13 @@ class ConversationMigratorTest {
             coEvery { messageDao.getActiveConversations() } returns flowOf(listOf(legacyRow()))
             coEvery { messageDao.getMessagesOnce(LEGACY_ID) } returns
                 listOf(messageRow("msg-1"), messageRow("msg-2"))
-            coEvery { messageDao.getConversationById(LEGACY_ID) } returns legacyRow()
 
             migrator.mergeLegacyConversations(UID_A, UID_B)
 
             coVerify(exactly = 1) { firestoreMessageDataSource.repointMessage("msg-1", CANONICAL_ID) }
             coVerify(exactly = 1) { firestoreMessageDataSource.repointMessage("msg-2", CANONICAL_ID) }
             coVerify(exactly = 1) { messageDao.repointMessages(LEGACY_ID, CANONICAL_ID) }
-            coVerify(exactly = 1) {
-                messageDao.insertConversation(match { it.id == LEGACY_ID && it.archived })
-            }
+            coVerify(exactly = 1) { messageDao.archiveConversation(LEGACY_ID) }
             coVerify(exactly = 1) {
                 firestoreMessageDataSource.setConversation(LEGACY_ID, mapOf("archived" to true))
             }
@@ -86,7 +89,7 @@ class ConversationMigratorTest {
 
         coVerify(exactly = 0) { messageDao.getMessagesOnce(CANONICAL_ID) }
         coVerify(exactly = 0) { messageDao.repointMessages(any(), any()) }
-        coVerify(exactly = 0) { messageDao.insertConversation(any()) }
+        coVerify(exactly = 0) { messageDao.archiveConversation(any()) }
         coVerify(exactly = 0) { firestoreMessageDataSource.setConversation(any(), any()) }
     }
 
@@ -100,7 +103,6 @@ class ConversationMigratorTest {
             flowOf(emptyList())
         )
         coEvery { messageDao.getMessagesOnce(LEGACY_ID) } returns listOf(messageRow("msg-1"))
-        coEvery { messageDao.getConversationById(LEGACY_ID) } returns legacyRow()
 
         migrator.mergeLegacyConversations(UID_A, UID_B)
         migrator.mergeLegacyConversations(UID_A, UID_B)
@@ -108,7 +110,7 @@ class ConversationMigratorTest {
         // Exactly the first run's worth of writes — the second run added none.
         coVerify(exactly = 1) { firestoreMessageDataSource.repointMessage("msg-1", CANONICAL_ID) }
         coVerify(exactly = 1) { messageDao.repointMessages(LEGACY_ID, CANONICAL_ID) }
-        coVerify(exactly = 1) { messageDao.insertConversation(any()) }
+        coVerify(exactly = 1) { messageDao.archiveConversation(any()) }
         coVerify(exactly = 1) { firestoreMessageDataSource.setConversation(any(), any()) }
     }
 
@@ -127,14 +129,13 @@ class ConversationMigratorTest {
 
         coVerify(exactly = 0) { messageDao.getMessagesOnce("random-uuid-other-pair") }
         coVerify(exactly = 0) { messageDao.repointMessages(any(), any()) }
-        coVerify(exactly = 0) { messageDao.insertConversation(any()) }
+        coVerify(exactly = 0) { messageDao.archiveConversation(any()) }
     }
 
     @Test
     fun `messages keep their own ids and are never inserted, only re-pointed`() = runTest {
         coEvery { messageDao.getActiveConversations() } returns flowOf(listOf(legacyRow()))
         coEvery { messageDao.getMessagesOnce(LEGACY_ID) } returns listOf(messageRow("msg-1"))
-        coEvery { messageDao.getConversationById(LEGACY_ID) } returns legacyRow()
 
         migrator.mergeLegacyConversations(UID_A, UID_B)
 
@@ -160,7 +161,7 @@ class ConversationMigratorTest {
             // re-point and the archive must both wait for every remote re-point to succeed, so
             // a retried launch can still tell this thread needs another pass.
             coVerify(exactly = 0) { messageDao.repointMessages(any(), any()) }
-            coVerify(exactly = 0) { messageDao.insertConversation(any()) }
+            coVerify(exactly = 0) { messageDao.archiveConversation(any()) }
             coVerify(exactly = 0) { firestoreMessageDataSource.setConversation(any(), any()) }
         }
 
@@ -180,7 +181,6 @@ class ConversationMigratorTest {
             // The first candidate's local read blows up unexpectedly (a Room I/O error, say).
             coEvery { messageDao.getMessagesOnce(LEGACY_ID) } throws IllegalStateException("disk full")
             coEvery { messageDao.getMessagesOnce(secondLegacyId) } returns listOf(messageRow("msg-9"))
-            coEvery { messageDao.getConversationById(secondLegacyId) } returns secondLegacy
 
             // Must not throw: PairingRepositoryImpl relies on this to never escape.
             migrator.mergeLegacyConversations(UID_A, UID_B)
@@ -188,9 +188,46 @@ class ConversationMigratorTest {
             // The second candidate still gets fully merged despite the first one's failure.
             coVerify(exactly = 1) { firestoreMessageDataSource.repointMessage("msg-9", CANONICAL_ID) }
             coVerify(exactly = 1) { messageDao.repointMessages(secondLegacyId, CANONICAL_ID) }
+            coVerify(exactly = 1) { messageDao.archiveConversation(secondLegacyId) }
+        }
+
+    // ---- remote message discovery ------------------------------------------
+
+    @Test
+    fun `a message present remotely but absent from local Room is still discovered and re-pointed`() =
+        runTest {
+            coEvery { messageDao.getActiveConversations() } returns flowOf(listOf(legacyRow()))
+            // Room only ever learned about msg-1; msg-remote-only reached Firestore under the
+            // legacy id but never made it into this device's Room (a partial sync, a reinstall,
+            // a second device signed into the same account).
+            coEvery { messageDao.getMessagesOnce(LEGACY_ID) } returns listOf(messageRow("msg-1"))
+            coEvery { firestoreMessageDataSource.fetchMessageIds(LEGACY_ID) } returns
+                setOf("msg-1", "msg-remote-only")
+
+            migrator.mergeLegacyConversations(UID_A, UID_B)
+
+            coVerify(exactly = 1) { firestoreMessageDataSource.repointMessage("msg-1", CANONICAL_ID) }
             coVerify(exactly = 1) {
-                messageDao.insertConversation(match { it.id == secondLegacyId && it.archived })
+                firestoreMessageDataSource.repointMessage("msg-remote-only", CANONICAL_ID)
             }
+            coVerify(exactly = 1) { messageDao.archiveConversation(LEGACY_ID) }
+        }
+
+    @Test
+    fun `a failed remote message-list read leaves the candidate untouched rather than guessing`() =
+        runTest {
+            coEvery { messageDao.getActiveConversations() } returns flowOf(listOf(legacyRow()))
+            coEvery { messageDao.getMessagesOnce(LEGACY_ID) } returns listOf(messageRow("msg-1"))
+            coEvery { firestoreMessageDataSource.fetchMessageIds(LEGACY_ID) } throws
+                RuntimeException("offline")
+
+            migrator.mergeLegacyConversations(UID_A, UID_B)
+
+            // Proceeding on the local-only list here would risk archiving a conversation that
+            // still has a message stranded under it remotely, invisible to this check.
+            coVerify(exactly = 0) { firestoreMessageDataSource.repointMessage(any(), any()) }
+            coVerify(exactly = 0) { messageDao.repointMessages(any(), any()) }
+            coVerify(exactly = 0) { messageDao.archiveConversation(any()) }
         }
 
     // ---- fixtures -----------------------------------------------------------

@@ -46,6 +46,18 @@ class ConversationKeyTest {
     }
 
     @Test
+    fun `matches the literal id firestore rules' canonicalConversationId derives for the pair`() {
+        // The drift pin's Kotlin-side half. `firestore.rules`' `canonicalConversationId`
+        // re-derives this exact sorted-join formula in Rules, to constrain the
+        // legacy-conversation merge's message re-point to the canonical conversation only (see
+        // `conversations-messages.test.js`'s "computes the same canonical id..." case, which
+        // asserts the matching literal succeeds against the real rule in the emulator). If
+        // either side's formula ever changes, only one of the two pins moves and the other's
+        // literal assertion catches it — the two derivations cannot silently disagree.
+        assertEquals("alice-uid__bob-uid", ConversationKey.of("alice-uid", "bob-uid"))
+    }
+
+    @Test
     fun `a uid containing the separator is rejected instead of silently colliding`() {
         // Without this guard, of("x__y", "z") and of("x", "y__z") would both join to
         // "x__y__z" — two different pairs producing the same id.

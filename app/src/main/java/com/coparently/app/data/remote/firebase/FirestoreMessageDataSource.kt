@@ -148,17 +148,44 @@ class FirestoreMessageDataSource @Inject constructor(
     /**
      * Moves one message onto a different conversation, as the legacy-conversation merge does.
      *
-     * A single-field update, matching the deployed `messages` rule: a participant of both the
-     * source and destination conversations may change `conversationId` and nothing else in the
-     * same write (see `canRepointMessage` in `firestore.rules`). Setting it to a value it
-     * already has is idempotent and denied by nothing, which is what makes a retried merge safe.
+     * A single-field update, matching the deployed `messages` rule: a participant of the
+     * message's current conversation may change `conversationId` to the canonical conversation
+     * for that conversation's participants, and nothing else in the same write — never to an
+     * arbitrary conversation, even a same-participants one (see `canRepointMessage` in
+     * `firestore.rules`; a looser, participant-based version of this rule was found to let one
+     * parent permanently hide the other's message in a conversation the other never observes).
+     * Setting it to a value it already has is idempotent and denied by nothing, which is what
+     * makes a retried merge safe.
      *
      * @param messageId Document id of the message; unchanged by the move.
-     * @param toConversationId The conversation the message now belongs to.
+     * @param toConversationId The conversation the message now belongs to — must be the
+     *   canonical conversation for the message's current participants, or the write is denied.
      */
     suspend fun repointMessage(messageId: String, toConversationId: String) {
         messagesCollection.document(messageId)
             .update("conversationId", toConversationId)
             .await()
     }
+
+    /**
+     * The ids of every message currently filed under [conversationId], read once — not a live
+     * listener.
+     *
+     * Used by the legacy-conversation merge to find messages Room does not know about: nothing
+     * else ever points a listener at a legacy conversation id, so a message that reached
+     * Firestore under one but never made it into this device's Room would otherwise never be
+     * discovered, re-pointed, or protected from being stranded when the legacy conversation is
+     * archived away.
+     *
+     * @param conversationId The (legacy) conversation to read.
+     * @return The ids of its messages; empty if there are none or the read is denied.
+     */
+    suspend fun fetchMessageIds(conversationId: String): Set<String> =
+        messagesCollection
+            .whereEqualTo("conversationId", conversationId)
+            .get()
+            .await()
+            .documents
+            .map { it.id }
+            .toSet()
 }

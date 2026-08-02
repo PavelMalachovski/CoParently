@@ -19,25 +19,41 @@ import javax.inject.Singleton
  * thread, then marks the leftover `archived` so it drops out of
  * [MessageDao.getActiveConversations] for good.
  *
+ * **This is a complete no-op until the deployed `messages` rule allows the re-point.** The
+ * `messages` update rule must permit a `conversationId`-only change into the canonical
+ * conversation (see `canRepointMessage` in `firestore.rules`) before any of this can succeed
+ * remotely. Against the rule that predates that change, every [tryRemoteRepoint] call below is
+ * denied, [mergeOne] returns before touching anything local, and the legacy history sits
+ * untouched under an id nothing observes — the same as if this class did not exist. That is the
+ * correct, safe degradation (see the ordering note below), but it means the feature only starts
+ * actually merging conversations on the first launch *after* the rule is deployed, not the
+ * moment this code ships.
+ *
  * **Ordering, and why it is idempotent and safe to interrupt at any point.** For each
- * candidate, every one of its messages is re-pointed *remotely* first; only once all of them
- * have succeeded does the conversation get re-pointed *locally* (a single `UPDATE`, so a
- * message can never end up duplicated under two ids) and archived, on both copies. If the
- * process dies or a remote write fails partway through:
+ * candidate, every message known to belong to it — Room's copy unioned with a one-shot remote
+ * read, see [collectMessageIds] — is re-pointed *remotely* first; only once all of them have
+ * succeeded does the conversation get re-pointed *locally* (a single `UPDATE`, so a message can
+ * never end up duplicated under two ids) and archived, on both copies. If the process dies or a
+ * remote write fails partway through:
  * - before any remote re-point succeeded: nothing changed anywhere, so the next launch starts
  *   the same candidate over from scratch;
  * - after all remote re-points succeeded but before the local re-point/archive ran: the next
  *   launch re-attempts the remote re-point for the same messages, which is a no-op (Firestore
  *   already has the destination value), then proceeds to the local re-point and archive;
  * - after the local re-point ran but before the archive did: the next launch reads the same
- *   (still unarchived) conversation, finds it has zero messages left under its old id (they
- *   already moved), trivially "succeeds" the remote step over an empty list, repeats the
- *   already-applied local re-point as a no-op, and archives it, completing the interrupted run.
+ *   (still unarchived) conversation, finds Room has zero messages left under its old id (they
+ *   already moved) while the remote read still finds the same ids, trivially "succeeds" the
+ *   remote step again (each one is already at its destination), repeats the already-applied
+ *   local re-point as a no-op, and archives it, completing the interrupted run.
  *
  * If some remote re-points succeed and others fail in the same pass, the conversation is left
  * unarchived and untouched locally, so the whole candidate is retried in full next launch — a
  * message is never re-pointed locally while its remote copy is still split, which is what would
  * make the local device believe the merge finished when the other parent still cannot see it.
+ * The same caution applies to the message *list* itself: if the one-shot remote read that finds
+ * messages Room does not know about fails, the candidate is skipped entirely for this pass
+ * rather than proceeding on a local-only list that might be incomplete — a merge that cannot see
+ * the full picture must not guess at it and archive on a guess.
  *
  * Once a candidate is fully merged, a second run does nothing at all: it is no longer
  * `archived = false`, so [MessageDao.getActiveConversations] does not return it as a candidate,
@@ -81,8 +97,9 @@ class ConversationMigrator @Inject constructor(
      * Without this, a pair with more than one legacy conversation — possible across repeated
      * pair/unpair cycles — would have every candidate *after* the failing one silently skipped
      * for the rest of this pass, not just the one that actually failed. [mergeOne] already
-     * handles the *expected* remote failure modes internally (a refused or offline re-point,
-     * a refused archive); this is the outer net for everything else.
+     * handles the *expected* failure modes internally (a refused or offline re-point, an
+     * incomplete remote message read, a refused archive); this is the outer net for everything
+     * else.
      */
     private suspend fun mergeOneSafely(legacyId: String, canonicalId: String) {
         try {
@@ -103,15 +120,21 @@ class ConversationMigrator @Inject constructor(
 
     /**
      * Merges one legacy conversation into [canonicalId], per the ordering documented on the
-     * class: remote message re-points must all succeed before anything local or archival
-     * happens.
+     * class: every message must be discovered, then every one re-pointed remotely, before
+     * anything local or archival happens.
      */
     private suspend fun mergeOne(legacyId: String, canonicalId: String) {
-        val messages = messageDao.getMessagesOnce(legacyId)
-
-        val fullyRepointedRemotely = messages.all { message ->
-            tryRemoteRepoint(message.id, canonicalId)
+        val messageIds = collectMessageIds(legacyId)
+        if (messageIds == null) {
+            Log.w(
+                TAG,
+                "Chat merge: could not determine the full set of messages in $legacyId " +
+                    "(the remote read failed); leaving it active so the next launch retries."
+            )
+            return
         }
+
+        val fullyRepointedRemotely = messageIds.all { id -> tryRemoteRepoint(id, canonicalId) }
         if (!fullyRepointedRemotely) {
             Log.w(
                 TAG,
@@ -122,14 +145,41 @@ class ConversationMigrator @Inject constructor(
         }
 
         messageDao.repointMessages(legacyId, canonicalId)
-        archiveLocally(legacyId)
+        messageDao.archiveConversation(legacyId)
         archiveRemotely(legacyId)
 
         Log.i(
             TAG,
-            "Chat merge: moved ${messages.size} message(s) from $legacyId into $canonicalId " +
+            "Chat merge: moved ${messageIds.size} message(s) from $legacyId into $canonicalId " +
                 "and archived $legacyId."
         )
+    }
+
+    /**
+     * The full set of message ids belonging to [legacyId] — the union of what Room and Firestore
+     * each know about it — or `null` if the remote half of that could not be determined.
+     *
+     * Room alone is not enough: after Tasks 1-4, nothing ever points a live listener at a legacy
+     * conversation id, so a message that reached Firestore under [legacyId] but never made it
+     * into *this* device's Room (a partial sync, a reinstall, a second device signed into the
+     * same account) would otherwise never be discovered by anything — and once this conversation
+     * is archived, it never will be. `null`, not a partial (local-only) set, is returned on a
+     * remote-read failure: proceeding on a set that might be missing entries is exactly the risk
+     * this exists to close, so the candidate is skipped for this pass instead of guessed at.
+     */
+    private suspend fun collectMessageIds(legacyId: String): Set<String>? {
+        val localIds = messageDao.getMessagesOnce(legacyId).map { it.id }.toSet()
+        val remoteIds = try {
+            firestoreMessageDataSource.fetchMessageIds(legacyId)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (
+            @Suppress("TooGenericExceptionCaught") e: Exception
+        ) {
+            Log.w(TAG, "Chat merge: remote message read failed for $legacyId.", e)
+            return null
+        }
+        return localIds + remoteIds
     }
 
     /**
@@ -153,13 +203,6 @@ class ConversationMigrator @Inject constructor(
             Log.w(TAG, "Chat merge: failed to re-point message $messageId to $canonicalId.", e)
             false
         }
-
-    /** Marks the legacy row `archived` locally, idempotently (a no-op if already set). */
-    private suspend fun archiveLocally(legacyId: String) {
-        val legacy = messageDao.getConversationById(legacyId)?.toDomain() ?: return
-        if (legacy.archived) return
-        messageDao.insertConversation(legacy.copy(archived = true).toEntity())
-    }
 
     /**
      * Marks the legacy document `archived` remotely, best-effort.

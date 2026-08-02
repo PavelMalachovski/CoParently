@@ -14,6 +14,18 @@ const ALICE = 'alice-uid';
 const BOB = 'bob-uid';
 const CAROL = 'carol-uid';
 
+/**
+ * The canonical conversation id for [ALICE, BOB], computed by hand the same way
+ * `firestore.rules`' `canonicalConversationId` and Kotlin's `ConversationKey.of` both do:
+ * sort the pair, join with `__`. 'alice-uid' < 'bob-uid', so this is 'alice-uid__bob-uid'.
+ *
+ * This literal is the drift pin: `ConversationKeyTest` (Kotlin) asserts
+ * `ConversationKey.of("alice-uid", "bob-uid")` equals this same string. If either side's
+ * formula ever changes, one of the two pins breaks — the two derivations cannot silently
+ * disagree with each other.
+ */
+const CANONICAL_ID = `${ALICE}__${BOB}`;
+
 const PAIRED_USERS = {
   'users/alice-uid': {name: 'Alice', email: 'a@x.test', partnerId: BOB},
   'users/bob-uid': {name: 'Bob', email: 'b@x.test', partnerId: ALICE},
@@ -220,10 +232,11 @@ describe('Part 1d: messages', () => {
       await assertFails(db.doc('messages/msg-1').update({senderId: BOB}));
     });
 
-    it('denies moving a message into another conversation', async () => {
-      const db = env.authenticatedContext(ALICE).firestore();
-      await assertFails(db.doc('messages/msg-1').update({conversationId: 'conv-2'}));
-    });
+    // Moving a message to another conversation is not blanket-denied any more — the
+    // legacy-conversation merge (Task 5) needs it, gated by `canRepointMessage`. What it is
+    // restricted to (only the canonical conversation for the pair, denied for anything else,
+    // including a look-alike with the same two participants) is the full subject of the
+    // dedicated describe block below; folded in here rather than duplicated.
 
     it('denies an outsider flipping isRead', async () => {
       const db = env.authenticatedContext(CAROL).firestore();
@@ -231,43 +244,64 @@ describe('Part 1d: messages', () => {
     });
   });
 
-  describe('conversationId re-point is restricted to the legacy-conversation merge (Task 5)', () => {
+  describe('conversationId re-point is restricted to the canonical conversation (Task 5)', () => {
     beforeEach(async () => {
       await seed(env, {
         'messages/msg-1': messageDoc({}),
-        // The destination for a legitimate merge: same two people, different id — as if
-        // `ConversationKey.of(ALICE, BOB)` produced 'conv-2' while 'conv-1' was the old
-        // randomly-generated thread.
-        'conversations/conv-2': conversationDoc({id: 'conv-2', participants: [ALICE, BOB]}),
-        // A conversation the caller belongs to, but with a different partner entirely —
-        // exercises that matching participant *sets* is enforced, not just "caller is a
-        // participant of the destination".
+        // The one legitimate destination: the canonical conversation for [ALICE, BOB].
+        [`conversations/${CANONICAL_ID}`]:
+            conversationDoc({id: CANONICAL_ID, participants: [ALICE, BOB]}),
+        // A look-alike: the exact same two participants, but not the canonical id — as if a
+        // participant created a second thread nobody else observes. This is the shape of the
+        // message-hiding attack this rule exists to close; see the dedicated test below.
+        'conversations/hidden-1': conversationDoc({id: 'hidden-1', participants: [ALICE, BOB]}),
+        // A conversation the caller belongs to, but with a different partner entirely.
         'conversations/conv-3': conversationDoc({id: 'conv-3', participants: [ALICE, CAROL]}),
         // A conversation the caller does not belong to at all.
         'conversations/conv-4': conversationDoc({id: 'conv-4', participants: [BOB, CAROL]}),
       });
     });
 
-    it('lets a participant re-point a message to another conversation with the same pair', async () => {
-      const db = env.authenticatedContext(ALICE).firestore();
-      await assertSucceeds(db.doc('messages/msg-1').update({conversationId: 'conv-2'}));
-    });
+    it('computes the same canonical id Kotlin\'s ConversationKey.of does for the pair',
+        async () => {
+          // This is the drift pin's Rules-side half — see CANONICAL_ID's comment. If
+          // `canonicalConversationId` in firestore.rules ever stops matching
+          // `ConversationKey.of`'s sorted-join formula, this literal string stops being the
+          // conversation the rule actually computes, and this assertion fails.
+          const db = env.authenticatedContext(ALICE).firestore();
+          await assertSucceeds(db.doc('messages/msg-1').update({conversationId: CANONICAL_ID}));
+        });
 
-    it('lets the other participant re-point it too', async () => {
+    it('lets the other participant re-point into the canonical conversation too', async () => {
       const db = env.authenticatedContext(BOB).firestore();
-      await assertSucceeds(db.doc('messages/msg-1').update({conversationId: 'conv-2'}));
+      await assertSucceeds(db.doc('messages/msg-1').update({conversationId: CANONICAL_ID}));
     });
 
     it('denies smuggling a second field alongside the re-point', async () => {
       const db = env.authenticatedContext(ALICE).firestore();
       await assertFails(
-          db.doc('messages/msg-1').update({conversationId: 'conv-2', isRead: true}));
+          db.doc('messages/msg-1').update({conversationId: CANONICAL_ID, isRead: true}));
     });
 
     it('denies smuggling a content edit alongside the re-point', async () => {
       const db = env.authenticatedContext(ALICE).firestore();
       await assertFails(
-          db.doc('messages/msg-1').update({conversationId: 'conv-2', content: 'rewritten'}));
+          db.doc('messages/msg-1').update({conversationId: CANONICAL_ID, content: 'rewritten'}));
+    });
+
+    it('denies the message-hiding attack: re-pointing into a same-participants ' +
+        'conversation that is not canonical', async () => {
+      // The exact attack this rule was tightened to close: Alice (or Bob) could otherwise
+      // create a second [ALICE, BOB] conversation nobody else's device ever observes, then
+      // move the other parent's message into it — removing it from the shared thread in
+      // every way that matters, even though `messages` states `allow delete: if false`.
+      const db = env.authenticatedContext(ALICE).firestore();
+      await assertFails(db.doc('messages/msg-1').update({conversationId: 'hidden-1'}));
+    });
+
+    it('denies the same attack run by the other participant', async () => {
+      const db = env.authenticatedContext(BOB).firestore();
+      await assertFails(db.doc('messages/msg-1').update({conversationId: 'hidden-1'}));
     });
 
     it('denies re-pointing into a conversation with a different pair, even one the caller ' +
@@ -281,14 +315,17 @@ describe('Part 1d: messages', () => {
       await assertFails(db.doc('messages/msg-1').update({conversationId: 'conv-4'}));
     });
 
-    it('denies re-pointing into a conversation that does not exist', async () => {
+    it('denies re-pointing into an arbitrary id that happens not to exist', async () => {
+      // Existence of the destination is not what the rule checks any more — only whether it
+      // equals the canonical id — so this is denied for the same reason as 'conv-3'/'conv-4'
+      // above (it is simply not that string), not because of a missing-document check.
       const db = env.authenticatedContext(ALICE).firestore();
       await assertFails(db.doc('messages/msg-1').update({conversationId: 'conv-nope'}));
     });
 
     it('denies an outsider re-pointing a message they cannot even read', async () => {
       const db = env.authenticatedContext(CAROL).firestore();
-      await assertFails(db.doc('messages/msg-1').update({conversationId: 'conv-3'}));
+      await assertFails(db.doc('messages/msg-1').update({conversationId: CANONICAL_ID}));
     });
   });
 
