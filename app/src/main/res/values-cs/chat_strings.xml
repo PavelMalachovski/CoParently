@@ -20,4 +20,10 @@
     <string name="chat_request_change_title">Požádat o změnu</string>
     <string name="chat_no_upcoming_events">Žádné nadcházející události, u kterých lze navrhnout změnu.</string>
     <string name="chat_pick_event_to_reschedule">Vyberte událost, kterou chcete přeložit:</string>
+    <!-- Shown when the co-parent action is used on an account that has no co-parent linked. -->
+    <string name="chat_no_coparent">Zatím nejste propojeni s druhým rodičem.</string>
+    <!-- Snackbar action next to chat_no_coparent; opens the pairing screen. -->
+    <string name="chat_no_coparent_action">Propojit</string>
+    <!-- Shown when the pairing state has not resolved in time; the action is worth retrying. -->
+    <string name="chat_coparent_link_pending">Stále ověřujeme propojení s druhým rodičem. Zkuste to prosím za chvíli znovu.</string>
 </resources>

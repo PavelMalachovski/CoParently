@@ -22,4 +22,10 @@
     <string name="chat_request_change_title">Request a change</string>
     <string name="chat_no_upcoming_events">No upcoming events to propose a change for.</string>
     <string name="chat_pick_event_to_reschedule">Pick the event you\'d like to reschedule:</string>
+    <!-- Shown when the co-parent action is used on an account that has no co-parent linked. -->
+    <string name="chat_no_coparent">You are not linked with a co-parent yet.</string>
+    <!-- Snackbar action next to chat_no_coparent; opens the pairing screen. -->
+    <string name="chat_no_coparent_action">Pair</string>
+    <!-- Shown when the pairing state has not resolved in time; the action is worth retrying. -->
+    <string name="chat_coparent_link_pending">Still checking your co-parent link. Try again in a moment.</string>
 </resources>

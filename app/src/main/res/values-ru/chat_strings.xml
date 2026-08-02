@@ -20,4 +20,10 @@
     <string name="chat_request_change_title">Запросить изменение</string>
     <string name="chat_no_upcoming_events">Нет предстоящих событий, для которых можно предложить изменение.</string>
     <string name="chat_pick_event_to_reschedule">Выберите событие, которое хотите перенести:</string>
+    <!-- Shown when the co-parent action is used on an account that has no co-parent linked. -->
+    <string name="chat_no_coparent">Вы ещё не связаны со вторым родителем.</string>
+    <!-- Snackbar action next to chat_no_coparent; opens the pairing screen. -->
+    <string name="chat_no_coparent_action">Связать</string>
+    <!-- Shown when the pairing state has not resolved in time; the action is worth retrying. -->
+    <string name="chat_coparent_link_pending">Проверяем связь со вторым родителем. Попробуйте ещё раз через мгновение.</string>
 </resources>

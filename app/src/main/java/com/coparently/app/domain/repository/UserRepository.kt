@@ -6,7 +6,15 @@ import kotlinx.coroutines.flow.Flow
 /**
  * Repository interface for managing users.
  * Part of the domain layer in Clean Architecture.
+ *
+ * Over detekt's `TooManyFunctions` threshold by one, and deliberately so: the eleventh is
+ * [observeCurrentUserId], the reactive counterpart of [getCurrentUserId]. Both are needed —
+ * a suspending call site wants the snapshot, a ViewModel wants the stream, and offering
+ * only the snapshot is what let `ChatViewModel` freeze a session identity in `init` and
+ * leave the co-parent action dead. Splitting the interface to satisfy the threshold would
+ * move that judgement into the type system for no benefit.
  */
+@Suppress("TooManyFunctions")
 interface UserRepository {
     /**
      * Gets all users as a Flow.
@@ -35,6 +43,19 @@ interface UserRepository {
      * (which today only happens during pairing).
      */
     suspend fun getCurrentUserId(): String?
+
+    /**
+     * The signed-in user's id (Firebase UID) as a stream: the value at subscription time,
+     * and every later sign-in, sign-out and account switch. Emits null while signed out,
+     * including the brief window on a cold start before Firebase Auth restores its session.
+     *
+     * The one-shot [getCurrentUserId] is a snapshot of the same thing and is fine for
+     * a suspending call site. A ViewModel that captures it once in `init` is not: the
+     * value it happens to read on construction then stands in for the whole session, and
+     * anything gated on it stays dead for the lifetime of that ViewModel. That is exactly
+     * how the chat entry point ended up doing nothing at all — see `ChatViewModel`.
+     */
+    fun observeCurrentUserId(): Flow<String?>
 
     /**
      * Makes sure the signed-in user has an identity-bearing profile, locally and in

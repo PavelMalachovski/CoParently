@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -15,6 +16,7 @@ import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
@@ -23,11 +25,17 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -39,6 +47,15 @@ import com.coparently.app.domain.model.Conversation
 import com.coparently.app.presentation.common.animations.AnimatedEmptyState
 import java.time.format.DateTimeFormatter
 
+/**
+ * The conversation list, and the single entry point into a chat with the co-parent.
+ *
+ * The "is there a co-parent" decision belongs to the ViewModel, not here: at the moment of
+ * a tap the pairing state may still be resolving, and treating that as "not paired" would
+ * either bounce the user to pairing for an account that *is* paired or — as it used to —
+ * do nothing at all. The screen just starts the action, shows progress while it resolves,
+ * and renders whatever [ChatEvent] comes back.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ConversationsScreen(
@@ -48,19 +65,38 @@ fun ConversationsScreen(
     viewModel: ChatViewModel = hiltViewModel()
 ) {
     val conversations by viewModel.conversations.collectAsState()
-    val partnerId by viewModel.partnerId.collectAsState()
+    val isOpening by viewModel.isOpeningConversation.collectAsState()
+    val snackbarHostState = remember { SnackbarHostState() }
 
-    // Chat needs a co-parent: if paired, open (or create) the conversation with them;
-    // if not, send the user to pairing instead of silently doing nothing.
-    val startChat: () -> Unit = {
-        if (partnerId.isNullOrEmpty()) {
-            onNavigateToPairing()
-        } else {
-            viewModel.startConversationWithPartner(onOpened = onConversationClick)
+    // Captured in composable scope: the collector below is not a composable, so it cannot
+    // call stringResource itself.
+    val noCoParentMessage = stringResource(R.string.chat_no_coparent)
+    val noCoParentAction = stringResource(R.string.chat_no_coparent_action)
+    val linkPendingMessage = stringResource(R.string.chat_coparent_link_pending)
+
+    LaunchedEffect(Unit) {
+        viewModel.events.collect { event ->
+            when (event) {
+                ChatEvent.NoCoParent -> {
+                    val result = snackbarHostState.showSnackbar(
+                        message = noCoParentMessage,
+                        actionLabel = noCoParentAction,
+                        duration = SnackbarDuration.Long
+                    )
+                    if (result == SnackbarResult.ActionPerformed) onNavigateToPairing()
+                }
+
+                ChatEvent.CoParentLinkPending -> snackbarHostState.showSnackbar(linkPendingMessage)
+            }
         }
     }
 
+    val startChat: () -> Unit = {
+        viewModel.startConversationWithPartner(onOpened = onConversationClick)
+    }
+
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.conversations_title)) },
@@ -79,7 +115,15 @@ fun ConversationsScreen(
             // its own primary action, so a second entry point would be redundant.
             if (conversations.isNotEmpty()) {
                 FloatingActionButton(onClick = startChat) {
-                    Icon(Icons.Default.Add, contentDescription = stringResource(R.string.chat_new_conversation))
+                    if (isOpening) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(24.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    } else {
+                        Icon(Icons.Default.Add, contentDescription = stringResource(R.string.chat_new_conversation))
+                    }
                 }
             }
         }

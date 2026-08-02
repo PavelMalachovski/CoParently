@@ -9,6 +9,7 @@ import com.coparently.app.data.session.ProfileIdentity
 import com.coparently.app.domain.model.User
 import com.coparently.app.domain.repository.UserRepository
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import java.util.UUID
 import javax.inject.Inject
@@ -53,6 +54,12 @@ class UserRepositoryImpl @Inject constructor(
     }
 
     override suspend fun getCurrentUserId(): String? = firebaseAuthService.getCurrentUser()?.uid
+
+    override fun observeCurrentUserId(): Flow<String?> = firebaseAuthService.getAuthStateFlow()
+        .map { it?.uid }
+        // Firebase re-emits the same user on every token refresh; only a real session
+        // change is interesting to a subscriber.
+        .distinctUntilChanged()
 
     /**
      * Fills in the signed-in user's identity (`name`, `email`) in `users/{uid}` and in the
