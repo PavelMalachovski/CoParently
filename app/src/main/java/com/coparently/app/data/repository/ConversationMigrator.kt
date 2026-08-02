@@ -166,6 +166,11 @@ class ConversationMigrator @Inject constructor(
      * is archived, it never will be. `null`, not a partial (local-only) set, is returned on a
      * remote-read failure: proceeding on a set that might be missing entries is exactly the risk
      * this exists to close, so the candidate is skipped for this pass instead of guessed at.
+     *
+     * That distinction only holds because [FirestoreMessageDataSource.fetchMessageIds] reads from
+     * the server and throws when it cannot: an offline device lands in the `null` branch below
+     * rather than reporting an empty — and, for a legacy id, always empty — offline cache as if it
+     * were the server's answer.
      */
     private suspend fun collectMessageIds(legacyId: String): Set<String>? {
         val localIds = messageDao.getMessagesOnce(legacyId).map { it.id }.toSet()

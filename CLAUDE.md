@@ -164,6 +164,20 @@ Data flow: UI → ViewModel → UseCase → Repository → Room (source of truth
     `isPartnerOf(resource.data.createdByFirebaseUid)`. A `whereIn`/`whereEqualTo` +
     `orderBy` combination on different fields also needs a composite index
     (`firestore.indexes.json`) — Firestore's error message links directly to the fix.
+13. **The conversation id is derived, never generated.** `ConversationKey.of(uidA, uidB)`
+    sorts the two UIDs and joins them, so both devices compute the same id without
+    coordination and creating the conversation is idempotent. Randomly generated ids are
+    what made the two phones settle on separate threads. Read and delivery state live on
+    the conversation as `{uid: epochMillis}` maps — one write per event — and the ticks and
+    unread badge are derived from them by `ChatReadState`, never stored per message.
+    Message times are stored the same way: `Message.sentAtMillis`, epoch millis (Room
+    schema v13), not a naive `LocalDateTime`, so two parents in different time zones agree
+    on what a mark means and on when a message was sent. The Firestore field keeps its name
+    (`timestamp`) and the read path still accepts a legacy ISO string, so a co-parent on an
+    older build stays readable. Deliberately *not* changed: `Event`, `Expense`, `Budget`
+    and `ChildInfo` dates, where a naive local time is often the right model — whether a
+    custody handover follows the child's zone or the viewer's is an unmade product
+    decision, not an oversight.
 
 ## Known issues / do not "fix" silently
 

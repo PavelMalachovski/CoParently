@@ -3,6 +3,7 @@ package com.coparently.app.data.remote.firebase
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.SetOptions
+import com.google.firebase.firestore.Source
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -168,8 +169,8 @@ class FirestoreMessageDataSource @Inject constructor(
     }
 
     /**
-     * The ids of every message currently filed under [conversationId], read once — not a live
-     * listener.
+     * The ids of every message currently filed under [conversationId], read once from the
+     * **server** — not a live listener, and never from the offline cache.
      *
      * Used by the legacy-conversation merge to find messages Room does not know about: nothing
      * else ever points a listener at a legacy conversation id, so a message that reached
@@ -177,13 +178,29 @@ class FirestoreMessageDataSource @Inject constructor(
      * discovered, re-pointed, or protected from being stranded when the legacy conversation is
      * archived away.
      *
+     * [Source.SERVER] is load-bearing, not a preference. With offline persistence on, a
+     * `Source.DEFAULT` one-shot read may be answered from the local cache — and because nothing
+     * ever listens on a legacy conversation id, that cache holds no legacy messages at all. The
+     * read would then succeed with an *empty* result, the caller would union it with Room's rows,
+     * conclude that Room already knows everything, and archive the legacy conversation, stranding
+     * exactly the remote-only message this read exists to find. `Source.SERVER` cannot answer
+     * from the cache: offline, it fails instead, and a failure is unambiguous.
+     *
+     * That is why this throws rather than returning an empty set on failure: an empty set means
+     * "the server says there are none", and nothing else. `ConversationMigrator.collectMessageIds`
+     * turns any exception here into `null` — "the message set is unknown" — which skips the
+     * candidate for this pass and retries it on the next launch. An offline device therefore
+     * postpones the merge instead of completing it on a half-known list.
+     *
      * @param conversationId The (legacy) conversation to read.
-     * @return The ids of its messages; empty if there are none or the read is denied.
+     * @return The ids of its messages, as the server holds them; empty only if there are none.
+     * @throws com.google.firebase.firestore.FirebaseFirestoreException if the server cannot be
+     *   reached (the device is offline) or the read is denied.
      */
     suspend fun fetchMessageIds(conversationId: String): Set<String> =
         messagesCollection
             .whereEqualTo("conversationId", conversationId)
-            .get()
+            .get(Source.SERVER)
             .await()
             .documents
             .map { it.id }
