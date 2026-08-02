@@ -167,6 +167,12 @@ fun ConversationsScreen(
  * [Conversation.lastMessageAtMillis] versus this user's own [Conversation.lastReadAt] mark —
  * there is no stored per-message unread count any more, so this is a has-unread indicator
  * rather than a precise count.
+ *
+ * A blank [currentUserId] means the session has not resolved yet, not "a user with no mark":
+ * looking a mark up under the empty string always misses, so an unguarded comparison
+ * reported unread for every thread that has any activity at all. That was invisible while
+ * nothing wrote `lastMessageAtMillis`; now that the conversation observer populates it, an
+ * unresolved session would flash a badge on the first frame and clear it a moment later.
  */
 @Composable
 fun ConversationItem(
@@ -175,7 +181,8 @@ fun ConversationItem(
     onClick: () -> Unit
 ) {
     val timeFormatter = DateTimeFormatter.ofPattern("MMM d, HH:mm")
-    val hasUnread = (conversation.lastMessageAtMillis ?: 0L) > (conversation.lastReadAt[currentUserId] ?: 0L)
+    val hasUnread = currentUserId.isNotEmpty() &&
+        (conversation.lastMessageAtMillis ?: 0L) > (conversation.lastReadAt[currentUserId] ?: 0L)
 
     ListItem(
         headlineContent = {

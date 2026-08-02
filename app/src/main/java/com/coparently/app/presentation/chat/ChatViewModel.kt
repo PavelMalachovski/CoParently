@@ -3,6 +3,7 @@ package com.coparently.app.presentation.chat
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.coparently.app.domain.chat.ConversationKey
 import com.coparently.app.domain.model.Conversation
 import com.coparently.app.domain.model.Event
 import com.coparently.app.domain.model.Message
@@ -24,6 +25,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
@@ -130,16 +132,6 @@ class ChatViewModel @Inject constructor(
             initialValue = CoParentLink.Resolving
         )
 
-    init {
-        launchGuarded("initial chat sync") {
-            // Gated on the session rather than on a local Room row: `getCurrentUser()`
-            // returns null until a profile row exists, so on a device whose profile write
-            // has not landed the sync used to never start at all.
-            currentUserId.first { it.isNotEmpty() }
-            messageRepository.syncWithFirestore()
-        }
-    }
-
     /**
      * Runs [block] in [viewModelScope] with a failure boundary around it.
      *
@@ -172,36 +164,46 @@ class ChatViewModel @Inject constructor(
     }
 
     /**
-     * The signed-in user's conversations, re-subscribed whenever the session changes.
+     * The co-parent thread, as a single-element list while it exists.
+     *
+     * There is exactly one conversation per account pair and its id is a pure function of
+     * the two uids, so this is derived from the session and the pairing rather than fetched
+     * as a list. The account-wide list accessor it replaces was the thing the deleted sync
+     * loop traversed.
      *
      * `flatMapLatest`, not `combine`: the inner flow has to be *built from* the current id,
      * and a `combine` builds it once, at construction, from whatever the id happens to be
-     * then — the empty string. (Today `MessageRepositoryImpl.getConversations` ignores its
-     * argument and returns every local conversation, which masked that; this does not rely
-     * on it continuing to.)
+     * then — the empty string.
      */
     @OptIn(ExperimentalCoroutinesApi::class)
-    val conversations: StateFlow<List<Conversation>> = currentUserId
-        .flatMapLatest { userId ->
-            if (userId.isEmpty()) flowOf(emptyList()) else messageRepository.getConversations(userId)
-        }
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(SUBSCRIPTION_TIMEOUT_MS),
-            initialValue = emptyList()
-        )
+    val conversations: StateFlow<List<Conversation>> =
+        combine(currentUserId, coParentLink) { userId, link -> userId to link }
+            .flatMapLatest { (userId, link) ->
+                val conversationId = (link as? CoParentLink.Linked)
+                    ?.let { conversationIdOrNull(userId, it.partnerId) }
+                if (conversationId == null) {
+                    flowOf(emptyList())
+                } else {
+                    messageRepository.observeConversation(conversationId).map { listOfNotNull(it) }
+                }
+            }
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(SUBSCRIPTION_TIMEOUT_MS),
+                initialValue = emptyList()
+            )
 
     /**
      * Messages of the selected conversation, re-subscribed whenever the selection changes.
      *
      * Same reason as [conversations], with a harder failure: the id is null at construction
-     * time by definition, so the `combine` version subscribed to `getMessages("")` and a
+     * time by definition, so the `combine` version subscribed to `observeMessages("")` and a
      * thread's messages could never appear at all.
      */
     @OptIn(ExperimentalCoroutinesApi::class)
     val messages: StateFlow<List<Message>> = _currentConversationId
         .flatMapLatest { conversationId ->
-            if (conversationId == null) flowOf(emptyList()) else messageRepository.getMessages(conversationId)
+            if (conversationId == null) flowOf(emptyList()) else messageRepository.observeMessages(conversationId)
         }
         .stateIn(
             scope = viewModelScope,
@@ -232,7 +234,7 @@ class ChatViewModel @Inject constructor(
         _currentConversationId.value = conversationId
         launchGuarded("mark conversation as read") {
             if (currentUserId.value.isNotEmpty()) {
-                messageRepository.markAsRead(conversationId, currentUserId.value)
+                messageRepository.markRead(conversationId, currentUserId.value)
             }
         }
     }
@@ -263,22 +265,6 @@ class ChatViewModel @Inject constructor(
 
     fun sendTemplateMessage(template: MessageTemplate, filledContent: String) {
         sendMessage(filledContent, MessageType.TEXT)
-    }
-
-    fun createConversation(otherUserId: String, title: String) {
-        val userId = currentUserId.value
-        if (userId.isEmpty()) return
-
-        launchGuarded("create conversation") {
-            val conversation = Conversation(
-                id = UUID.randomUUID().toString(),
-                participants = listOf(userId, otherUserId),
-                title = title,
-                createdAt = LocalDateTime.now()
-            )
-            messageRepository.createConversation(conversation)
-            _currentConversationId.value = conversation.id
-        }
     }
 
     /**
@@ -320,41 +306,40 @@ class ChatViewModel @Inject constructor(
      * The id of the 1:1 conversation between [userId] and [partnerId], creating it if it
      * does not exist yet.
      *
-     * The lookup goes to the repository rather than to [conversations] because that
-     * StateFlow only holds data while the UI is subscribed, and this runs from a tap
-     * handler that must work on the very first frame.
+     * No lookup: the id is derived from the pair, and the create is idempotent, so this is
+     * a single call whichever device runs it and however many times.
      */
     private suspend fun openConversationWith(userId: String, partnerId: String): String {
-        val pair = setOf(userId, partnerId)
-        val existing = messageRepository.getConversations(userId).first()
-            .firstOrNull { it.participants.toSet() == pair }
-        val conversationId = existing?.id ?: run {
-            val partnerName = userRepository.getUserById(partnerId)?.name ?: "Co-parent"
-            val conversation = Conversation(
-                id = UUID.randomUUID().toString(),
-                participants = listOf(userId, partnerId),
-                title = partnerName,
-                createdAt = LocalDateTime.now()
-            )
-            messageRepository.createConversation(conversation)
-            conversation.id
-        }
+        val partnerName = userRepository.getUserById(partnerId)?.name ?: "Co-parent"
+        val conversationId = messageRepository.ensureConversation(userId, partnerId, partnerName)
         _currentConversationId.value = conversationId
         return conversationId
     }
 
     /**
-     * Refresh messages for the current conversation.
-     * Issue 6.2: Pull-to-refresh functionality.
+     * Handles the thread's pull-to-refresh gesture.
+     *
+     * The thread itself is a realtime listener now, so there is nothing left to fetch —
+     * what a manual refresh can still usefully do is re-assert the read mark, which a
+     * previous refused or offline write may have left behind on the server.
      */
-    fun refreshMessages() {
-        launchGuarded("refresh messages") {
-            val conversationId = _currentConversationId.value
-            if (conversationId != null) {
-                messageRepository.syncWithFirestore()
+    fun refreshThread() {
+        launchGuarded("refresh thread") {
+            val conversationId = _currentConversationId.value ?: return@launchGuarded
+            val userId = currentUserId.value
+            if (userId.isNotEmpty()) {
+                messageRepository.markRead(conversationId, userId)
             }
         }
     }
+
+    /**
+     * The deterministic conversation id for [userId] and [partnerId], or `null` when the
+     * pair cannot form one — an unresolved session (blank uid) or, defensively, a partner
+     * id equal to this user's.
+     */
+    private fun conversationIdOrNull(userId: String, partnerId: String): String? =
+        runCatching { ConversationKey.of(userId, partnerId) }.getOrNull()
 
     /**
      * The pairing state as the chat entry point needs to see it.

@@ -91,7 +91,7 @@ fun ChatScreen(
                 messages = messages,
                 currentUserId = currentUserId,
                 onRefresh = {
-                    viewModel.refreshMessages()
+                    viewModel.refreshThread()
                 },
                 modifier = Modifier.weight(1f)
             )

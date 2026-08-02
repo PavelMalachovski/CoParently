@@ -3,6 +3,8 @@ package com.coparently.app.presentation.home
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.coparently.app.data.repository.CustodyModelRepository
+import com.coparently.app.domain.chat.ChatReadState
+import com.coparently.app.domain.chat.ConversationKey
 import com.coparently.app.domain.custody.HandoverCalculator
 import com.coparently.app.domain.custody.HandoverInfo
 import com.coparently.app.domain.model.Event
@@ -20,6 +22,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
@@ -187,25 +190,35 @@ class HomeViewModel @Inject constructor(
     )
 
     /**
-     * Number of conversations with activity the user has not opened yet.
+     * Number of unread **messages** from the co-parent, matching the tile's label.
      *
-     * Derived from [com.coparently.app.domain.model.Conversation.lastMessageAtMillis] versus
-     * this user's own [com.coparently.app.domain.model.Conversation.lastReadAt] mark — there
-     * is no stored counter any more (see `unreadCount`'s removal from the domain model). This
-     * counts conversations, not individual messages: a precise per-message count would need
-     * each conversation's message list, which this dashboard tile does not otherwise load.
-     * Chat is 1:1 today, so in practice this is 0 or 1.
+     * Counted per message by [ChatReadState.unreadCount], from the co-parent thread's own
+     * messages against this user's `lastReadAt` mark. The interim version counted
+     * *conversations* with activity, which — chat being 1:1 — could only ever render 0 or 1
+     * under a label that says messages.
+     *
+     * Both the id and the flows are derived, not fetched: the conversation id is a pure
+     * function of the two uids, so the tile needs no list query. A remote failure inside the
+     * repository is already contained there; the [catch] here is the last resort that keeps
+     * a Room-level failure from taking down `viewModelScope` and, with it, the process.
      */
-    val unreadCount: StateFlow<Int> = _userId
-        .flatMapLatest { id ->
-            if (id.isEmpty()) {
+    val unreadCount: StateFlow<Int> = combine(_userId, _partnerId) { userId, partnerId ->
+        userId to partnerId
+    }
+        .flatMapLatest { (userId, partnerId) ->
+            val conversationId = partnerId?.let { conversationIdOrNull(userId, it) }
+            if (conversationId == null) {
                 flowOf(0)
             } else {
-                messageRepository.getConversations(id).map { convs ->
-                    convs.count { conv -> (conv.lastMessageAtMillis ?: 0L) > (conv.lastReadAt[id] ?: 0L) }
+                combine(
+                    messageRepository.observeConversation(conversationId),
+                    messageRepository.observeMessages(conversationId)
+                ) { conversation, messages ->
+                    ChatReadState.unreadCount(messages, userId, conversation?.lastReadAt?.get(userId))
                 }
             }
         }
+        .catch { emit(0) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), 0)
 
     /**
@@ -243,6 +256,14 @@ class HomeViewModel @Inject constructor(
         started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS),
         initialValue = emptyList()
     )
+
+    /**
+     * The deterministic conversation id for [userId] and [partnerId], or `null` when the
+     * pair cannot form one — an unresolved session (blank uid), or a partner id that
+     * somehow equals this user's.
+     */
+    private fun conversationIdOrNull(userId: String, partnerId: String): String? =
+        runCatching { ConversationKey.of(userId, partnerId) }.getOrNull()
 
     private fun Event.toActivityItem(): ActivityItem {
         val kind = when {

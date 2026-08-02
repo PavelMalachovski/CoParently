@@ -1,6 +1,7 @@
 package com.coparently.app.presentation.chat
 
 import app.cash.turbine.test
+import com.coparently.app.domain.chat.ConversationKey
 import com.coparently.app.domain.model.Conversation
 import com.coparently.app.domain.model.Message
 import com.coparently.app.domain.model.MessageType
@@ -14,7 +15,6 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
-import io.mockk.slot
 import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -51,7 +51,7 @@ class ChatViewModelTest {
 
     private lateinit var pairingState: MutableStateFlow<PairingState>
     private lateinit var signedInUid: MutableStateFlow<String?>
-    private lateinit var conversationsInRoom: MutableStateFlow<List<Conversation>>
+    private lateinit var conversationInRoom: MutableStateFlow<Conversation?>
     private lateinit var messageRepository: MessageRepository
     private lateinit var userRepository: UserRepository
 
@@ -61,11 +61,14 @@ class ChatViewModelTest {
 
         pairingState = MutableStateFlow(PairingState.Loading)
         signedInUid = MutableStateFlow<String?>(UID)
-        conversationsInRoom = MutableStateFlow(emptyList())
+        conversationInRoom = MutableStateFlow(null)
 
         messageRepository = mockk(relaxed = true) {
-            every { getConversations(any()) } returns conversationsInRoom
-            every { getMessages(any()) } returns flowOf(emptyList())
+            every { observeConversation(any()) } returns conversationInRoom
+            every { observeMessages(any()) } returns flowOf(emptyList())
+            coEvery { ensureConversation(any(), any(), any()) } answers {
+                ConversationKey.of(firstArg(), secondArg())
+            }
         }
         userRepository = mockk(relaxed = true) {
             every { observeCurrentUserId() } returns signedInUid
@@ -97,23 +100,23 @@ class ChatViewModelTest {
         runCurrent()
 
         assertTrue("the action must complete once the pairing arrives", opened != null)
-        val created = slot<Conversation>()
-        coVerify { messageRepository.createConversation(capture(created)) }
-        assertEquals(setOf(UID, PARTNER), created.captured.participants.toSet())
+        assertEquals(CONVERSATION, opened)
+        coVerify { messageRepository.ensureConversation(UID, PARTNER, any()) }
     }
 
     @Test
     fun `an already known pairing opens the existing thread instead of a second one`() = runTest {
         pairingState.value = PairingState.Paired(partner())
-        conversationsInRoom.value = listOf(existingThread())
+        conversationInRoom.value = existingThread()
         val viewModel = createViewModel()
         var opened: String? = null
 
         viewModel.startConversationWithPartner { opened = it }
         runCurrent()
 
+        // The id is derived from the participant pair, so "reuse" is not a lookup any more:
+        // the same call on either device can only ever land on the one deterministic thread.
         assertEquals(CONVERSATION, opened)
-        coVerify(exactly = 0) { messageRepository.createConversation(any()) }
     }
 
     @Test
@@ -144,7 +147,7 @@ class ChatViewModelTest {
             runCurrent()
             assertEquals(ChatEvent.NoCoParent, awaitItem())
         }
-        coVerify(exactly = 0) { messageRepository.createConversation(any()) }
+        coVerify(exactly = 0) { messageRepository.ensureConversation(any(), any(), any()) }
     }
 
     @Test
@@ -163,7 +166,7 @@ class ChatViewModelTest {
 
     @Test
     fun `messages follow the selected conversation id`() = runTest {
-        every { messageRepository.getMessages(CONVERSATION) } returns flowOf(listOf(message()))
+        every { messageRepository.observeMessages(CONVERSATION) } returns flowOf(listOf(message()))
         val viewModel = createViewModel()
 
         viewModel.messages.test {
@@ -177,8 +180,8 @@ class ChatViewModelTest {
 
     @Test
     fun `switching conversation re-subscribes rather than keeping the first thread`() = runTest {
-        every { messageRepository.getMessages(CONVERSATION) } returns flowOf(listOf(message()))
-        every { messageRepository.getMessages(OTHER_CONVERSATION) } returns flowOf(emptyList())
+        every { messageRepository.observeMessages(CONVERSATION) } returns flowOf(listOf(message()))
+        every { messageRepository.observeMessages(OTHER_CONVERSATION) } returns flowOf(emptyList())
         val viewModel = createViewModel()
 
         viewModel.messages.test {
@@ -193,10 +196,8 @@ class ChatViewModelTest {
     // ---- 1d: conversations follow the signed-in user --------------------
 
     @Test
-    fun `conversations are requested for the signed-in user, not for an empty id`() = runTest {
-        // `MessageRepositoryImpl.getConversations` currently ignores this argument and
-        // returns every local conversation, which is what masked the same construction
-        // bug here. Pinning the argument keeps that masking from becoming load-bearing.
+    fun `the thread is observed under the deterministic id, never under an empty one`() = runTest {
+        pairingState.value = PairingState.Paired(partner())
         val viewModel = createViewModel()
 
         viewModel.conversations.test {
@@ -204,13 +205,16 @@ class ChatViewModelTest {
             advanceUntilIdle()
         }
 
-        verify { messageRepository.getConversations(UID) }
-        verify(exactly = 0) { messageRepository.getConversations("") }
+        verify { messageRepository.observeConversation(CONVERSATION) }
+        // An unresolved session cannot form a conversation key, so no thread is observed at
+        // all rather than one under a bogus id built from the empty string.
+        verify(exactly = 0) { messageRepository.observeConversation("") }
     }
 
     @Test
     fun `signing out empties the conversation list`() = runTest {
-        conversationsInRoom.value = listOf(existingThread())
+        pairingState.value = PairingState.Paired(partner())
+        conversationInRoom.value = existingThread()
         val viewModel = createViewModel()
 
         viewModel.conversations.test {
@@ -262,7 +266,9 @@ class ChatViewModelTest {
     private companion object {
         const val UID = "user-a"
         const val PARTNER = "user-b"
-        const val CONVERSATION = "conversation-1"
+
+        /** What `ConversationKey.of(UID, PARTNER)` derives; kept literal so the test pins it. */
+        const val CONVERSATION = "user-a__user-b"
         const val OTHER_CONVERSATION = "conversation-2"
         val TIMESTAMP: LocalDateTime = LocalDateTime.of(2026, 8, 1, 12, 0)
     }
