@@ -37,9 +37,22 @@ interface UserRepository {
     suspend fun getCurrentUserId(): String?
 
     /**
-     * Inserts or updates a user.
+     * Makes sure the signed-in user has an identity-bearing profile, locally and in
+     * Firestore, and keeps it current.
+     *
+     * `users/{uid}` is what the *other* parent reads to learn who they are paired with,
+     * and what this app reads to title a conversation or an invitation. Firebase Auth
+     * does not create that document, so without this call it only ever comes into
+     * existence as a side effect of the FCM token write — carrying `fcmToken` and
+     * nothing else, which renders as "Unknown"/"Email unavailable" on the co-parent's
+     * pairing screen.
+     *
+     * Implementations must merge rather than overwrite (the document also carries
+     * `partnerId`, `pairedAt`, `fcmToken` and `pendingRevocationOf`) and must never
+     * replace a stored name with a weaker guess. Best-effort: failures are logged, not
+     * thrown, because no user-facing action depends on this having succeeded.
      */
-    suspend fun upsertUser(user: User)
+    suspend fun ensureProfile()
 
     /**
      * Updates a user.

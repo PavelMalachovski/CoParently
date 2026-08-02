@@ -53,46 +53,118 @@ class UserRepositoryImpl @Inject constructor(
 
     override suspend fun getCurrentUserId(): String? = firebaseAuthService.getCurrentUser()?.uid
 
-    override suspend fun upsertUser(user: User) {
-        try {
-            userDao.insertUser(user.toEntity())
-        } catch (e: Exception) {
-            android.util.Log.e("UserRepository", "Failed to save user to local database", e)
-            throw e
-        }
+    /**
+     * Fills in the signed-in user's identity (`name`, `email`) in `users/{uid}` and in the
+     * local Room row, without disturbing anything else either side already holds.
+     *
+     * Three properties this has to get right:
+     *
+     * 1. **Merge, never overwrite.** The remote write goes through
+     *    [FirestoreUserDataSource.updateUser], which is `set(..., SetOptions.merge())`, and
+     *    carries only the keys that actually need to change. `partnerId`, `pairedAt`,
+     *    `fcmToken` and `pendingRevocationOf` are therefore untouched. This replaces the
+     *    dormant `upsertUser`, a full `.set()` that would have deleted every key it did not
+     *    list — including `pendingRevocationOf`, the marker `unpairCoParent` leaves behind
+     *    to remember whose shared access a partial revocation sweep still has to reach.
+     * 2. **No downgrade.** The name is resolved by [resolveName] in a strict preference
+     *    order, so a session where Firebase Auth has no `displayName` (every
+     *    email/password account) keeps whatever real name is already stored instead of
+     *    falling back to the email local part.
+     * 3. **Idempotent.** Nothing is written when the stored picture already matches, so the
+     *    per-session and per-sync calls cost one cached document read.
+     *
+     * Best-effort by design: this runs in the background off the auth-state boundary, no
+     * user action is waiting on it, and the next session (or the next `SyncWorker` pass)
+     * retries. Failures are logged and swallowed.
+     */
+    override suspend fun ensureProfile() {
+        val firebaseUser = firebaseAuthService.getCurrentUser() ?: return
+        val uid = firebaseUser.uid
 
-        // Also sync to Firestore
-        val firebaseUser = firebaseAuthService.getCurrentUser()
-        if (firebaseUser != null) {
-            try {
-                val userData = mapOf(
-                    "id" to user.id,
-                    "firebaseUid" to firebaseUser.uid, // Required by Firestore security rules
-                    "email" to user.email,
-                    "name" to user.name,
-                    "role" to user.role,
-                    "colorCode" to user.colorCode,
-                    "profilePhotoUrl" to (user.profilePhotoUrl ?: ""),
-                    "googleCalendarSyncEnabled" to user.googleCalendarSyncEnabled,
-                    "googleCalendarId" to (user.googleCalendarId ?: ""),
-                    "partnerId" to (user.partnerId ?: ""),
-                    "fcmToken" to (user.fcmToken ?: "")
-                )
-                // WARNING, currently dormant: `upsertUser` is a full `.set()`, so every key
-                // absent from `userData` above is *deleted* from `users/{uid}`. That
-                // includes `pendingRevocationOf`, the marker `unpairCoParent` writes to
-                // remember whose shared access still has to be revoked after a partial
-                // sweep; erasing it leaves the ex-partner in the `sharedWith` of every
-                // document the sweep did not reach, with nothing left that remembers who
-                // they were. Nothing calls `UserRepository.upsertUser` today. Before wiring
-                // it up, either switch the data source to `set(merge)` — as `updateUser`
-                // already does — or carry `pendingRevocationOf` through this map.
-                firestoreUserDataSource.upsertUser(firebaseUser.uid, userData).getOrThrow()
-            } catch (e: Exception) {
-                android.util.Log.e("UserRepository", "Failed to sync user to Firestore", e)
-                // Don't throw here - local save succeeded, Firestore sync failed
+        try {
+            // Null here means either "no document" or "the read failed"; both are safe,
+            // because every write below is a merge and the name resolution falls back to
+            // the local row rather than to a guess.
+            val remote = firestoreUserDataSource.getUserById(uid)
+            val local = userDao.getUserById(uid)
+
+            val name = resolveName(
+                displayName = firebaseUser.displayName,
+                storedRemoteName = remote?.string("name"),
+                storedLocalName = local?.name,
+                email = firebaseUser.email ?: local?.email
+            )
+            if (name == null) {
+                // A profile with a blank name is rejected by the `users` create rule and
+                // would render as "Unknown" anyway — better to retry next session.
+                android.util.Log.w(TAG, "No name could be derived for $uid; skipping profile write")
+                return
             }
+            val email = firebaseUser.email?.nonBlank() ?: remote?.string("email") ?: local?.email.orEmpty()
+
+            writeRemoteProfile(uid, remote, name, email)
+            writeLocalProfile(uid, remote, local, name, email)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (
+            @Suppress("TooGenericExceptionCaught") e: Exception
+        ) {
+            android.util.Log.e(TAG, "Failed to ensure the user profile for $uid", e)
         }
+    }
+
+    /**
+     * Merges the identity keys that are missing or stale into `users/{uid}`.
+     *
+     * `id` and `firebaseUid` are only added when the document does not carry them:
+     * [syncWithFirestore] reads `id` back and would otherwise mint a random UUID for the
+     * local row, and the `users` rules require `firebaseUid`, when present, to equal the
+     * caller's UID.
+     */
+    private suspend fun writeRemoteProfile(
+        uid: String,
+        remote: Map<String, Any?>?,
+        name: String,
+        email: String
+    ) {
+        val patch = buildMap<String, Any> {
+            if (remote?.string("name") != name) put("name", name)
+            if (remote?.string("email") != email.nonBlank()) put("email", email)
+            if (remote?.string("id") == null) put("id", uid)
+            if (remote?.string("firebaseUid") == null) put("firebaseUid", uid)
+        }
+        if (patch.isEmpty()) return
+
+        firestoreUserDataSource.updateUser(uid, patch)
+            .onFailure { android.util.Log.e(TAG, "Failed to merge the profile into Firestore for $uid", it) }
+    }
+
+    /**
+     * Mirrors the same identity into Room, so the local picture agrees with the remote one.
+     *
+     * An existing row is `copy()`-ed rather than rebuilt, so role, colour, calendar
+     * settings, `partnerId` and the FCM token survive the REPLACE insert.
+     */
+    private suspend fun writeLocalProfile(
+        uid: String,
+        remote: Map<String, Any?>?,
+        local: UserEntity?,
+        name: String,
+        email: String
+    ) {
+        val updated = local?.copy(name = name, email = email) ?: UserEntity(
+            id = uid,
+            email = email,
+            name = name,
+            role = remote?.string("role") ?: DEFAULT_ROLE,
+            colorCode = remote?.string("colorCode") ?: DEFAULT_COLOR_CODE,
+            profilePhotoUrl = remote?.string("profilePhotoUrl"),
+            googleCalendarSyncEnabled = remote?.get("googleCalendarSyncEnabled") as? Boolean ?: false,
+            googleCalendarId = remote?.string("googleCalendarId"),
+            partnerId = remote?.string("partnerId"),
+            fcmToken = remote?.string("fcmToken")
+        )
+        if (updated != local) userDao.insertUser(updated)
     }
 
     override suspend fun updateUser(user: User) {
@@ -161,6 +233,35 @@ class UserRepositoryImpl @Inject constructor(
     }
 
     /**
+     * Picks the best available display name, or null when there is nothing usable.
+     *
+     * Order, strongest first:
+     *
+     * 1. the Firebase Auth `displayName` — the authoritative identity, and the only source
+     *    that self-heals once a Google account starts providing one;
+     * 2. the name already stored remotely, then locally — this is the rung that matters for
+     *    email/password accounts, where `displayName` is always null and step 1 must not be
+     *    allowed to demote a real name to the email local part;
+     * 3. the local part of the email address, the same last resort the pre-rewrite pairing
+     *    screen used.
+     */
+    private fun resolveName(
+        displayName: String?,
+        storedRemoteName: String?,
+        storedLocalName: String?,
+        email: String?
+    ): String? = displayName?.nonBlank()
+        ?: storedRemoteName?.nonBlank()
+        ?: storedLocalName?.nonBlank()
+        ?: email?.substringBefore("@")?.nonBlank()
+
+    /** This string unless it is blank, in which case null. */
+    private fun String.nonBlank(): String? = takeIf { it.isNotBlank() }
+
+    /** The value at [key] as a non-blank string, or null. */
+    private fun Map<String, Any?>.string(key: String): String? = (this[key] as? String)?.nonBlank()
+
+    /**
      * Maps UserEntity to User domain model.
      */
     private fun UserEntity.toDomain(): User {
@@ -212,6 +313,14 @@ class UserRepositoryImpl @Inject constructor(
             partnerId = this["partnerId"] as? String,
             fcmToken = this["fcmToken"] as? String
         )
+    }
+
+    private companion object {
+        const val TAG = "UserRepository"
+
+        /** Same defaults [toUser] applies to a Firestore document that omits them. */
+        const val DEFAULT_ROLE = "mom"
+        const val DEFAULT_COLOR_CODE = "#FF4081"
     }
 }
 
