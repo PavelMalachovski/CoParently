@@ -1,17 +1,19 @@
 package com.coparently.app.presentation.chat
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.coparently.app.domain.model.Conversation
+import com.coparently.app.domain.model.Event
 import com.coparently.app.domain.model.Message
 import com.coparently.app.domain.model.MessageSendStatus
 import com.coparently.app.domain.model.MessageTemplate
 import com.coparently.app.domain.model.MessageType
-import com.coparently.app.domain.model.Event
 import com.coparently.app.domain.repository.EventRepository
 import com.coparently.app.domain.repository.MessageRepository
 import com.coparently.app.domain.repository.UserRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -43,11 +45,42 @@ class ChatViewModel @Inject constructor(
     val partnerId: StateFlow<String?> = _partnerId.asStateFlow()
 
     init {
-        viewModelScope.launch {
+        launchGuarded("initial chat sync") {
             userRepository.getCurrentUser()?.let { user ->
                 _currentUserId.value = user.id
                 _partnerId.value = user.partnerId
                 messageRepository.syncWithFirestore()
+            }
+        }
+    }
+
+    /**
+     * Runs [block] in [viewModelScope] with a failure boundary around it.
+     *
+     * Every chat action below reaches Firestore. An uncaught failure in a
+     * `viewModelScope.launch` is not delivered to any handler — it reaches the thread's
+     * default uncaught-exception handler and terminates the process. That is exactly how a
+     * missing composite index on `messages` (`conversationId ==` + `orderBy timestamp`) turned
+     * a degraded remote read into a crash on opening Chat.
+     *
+     * Room is the offline-first source of truth here, so a remote failure is recoverable:
+     * the local data stays on screen and the next sync retries. The failure is logged with
+     * [operation] so it is recognisable in logcat rather than silently swallowed.
+     * [kotlinx.coroutines.CancellationException] is rethrown — cancellation is not a failure.
+     *
+     * @param operation Short description of the work, used as the log context.
+     * @param block The work to run.
+     */
+    private fun launchGuarded(operation: String, block: suspend () -> Unit) {
+        viewModelScope.launch {
+            try {
+                block()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (
+                @Suppress("TooGenericExceptionCaught") e: Exception
+            ) {
+                Log.w(TAG, "Chat operation failed: $operation", e)
             }
         }
     }
@@ -93,7 +126,7 @@ class ChatViewModel @Inject constructor(
 
     fun setConversationId(conversationId: String) {
         _currentConversationId.value = conversationId
-        viewModelScope.launch {
+        launchGuarded("mark conversation as read") {
             if (_currentUserId.value.isNotEmpty()) {
                 messageRepository.markAsRead(conversationId, _currentUserId.value)
             }
@@ -105,7 +138,7 @@ class ChatViewModel @Inject constructor(
         val userId = _currentUserId.value
         if (userId.isEmpty()) return
 
-        viewModelScope.launch {
+        launchGuarded("send message") {
             val user = userRepository.getCurrentUser()
             val senderName = user?.name ?: "Unknown"
 
@@ -132,7 +165,7 @@ class ChatViewModel @Inject constructor(
         val userId = _currentUserId.value
         if (userId.isEmpty()) return
 
-        viewModelScope.launch {
+        launchGuarded("create conversation") {
             val conversation = Conversation(
                 id = UUID.randomUUID().toString(),
                 participants = listOf(userId, otherUserId),
@@ -155,7 +188,7 @@ class ChatViewModel @Inject constructor(
         val partner = _partnerId.value
         if (userId.isEmpty() || partner.isNullOrEmpty()) return
 
-        viewModelScope.launch {
+        launchGuarded("open conversation with partner") {
             val existing = conversations.value.firstOrNull {
                 it.participants.toSet() == setOf(userId, partner)
             }
@@ -180,7 +213,7 @@ class ChatViewModel @Inject constructor(
      * Issue 6.2: Pull-to-refresh functionality.
      */
     fun refreshMessages() {
-        viewModelScope.launch {
+        launchGuarded("refresh messages") {
             val conversationId = _currentConversationId.value
             if (conversationId != null) {
                 messageRepository.syncWithFirestore()
@@ -190,5 +223,6 @@ class ChatViewModel @Inject constructor(
 
     private companion object {
         const val UPCOMING_DAYS = 30L
+        const val TAG = "ChatViewModel"
     }
 }

@@ -138,7 +138,16 @@ class MessageRepositoryImpl @Inject constructor(
         // Sync conversations. Offline-first: a Firestore failure (denied read, missing
         // index, no network) must not crash the app — Room stays the source of truth.
         firestoreMessageDataSource.getConversations(firebaseUser.uid)
-            .catch { e -> android.util.Log.w("MessageRepo", "Message sync failed", e) }
+            .catch { e ->
+                android.util.Log.w(
+                    TAG,
+                    "Conversation sync failed for uid=${firebaseUser.uid} " +
+                        "(conversations: array-contains participants). " +
+                        "A FAILED_PRECONDITION here means a missing Firestore index — " +
+                        "check firestore.indexes.json. Keeping the local Room copy.",
+                    e
+                )
+            }
             .collect { conversations ->
                 conversations.forEach { data ->
                     val conversation = Conversation(
@@ -157,26 +166,51 @@ class MessageRepositoryImpl @Inject constructor(
             }
     }
 
+    /**
+     * Mirrors the remote messages of [conversationId] into Room.
+     *
+     * The `messages` query is `conversationId == … ORDER BY timestamp ASC`, which Firestore can
+     * only serve from a composite index. When that index is absent (or still building, or the
+     * read is denied, or the device is offline with a cold cache) the snapshot listener reports
+     * `FAILED_PRECONDITION` and the flow fails. Without the [catch] below that failure escaped
+     * this collector, propagated out of [syncWithFirestore] into `ChatViewModel`'s
+     * `viewModelScope.launch`, and killed the process every time the user opened Chat.
+     *
+     * Offline-first: Room is the source of truth, so a failed remote read degrades to "no new
+     * messages this round" rather than to a crash. It is logged, never swallowed silently —
+     * the message names the query so a missing index is recognisable in logcat.
+     */
     private suspend fun syncMessagesForConversation(conversationId: String) {
-        firestoreMessageDataSource.getMessages(conversationId).collect { messages ->
-            messages.forEach { data ->
-                val message = Message(
-                    id = data["id"] as String,
-                    conversationId = data["conversationId"] as String,
-                    senderId = data["senderId"] as String,
-                    senderName = data["senderName"] as String,
-                    content = data["content"] as String,
-                    timestamp = LocalDateTime.parse(data["timestamp"] as String, dateFormatter),
-                    messageType = MessageType.valueOf(data["messageType"] as String),
-                    attachments = (data["attachments"] as? List<String>) ?: emptyList(),
-                    isRead = (data["isRead"] as? Boolean) ?: false,
-                    replyToMessageId = data["replyToMessageId"] as? String,
-                    syncedToFirestore = true,
-                    status = MessageSendStatus.SENT // Messages from Firestore are always SENT
+        firestoreMessageDataSource.getMessages(conversationId)
+            .catch { e ->
+                android.util.Log.w(
+                    TAG,
+                    "Message sync failed for conversationId=$conversationId " +
+                        "(messages: conversationId ==, orderBy timestamp ASC). " +
+                        "A FAILED_PRECONDITION here means a missing Firestore index — " +
+                        "check firestore.indexes.json. Keeping the local Room copy.",
+                    e
                 )
-                messageDao.insertMessage(message.toEntity())
             }
-        }
+            .collect { messages ->
+                messages.forEach { data ->
+                    val message = Message(
+                        id = data["id"] as String,
+                        conversationId = data["conversationId"] as String,
+                        senderId = data["senderId"] as String,
+                        senderName = data["senderName"] as String,
+                        content = data["content"] as String,
+                        timestamp = LocalDateTime.parse(data["timestamp"] as String, dateFormatter),
+                        messageType = MessageType.valueOf(data["messageType"] as String),
+                        attachments = (data["attachments"] as? List<String>) ?: emptyList(),
+                        isRead = (data["isRead"] as? Boolean) ?: false,
+                        replyToMessageId = data["replyToMessageId"] as? String,
+                        syncedToFirestore = true,
+                        status = MessageSendStatus.SENT // Messages from Firestore are always SENT
+                    )
+                    messageDao.insertMessage(message.toEntity())
+                }
+            }
     }
 
     private fun ConversationEntity.toDomain(): Conversation {
@@ -243,5 +277,9 @@ class MessageRepositoryImpl @Inject constructor(
             syncedToFirestore = syncedToFirestore,
             status = status.name // Will never be null as Message always has a status
         )
+    }
+
+    private companion object {
+        const val TAG = "MessageRepo"
     }
 }
