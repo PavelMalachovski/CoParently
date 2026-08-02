@@ -8,6 +8,7 @@ import com.coparently.app.data.remote.firebase.FirestoreUserDataSource
 import com.coparently.app.data.session.ProfileIdentity
 import com.coparently.app.domain.model.User
 import com.coparently.app.domain.repository.UserRepository
+import com.google.firebase.auth.FirebaseUser
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
@@ -105,9 +106,7 @@ class UserRepositoryImpl @Inject constructor(
                 email = firebaseUser.email ?: local?.email
             )
             if (name == null) {
-                // A profile with a blank name is rejected by the `users` create rule and
-                // would render as "Unknown" anyway — better to retry next session.
-                android.util.Log.w(TAG, "No name could be derived for $uid; skipping profile write")
+                writeIdentityWithoutName(uid, firebaseUser, remote, local)
                 return
             }
             val identity = ResolvedIdentity(
@@ -128,6 +127,86 @@ class UserRepositoryImpl @Inject constructor(
             @Suppress("TooGenericExceptionCaught") e: Exception
         ) {
             android.util.Log.e(TAG, "Failed to ensure the user profile for $uid", e)
+        }
+    }
+
+    /**
+     * Salvages whatever identity *is* known when no display name could be derived.
+     *
+     * A blank name genuinely cannot be written: the `users` **create** rule requires
+     * `name` to be 1..100 characters, so a merge onto a document that does not exist yet
+     * is rejected outright. The **update** rule says nothing about `name` at all, so a
+     * document that already exists — the `fcmToken`-only one the FCM registration leaves
+     * behind is the common case — can be merged into without one. Both halves of that are
+     * pinned in `firestore-tests/rules/users-profile.test.js`.
+     *
+     * So the skip is narrowed from "write nothing" to "write everything except the name":
+     * the email address and the avatar are real data the co-parent's pairing card renders,
+     * and `id`/`firebaseUid` are what keep [syncWithFirestore] from minting a random local
+     * id later. Discarding them because one *other* field is unknown helped nobody.
+     *
+     * A null [remote] is deliberately treated as "do not write remotely". It means either
+     * "no document" — where the create rule would reject this patch — or "the read failed",
+     * where nothing is known about what is already stored. Neither is worth a denied write;
+     * the next session retries.
+     *
+     * The log line is the point of the rest of this: it reports which inputs were absent
+     * and what kind of session this is, so a device that keeps landing here can be
+     * diagnosed instead of guessed at. See [ProfileIdentity.describeNameSources] for why
+     * it carries presence flags and provider ids and no personal data.
+     */
+    private suspend fun writeIdentityWithoutName(
+        uid: String,
+        firebaseUser: FirebaseUser,
+        remote: Map<String, Any?>?,
+        local: UserEntity?
+    ) {
+        val email = firebaseUser.email?.nonBlank() ?: remote?.string("email") ?: local?.email?.nonBlank()
+        val photoUrl = ProfileIdentity.resolvePhotoUrl(
+            authPhotoUrl = firebaseUser.photoUrl?.toString(),
+            storedRemoteUrl = remote?.string("profilePhotoUrl"),
+            storedLocalUrl = local?.profilePhotoUrl
+        )
+        val sources = ProfileIdentity.describeNameSources(
+            hasDisplayName = firebaseUser.displayName?.nonBlank() != null,
+            hasRemoteName = remote?.string("name") != null,
+            hasLocalName = local?.name?.nonBlank() != null,
+            hasEmail = email != null,
+            hasRemoteProfile = remote != null,
+            isAnonymous = firebaseUser.isAnonymous,
+            providerIds = firebaseUser.providerData.map { it.providerId }
+        )
+        val outcome = if (remote == null) {
+            "No readable profile document, so a name-less merge would hit the create rule; " +
+                "nothing written remotely."
+        } else {
+            "Merging the fields that are known into the existing document."
+        }
+        android.util.Log.w(TAG, "No name could be derived for $uid; $sources. $outcome")
+
+        if (remote != null) {
+            val patch = buildMap<String, Any> {
+                email?.takeIf { it != remote.string("email") }?.let { put("email", it) }
+                if (remote.string("id") == null) put("id", uid)
+                if (remote.string("firebaseUid") == null) put("firebaseUid", uid)
+                photoUrl?.takeIf { it != remote.string("profilePhotoUrl") }
+                    ?.let { put("profilePhotoUrl", it) }
+            }
+            if (patch.isNotEmpty()) {
+                firestoreUserDataSource.updateUser(uid, patch).onFailure {
+                    android.util.Log.e(TAG, "Failed to merge the name-less profile into Firestore for $uid", it)
+                }
+            }
+        }
+
+        // Only an existing local row is touched. Creating one whose `name` is blank would
+        // put a nameless user into every list that reads Room, which is worse than the gap.
+        if (local != null) {
+            val updated = local.copy(
+                email = email ?: local.email,
+                profilePhotoUrl = photoUrl ?: local.profilePhotoUrl
+            )
+            if (updated != local) userDao.insertUser(updated)
         }
     }
 

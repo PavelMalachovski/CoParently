@@ -66,6 +66,50 @@ internal object ProfileIdentity {
         ?: storedRemoteUrl?.nonBlank()
         ?: storedLocalUrl?.nonBlank()
 
+    /**
+     * A one-line, personal-data-free description of why [resolveName] returned null.
+     *
+     * When every rung of [resolveName] comes back empty the interesting question is *which*
+     * of them were empty and what kind of session this is — a Google sign-in is supposed to
+     * supply both a display name and an email address, so a session that supplies neither is
+     * either not the provider the user believes it is, or an account whose profile scope was
+     * never granted. The original log line said only "no name could be derived", which is
+     * consistent with all of those and distinguishes none of them.
+     *
+     * Nothing here is personal data: every input is reported as a presence flag, and
+     * `providerId` values are Firebase's fixed provider constants (`google.com`,
+     * `password`, `firebase`, …), not account identifiers. The email address itself must
+     * never appear — logcat is readable by anything with adb access, and a previous fix on
+     * this branch removed exactly that leak from the pairing listener.
+     *
+     * @param hasDisplayName Whether Firebase Auth reported a non-blank `displayName`
+     * @param hasRemoteName Whether the Firestore profile document holds a non-blank name
+     * @param hasLocalName Whether the local Room row holds a non-blank name
+     * @param hasEmail Whether any non-blank email address was available
+     * @param hasRemoteProfile Whether a `users/{uid}` document could be read at all
+     * @param isAnonymous Whether this is an anonymous Firebase session
+     * @param providerIds `FirebaseUser.providerData` provider ids, in the order reported
+     */
+    @Suppress("LongParameterList")
+    fun describeNameSources(
+        hasDisplayName: Boolean,
+        hasRemoteName: Boolean,
+        hasLocalName: Boolean,
+        hasEmail: Boolean,
+        hasRemoteProfile: Boolean,
+        isAnonymous: Boolean,
+        providerIds: List<String>
+    ): String = "displayName=${presence(hasDisplayName)} " +
+        "remoteName=${presence(hasRemoteName)} " +
+        "localName=${presence(hasLocalName)} " +
+        "email=${presence(hasEmail)} " +
+        "remoteProfile=${presence(hasRemoteProfile)} " +
+        "anonymous=$isAnonymous " +
+        "providers=[${providerIds.joinToString(",").ifEmpty { "none" }}]"
+
+    /** "present" or "absent" — never the value itself. */
+    private fun presence(has: Boolean): String = if (has) "present" else "absent"
+
     /** This string unless it is blank, in which case null. */
     private fun String.nonBlank(): String? = takeIf { it.isNotBlank() }
 }

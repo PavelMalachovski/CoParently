@@ -132,6 +132,37 @@ describe('users profile: the identity write ensureProfile performs', () => {
     await assertFails(mergeProfile(env, {id: ALICE, email: 'alice@example.com'}));
   });
 
+  it('accepts a name-less merge into a document that already exists', async () => {
+    // The other half of the same question, and the one that decides how much
+    // `ensureProfile` may salvage when no name can be derived: `allow update` places no
+    // requirement on `name`, so an existing document can take the email, the photo and
+    // the ids without one. A device stuck without a display name therefore does not have
+    // to discard everything else it knows — it only has to skip the name.
+    await seed(env, {[`users/${ALICE}`]: {fcmToken: 'token-1'}});
+
+    await assertSucceeds(mergeProfile(env, {
+      id: ALICE,
+      firebaseUid: ALICE,
+      email: 'alice@example.com',
+      profilePhotoUrl: 'https://lh3.googleusercontent.com/a/alice',
+    }));
+
+    const stored = await readRaw(env, `users/${ALICE}`);
+    if (stored.name !== undefined) throw new Error('no name should have been written');
+    if (stored.fcmToken !== 'token-1') throw new Error('fcmToken was lost');
+  });
+
+  it('still rejects the same name-less merge when no document exists', async () => {
+    // Same patch, no seeded document: now it is a create, and the create rule wins. This
+    // pair is why `ensureProfile` keys the salvage attempt on having read a document.
+    await assertFails(mergeProfile(env, {
+      id: ALICE,
+      firebaseUid: ALICE,
+      email: 'alice@example.com',
+      profilePhotoUrl: 'https://lh3.googleusercontent.com/a/alice',
+    }));
+  });
+
   it('rejects a firebaseUid that does not match the caller', async () => {
     await assertFails(mergeProfile(env, {...IDENTITY_PATCH, firebaseUid: BOB}));
   });

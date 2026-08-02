@@ -276,15 +276,64 @@ class UserRepositoryEnsureProfileTest {
     }
 
     @Test
-    fun `writes nothing when no name can be derived`() = runTest {
-        // The `users` create rule requires a name of at least one character, and a blank
-        // one would render as "Unknown" anyway — retrying next session beats writing junk.
+    fun `writes nothing remotely when there is no document to merge a name-less profile into`() = runTest {
+        // A merge onto a missing document is a *create*, and the `users` create rule
+        // requires a name of 1..100 characters — so this patch could only be denied.
+        // A null read is also indistinguishable from a failed one, which is the second
+        // reason not to guess. Retrying next session beats a rejected write.
         signedIn(displayName = null, email = null)
-        coEvery { firestoreUserDataSource.getUserById(UID) } returns emptyMap()
+        coEvery { firestoreUserDataSource.getUserById(UID) } returns null
 
         repository.ensureProfile()
 
         coVerify(exactly = 0) { firestoreUserDataSource.updateUser(any(), any()) }
+        coVerify(exactly = 0) { userDao.insertUser(any()) }
+    }
+
+    @Test
+    fun `writes the fields it does know when no name can be derived but the document exists`() = runTest {
+        // The Samsung's shape: Firebase Auth reports neither a display name nor an email,
+        // and the only document is the one the FCM registration created. The `users`
+        // *update* rule says nothing about `name`, so everything else is still writable —
+        // abandoning the photo and the ids because one other field is unknown helped nobody.
+        signedIn(displayName = null, email = null, photoUrl = PHOTO)
+        coEvery { firestoreUserDataSource.getUserById(UID) } returns mapOf("fcmToken" to "token-1")
+
+        repository.ensureProfile()
+
+        val patch = capturedRemotePatch()
+        assertFalse("a blank name must never be written", patch.containsKey("name"))
+        assertEquals(UID, patch["id"])
+        assertEquals(UID, patch["firebaseUid"])
+        assertEquals(PHOTO, patch["profilePhotoUrl"])
+    }
+
+    @Test
+    fun `a name-less session still refreshes the local row without inventing a name`() = runTest {
+        signedIn(displayName = null, email = null, photoUrl = NEW_PHOTO)
+        coEvery { firestoreUserDataSource.getUserById(UID) } returns mapOf("fcmToken" to "token-1")
+        // Email blank as well: an address on the local row would itself yield a name.
+        coEvery { userDao.getUserById(UID) } returns
+            localRow(name = "").copy(email = "", profilePhotoUrl = PHOTO)
+
+        repository.ensureProfile()
+
+        val row = slot<UserEntity>()
+        coVerify { userDao.insertUser(capture(row)) }
+        assertEquals(NEW_PHOTO, row.captured.profilePhotoUrl)
+        assertEquals("", row.captured.name)
+    }
+
+    @Test
+    fun `a name-less session does not create a local row out of nothing`() = runTest {
+        // A row whose name is blank would put a nameless user into every list that reads
+        // Room; the gap is the lesser evil until a name turns up.
+        signedIn(displayName = null, email = null)
+        coEvery { firestoreUserDataSource.getUserById(UID) } returns mapOf("fcmToken" to "token-1")
+        coEvery { userDao.getUserById(UID) } returns null
+
+        repository.ensureProfile()
+
         coVerify(exactly = 0) { userDao.insertUser(any()) }
     }
 
@@ -331,6 +380,10 @@ class UserRepositoryEnsureProfileTest {
         every { firebaseUser.photoUrl } returns photoUrl?.let { url ->
             mockk<Uri>(relaxed = true).also { uri -> every { uri.toString() } returns url }
         }
+        // Read by the name-less diagnostic; an explicit empty list keeps a relaxed mock
+        // from handing back a stub whose providerId is a mock identifier.
+        every { firebaseUser.providerData } returns mutableListOf()
+        every { firebaseUser.isAnonymous } returns false
         every { authService.getCurrentUser() } returns firebaseUser
     }
 
