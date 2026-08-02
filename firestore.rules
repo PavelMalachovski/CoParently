@@ -60,6 +60,46 @@ service cloud.firestore {
       return data.get(key, {}).keys().hasOnly([request.auth.uid]);
     }
 
+    // True when the caller is a participant of `conversationId`. `exists()` is load-bearing
+    // and must run first: `get()` on a missing document is an evaluation error in Firestore
+    // Rules, not null, and `&&` short-circuits left-to-right, so this must never be reordered
+    // — the same hazard `isPartnerOf` and `ownMarkOnly` above already guard against.
+    function isParticipantOfConversation(conversationId) {
+      return exists(/databases/$(database)/documents/conversations/$(conversationId)) &&
+             request.auth.uid in
+               get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants;
+    }
+
+    // True when two participant lists name the same two people, regardless of order.
+    function sameParticipants(participantsA, participantsB) {
+      return participantsA.hasAll(participantsB) && participantsB.hasAll(participantsA);
+    }
+
+    // True when a message may move from `before.conversationId` to `after.conversationId` —
+    // the legacy-conversation merge (Task 5). The caller must participate in both the source
+    // and the destination, and the two conversations must name the exact same pair of
+    // participants.
+    //
+    // Deliberately not "the caller participates in the destination" alone: that would let a
+    // message be redirected into *any* of the caller's conversations, which would be a
+    // cross-pair leak the moment this app ever supports more than one conversation per user.
+    // Also deliberately not "the destination id equals the canonical `ConversationKey.of(...)`
+    // string": that would re-derive the sorted-join formula a second time in Rules, which
+    // drifts the moment either copy changes. Matching participant sets ties the check to the
+    // actual invariant the migration needs — moving a message within one pair's own threads —
+    // without duplicating the id algorithm.
+    //
+    // `isParticipantOfConversation` is checked, and thus both documents' existence confirmed,
+    // before either `get()` below runs, for the same short-circuit reason as above.
+    function canRepointMessage(before, after) {
+      return isParticipantOfConversation(before.conversationId) &&
+             isParticipantOfConversation(after.conversationId) &&
+             sameParticipants(
+               get(/databases/$(database)/documents/conversations/$(before.conversationId)).data.participants,
+               get(/databases/$(database)/documents/conversations/$(after.conversationId)).data.participants
+             );
+    }
+
     // ---- Users ---------------------------------------------------------
     // Users can read/write their own profile and read their partner's profile.
     match /users/{userId} {
@@ -327,12 +367,23 @@ service cloud.firestore {
                         get(/databases/$(database)/documents/conversations/$(request.resource.data.conversationId))
                           .data.participants;
 
-      // Participants may only flip the read flag; all other fields are immutable.
+      // Participants may flip the read flag, or — as of the legacy-conversation merge
+      // (Task 5) — re-point a message to a different conversation and nothing else. The two
+      // paths are disjoint `hasOnly` branches, so a single write can satisfy at most one:
+      // isRead and conversationId can never change in the same write, and neither path opens
+      // a way to touch content, sender, timestamp or attachments. See `canRepointMessage` for
+      // what constrains the destination.
       allow update: if isAuthenticated() &&
                       request.auth.uid in
                         get(/databases/$(database)/documents/conversations/$(resource.data.conversationId))
                           .data.participants &&
-                      request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isRead']);
+                      (
+                        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isRead']) ||
+                        (
+                          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['conversationId']) &&
+                          canRepointMessage(resource.data, request.resource.data)
+                        )
+                      );
 
       allow delete: if false;
     }

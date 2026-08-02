@@ -231,6 +231,67 @@ describe('Part 1d: messages', () => {
     });
   });
 
+  describe('conversationId re-point is restricted to the legacy-conversation merge (Task 5)', () => {
+    beforeEach(async () => {
+      await seed(env, {
+        'messages/msg-1': messageDoc({}),
+        // The destination for a legitimate merge: same two people, different id — as if
+        // `ConversationKey.of(ALICE, BOB)` produced 'conv-2' while 'conv-1' was the old
+        // randomly-generated thread.
+        'conversations/conv-2': conversationDoc({id: 'conv-2', participants: [ALICE, BOB]}),
+        // A conversation the caller belongs to, but with a different partner entirely —
+        // exercises that matching participant *sets* is enforced, not just "caller is a
+        // participant of the destination".
+        'conversations/conv-3': conversationDoc({id: 'conv-3', participants: [ALICE, CAROL]}),
+        // A conversation the caller does not belong to at all.
+        'conversations/conv-4': conversationDoc({id: 'conv-4', participants: [BOB, CAROL]}),
+      });
+    });
+
+    it('lets a participant re-point a message to another conversation with the same pair', async () => {
+      const db = env.authenticatedContext(ALICE).firestore();
+      await assertSucceeds(db.doc('messages/msg-1').update({conversationId: 'conv-2'}));
+    });
+
+    it('lets the other participant re-point it too', async () => {
+      const db = env.authenticatedContext(BOB).firestore();
+      await assertSucceeds(db.doc('messages/msg-1').update({conversationId: 'conv-2'}));
+    });
+
+    it('denies smuggling a second field alongside the re-point', async () => {
+      const db = env.authenticatedContext(ALICE).firestore();
+      await assertFails(
+          db.doc('messages/msg-1').update({conversationId: 'conv-2', isRead: true}));
+    });
+
+    it('denies smuggling a content edit alongside the re-point', async () => {
+      const db = env.authenticatedContext(ALICE).firestore();
+      await assertFails(
+          db.doc('messages/msg-1').update({conversationId: 'conv-2', content: 'rewritten'}));
+    });
+
+    it('denies re-pointing into a conversation with a different pair, even one the caller ' +
+        'belongs to', async () => {
+      const db = env.authenticatedContext(ALICE).firestore();
+      await assertFails(db.doc('messages/msg-1').update({conversationId: 'conv-3'}));
+    });
+
+    it('denies re-pointing into a conversation the caller is not part of at all', async () => {
+      const db = env.authenticatedContext(ALICE).firestore();
+      await assertFails(db.doc('messages/msg-1').update({conversationId: 'conv-4'}));
+    });
+
+    it('denies re-pointing into a conversation that does not exist', async () => {
+      const db = env.authenticatedContext(ALICE).firestore();
+      await assertFails(db.doc('messages/msg-1').update({conversationId: 'conv-nope'}));
+    });
+
+    it('denies an outsider re-pointing a message they cannot even read', async () => {
+      const db = env.authenticatedContext(CAROL).firestore();
+      await assertFails(db.doc('messages/msg-1').update({conversationId: 'conv-3'}));
+    });
+  });
+
   it('denies deletes outright', async () => {
     await seed(env, {'messages/msg-1': messageDoc({})});
     await assertFails(
