@@ -12,6 +12,10 @@
     <string name="chat_status_sending">Wird gesendet</string>
     <string name="chat_status_error">Fehler</string>
     <string name="chat_status_sent">Gesendet</string>
+    <!-- Tick content description: the message reached the co-parent's device but has not been read yet. -->
+    <string name="chat_status_delivered">Zugestellt</string>
+    <!-- Tick content description: the co-parent has opened the thread past this message. -->
+    <string name="chat_status_read">Gelesen</string>
     <string name="chat_sending_ellipsis">Wird gesendet…</string>
     <string name="chat_failed_to_send">Senden fehlgeschlagen</string>
     <string name="chat_title_fallback">Chat</string>

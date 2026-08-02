@@ -192,7 +192,10 @@ fun ConversationItem(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = conversation.title,
+                    // A blank (not null) title means this row was mirrored locally before any
+                    // successful `ensureConversation` set it — show the fallback rather than
+                    // an empty row.
+                    text = conversation.title.ifBlank { stringResource(R.string.chat_title_fallback) },
                     style = MaterialTheme.typography.titleMedium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,

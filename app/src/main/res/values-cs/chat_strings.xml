@@ -12,6 +12,10 @@
     <string name="chat_status_sending">Odesílání</string>
     <string name="chat_status_error">Chyba</string>
     <string name="chat_status_sent">Odesláno</string>
+    <!-- Tick content description: the message reached the co-parent's device but has not been read yet. -->
+    <string name="chat_status_delivered">Doručeno</string>
+    <!-- Tick content description: the co-parent has opened the thread past this message. -->
+    <string name="chat_status_read">Přečteno</string>
     <string name="chat_sending_ellipsis">Odesílání…</string>
     <string name="chat_failed_to_send">Nepodařilo se odeslat</string>
     <string name="chat_title_fallback">Chat</string>

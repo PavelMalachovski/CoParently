@@ -19,6 +19,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.Message
 import androidx.compose.material.icons.filled.Schedule
@@ -213,17 +214,31 @@ fun MessageItem(
                     }
                     // This `when` must handle every MessageSendStatus: the Kotlin compiler
                     // rejects it as non-exhaustive otherwise (verified by building with the
-                    // branches removed). DELIVERED/READ are not produced anywhere yet — nothing
-                    // wires ChatReadState.statusFor into this screen — so they render as a
-                    // placeholder identical to SENT until Task 6 gives them their own icons.
-                    MessageSendStatus.SENT,
-                    MessageSendStatus.DELIVERED,
-                    MessageSendStatus.READ -> {
+                    // branches removed). One check for SENT, two (muted) for DELIVERED, two in
+                    // colorScheme.primary for READ — never Mom-pink/Dad-blue, which are parent
+                    // identity colours, not status colours.
+                    MessageSendStatus.SENT -> {
                         Icon(
                             imageVector = Icons.Default.Check,
                             contentDescription = stringResource(R.string.chat_status_sent),
                             modifier = Modifier.size(12.dp),
-                            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                        )
+                    }
+                    MessageSendStatus.DELIVERED -> {
+                        Icon(
+                            imageVector = Icons.Default.DoneAll,
+                            contentDescription = stringResource(R.string.chat_status_delivered),
+                            modifier = Modifier.size(12.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                        )
+                    }
+                    MessageSendStatus.READ -> {
+                        Icon(
+                            imageVector = Icons.Default.DoneAll,
+                            contentDescription = stringResource(R.string.chat_status_read),
+                            modifier = Modifier.size(12.dp),
+                            tint = MaterialTheme.colorScheme.primary
                         )
                     }
                 }

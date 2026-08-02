@@ -59,13 +59,19 @@ fun ChatScreen(
     var showEventPicker by remember { mutableStateOf(false) }
 
     LaunchedEffect(conversationId) {
-        viewModel.setConversationId(conversationId)
+        viewModel.onThreadOpened(conversationId)
     }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(conversation?.title ?: stringResource(R.string.chat_title_fallback)) },
+                title = {
+                    // A blank (not null) title means this row was mirrored locally before any
+                    // successful `ensureConversation` set it — `?:` alone never catches that.
+                    val title = conversation?.title?.takeIf { it.isNotBlank() }
+                        ?: stringResource(R.string.chat_title_fallback)
+                    Text(title)
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.chat_back))

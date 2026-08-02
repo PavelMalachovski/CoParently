@@ -12,6 +12,10 @@
     <string name="chat_status_sending">Надсилання</string>
     <string name="chat_status_error">Помилка</string>
     <string name="chat_status_sent">Надіслано</string>
+    <!-- Tick content description: the message reached the co-parent's device but has not been read yet. -->
+    <string name="chat_status_delivered">Доставлено</string>
+    <!-- Tick content description: the co-parent has opened the thread past this message. -->
+    <string name="chat_status_read">Прочитано</string>
     <string name="chat_sending_ellipsis">Надсилання…</string>
     <string name="chat_failed_to_send">Не вдалося надіслати</string>
     <string name="chat_title_fallback">Чат</string>

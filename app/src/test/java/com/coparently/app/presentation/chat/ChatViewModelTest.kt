@@ -4,6 +4,7 @@ import app.cash.turbine.test
 import com.coparently.app.domain.chat.ConversationKey
 import com.coparently.app.domain.model.Conversation
 import com.coparently.app.domain.model.Message
+import com.coparently.app.domain.model.MessageSendStatus
 import com.coparently.app.domain.model.MessageType
 import com.coparently.app.domain.model.PairingState
 import com.coparently.app.domain.model.PartnerSummary
@@ -33,6 +34,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import java.time.LocalDateTime
+import java.time.ZoneId
 
 /**
  * Unit tests for [ChatViewModel]'s session-dependent state.
@@ -172,7 +174,7 @@ class ChatViewModelTest {
         viewModel.messages.test {
             assertEquals(emptyList<Message>(), awaitItem())
 
-            viewModel.setConversationId(CONVERSATION)
+            viewModel.onThreadOpened(CONVERSATION)
 
             assertEquals(listOf(message()), awaitItem())
         }
@@ -186,9 +188,9 @@ class ChatViewModelTest {
 
         viewModel.messages.test {
             awaitItem()
-            viewModel.setConversationId(CONVERSATION)
+            viewModel.onThreadOpened(CONVERSATION)
             assertEquals(1, awaitItem().size)
-            viewModel.setConversationId(OTHER_CONVERSATION)
+            viewModel.onThreadOpened(OTHER_CONVERSATION)
             assertEquals(0, awaitItem().size)
         }
     }
@@ -227,6 +229,144 @@ class ChatViewModelTest {
             assertEquals(emptyList<Conversation>(), awaitItem())
         }
     }
+
+    // ---- 1e: the read/delivered marks fire from the messages flow, not just on open -----
+    //
+    // Task 4 left two gaps: a fresh install (or right after pairing, or after a database
+    // wipe) has nothing in Room yet when the thread opens, so a one-shot mark-on-open call
+    // sees an empty table and writes nothing; and a message arriving from the co-parent
+    // while the thread stays open must still clear the badge and advance the tick without
+    // the user leaving and re-entering. Both are fixed by the same hook: re-asserting both
+    // marks every time the open thread's messages flow emits.
+
+    @Test
+    fun `opening the thread calls markRead exactly once`() = runTest {
+        every { messageRepository.observeMessages(CONVERSATION) } returns flowOf(listOf(message()))
+        val viewModel = createViewModel()
+
+        viewModel.onThreadOpened(CONVERSATION)
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { messageRepository.markRead(CONVERSATION, UID) }
+    }
+
+    @Test
+    fun `ingesting a message batch calls markDelivered`() = runTest {
+        every { messageRepository.observeMessages(CONVERSATION) } returns flowOf(listOf(message()))
+        val viewModel = createViewModel()
+
+        viewModel.onThreadOpened(CONVERSATION)
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { messageRepository.markDelivered(CONVERSATION, UID) }
+    }
+
+    @Test
+    fun `a message batch arriving while the thread stays open re-asserts both marks again`() = runTest {
+        val incoming = MutableStateFlow(listOf(message()))
+        every { messageRepository.observeMessages(CONVERSATION) } returns incoming
+        val viewModel = createViewModel()
+
+        viewModel.onThreadOpened(CONVERSATION)
+        advanceUntilIdle()
+        incoming.value = listOf(message(), message().copy(id = "message-2"))
+        advanceUntilIdle()
+
+        coVerify(exactly = 2) { messageRepository.markRead(CONVERSATION, UID) }
+        coVerify(exactly = 2) { messageRepository.markDelivered(CONVERSATION, UID) }
+    }
+
+    @Test
+    fun `a thread that is never opened never has its marks written`() = runTest {
+        createViewModel()
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { messageRepository.markRead(any(), any()) }
+        coVerify(exactly = 0) { messageRepository.markDelivered(any(), any()) }
+    }
+
+    // ---- 1f: my own messages render the tick the conversation's marks support -----------
+
+    @Test
+    fun `my message is rendered READ once the other parent's read mark passes it`() = runTest {
+        pairingState.value = PairingState.Paired(partner())
+        conversationInRoom.value = existingThread().copy(lastReadAt = mapOf(PARTNER to epochMillisAfter(TIMESTAMP)))
+        val myMessage = message().copy(senderId = UID, status = MessageSendStatus.SENT)
+        every { messageRepository.observeMessages(CONVERSATION) } returns flowOf(listOf(myMessage))
+        val viewModel = createViewModel()
+
+        viewModel.messages.test {
+            skipItems(1) // the StateFlow's seed value, before anything is subscribed
+            viewModel.onThreadOpened(CONVERSATION)
+            advanceUntilIdle()
+            assertEquals(listOf(MessageSendStatus.READ), expectMostRecentItem().map { it.status })
+        }
+    }
+
+    @Test
+    fun `my message is rendered DELIVERED when only the delivery mark has passed it`() = runTest {
+        pairingState.value = PairingState.Paired(partner())
+        conversationInRoom.value =
+            existingThread().copy(lastDeliveredAt = mapOf(PARTNER to epochMillisAfter(TIMESTAMP)))
+        val myMessage = message().copy(senderId = UID, status = MessageSendStatus.SENT)
+        every { messageRepository.observeMessages(CONVERSATION) } returns flowOf(listOf(myMessage))
+        val viewModel = createViewModel()
+
+        viewModel.messages.test {
+            skipItems(1)
+            viewModel.onThreadOpened(CONVERSATION)
+            advanceUntilIdle()
+            assertEquals(listOf(MessageSendStatus.DELIVERED), expectMostRecentItem().map { it.status })
+        }
+    }
+
+    @Test
+    fun `my message stays SENT when neither mark has reached it yet`() = runTest {
+        pairingState.value = PairingState.Paired(partner())
+        conversationInRoom.value = existingThread()
+        val myMessage = message().copy(senderId = UID, status = MessageSendStatus.SENT)
+        every { messageRepository.observeMessages(CONVERSATION) } returns flowOf(listOf(myMessage))
+        val viewModel = createViewModel()
+
+        viewModel.messages.test {
+            skipItems(1)
+            viewModel.onThreadOpened(CONVERSATION)
+            advanceUntilIdle()
+            assertEquals(listOf(MessageSendStatus.SENT), expectMostRecentItem().map { it.status })
+        }
+    }
+
+    // ---- 1g: the unread count follows the conversation's own read mark ------------------
+
+    @Test
+    fun `unread count follows the other parent's messages against my read mark`() = runTest {
+        pairingState.value = PairingState.Paired(partner())
+        conversationInRoom.value = existingThread()
+        every { messageRepository.observeMessages(CONVERSATION) } returns flowOf(listOf(message()))
+        val viewModel = createViewModel()
+
+        viewModel.unreadCount.test {
+            advanceUntilIdle()
+            assertEquals(1, expectMostRecentItem())
+        }
+    }
+
+    @Test
+    fun `unread count is zero once my read mark passes the co-parent's message`() = runTest {
+        pairingState.value = PairingState.Paired(partner())
+        conversationInRoom.value = existingThread().copy(lastReadAt = mapOf(UID to epochMillisAfter(TIMESTAMP)))
+        every { messageRepository.observeMessages(CONVERSATION) } returns flowOf(listOf(message()))
+        val viewModel = createViewModel()
+
+        viewModel.unreadCount.test {
+            advanceUntilIdle()
+            assertEquals(0, expectMostRecentItem())
+        }
+    }
+
+    /** A millisecond mark after [timestamp], the same way [ChatReadState] reads a timestamp. */
+    private fun epochMillisAfter(timestamp: LocalDateTime): Long =
+        timestamp.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli() + 1_000L
 
     private fun createViewModel(): ChatViewModel {
         val eventRepository = mockk<EventRepository> {

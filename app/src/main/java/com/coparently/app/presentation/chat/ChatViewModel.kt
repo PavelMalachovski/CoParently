@@ -3,6 +3,7 @@ package com.coparently.app.presentation.chat
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.coparently.app.domain.chat.ChatReadState
 import com.coparently.app.domain.chat.ConversationKey
 import com.coparently.app.domain.model.Conversation
 import com.coparently.app.domain.model.Event
@@ -18,6 +19,7 @@ import com.coparently.app.domain.repository.UserRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -215,23 +217,102 @@ class ChatViewModel @Inject constructor(
             )
 
     /**
-     * Messages of the selected conversation, re-subscribed whenever the selection changes.
+     * The selected conversation's raw messages, tagged with the id they belong to.
      *
-     * Same reason as [conversations], with a harder failure: the id is null at construction
-     * time by definition, so the `combine` version subscribed to `observeMessages("")` and a
-     * thread's messages could never appear at all.
+     * Cold and unshared on purpose: [messages] and the read/delivered collector in `init`
+     * each get their own independent subscription to this, so a failure caught by one
+     * cannot silently starve the other. Same reason [conversations] gives for using
+     * `flatMapLatest` over `combine` applies here — the id is null at construction time by
+     * definition, so a `combine` version would subscribe to `observeMessages("")` once and
+     * a thread's messages could never appear at all.
      */
     @OptIn(ExperimentalCoroutinesApi::class)
-    val messages: StateFlow<List<Message>> = _currentConversationId
+    private val currentThreadMessages: Flow<Pair<String?, List<Message>>> = _currentConversationId
         .flatMapLatest { conversationId ->
-            if (conversationId == null) flowOf(emptyList()) else messageRepository.observeMessages(conversationId)
+            val raw = if (conversationId == null) {
+                flowOf(emptyList())
+            } else {
+                messageRepository.observeMessages(conversationId)
+            }
+            raw.map { conversationId to it }
         }
+
+    /**
+     * Messages of the selected conversation, each carrying the status the UI should render.
+     *
+     * A message this account sent is promoted from [MessageSendStatus.SENT] to
+     * [MessageSendStatus.DELIVERED] or [MessageSendStatus.READ] via [ChatReadState.statusFor],
+     * using the *open* conversation's own marks — matched by [Conversation.id] against
+     * [conversations] rather than blindly taking its single element, in case the two ever
+     * disagree (e.g. a conversation id passed in before [conversations] has resolved).
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val messages: StateFlow<List<Message>> = combine(
+        currentThreadMessages,
+        conversations,
+        currentUserId
+    ) { (conversationId, rawMessages), convs, myUid ->
+        val conversation = convs.firstOrNull { it.id == conversationId }
+        val otherUid = conversation?.participants?.firstOrNull { it != myUid }
+        if (conversation == null || myUid.isEmpty() || otherUid == null) {
+            rawMessages
+        } else {
+            rawMessages.map { message -> message.withDerivedStatus(myUid, otherUid, conversation) }
+        }
+    }
         .catch { e -> failSoft("observe messages", e) { emit(emptyList()) } }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(SUBSCRIPTION_TIMEOUT_MS),
             initialValue = emptyList()
         )
+
+    /**
+     * Number of the co-parent's messages this account has not yet read.
+     *
+     * There is exactly one conversation per pair, so this is that thread's own
+     * [ChatReadState.unreadCount] rather than anything summed across a list. Kept as an
+     * independent subscription from [messages] — mirroring `HomeViewModel.unreadCount`'s
+     * Home-tile figure — so a failure in one cannot blank the other.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val unreadCount: StateFlow<Int> = combine(
+        conversations.flatMapLatest { convs ->
+            val conversationId = convs.firstOrNull()?.id
+            if (conversationId == null) flowOf(emptyList()) else messageRepository.observeMessages(conversationId)
+        },
+        conversations,
+        currentUserId
+    ) { rawMessages, convs, myUid ->
+        ChatReadState.unreadCount(rawMessages, myUid, convs.firstOrNull()?.lastReadAt?.get(myUid))
+    }
+        .catch { e -> failSoft("observe unread count", e) { emit(0) } }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(SUBSCRIPTION_TIMEOUT_MS),
+            initialValue = 0
+        )
+
+    init {
+        // Re-asserts the read/delivered marks every time the open thread's messages change —
+        // not only when the thread is first opened. A one-shot mark on open alone misses two
+        // cases: Room not having ingested any messages yet (fresh install, right after
+        // pairing, right after a database wipe — the repository's newest-message lookup is
+        // null then and writes nothing), and a message arriving from the co-parent while the
+        // thread stays open, which must clear the badge and advance the tick without the user
+        // leaving and re-entering the screen.
+        launchGuarded("re-assert read/delivered marks") {
+            currentThreadMessages
+                .catch { e -> failSoft("re-assert read/delivered marks", e) {} }
+                .collect { (conversationId, _) ->
+                    if (conversationId == null) return@collect
+                    val userId = currentUserId.value
+                    if (userId.isEmpty()) return@collect
+                    messageRepository.markRead(conversationId, userId)
+                    messageRepository.markDelivered(conversationId, userId)
+                }
+        }
+    }
 
     /**
      * Upcoming non-private events (next [UPCOMING_DAYS] days) offered when the user
@@ -252,13 +333,17 @@ class ChatViewModel @Inject constructor(
             initialValue = emptyList()
         )
 
-    fun setConversationId(conversationId: String) {
+    /**
+     * Called when the chat thread screen is displayed for [conversationId].
+     *
+     * Only selects which conversation's messages this ViewModel observes. The `init`
+     * collector above is where `markRead`/`markDelivered` are actually written — deriving
+     * them from the messages flow itself, rather than firing a single call right here, is
+     * what lets the mark land once Room has actually ingested the thread's messages instead
+     * of being lost on a fresh install or right after pairing.
+     */
+    fun onThreadOpened(conversationId: String) {
         _currentConversationId.value = conversationId
-        launchGuarded("mark conversation as read") {
-            if (currentUserId.value.isNotEmpty()) {
-                messageRepository.markRead(conversationId, currentUserId.value)
-            }
-        }
     }
 
     fun sendMessage(content: String, type: MessageType = MessageType.TEXT, attachments: List<String> = emptyList()) {
@@ -362,6 +447,25 @@ class ChatViewModel @Inject constructor(
      */
     private fun conversationIdOrNull(userId: String, partnerId: String): String? =
         runCatching { ConversationKey.of(userId, partnerId) }.getOrNull()
+
+    /**
+     * This message, promoted to [MessageSendStatus.DELIVERED] or [MessageSendStatus.READ] via
+     * [ChatReadState.statusFor] if it is one of [myUid]'s own — a message from the co-parent
+     * is rendered exactly as stored, since only the sender's own bubble carries a tick.
+     */
+    private fun Message.withDerivedStatus(myUid: String, otherUid: String, conversation: Conversation): Message =
+        if (senderId != myUid) {
+            this
+        } else {
+            copy(
+                status = ChatReadState.statusFor(
+                    message = this,
+                    otherUid = otherUid,
+                    lastReadAt = conversation.lastReadAt,
+                    lastDeliveredAt = conversation.lastDeliveredAt
+                )
+            )
+        }
 
     /**
      * The pairing state as the chat entry point needs to see it.
