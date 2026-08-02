@@ -12,7 +12,6 @@ import com.coparently.app.domain.model.PairingInvite
 import com.coparently.app.domain.model.PairingState
 import com.coparently.app.domain.model.PartnerSummary
 import com.coparently.app.domain.pairing.InviteCodeGenerator
-import com.coparently.app.domain.repository.MessageRepository
 import com.coparently.app.domain.repository.PairingRepository
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
@@ -46,7 +45,7 @@ class PairingRepositoryImpl @Inject constructor(
     private val firestore: FirebaseFirestore,
     private val authService: FirebaseAuthService,
     private val pairingFunctions: PairingFunctions,
-    private val messageRepository: MessageRepository,
+    private val postPairingConversationSetup: PostPairingConversationSetup,
     private val userDao: UserDao,
     // Application context only, for the localized conversation-title fallback. This is a
     // repository, not a ViewModel, so it is allowed to resolve resources directly.
@@ -348,6 +347,11 @@ class PairingRepositoryImpl @Inject constructor(
      * There is no get-or-create lookup any more. The id is derived from the participant
      * pair, so both devices compute the same one and a duplicate thread is impossible to
      * create — the lookup existed only to prevent duplicates that can no longer happen.
+     *
+     * [PostPairingConversationSetup] also folds any legacy conversation for this pair into the
+     * canonical one right after creating it, inside this same `try` — so a merge failure
+     * degrades exactly like a create failure: logged and swallowed, never surfaced as a failed
+     * pairing.
      */
     private suspend fun ensureConversationWith(partnerId: String) {
         val uid = authService.getCurrentUser()?.uid ?: return
@@ -359,7 +363,7 @@ class PairingRepositoryImpl @Inject constructor(
                 .getString("name")
                 .orEmpty()
                 .ifEmpty { context.getString(R.string.pairing_default_partner_name) }
-            messageRepository.ensureConversation(uid, partnerId, partnerName)
+            postPairingConversationSetup.run(uid, partnerId, partnerName)
         } catch (e: CancellationException) {
             throw e
         } catch (

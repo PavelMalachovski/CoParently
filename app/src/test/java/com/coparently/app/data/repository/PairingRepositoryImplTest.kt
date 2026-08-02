@@ -44,6 +44,7 @@ class PairingRepositoryImplTest {
     private lateinit var authService: FirebaseAuthService
     private lateinit var pairingFunctions: PairingFunctions
     private lateinit var messageRepository: MessageRepository
+    private lateinit var conversationMigrator: ConversationMigrator
     private lateinit var userDao: UserDao
     private lateinit var context: Context
     private lateinit var repository: PairingRepositoryImpl
@@ -61,6 +62,7 @@ class PairingRepositoryImplTest {
         authService = mockk(relaxed = true)
         pairingFunctions = mockk(relaxed = true)
         messageRepository = mockk(relaxed = true)
+        conversationMigrator = mockk(relaxed = true)
 
         val firebaseUser = mockk<FirebaseUser>(relaxed = true)
         every { firebaseUser.uid } returns "user-a"
@@ -96,7 +98,7 @@ class PairingRepositoryImplTest {
             firestore = firestore,
             authService = authService,
             pairingFunctions = pairingFunctions,
-            messageRepository = messageRepository,
+            postPairingConversationSetup = PostPairingConversationSetup(messageRepository, conversationMigrator),
             userDao = userDao,
             context = context
         )
@@ -179,6 +181,11 @@ class PairingRepositoryImplTest {
         }
 
         coVerify { userDao.updateUser(userEntity(partnerId = "u2")) }
+        // The legacy-conversation merge runs immediately after the canonical conversation is
+        // ensured, inside the same guarded block, so a merge failure can never surface as a
+        // failed pairing.
+        coVerify { messageRepository.ensureConversation("user-a", "u2", any()) }
+        coVerify { conversationMigrator.mergeLegacyConversations("user-a", "u2") }
     }
 
     @Test

@@ -144,4 +144,21 @@ class FirestoreMessageDataSource @Inject constructor(
             .update("lastDeliveredAt.$userId", atMillis)
             .await()
     }
+
+    /**
+     * Moves one message onto a different conversation, as the legacy-conversation merge does.
+     *
+     * A single-field update, matching the deployed `messages` rule: a participant of both the
+     * source and destination conversations may change `conversationId` and nothing else in the
+     * same write (see `canRepointMessage` in `firestore.rules`). Setting it to a value it
+     * already has is idempotent and denied by nothing, which is what makes a retried merge safe.
+     *
+     * @param messageId Document id of the message; unchanged by the move.
+     * @param toConversationId The conversation the message now belongs to.
+     */
+    suspend fun repointMessage(messageId: String, toConversationId: String) {
+        messagesCollection.document(messageId)
+            .update("conversationId", toConversationId)
+            .await()
+    }
 }
