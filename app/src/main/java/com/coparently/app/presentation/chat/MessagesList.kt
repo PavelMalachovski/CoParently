@@ -211,7 +211,12 @@ fun MessageItem(
                             color = MaterialTheme.colorScheme.error
                         )
                     }
-                    MessageSendStatus.SENT -> {
+                    // DELIVERED/READ render like SENT until a later task adds distinct
+                    // delivered/read indicators; they are derived at render time by
+                    // ChatReadState.statusFor and not yet wired into this screen.
+                    MessageSendStatus.SENT,
+                    MessageSendStatus.DELIVERED,
+                    MessageSendStatus.READ -> {
                         Icon(
                             imageVector = Icons.Default.Check,
                             contentDescription = stringResource(R.string.chat_status_sent),

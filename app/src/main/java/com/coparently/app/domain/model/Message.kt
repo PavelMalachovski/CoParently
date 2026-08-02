@@ -44,10 +44,17 @@ enum class MessageType {
 }
 
 /**
- * Status of message delivery.
+ * How far a message has got.
+ *
+ * Only [SENDING], [SENT] and [ERROR] are ever persisted — they describe this device's own
+ * write attempt. [DELIVERED] and [READ] are derived at render time by
+ * [com.coparently.app.domain.chat.ChatReadState.statusFor] from the conversation's
+ * per-user marks, and must never be written to the message row.
  */
 enum class MessageSendStatus {
     SENDING,
     SENT,
+    DELIVERED,
+    READ,
     ERROR
 }
