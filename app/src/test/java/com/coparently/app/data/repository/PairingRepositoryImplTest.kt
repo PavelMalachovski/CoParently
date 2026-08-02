@@ -79,8 +79,8 @@ class PairingRepositoryImplTest {
         every { usersCollection.document(any()) } returns userDocument
         every { userDocument.get() } returns Tasks.forResult(userSnapshot)
 
-        // No locally cached conversation with the partner yet, by default.
-        every { messageRepository.getConversations(any()) } returns flowOf(emptyList())
+        // The conversation id is derived from the participant pair, so there is no
+        // get-or-create lookup to stub any more — the relaxed mock answers `ensureConversation`.
 
         invitationsCollection = mockk(relaxed = true)
         invitationsQuery = mockk(relaxed = true)

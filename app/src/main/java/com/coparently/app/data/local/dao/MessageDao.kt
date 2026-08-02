@@ -44,6 +44,16 @@ interface MessageDao {
     @Query("SELECT * FROM conversations WHERE id = :id")
     suspend fun getConversationById(id: String): ConversationEntity?
 
+    /**
+     * Observes one conversation, emitting `null` while no row with [id] exists.
+     *
+     * The Room-backed half of `MessageRepository.observeConversation`: the remote snapshot
+     * listener only mirrors into this table, and what the UI collects comes back out of it,
+     * so Room stays the single source of truth for the marks.
+     */
+    @Query("SELECT * FROM conversations WHERE id = :id")
+    fun observeConversationById(id: String): Flow<ConversationEntity?>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertConversation(conversation: ConversationEntity)
 

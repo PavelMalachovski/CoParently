@@ -1,26 +1,38 @@
 package com.coparently.app.data.repository
 
+import android.util.Log
 import com.coparently.app.data.local.dao.MessageDao
-import com.coparently.app.data.local.entity.ConversationEntity
-import com.coparently.app.data.local.entity.MessageEntity
 import com.coparently.app.data.remote.firebase.FirebaseAuthService
 import com.coparently.app.data.remote.firebase.FirestoreMessageDataSource
+import com.coparently.app.domain.chat.ConversationKey
 import com.coparently.app.domain.model.Conversation
 import com.coparently.app.domain.model.Message
 import com.coparently.app.domain.model.MessageSendStatus
-import com.coparently.app.domain.model.MessageType
 import com.coparently.app.domain.repository.MessageRepository
-import com.google.gson.Gson
-import com.google.gson.reflect.TypeToken
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.merge
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.transform
 import java.time.LocalDateTime
-import java.time.ZoneOffset
-import java.time.format.DateTimeFormatter
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/**
+ * Room-backed implementation of [MessageRepository].
+ *
+ * Two independent realtime observers, neither nested inside the other: one for the
+ * conversation document, one for its messages. The predecessor collected an infinite
+ * conversation-snapshot flow and started a second infinite message flow *inside* that
+ * collector, so the inner collect never returned and the outer one never advanced past its
+ * first emission — which is why the two parents' threads never converged.
+ *
+ * Each observer mirrors what arrives into Room and hands the caller the Room-backed flow.
+ * Room is the source of truth: a denied read, a missing index or a cold offline cache
+ * degrades to "nothing new this round", logged, with the local copy intact.
+ */
 @Singleton
 class MessageRepositoryImpl @Inject constructor(
     private val messageDao: MessageDao,
@@ -28,107 +40,154 @@ class MessageRepositoryImpl @Inject constructor(
     private val firestoreMessageDataSource: FirestoreMessageDataSource
 ) : MessageRepository {
 
-    private val gson = Gson()
-    private val dateFormatter = DateTimeFormatter.ISO_LOCAL_DATE_TIME
+    /**
+     * Observes the conversation document.
+     *
+     * The remote branch never emits downstream — see [mirrorOnly]. It exists only to fold
+     * the snapshot into Room, which then drives the flow the caller actually collects.
+     */
+    override fun observeConversation(conversationId: String): Flow<Conversation?> {
+        val mirror = firestoreMessageDataSource.observeConversation(conversationId)
+            .onEach { remote -> mirrorConversation(conversationId, remote) }
+            .catch { e ->
+                Log.w(
+                    TAG,
+                    "Conversation observe failed for conversationId=$conversationId " +
+                        "(conversations/$conversationId document listener). " +
+                        "This is a single-document listener, so no index is involved — a " +
+                        "PERMISSION_DENIED here means the deployed conversations rule, " +
+                        "check firestore.rules. Keeping the local Room copy.",
+                    e
+                )
+            }
+            .mirrorOnly<Conversation?>()
 
-    override fun getConversations(userId: String): Flow<List<Conversation>> {
-        return messageDao.getConversationsOrdered().map { entities ->
-            entities.map { it.toDomain() }
-        }
+        val local = messageDao.observeConversationById(conversationId)
+            .map { entity -> entity?.toDomain() }
+
+        return merge(mirror, local)
     }
 
-    override fun getMessages(conversationId: String): Flow<List<Message>> {
-        return messageDao.getMessages(conversationId).map { entities ->
-            entities.map { it.toDomain() }
-        }
+    /**
+     * Observes the conversation's messages, oldest first.
+     *
+     * The `messages` query is `conversationId == … ORDER BY timestamp ASC`, which Firestore
+     * can only serve from a composite index. When that index is absent (or still building,
+     * or the read is denied, or the device is offline with a cold cache) the snapshot
+     * listener reports `FAILED_PRECONDITION` and the flow fails. Without the [catch] below
+     * that failure escapes into the caller's `viewModelScope.launch`, where nothing handles
+     * it and the process is killed — which is exactly what used to happen on opening Chat.
+     */
+    override fun observeMessages(conversationId: String): Flow<List<Message>> {
+        val mirror = firestoreMessageDataSource.getMessages(conversationId)
+            .onEach { documents -> mirrorMessages(documents) }
+            .catch { e ->
+                Log.w(
+                    TAG,
+                    "Message observe failed for conversationId=$conversationId " +
+                        "(messages: conversationId ==, orderBy timestamp ASC). " +
+                        "A FAILED_PRECONDITION here means a missing Firestore index — " +
+                        "check firestore.indexes.json. Keeping the local Room copy.",
+                    e
+                )
+            }
+            .mirrorOnly<List<Message>>()
+
+        val local = messageDao.getMessages(conversationId)
+            .map { entities -> entities.map { it.toDomain() } }
+
+        return merge(mirror, local)
     }
 
-    override suspend fun getConversationById(id: String): Conversation? {
-        return messageDao.getConversationById(id)?.toDomain()
+    override suspend fun ensureConversation(myUid: String, partnerUid: String, title: String): String {
+        val conversationId = ConversationKey.of(myUid, partnerUid)
+        val participants = listOf(myUid, partnerUid).sorted()
+        val existing = messageDao.getConversationById(conversationId)?.toDomain()
+
+        // A `copy` of the existing row, never a fresh object: rebuilding one here would put
+        // the mark maps back to their defaults on every pairing and every chat open, which
+        // is the reset the deleted sync loop used to perform.
+        val conversation = existing?.copy(
+            participants = participants,
+            title = title.ifBlank { existing.title }
+        ) ?: Conversation(
+            id = conversationId,
+            participants = participants,
+            title = title,
+            createdAt = LocalDateTime.now()
+        )
+        messageDao.insertConversation(conversation.toEntity())
+
+        runRemote("ensureConversation", conversationId) {
+            firestoreMessageDataSource.setConversation(
+                conversationId,
+                mapOf(
+                    "id" to conversationId,
+                    "participants" to participants,
+                    "title" to conversation.title,
+                    "archived" to conversation.archived,
+                    "createdAt" to conversation.createdAt.toIsoString()
+                )
+            )
+            messageDao.insertConversation(conversation.copy(syncedToFirestore = true).toEntity())
+        }
+        return conversationId
     }
 
     override suspend fun sendMessage(message: Message) {
-        // Insert message with SENDING status
+        // Store it as SENDING first, so the thread shows it immediately and a crash between
+        // here and the remote write cannot lose it.
         val sendingMessage = if (message.status == MessageSendStatus.SENT) {
             message.copy(status = MessageSendStatus.SENDING)
         } else {
             message
         }
-        val entity = sendingMessage.toEntity()
-        messageDao.insertMessage(entity)
+        messageDao.insertMessage(sendingMessage.toEntity())
 
-        // Sync to Firestore
         val firebaseUser = firebaseAuthService.getCurrentUser()
-        if (firebaseUser != null) {
-            try {
-                val messageData = mapOf(
-                    "id" to message.id,
-                    "conversationId" to message.conversationId,
-                    "senderId" to message.senderId,
-                    "senderName" to message.senderName,
-                    "content" to message.content,
-                    "timestamp" to message.timestamp.format(dateFormatter),
-                    "messageType" to message.messageType.name,
-                    "attachments" to message.attachments,
-                    "isRead" to message.isRead,
-                    "replyToMessageId" to (message.replyToMessageId ?: "")
-                )
-                firestoreMessageDataSource.sendMessage(message.id, messageData)
+        if (firebaseUser == null) {
+            messageDao.insertMessage(message.copy(status = MessageSendStatus.ERROR).toEntity())
+            return
+        }
 
-                // Mark as synced and SENT
-                val syncedMessage = message.copy(
-                    syncedToFirestore = true,
-                    status = MessageSendStatus.SENT
-                )
-                messageDao.insertMessage(syncedMessage.toEntity())
-            } catch (e: Exception) {
-                // Mark as ERROR on failure
-                val errorMessage = message.copy(
-                    status = MessageSendStatus.ERROR
-                )
-                messageDao.insertMessage(errorMessage.toEntity())
-                throw e
-            }
-        } else {
-            // No user, mark as ERROR
-            val errorMessage = message.copy(
-                status = MessageSendStatus.ERROR
+        val sentAtMillis = message.timestamp.toEpochMillis()
+        try {
+            firestoreMessageDataSource.sendMessage(
+                message.id,
+                message.toFirestoreMap(),
+                sentAtMillis
             )
-            messageDao.insertMessage(errorMessage.toEntity())
+            messageDao.insertMessage(
+                message.copy(syncedToFirestore = true, status = MessageSendStatus.SENT).toEntity()
+            )
+            bumpConversation(message.conversationId, message.senderId, sentAtMillis)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (
+            @Suppress("TooGenericExceptionCaught") e: Exception
+        ) {
+            messageDao.insertMessage(message.copy(status = MessageSendStatus.ERROR).toEntity())
+            throw e
         }
     }
 
-    /**
-     * Marks all messages in a conversation as read for [userId].
-     *
-     * There is no stored counter to zero any more — read state now lives on
-     * [Conversation.lastReadAt] and is derived by `ChatReadState`. Writing that mark to Room
-     * and Firestore is a later task's job (the conversation-observer rework); today this only
-     * notifies Firestore, which is itself still a no-op there.
-     */
-    override suspend fun markAsRead(conversationId: String, userId: String) {
-        val firebaseUser = firebaseAuthService.getCurrentUser()
-        if (firebaseUser != null) {
-            firestoreMessageDataSource.markAsRead(conversationId, userId)
+    override suspend fun markRead(conversationId: String, myUid: String) {
+        val atMillis = System.currentTimeMillis()
+        updateConversation(conversationId) { conversation ->
+            conversation.copy(lastReadAt = conversation.lastReadAt.advanced(myUid, atMillis))
+        }
+        runRemote("markRead", conversationId) {
+            firestoreMessageDataSource.markRead(conversationId, myUid, atMillis)
         }
     }
 
-    override suspend fun createConversation(conversation: Conversation) {
-        val entity = conversation.toEntity()
-        messageDao.insertConversation(entity)
-
-        val firebaseUser = firebaseAuthService.getCurrentUser()
-        if (firebaseUser != null) {
-            val conversationData = mapOf(
-                "id" to conversation.id,
-                "participants" to conversation.participants,
-                "title" to conversation.title,
-                "createdAt" to conversation.createdAt.format(dateFormatter)
-            )
-            firestoreMessageDataSource.setConversation(conversation.id, conversationData)
-
-            val syncedConversation = conversation.copy(syncedToFirestore = true)
-            messageDao.insertConversation(syncedConversation.toEntity())
+    override suspend fun markDelivered(conversationId: String, myUid: String) {
+        val atMillis = System.currentTimeMillis()
+        updateConversation(conversationId) { conversation ->
+            conversation.copy(lastDeliveredAt = conversation.lastDeliveredAt.advanced(myUid, atMillis))
+        }
+        runRemote("markDelivered", conversationId) {
+            firestoreMessageDataSource.markDelivered(conversationId, myUid, atMillis)
         }
     }
 
@@ -137,158 +196,129 @@ class MessageRepositoryImpl @Inject constructor(
         // Note: Deleting from Firestore is not implemented in this version for safety
     }
 
-    override suspend fun syncWithFirestore() {
-        val firebaseUser = firebaseAuthService.getCurrentUser() ?: return
+    // ---- mirroring --------------------------------------------------------
 
-        // Sync conversations. Offline-first: a Firestore failure (denied read, missing
-        // index, no network) must not crash the app — Room stays the source of truth.
-        firestoreMessageDataSource.getConversations(firebaseUser.uid)
-            .catch { e ->
-                android.util.Log.w(
-                    TAG,
-                    "Conversation sync failed for uid=${firebaseUser.uid} " +
-                        "(conversations: array-contains participants). " +
-                        "A FAILED_PRECONDITION here means a missing Firestore index — " +
-                        "check firestore.indexes.json. Keeping the local Room copy.",
-                    e
-                )
-            }
-            .collect { conversations ->
-                conversations.forEach { data ->
-                    val conversation = Conversation(
-                        id = data["id"] as String,
-                        participants = (data["participants"] as? List<String>) ?: emptyList(),
-                        title = data["title"] as String,
-                        createdAt = LocalDateTime.parse(data["createdAt"] as String, dateFormatter),
-                        syncedToFirestore = true
-                    )
-                    messageDao.insertConversation(conversation.toEntity())
+    /**
+     * Folds the remote conversation document into the local row.
+     *
+     * Deliberately a *merge*, not a replace. The remote copy is partial by nature — an older
+     * document predates the mark maps, and a mark this device has just written may not have
+     * round-tripped yet — so replacing the row from it would silently reset read state on
+     * every Chat open. Both marks are monotonic epoch timestamps, so taking the larger of
+     * the two per uid is both safe and correct: a mark can only ever move forward.
+     *
+     * @param conversationId The conversation being observed.
+     * @param remote The remote document, or `null` while it does not exist.
+     */
+    private suspend fun mirrorConversation(conversationId: String, remote: Map<String, Any>?) {
+        if (remote == null) return
+        val local = messageDao.getConversationById(conversationId)?.toDomain()
 
-                    // Sync messages for this conversation
-                    syncMessagesForConversation(conversation.id)
-                }
-            }
+        val merged = Conversation(
+            id = conversationId,
+            participants = remote.stringList("participants").ifEmpty { local?.participants.orEmpty() },
+            title = (remote["title"] as? String).orEmpty().ifEmpty { local?.title.orEmpty() },
+            lastReadAt = mergeMarks(local?.lastReadAt, remote.markMap("lastReadAt")),
+            lastDeliveredAt = mergeMarks(local?.lastDeliveredAt, remote.markMap("lastDeliveredAt")),
+            lastMessageAtMillis = maxOfNullable(local?.lastMessageAtMillis, remote.longOrNull("lastMessageAt")),
+            // Archiving is one-way: once a legacy thread has been merged away it stays merged,
+            // whichever copy learns about it first.
+            archived = (remote["archived"] as? Boolean ?: false) || (local?.archived ?: false),
+            createdAt = remote.dateTimeOrNull("createdAt") ?: local?.createdAt ?: LocalDateTime.now(),
+            syncedToFirestore = true
+        )
+        messageDao.insertConversation(merged.toEntity())
     }
 
     /**
-     * Mirrors the remote messages of [conversationId] into Room.
+     * Folds a batch of remote message documents into Room.
      *
-     * The `messages` query is `conversationId == … ORDER BY timestamp ASC`, which Firestore can
-     * only serve from a composite index. When that index is absent (or still building, or the
-     * read is denied, or the device is offline with a cold cache) the snapshot listener reports
-     * `FAILED_PRECONDITION` and the flow fails. Without the [catch] below that failure escaped
-     * this collector, propagated out of [syncWithFirestore] into `ChatViewModel`'s
-     * `viewModelScope.launch`, and killed the process every time the user opened Chat.
-     *
-     * Offline-first: Room is the source of truth, so a failed remote read degrades to "no new
-     * messages this round" rather than to a crash. It is logged, never swallowed silently —
-     * the message names the query so a missing index is recognisable in logcat.
+     * Everything that arrives this way is [MessageSendStatus.SENT] — the row records what
+     * *this* device's own write achieved. `DELIVERED` and `READ` describe the other parent
+     * and are derived at render time from the conversation's marks; persisting either would
+     * let a stale row outrank the live marks.
      */
-    private suspend fun syncMessagesForConversation(conversationId: String) {
-        firestoreMessageDataSource.getMessages(conversationId)
-            .catch { e ->
-                android.util.Log.w(
-                    TAG,
-                    "Message sync failed for conversationId=$conversationId " +
-                        "(messages: conversationId ==, orderBy timestamp ASC). " +
-                        "A FAILED_PRECONDITION here means a missing Firestore index — " +
-                        "check firestore.indexes.json. Keeping the local Room copy.",
-                    e
-                )
-            }
-            .collect { messages ->
-                messages.forEach { data ->
-                    val message = Message(
-                        id = data["id"] as String,
-                        conversationId = data["conversationId"] as String,
-                        senderId = data["senderId"] as String,
-                        senderName = data["senderName"] as String,
-                        content = data["content"] as String,
-                        timestamp = LocalDateTime.parse(data["timestamp"] as String, dateFormatter),
-                        messageType = MessageType.valueOf(data["messageType"] as String),
-                        attachments = (data["attachments"] as? List<String>) ?: emptyList(),
-                        isRead = (data["isRead"] as? Boolean) ?: false,
-                        replyToMessageId = data["replyToMessageId"] as? String,
-                        syncedToFirestore = true,
-                        status = MessageSendStatus.SENT // Messages from Firestore are always SENT
-                    )
-                    messageDao.insertMessage(message.toEntity())
-                }
-            }
+    private suspend fun mirrorMessages(documents: List<Map<String, Any>>) {
+        documents.forEach { data ->
+            val message = data.toMessageOrNull() ?: return@forEach
+            messageDao.insertMessage(message.toEntity())
+        }
     }
 
-    private fun ConversationEntity.toDomain(): Conversation {
-        val participantsListType = object : TypeToken<List<String>>() {}.type
-        val participants: List<String> = gson.fromJson(participantsJson, participantsListType)
-        val marksType = object : TypeToken<Map<String, Long>>() {}.type
+    // ---- local writes -----------------------------------------------------
 
-        return Conversation(
-            id = id,
-            participants = participants,
-            title = title,
-            lastReadAt = gson.fromJson(lastReadAtJson, marksType) ?: emptyMap(),
-            lastDeliveredAt = gson.fromJson(lastDeliveredAtJson, marksType) ?: emptyMap(),
-            lastMessageAtMillis = lastMessageAtMillis,
-            archived = archived,
-            createdAt = createdAt,
-            syncedToFirestore = syncedToFirestore
-        )
+    /**
+     * Applies [transform] to the local conversation row, if there is one.
+     *
+     * Always a read-modify-write of the *whole local row*, so a single-field change can
+     * never drop the fields it did not touch.
+     */
+    private suspend fun updateConversation(
+        conversationId: String,
+        transform: (Conversation) -> Conversation
+    ) {
+        val local = messageDao.getConversationById(conversationId)?.toDomain() ?: return
+        messageDao.insertConversation(transform(local).toEntity())
     }
 
-    private fun Conversation.toEntity(): ConversationEntity {
-        return ConversationEntity(
-            id = id,
-            participantsJson = gson.toJson(participants),
-            title = title,
-            lastReadAtJson = gson.toJson(lastReadAt),
-            lastDeliveredAtJson = gson.toJson(lastDeliveredAt),
-            lastMessageAtMillis = lastMessageAtMillis,
-            archived = archived,
-            createdAt = createdAt,
-            syncedToFirestore = syncedToFirestore
-        )
+    /**
+     * Advances the conversation's ordering timestamp after [senderId] sent a message.
+     *
+     * The sender's own read mark moves with it: a message can only be sent from inside the
+     * open thread, so the sender has by definition read everything up to it. Without this
+     * the sender's own message would light up the unread indicator on their own conversation
+     * row the moment the remote echo arrived.
+     */
+    private suspend fun bumpConversation(conversationId: String, senderId: String, atMillis: Long) {
+        updateConversation(conversationId) { conversation ->
+            conversation.copy(
+                lastMessageAtMillis = maxOfNullable(conversation.lastMessageAtMillis, atMillis),
+                lastReadAt = conversation.lastReadAt.advanced(senderId, atMillis)
+            )
+        }
     }
 
-    private fun MessageEntity.toDomain(): Message {
-        val attachmentsListType = object : TypeToken<List<String>>() {}.type
-        val attachments: List<String> = gson.fromJson(attachmentsJson, attachmentsListType)
-
-        return Message(
-            id = id,
-            conversationId = conversationId,
-            senderId = senderId,
-            senderName = senderName,
-            content = content,
-            timestamp = timestamp,
-            messageType = MessageType.valueOf(messageType),
-            attachments = attachments,
-            isRead = isRead,
-            replyToMessageId = replyToMessageId,
-            syncedToFirestore = syncedToFirestore,
-            status = try {
-                MessageSendStatus.valueOf(status ?: "SENT")
-            } catch (e: IllegalArgumentException) {
-                MessageSendStatus.SENT // Default to SENT for old messages or invalid values
-            }
-        )
+    /**
+     * Runs a remote write, swallowing a failure with a log.
+     *
+     * Room already holds the change by the time this runs, so a refused or unreachable write
+     * degrades to "local for now, retried on the next open" rather than to an exception in
+     * the caller's coroutine. Cancellation is rethrown — it is not a failure.
+     *
+     * @param operation Short description, used as the log context.
+     * @param conversationId The conversation the write targets.
+     * @param block The remote write.
+     */
+    private suspend fun runRemote(
+        operation: String,
+        conversationId: String,
+        block: suspend () -> Unit
+    ) {
+        try {
+            block()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (
+            @Suppress("TooGenericExceptionCaught") e: Exception
+        ) {
+            Log.w(
+                TAG,
+                "Chat $operation failed for conversationId=$conversationId. " +
+                    "Room keeps the local copy and the next open retries.",
+                e
+            )
+        }
     }
 
-    private fun Message.toEntity(): MessageEntity {
-        return MessageEntity(
-            id = id,
-            conversationId = conversationId,
-            senderId = senderId,
-            senderName = senderName,
-            content = content,
-            timestamp = timestamp,
-            messageType = messageType.name,
-            attachmentsJson = gson.toJson(attachments),
-            isRead = isRead,
-            replyToMessageId = replyToMessageId,
-            syncedToFirestore = syncedToFirestore,
-            status = status.name // Will never be null as Message always has a status
-        )
-    }
+    // ---- helpers ----------------------------------------------------------
+
+    /**
+     * Turns a mirroring flow into one that never emits.
+     *
+     * Lets the remote listener be [merge]d with the Room-backed flow purely for its side
+     * effect, so exactly one of the two branches — Room — decides what the caller sees.
+     */
+    private fun <T> Flow<*>.mirrorOnly(): Flow<T> = transform { }
 
     private companion object {
         const val TAG = "MessageRepo"

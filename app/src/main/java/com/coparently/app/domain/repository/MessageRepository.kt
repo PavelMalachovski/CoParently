@@ -7,45 +7,77 @@ import kotlinx.coroutines.flow.Flow
 /**
  * Repository interface for managing messages and conversations.
  * Part of the domain layer in Clean Architecture.
+ *
+ * The surface is per-conversation rather than per-account. The conversation id is derived
+ * from the two participants (`com.coparently.app.domain.chat.ConversationKey`), so a caller
+ * always knows which thread it wants and there is no list to traverse — which is what let
+ * the previous `syncWithFirestore` be deleted rather than untangled. It collected an
+ * infinite conversation-snapshot flow and, inside that collector, an infinite message
+ * flow; the inner one never returned, so the outer one never advanced past its first
+ * emission and the two phones never converged.
+ *
+ * Every observer here is Room-backed: the remote listener only mirrors into Room, and what
+ * the caller collects comes out of Room. A remote failure therefore degrades to "no new
+ * data this round", never to an empty screen or a crash.
  */
 interface MessageRepository {
     /**
-     * Gets all conversations for a user as a Flow.
+     * Observes one conversation, emitting `null` until it exists locally.
+     *
+     * @param conversationId The deterministic conversation id.
      */
-    fun getConversations(userId: String): Flow<List<Conversation>>
+    fun observeConversation(conversationId: String): Flow<Conversation?>
 
     /**
-     * Gets all messages for a specific conversation as a Flow.
+     * Observes the messages of one conversation, oldest first.
+     *
+     * @param conversationId The deterministic conversation id.
      */
-    fun getMessages(conversationId: String): Flow<List<Message>>
+    fun observeMessages(conversationId: String): Flow<List<Message>>
 
     /**
-     * Gets a conversation by ID.
+     * Creates the 1:1 conversation between [myUid] and [partnerUid] if it does not exist,
+     * and returns its id.
+     *
+     * Idempotent by construction: the id is derived from the participant pair and the
+     * remote write merges, so running it again — on either device, any number of times —
+     * can neither produce a second thread nor clobber marks already recorded on this one.
+     *
+     * @param myUid This device's signed-in uid.
+     * @param partnerUid The co-parent's uid.
+     * @param title Display title for the thread, normally the co-parent's name.
+     * @return The conversation id.
+     * @throws IllegalArgumentException if the two uids cannot form a conversation key.
      */
-    suspend fun getConversationById(id: String): Conversation?
+    suspend fun ensureConversation(myUid: String, partnerUid: String, title: String): String
 
     /**
-     * Sends a new message.
+     * Sends a message, storing it locally first and settling its status on the outcome.
+     *
+     * @param message The message to send.
      */
     suspend fun sendMessage(message: Message)
 
     /**
-     * Marks all messages in a conversation as read for a specific user.
+     * Records that [myUid] has read [conversationId] up to now.
+     *
+     * @param conversationId The deterministic conversation id.
+     * @param myUid This device's signed-in uid.
      */
-    suspend fun markAsRead(conversationId: String, userId: String)
+    suspend fun markRead(conversationId: String, myUid: String)
 
     /**
-     * Creates a new conversation.
+     * Records that [myUid]'s device has ingested [conversationId] up to now.
+     *
+     * @param conversationId The deterministic conversation id.
+     * @param myUid This device's signed-in uid.
      */
-    suspend fun createConversation(conversation: Conversation)
+    suspend fun markDelivered(conversationId: String, myUid: String)
 
     /**
-     * Deletes a message.
+     * Deletes a message locally.
+     *
+     * @param messageId The message id.
      */
     suspend fun deleteMessage(messageId: String)
-
-    /**
-     * Syncs messages with Firestore.
-     */
-    suspend fun syncWithFirestore()
 }
