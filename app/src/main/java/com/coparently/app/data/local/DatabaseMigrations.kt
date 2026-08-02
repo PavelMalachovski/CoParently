@@ -146,6 +146,52 @@ object DatabaseMigrations {
     }
 
     /**
+     * Migration from version 11 to 12.
+     *
+     * Chat read state moves onto the conversation: two `{uid: epochMillis}` maps stored as
+     * JSON, plus an ordering timestamp and the archive flag the legacy-conversation merge
+     * sets. `unreadCount` is dropped — it is derived from `lastReadAt` now, and the stored
+     * column was never incremented by anything.
+     */
+    val MIGRATION_11_12 = object : Migration(11, 12) {
+        override fun migrate(database: SupportSQLiteDatabase) {
+            // `unreadCount` has to go — Room validates the live schema against the entity
+            // and a leftover column fails that check. SQLite cannot drop a column here, so
+            // the table is rebuilt. The four new columns are supplied as literals in the
+            // INSERT rather than added with ALTER first: the rebuild is happening anyway,
+            // and adding them twice would be pure ceremony.
+            database.execSQL(
+                """
+                CREATE TABLE conversations_new (
+                    id TEXT NOT NULL PRIMARY KEY,
+                    participantsJson TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    lastMessageId TEXT,
+                    lastReadAtJson TEXT NOT NULL DEFAULT '{}',
+                    lastDeliveredAtJson TEXT NOT NULL DEFAULT '{}',
+                    lastMessageAtMillis INTEGER,
+                    archived INTEGER NOT NULL DEFAULT 0,
+                    createdAt TEXT NOT NULL,
+                    syncedToFirestore INTEGER NOT NULL DEFAULT 0
+                )
+                """.trimIndent()
+            )
+            database.execSQL(
+                """
+                INSERT INTO conversations_new
+                    (id, participantsJson, title, lastMessageId, lastReadAtJson,
+                     lastDeliveredAtJson, lastMessageAtMillis, archived, createdAt, syncedToFirestore)
+                SELECT id, participantsJson, title, lastMessageId, '{}',
+                       '{}', NULL, 0, createdAt, syncedToFirestore
+                FROM conversations
+                """.trimIndent()
+            )
+            database.execSQL("DROP TABLE conversations")
+            database.execSQL("ALTER TABLE conversations_new RENAME TO conversations")
+        }
+    }
+
+    /**
      * List of all migrations in order.
      */
     val ALL_MIGRATIONS = arrayOf(
@@ -154,6 +200,7 @@ object DatabaseMigrations {
         MIGRATION_7_8,
         MIGRATION_8_9,
         MIGRATION_9_10,
-        MIGRATION_10_11
+        MIGRATION_10_11,
+        MIGRATION_11_12
     )
 }

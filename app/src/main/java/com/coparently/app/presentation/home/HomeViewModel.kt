@@ -186,13 +186,24 @@ class HomeViewModel @Inject constructor(
         MonthSpend(listOf(CurrencyAmount(SupportedCurrency.DEFAULT.code, 0.0)))
     )
 
-    /** Total unread messages across all conversations. */
+    /**
+     * Number of conversations with activity the user has not opened yet.
+     *
+     * Derived from [com.coparently.app.domain.model.Conversation.lastMessageAtMillis] versus
+     * this user's own [com.coparently.app.domain.model.Conversation.lastReadAt] mark — there
+     * is no stored counter any more (see `unreadCount`'s removal from the domain model). This
+     * counts conversations, not individual messages: a precise per-message count would need
+     * each conversation's message list, which this dashboard tile does not otherwise load.
+     * Chat is 1:1 today, so in practice this is 0 or 1.
+     */
     val unreadCount: StateFlow<Int> = _userId
         .flatMapLatest { id ->
             if (id.isEmpty()) {
                 flowOf(0)
             } else {
-                messageRepository.getConversations(id).map { convs -> convs.sumOf { it.unreadCount } }
+                messageRepository.getConversations(id).map { convs ->
+                    convs.count { conv -> (conv.lastMessageAtMillis ?: 0L) > (conv.lastReadAt[id] ?: 0L) }
+                }
             }
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), 0)

@@ -66,6 +66,7 @@ fun ConversationsScreen(
 ) {
     val conversations by viewModel.conversations.collectAsState()
     val isOpening by viewModel.isOpeningConversation.collectAsState()
+    val currentUserId by viewModel.currentUserId.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
 
     // Captured in composable scope: the collector below is not a composable, so it cannot
@@ -149,6 +150,7 @@ fun ConversationsScreen(
                 ) { conversation ->
                     ConversationItem(
                         conversation = conversation,
+                        currentUserId = currentUserId,
                         onClick = { onConversationClick(conversation.id) }
                     )
                     HorizontalDivider()
@@ -158,12 +160,22 @@ fun ConversationsScreen(
     }
 }
 
+/**
+ * One row of the conversation list.
+ *
+ * [currentUserId] is used to derive whether this conversation has unread activity, from
+ * [Conversation.lastMessageAtMillis] versus this user's own [Conversation.lastReadAt] mark —
+ * there is no stored per-message unread count any more, so this is a has-unread indicator
+ * rather than a precise count.
+ */
 @Composable
 fun ConversationItem(
     conversation: Conversation,
+    currentUserId: String,
     onClick: () -> Unit
 ) {
     val timeFormatter = DateTimeFormatter.ofPattern("MMM d, HH:mm")
+    val hasUnread = (conversation.lastMessageAtMillis ?: 0L) > (conversation.lastReadAt[currentUserId] ?: 0L)
 
     ListItem(
         headlineContent = {
@@ -194,13 +206,17 @@ fun ConversationItem(
                 text = conversation.lastMessage?.content ?: stringResource(R.string.chat_no_messages),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                style = if (conversation.unreadCount > 0) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodySmall,
-                color = if (conversation.unreadCount > 0) MaterialTheme.typography.bodyLarge.color else MaterialTheme.colorScheme.onSurfaceVariant
+                style = if (hasUnread) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodySmall,
+                color = if (hasUnread) {
+                    MaterialTheme.typography.bodyLarge.color
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                }
             )
         },
         trailingContent = {
-            if (conversation.unreadCount > 0) {
-                BadgedBox(badge = { Badge { Text(conversation.unreadCount.toString()) } }) {
+            if (hasUnread) {
+                BadgedBox(badge = { Badge() }) {
                     // Empty content for badge anchor
                 }
             }

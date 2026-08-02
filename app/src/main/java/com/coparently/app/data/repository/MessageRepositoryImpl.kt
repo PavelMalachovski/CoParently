@@ -32,7 +32,7 @@ class MessageRepositoryImpl @Inject constructor(
     private val dateFormatter = DateTimeFormatter.ISO_LOCAL_DATE_TIME
 
     override fun getConversations(userId: String): Flow<List<Conversation>> {
-        return messageDao.getConversations().map { entities ->
+        return messageDao.getConversationsOrdered().map { entities ->
             entities.map { it.toDomain() }
         }
     }
@@ -98,9 +98,15 @@ class MessageRepositoryImpl @Inject constructor(
         }
     }
 
+    /**
+     * Marks all messages in a conversation as read for [userId].
+     *
+     * There is no stored counter to zero any more — read state now lives on
+     * [Conversation.lastReadAt] and is derived by `ChatReadState`. Writing that mark to Room
+     * and Firestore is a later task's job (the conversation-observer rework); today this only
+     * notifies Firestore, which is itself still a no-op there.
+     */
     override suspend fun markAsRead(conversationId: String, userId: String) {
-        messageDao.markConversationAsRead(conversationId)
-
         val firebaseUser = firebaseAuthService.getCurrentUser()
         if (firebaseUser != null) {
             firestoreMessageDataSource.markAsRead(conversationId, userId)
@@ -117,7 +123,6 @@ class MessageRepositoryImpl @Inject constructor(
                 "id" to conversation.id,
                 "participants" to conversation.participants,
                 "title" to conversation.title,
-                "unreadCount" to conversation.unreadCount,
                 "createdAt" to conversation.createdAt.format(dateFormatter)
             )
             firestoreMessageDataSource.setConversation(conversation.id, conversationData)
@@ -154,7 +159,6 @@ class MessageRepositoryImpl @Inject constructor(
                         id = data["id"] as String,
                         participants = (data["participants"] as? List<String>) ?: emptyList(),
                         title = data["title"] as String,
-                        unreadCount = (data["unreadCount"] as? Long)?.toInt() ?: 0,
                         createdAt = LocalDateTime.parse(data["createdAt"] as String, dateFormatter),
                         syncedToFirestore = true
                     )
@@ -216,12 +220,16 @@ class MessageRepositoryImpl @Inject constructor(
     private fun ConversationEntity.toDomain(): Conversation {
         val participantsListType = object : TypeToken<List<String>>() {}.type
         val participants: List<String> = gson.fromJson(participantsJson, participantsListType)
+        val marksType = object : TypeToken<Map<String, Long>>() {}.type
 
         return Conversation(
             id = id,
             participants = participants,
             title = title,
-            unreadCount = unreadCount,
+            lastReadAt = gson.fromJson(lastReadAtJson, marksType) ?: emptyMap(),
+            lastDeliveredAt = gson.fromJson(lastDeliveredAtJson, marksType) ?: emptyMap(),
+            lastMessageAtMillis = lastMessageAtMillis,
+            archived = archived,
             createdAt = createdAt,
             syncedToFirestore = syncedToFirestore
         )
@@ -232,7 +240,10 @@ class MessageRepositoryImpl @Inject constructor(
             id = id,
             participantsJson = gson.toJson(participants),
             title = title,
-            unreadCount = unreadCount,
+            lastReadAtJson = gson.toJson(lastReadAt),
+            lastDeliveredAtJson = gson.toJson(lastDeliveredAt),
+            lastMessageAtMillis = lastMessageAtMillis,
+            archived = archived,
             createdAt = createdAt,
             syncedToFirestore = syncedToFirestore
         )
