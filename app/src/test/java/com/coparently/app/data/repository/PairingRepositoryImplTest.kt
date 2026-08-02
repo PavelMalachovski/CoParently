@@ -129,6 +129,39 @@ class PairingRepositoryImplTest {
     }
 
     @Test
+    fun `the paired partner carries the avatar stored in their profile`() = runTest {
+        // Same field, same path as this user's own avatar — the co-parent's card would look
+        // accidental showing an initial next to a photo of you. It stays null until their
+        // phone runs a build whose `ensureProfile` writes one, so the card keeps its
+        // initial-letter fallback for as long as the other device is behind.
+        every { userSnapshot.getString("name") } returns "Bob Dvorak"
+        every { userSnapshot.getString("email") } returns "bob@example.com"
+        every { userSnapshot.getString("profilePhotoUrl") } returns PARTNER_PHOTO
+        val listeners = stubRealtimeListeners()
+
+        repository.observePairingState().test {
+            assertEquals(PairingState.Loading, awaitItem())
+            runCurrent()
+            listeners.emitInvites()
+            listeners.emitUser(userDoc(partnerId = "u2", pairedAt = 123L))
+
+            assertEquals(
+                PairingState.Paired(
+                    PartnerSummary(
+                        id = "u2",
+                        name = "Bob Dvorak",
+                        email = "bob@example.com",
+                        pairedSinceMillis = 123L,
+                        photoUrl = PARTNER_PHOTO
+                    )
+                ),
+                awaitItem()
+            )
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun `observePairingState mirrors the Paired transition into Room`() = runTest {
         // Everything outside the pairing screen (chat, expenses, budgets, event sync) reads
         // the link from Room, so the observed transition — not the redeem() call, which only
@@ -528,5 +561,6 @@ class PairingRepositoryImplTest {
 
     private companion object {
         const val HOUR_MILLIS = 60L * 60 * 1000
+        const val PARTNER_PHOTO = "https://lh3.googleusercontent.com/a/bob"
     }
 }

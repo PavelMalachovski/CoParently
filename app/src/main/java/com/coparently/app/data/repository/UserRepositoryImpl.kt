@@ -5,6 +5,7 @@ import com.coparently.app.data.local.entity.UserEntity
 import com.coparently.app.data.remote.firebase.FcmService
 import com.coparently.app.data.remote.firebase.FirebaseAuthService
 import com.coparently.app.data.remote.firebase.FirestoreUserDataSource
+import com.coparently.app.data.session.ProfileIdentity
 import com.coparently.app.domain.model.User
 import com.coparently.app.domain.repository.UserRepository
 import kotlinx.coroutines.flow.Flow
@@ -66,10 +67,12 @@ class UserRepositoryImpl @Inject constructor(
      *    dormant `upsertUser`, a full `.set()` that would have deleted every key it did not
      *    list — including `pendingRevocationOf`, the marker `unpairCoParent` leaves behind
      *    to remember whose shared access a partial revocation sweep still has to reach.
-     * 2. **No downgrade.** The name is resolved by [resolveName] in a strict preference
-     *    order, so a session where Firebase Auth has no `displayName` (every
-     *    email/password account) keeps whatever real name is already stored instead of
-     *    falling back to the email local part.
+     * 2. **No downgrade.** Name and photo are resolved by [ProfileIdentity] in a strict
+     *    preference order, so a session where Firebase Auth has no `displayName` and no
+     *    `photoUrl` (every email/password account) keeps whatever real name and avatar are
+     *    already stored instead of falling back to the email local part and to nothing.
+     *    A null photo is never written: "this session does not know one" must not be
+     *    mistaken for "the user removed theirs".
      * 3. **Idempotent.** Nothing is written when the stored picture already matches, so the
      *    per-session and per-sync calls cost one cached document read.
      *
@@ -88,7 +91,7 @@ class UserRepositoryImpl @Inject constructor(
             val remote = firestoreUserDataSource.getUserById(uid)
             val local = userDao.getUserById(uid)
 
-            val name = resolveName(
+            val name = ProfileIdentity.resolveName(
                 displayName = firebaseUser.displayName,
                 storedRemoteName = remote?.string("name"),
                 storedLocalName = local?.name,
@@ -100,10 +103,18 @@ class UserRepositoryImpl @Inject constructor(
                 android.util.Log.w(TAG, "No name could be derived for $uid; skipping profile write")
                 return
             }
-            val email = firebaseUser.email?.nonBlank() ?: remote?.string("email") ?: local?.email.orEmpty()
+            val identity = ResolvedIdentity(
+                name = name,
+                email = firebaseUser.email?.nonBlank() ?: remote?.string("email") ?: local?.email.orEmpty(),
+                photoUrl = ProfileIdentity.resolvePhotoUrl(
+                    authPhotoUrl = firebaseUser.photoUrl?.toString(),
+                    storedRemoteUrl = remote?.string("profilePhotoUrl"),
+                    storedLocalUrl = local?.profilePhotoUrl
+                )
+            )
 
-            writeRemoteProfile(uid, remote, name, email)
-            writeLocalProfile(uid, remote, local, name, email)
+            writeRemoteProfile(uid, remote, identity)
+            writeLocalProfile(uid, remote, local, identity)
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (
@@ -114,24 +125,43 @@ class UserRepositoryImpl @Inject constructor(
     }
 
     /**
+     * The identity [ensureProfile] resolved, on its way to both stores.
+     *
+     * Grouped rather than passed as three loose parameters so the two writers below stay
+     * under detekt's parameter-count limit, and so a fourth identity field can be added
+     * later without touching their signatures.
+     */
+    private data class ResolvedIdentity(
+        val name: String,
+        val email: String,
+        val photoUrl: String?
+    )
+
+    /**
      * Merges the identity keys that are missing or stale into `users/{uid}`.
      *
      * `id` and `firebaseUid` are only added when the document does not carry them:
      * [syncWithFirestore] reads `id` back and would otherwise mint a random UUID for the
      * local row, and the `users` rules require `firebaseUid`, when present, to equal the
      * caller's UID.
+     *
+     * `profilePhotoUrl` is only added when this session actually resolved one, so an
+     * email/password sign-in — where Firebase Auth reports no photo at all — cannot blank
+     * out an avatar a Google session stored earlier.
      */
     private suspend fun writeRemoteProfile(
         uid: String,
         remote: Map<String, Any?>?,
-        name: String,
-        email: String
+        identity: ResolvedIdentity
     ) {
         val patch = buildMap<String, Any> {
-            if (remote?.string("name") != name) put("name", name)
-            if (remote?.string("email") != email.nonBlank()) put("email", email)
+            if (remote?.string("name") != identity.name) put("name", identity.name)
+            if (remote?.string("email") != identity.email.nonBlank()) put("email", identity.email)
             if (remote?.string("id") == null) put("id", uid)
             if (remote?.string("firebaseUid") == null) put("firebaseUid", uid)
+            identity.photoUrl
+                ?.takeIf { it != remote?.string("profilePhotoUrl") }
+                ?.let { put("profilePhotoUrl", it) }
         }
         if (patch.isEmpty()) return
 
@@ -143,22 +173,27 @@ class UserRepositoryImpl @Inject constructor(
      * Mirrors the same identity into Room, so the local picture agrees with the remote one.
      *
      * An existing row is `copy()`-ed rather than rebuilt, so role, colour, calendar
-     * settings, `partnerId` and the FCM token survive the REPLACE insert.
+     * settings, `partnerId` and the FCM token survive the REPLACE insert. The photo is
+     * only overwritten when one was resolved, for the same no-downgrade reason as the
+     * remote patch.
      */
     private suspend fun writeLocalProfile(
         uid: String,
         remote: Map<String, Any?>?,
         local: UserEntity?,
-        name: String,
-        email: String
+        identity: ResolvedIdentity
     ) {
-        val updated = local?.copy(name = name, email = email) ?: UserEntity(
+        val updated = local?.copy(
+            name = identity.name,
+            email = identity.email,
+            profilePhotoUrl = identity.photoUrl ?: local.profilePhotoUrl
+        ) ?: UserEntity(
             id = uid,
-            email = email,
-            name = name,
+            email = identity.email,
+            name = identity.name,
             role = remote?.string("role") ?: DEFAULT_ROLE,
             colorCode = remote?.string("colorCode") ?: DEFAULT_COLOR_CODE,
-            profilePhotoUrl = remote?.string("profilePhotoUrl"),
+            profilePhotoUrl = identity.photoUrl,
             googleCalendarSyncEnabled = remote?.get("googleCalendarSyncEnabled") as? Boolean ?: false,
             googleCalendarId = remote?.string("googleCalendarId"),
             partnerId = remote?.string("partnerId"),
@@ -231,29 +266,6 @@ class UserRepositoryImpl @Inject constructor(
         val updatedUser = currentUser.copy(fcmToken = token)
         updateUser(updatedUser)
     }
-
-    /**
-     * Picks the best available display name, or null when there is nothing usable.
-     *
-     * Order, strongest first:
-     *
-     * 1. the Firebase Auth `displayName` — the authoritative identity, and the only source
-     *    that self-heals once a Google account starts providing one;
-     * 2. the name already stored remotely, then locally — this is the rung that matters for
-     *    email/password accounts, where `displayName` is always null and step 1 must not be
-     *    allowed to demote a real name to the email local part;
-     * 3. the local part of the email address, the same last resort the pre-rewrite pairing
-     *    screen used.
-     */
-    private fun resolveName(
-        displayName: String?,
-        storedRemoteName: String?,
-        storedLocalName: String?,
-        email: String?
-    ): String? = displayName?.nonBlank()
-        ?: storedRemoteName?.nonBlank()
-        ?: storedLocalName?.nonBlank()
-        ?: email?.substringBefore("@")?.nonBlank()
 
     /** This string unless it is blank, in which case null. */
     private fun String.nonBlank(): String? = takeIf { it.isNotBlank() }

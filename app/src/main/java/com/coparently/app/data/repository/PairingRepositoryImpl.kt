@@ -295,7 +295,12 @@ class PairingRepositoryImpl @Inject constructor(
             id = partnerId,
             name = data.getString("name").orEmpty(),
             email = data.getString("email").orEmpty(),
-            pairedSinceMillis = pairedAt
+            pairedSinceMillis = pairedAt,
+            // Written by the co-parent's own `ensureProfile`, so it stays null until their
+            // phone runs a build that stores one — the card falls back to the initial.
+            // Blank is normalized to null: the legacy full-profile write stores "" for a
+            // missing photo, and an empty URL must read as "no photo", not as a broken one.
+            photoUrl = data.getString("profilePhotoUrl")?.takeIf { it.isNotBlank() }
         )
     }
 

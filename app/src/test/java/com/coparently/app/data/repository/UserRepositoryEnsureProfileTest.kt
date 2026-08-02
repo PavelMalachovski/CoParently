@@ -1,5 +1,6 @@
 package com.coparently.app.data.repository
 
+import android.net.Uri
 import com.coparently.app.data.local.dao.UserDao
 import com.coparently.app.data.local.entity.UserEntity
 import com.coparently.app.data.remote.firebase.FcmService
@@ -185,6 +186,86 @@ class UserRepositoryEnsureProfileTest {
     }
 
     @Test
+    fun `carries the google account photo into the profile`() = runTest {
+        // The avatar the pairing screen and the co-parent's card render comes from here:
+        // Firebase Auth is the only source of it, and before this it was simply dropped.
+        signedIn(displayName = "Alice Novak", email = "alice@example.com", photoUrl = PHOTO)
+        coEvery { firestoreUserDataSource.getUserById(UID) } returns mapOf("fcmToken" to "token-1")
+
+        repository.ensureProfile()
+
+        assertEquals(PHOTO, capturedRemotePatch()["profilePhotoUrl"])
+        val row = slot<UserEntity>()
+        coVerify { userDao.insertUser(capture(row)) }
+        assertEquals(PHOTO, row.captured.profilePhotoUrl)
+    }
+
+    @Test
+    fun `does not downgrade a stored photo when auth has none`() = runTest {
+        // Every email/password session looks like this, and so does a Google session whose
+        // photo failed to load into the auth object. Neither is the user deleting a photo.
+        signedIn(displayName = null, email = "alice@example.com", photoUrl = null)
+        coEvery { firestoreUserDataSource.getUserById(UID) } returns mapOf(
+            "name" to "Alice Novak",
+            "email" to "alice@example.com",
+            "profilePhotoUrl" to PHOTO
+        )
+
+        repository.ensureProfile()
+
+        assertFalse(capturedRemotePatch().containsKey("profilePhotoUrl"))
+    }
+
+    @Test
+    fun `never clears a stored photo on the local row either`() = runTest {
+        signedIn(displayName = "Alice Novak", email = "alice@example.com", photoUrl = null)
+        coEvery { firestoreUserDataSource.getUserById(UID) } returns emptyMap()
+        coEvery { userDao.getUserById(UID) } returns localRow(name = "").copy(profilePhotoUrl = PHOTO)
+
+        repository.ensureProfile()
+
+        val row = slot<UserEntity>()
+        coVerify { userDao.insertUser(capture(row)) }
+        assertEquals(PHOTO, row.captured.profilePhotoUrl)
+    }
+
+    @Test
+    fun `a newer photo from auth replaces the stored one`() = runTest {
+        // Firebase Auth is the authoritative source, so a changed Google avatar wins.
+        signedIn(displayName = "Alice Novak", email = "alice@example.com", photoUrl = NEW_PHOTO)
+        coEvery { firestoreUserDataSource.getUserById(UID) } returns mapOf(
+            "id" to UID,
+            "firebaseUid" to UID,
+            "name" to "Alice Novak",
+            "email" to "alice@example.com",
+            "profilePhotoUrl" to PHOTO
+        )
+
+        repository.ensureProfile()
+
+        assertEquals(NEW_PHOTO, capturedRemotePatch()["profilePhotoUrl"])
+    }
+
+    @Test
+    fun `an unchanged photo is not rewritten`() = runTest {
+        signedIn(displayName = "Alice Novak", email = "alice@example.com", photoUrl = PHOTO)
+        coEvery { firestoreUserDataSource.getUserById(UID) } returns mapOf(
+            "id" to UID,
+            "firebaseUid" to UID,
+            "name" to "Alice Novak",
+            "email" to "alice@example.com",
+            "profilePhotoUrl" to PHOTO
+        )
+        coEvery { userDao.getUserById(UID) } returns
+            localRow(name = "Alice Novak").copy(profilePhotoUrl = PHOTO)
+
+        repository.ensureProfile()
+
+        coVerify(exactly = 0) { firestoreUserDataSource.updateUser(any(), any()) }
+        coVerify(exactly = 0) { userDao.insertUser(any()) }
+    }
+
+    @Test
     fun `writes nothing when nobody is signed in`() = runTest {
         every { authService.getCurrentUser() } returns null
 
@@ -236,11 +317,20 @@ class UserRepositoryEnsureProfileTest {
         assertFalse(capturedRemotePatch().containsKey("fcmToken"))
     }
 
-    private fun signedIn(displayName: String?, email: String?) {
+    /**
+     * @param photoUrl What `FirebaseUser.photoUrl` reports. Google sign-in populates it;
+     *   an email/password account never does, which is why the default here is null.
+     */
+    private fun signedIn(displayName: String?, email: String?, photoUrl: String? = null) {
         val firebaseUser = mockk<FirebaseUser>(relaxed = true)
         every { firebaseUser.uid } returns UID
         every { firebaseUser.displayName } returns displayName
         every { firebaseUser.email } returns email
+        // Explicit even when null: a relaxed mock would hand back a stub Uri whose
+        // toString() is a mock identifier, and that would be written as a photo URL.
+        every { firebaseUser.photoUrl } returns photoUrl?.let { url ->
+            mockk<Uri>(relaxed = true).also { uri -> every { uri.toString() } returns url }
+        }
         every { authService.getCurrentUser() } returns firebaseUser
     }
 
@@ -262,5 +352,7 @@ class UserRepositoryEnsureProfileTest {
     private companion object {
         const val UID = "user-a"
         const val PARTNER = "user-b"
+        const val PHOTO = "https://lh3.googleusercontent.com/a/alice"
+        const val NEW_PHOTO = "https://lh3.googleusercontent.com/a/alice-v2"
     }
 }
