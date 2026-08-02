@@ -680,28 +680,58 @@ private fun PairingDeepLinkEffect(
 }
 
 /**
- * A `coplanly://chat` deep link awaiting hand-off to the Chat tab, bundled with the callback
- * that clears it once consumed.
+ * A `coplanly://chat` deep link awaiting hand-off, or null while none is pending.
+ *
+ * [conversationId] carries the id from the link's `?conversationId=…` query parameter (see
+ * [com.coparently.app.domain.chat.ChatUri]), or null for a bare `coplanly://chat` link — a
+ * manual test push, an older payload, or a hand-typed link may carry none, and that must
+ * degrade to opening the Chat tab's list rather than fail.
+ */
+data class PendingChatLink(val conversationId: String?)
+
+/**
+ * A [PendingChatLink] awaiting hand-off, bundled with the callback that clears it once
+ * consumed.
  *
  * Exists purely to keep [NavGraph]'s own signature from growing by two more loose parameters
  * every time another deep link is added — see [NavGraph]'s `pendingChatOpen` doc.
  *
- * @property isPending Whether a chat deep link is currently awaiting hand-off.
+ * @property link The pending link, or null when none is outstanding.
  * @property onConsumed Called once the link has been acted on, so the owner (
  *   [MainActivity][com.coparently.app.presentation.MainActivity]) can clear it and avoid
  *   re-navigating on the next recomposition.
  */
-class PendingChatOpen(val isPending: StateFlow<Boolean>, val onConsumed: () -> Unit)
+class PendingChatOpen(val link: StateFlow<PendingChatLink?>, val onConsumed: () -> Unit)
 
 /**
- * Navigates to the Chat tab once a `coplanly://chat` deep link is both pending and safe to
- * act on — same authentication guard as [PairingDeepLinkEffect], for the same reason: an
- * unauthenticated user must follow the normal Auth flow rather than being dropped straight
- * onto a screen behind the auth gate.
+ * The route a [PendingChatLink] should open: the specific thread when it carries a
+ * conversation id, otherwise the Chat tab's conversation list.
  *
- * There is no code or id to carry through: two co-parents share exactly one conversation,
- * so "open the chat link" and "open the Chat tab" are the same action, unlike the pairing
- * link's optional invite code.
+ * A pure function (no [Composable] dependency) purely so this fallback — the part the review
+ * that added it cared about — is pinned by a plain unit test rather than only exercised
+ * through Compose UI test infrastructure this project does not otherwise use.
+ *
+ * @param conversationId The id from the link, or null/blank for a bare `coplanly://chat` link.
+ * @return The route to navigate to.
+ */
+internal fun chatDeepLinkRoute(conversationId: String?): String =
+    if (conversationId.isNullOrBlank()) {
+        Screen.Conversations.createRoute()
+    } else {
+        Screen.Chat.createRoute(conversationId)
+    }
+
+/**
+ * Navigates to the Chat tab (or a specific thread) once a `coplanly://chat` deep link is both
+ * pending and safe to act on — same authentication guard as [PairingDeepLinkEffect], for the
+ * same reason: an unauthenticated user must follow the normal Auth flow rather than being
+ * dropped straight onto a screen behind the auth gate.
+ *
+ * Unlike [PairingDeepLinkEffect], this never pops [Screen.Conversations] off the back stack
+ * first: `PairingScreen` needed that because it re-arms a confirmation dialog via
+ * `rememberSaveable`, but nothing in `ChatScreen`/`ConversationsScreen` has an analogous
+ * stale-state problem, so a plain [NavHostController.navigate] with `launchSingleTop` is
+ * enough to avoid stacking duplicate entries from a repeated tap.
  *
  * @param pendingChatOpen The pending link and its consumption callback.
  * @param isAuthenticated Current auth state (`null` while loading).
@@ -713,11 +743,11 @@ private fun ChatDeepLinkEffect(
     isAuthenticated: Boolean?,
     navController: NavHostController
 ) {
-    val chatOpenPending by pendingChatOpen.isPending.collectAsState()
-    LaunchedEffect(chatOpenPending, isAuthenticated) {
-        if (chatOpenPending && isAuthenticated == true) {
-            navController.navigate(Screen.Conversations.createRoute()) {
-                popUpTo(Screen.Conversations.route) { inclusive = true }
+    val chatLink by pendingChatOpen.link.collectAsState()
+    LaunchedEffect(chatLink, isAuthenticated) {
+        if (chatLink != null && isAuthenticated == true) {
+            navController.navigate(chatDeepLinkRoute(chatLink?.conversationId)) {
+                launchSingleTop = true
             }
             pendingChatOpen.onConsumed()
         }

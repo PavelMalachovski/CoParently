@@ -827,6 +827,18 @@ const CHAT_MESSAGE_PREVIEW_LENGTH = 120;
  * a never-read conversation's own `0` default and silently swallow the push instead of
  * sending one.
  *
+ * Only the first non-sender uid in `participants` is ever notified. `ConversationKey.of`
+ * only ever produces a two-uid conversation today, so a third participant is unreachable in
+ * practice — but if that ever changes, this silently notifies just one of the other
+ * participants rather than all of them, which would need a deliberate decision, not a
+ * side effect of `Array.prototype.find`.
+ *
+ * `messageType` is not read here: only `TEXT` messages are sent today (`MessageType.IMAGE`
+ * and `VOICE` exist on the model but nothing produces them yet), so `message.content` is
+ * always the right preview source. Once either ships, this will push an empty-body
+ * notification for it — not a live bug, but worth fixing at that point rather than being
+ * rediscovered as one.
+ *
  * @param {FirebaseFirestore.Firestore} db Firestore instance.
  * @param {Object} message The created `messages/{messageId}` document's data.
  * @return {Promise<void>}
@@ -854,7 +866,7 @@ async function notifyOfChatMessage(db, message) {
     targetUserId: recipient,
     data: {
       type: 'chat_message',
-      conversationId: conversationId,
+      conversationId,
       title: message.senderName || 'CoPlanly',
       body: String(message.content || '').slice(0, CHAT_MESSAGE_PREVIEW_LENGTH),
     },

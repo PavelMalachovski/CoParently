@@ -71,7 +71,12 @@ class CoPlanlyMessagingService : FirebaseMessagingService() {
         // skip rather than post a title-only or fully blank-looking notification.
         if (title.isNullOrEmpty() && body.isNullOrEmpty()) return
 
-        showNotification(title ?: getString(R.string.app_name), body.orEmpty(), type)
+        // Only meaningful for TYPE_CHAT_MESSAGE (see notifyOfChatMessage in
+        // functions/index.js, which is the only producer that sets it); null for every
+        // other type, and showNotification only reads it for that one branch.
+        val conversationId = data["conversationId"]
+
+        showNotification(title ?: getString(R.string.app_name), body.orEmpty(), type, conversationId)
     }
 
     override fun onNewToken(token: String) {
@@ -88,8 +93,9 @@ class CoPlanlyMessagingService : FirebaseMessagingService() {
 
     /**
      * Shows a notification, deep-linking pairing events into the pairing
-     * screen, a chat message into the Chat tab, and everything else into the
-     * app's launcher activity.
+     * screen, a chat message into its conversation (or the Chat tab's list
+     * when [conversationId] is null — a manual test push or an older payload),
+     * and everything else into the app's launcher activity.
      *
      * Pairing notifications reuse [PAIRING_NOTIFICATION_ID] instead of a
      * timestamp-derived id: a `pairing_accepted` followed by a `pairing_removed`
@@ -101,8 +107,11 @@ class CoPlanlyMessagingService : FirebaseMessagingService() {
      * distinct constant, never collides with (or is replaced by) a pairing
      * notification. Every other notification type keeps a timestamp id so
      * unrelated notifications keep accumulating.
+     *
+     * @param conversationId The `data["conversationId"]` [onMessageReceived] read off the
+     *   message; only meaningful (and only ever non-null) for [TYPE_CHAT_MESSAGE].
      */
-    private fun showNotification(title: String, body: String, type: String?) {
+    private fun showNotification(title: String, body: String, type: String?, conversationId: String? = null) {
         val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
         val isPairingEvent = type == TYPE_PAIRING_ACCEPTED || type == TYPE_PAIRING_REMOVED
@@ -111,7 +120,7 @@ class CoPlanlyMessagingService : FirebaseMessagingService() {
             isPairingEvent -> Intent(Intent.ACTION_VIEW, Uri.parse(PAIRING_DEEP_LINK)).apply {
                 setPackage(packageName)
             }
-            isChatMessage -> Intent(Intent.ACTION_VIEW, Uri.parse(CHAT_DEEP_LINK)).apply {
+            isChatMessage -> Intent(Intent.ACTION_VIEW, Uri.parse(ChatUri.build(conversationId))).apply {
                 setPackage(packageName)
             }
             else -> packageManager.getLaunchIntentForPackage(packageName)
@@ -187,15 +196,6 @@ class CoPlanlyMessagingService : FirebaseMessagingService() {
          * the pairing screen with nothing pre-filled" rather than a no-op.
          */
         private val PAIRING_DEEP_LINK = "${PairingUri.SCHEME}://${PairingUri.HOST}"
-
-        /**
-         * Opens the Chat tab — see
-         * [MainActivity][com.coparently.app.presentation.MainActivity]'s
-         * `readChatDeepLink`. Carries no conversation id: the two co-parents
-         * share exactly one conversation, whose id the client resolves for
-         * itself.
-         */
-        private val CHAT_DEEP_LINK = ChatUri.build()
 
         /**
          * Stable id shared by both pairing notification types so a newer one

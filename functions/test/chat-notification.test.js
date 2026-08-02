@@ -173,6 +173,23 @@ describe('notifyOfChatMessage', () => {
     assert.deepStrictEqual(db._added, []);
   });
 
+  it('notifies only the first non-sender participant when there are more than two', async () => {
+    // Pins the deliberate choice: `ConversationKey.of` only ever produces a two-uid
+    // conversation today, so this is unreachable in practice, but a looser schema tomorrow
+    // must not silently start notifying just one of several recipients without a review of
+    // this test.
+    const db = fakeDb({participants: ['alice', 'bob', 'carol']});
+    const message = {
+      conversationId: 'alice__bob__carol', senderId: 'alice', senderName: 'Alice',
+      content: 'Hi', timestamp: '2026-08-02T10:00:00',
+    };
+
+    await notifyOfChatMessage(db, message);
+
+    assert.strictEqual(db._added.length, 1);
+    assert.strictEqual(db._added[0].data.targetUserId, 'bob');
+  });
+
   it('truncates the body to the named preview length rather than inlining a number', async () => {
     const longBody = 'x'.repeat(500);
     const db = fakeDb({participants: ['alice', 'bob']});
