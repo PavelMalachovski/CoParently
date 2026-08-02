@@ -44,4 +44,16 @@ class ConversationKeyTest {
             ConversationKey.of("uidA", "  ")
         }
     }
+
+    @Test
+    fun `a uid containing the separator is rejected instead of silently colliding`() {
+        // Without this guard, of("x__y", "z") and of("x", "y__z") would both join to
+        // "x__y__z" — two different pairs producing the same id.
+        assertThrows(IllegalArgumentException::class.java) {
+            ConversationKey.of("x__y", "z")
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            ConversationKey.of("x", "y__z")
+        }
+    }
 }

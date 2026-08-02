@@ -52,9 +52,23 @@ object ChatReadState {
     /**
      * The message's timestamp as epoch millis.
      *
-     * `Message.timestamp` is a `LocalDateTime`, so it needs a zone to become an instant.
-     * The device zone is correct here: both marks are written by clients using the same
-     * conversion, and the comparison is between values produced the same way.
+     * `Message.timestamp` is a naive `LocalDateTime` — it was written as `LocalDateTime.now()`
+     * on the sending device and carries no offset — so turning it into an instant needs a zone,
+     * and the only one available here is the *reading* device's own [ZoneId.systemDefault].
+     *
+     * That is only correct while both parents' devices share a timezone. If they don't, a
+     * message's wall-clock time gets reinterpreted in the wrong zone: a message written at
+     * 14:00 in UTC+2 is read back as 14:00 in a UTC+0 reader's zone, i.e. as having been sent
+     * two hours later than it actually was. Relative to that reader's own `lastReadAt`/
+     * `lastDeliveredAt` marks (real epoch millis, advanced as the reader acts *now*), the
+     * message can permanently appear to be from the future: [unreadCount] never counts it as
+     * read, its badge never clears, and [statusFor] never promotes it past `SENT` — the ticks
+     * stay stuck.
+     *
+     * The real fix is storing `Message.timestamp` as epoch millis instead of a naive
+     * `LocalDateTime`, removing the need for this conversion entirely. That is a larger,
+     * separate change; today's behaviour is accepted as-is because both parents are expected
+     * to be in the same timezone.
      */
     private fun Message.epochMillis(): Long =
         timestamp.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()

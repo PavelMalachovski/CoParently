@@ -55,6 +55,18 @@ class ChatReadStateTest {
     }
 
     @Test
+    fun `an empty message list has no unread messages`() {
+        assertEquals(0, ChatReadState.unreadCount(emptyList(), myUid = "me", lastReadAtMillis = null))
+    }
+
+    @Test
+    fun `a read mark later than every message leaves nothing unread`() {
+        val messages = listOf(message("m1", "them", 100), message("m2", "them", 200))
+
+        assertEquals(0, ChatReadState.unreadCount(messages, myUid = "me", lastReadAtMillis = 1_000))
+    }
+
+    @Test
     fun `a sent message the other device has not fetched stays SENT`() {
         val status = ChatReadState.statusFor(
             message = message("m1", "me", 200),
@@ -114,6 +126,18 @@ class ChatReadStateTest {
         )
 
         assertEquals(MessageSendStatus.ERROR, status)
+    }
+
+    @Test
+    fun `a conversation nobody has touched leaves the message at SENT`() {
+        val status = ChatReadState.statusFor(
+            message = message("m1", "me", 200),
+            otherUid = "them",
+            lastReadAt = emptyMap(),
+            lastDeliveredAt = emptyMap()
+        )
+
+        assertEquals(MessageSendStatus.SENT, status)
     }
 
     @Test

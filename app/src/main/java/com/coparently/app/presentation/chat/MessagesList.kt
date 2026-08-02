@@ -211,9 +211,11 @@ fun MessageItem(
                             color = MaterialTheme.colorScheme.error
                         )
                     }
-                    // DELIVERED/READ render like SENT until a later task adds distinct
-                    // delivered/read indicators; they are derived at render time by
-                    // ChatReadState.statusFor and not yet wired into this screen.
+                    // This `when` must handle every MessageSendStatus: the Kotlin compiler
+                    // rejects it as non-exhaustive otherwise (verified by building with the
+                    // branches removed). DELIVERED/READ are not produced anywhere yet — nothing
+                    // wires ChatReadState.statusFor into this screen — so they render as a
+                    // placeholder identical to SENT until Task 6 gives them their own icons.
                     MessageSendStatus.SENT,
                     MessageSendStatus.DELIVERED,
                     MessageSendStatus.READ -> {
