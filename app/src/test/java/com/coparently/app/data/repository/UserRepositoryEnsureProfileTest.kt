@@ -7,6 +7,7 @@ import com.coparently.app.data.remote.firebase.FcmService
 import com.coparently.app.data.remote.firebase.FirebaseAuthService
 import com.coparently.app.data.remote.firebase.FirestoreUserDataSource
 import com.google.firebase.auth.FirebaseUser
+import com.google.firebase.auth.UserInfo
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -110,6 +111,63 @@ class UserRepositoryEnsureProfileTest {
 
         // The write still happens (this document is missing `id`/`firebaseUid`), but it
         // must not carry a name — "alice", the email local part, would be a downgrade.
+        assertFalse(capturedRemotePatch().containsKey("name"))
+    }
+
+    @Test
+    fun `recovers name, email and photo from providerData when the top-level fields are empty`() = runTest {
+        // The owner's Samsung, reproduced: a genuine Google session whose account record
+        // predates linking the provider, so displayName and email are empty at the top
+        // level while the google.com entry in providerData carries all three.
+        signedIn(
+            displayName = null,
+            email = null,
+            photoUrl = null,
+            providers = listOf(
+                googleProviderInfo(
+                    displayName = "Alice Novak",
+                    email = "alice@example.com",
+                    photoUrl = PHOTO
+                )
+            )
+        )
+        coEvery { firestoreUserDataSource.getUserById(UID) } returns mapOf("fcmToken" to "token-1")
+
+        repository.ensureProfile()
+
+        val patch = capturedRemotePatch()
+        assertEquals("Alice Novak", patch["name"])
+        assertEquals("alice@example.com", patch["email"])
+        assertEquals(PHOTO, patch["profilePhotoUrl"])
+    }
+
+    @Test
+    fun `does not downgrade a stored name with a provider value`() = runTest {
+        signedIn(
+            displayName = null,
+            email = null,
+            providers = listOf(googleProviderInfo(displayName = "Alice N. (Google)", email = "alice@example.com"))
+        )
+        coEvery { firestoreUserDataSource.getUserById(UID) } returns mapOf(
+            "name" to "Alice Novak",
+            "email" to "alice@example.com"
+        )
+
+        repository.ensureProfile()
+
+        // The document is missing `id`/`firebaseUid`, so a write still happens, but it must
+        // not carry a name — the provider's value must not demote the one already stored.
+        assertFalse(capturedRemotePatch().containsKey("name"))
+    }
+
+    @Test
+    fun `ignores the synthetic firebase entry as a name source`() = runTest {
+        signedIn(displayName = null, email = null, providers = listOf(syntheticProviderInfo()))
+        coEvery { firestoreUserDataSource.getUserById(UID) } returns mapOf("fcmToken" to "token-1")
+
+        repository.ensureProfile()
+
+        // Falls through to the name-less path exactly as if providerData were empty.
         assertFalse(capturedRemotePatch().containsKey("name"))
     }
 
@@ -369,8 +427,16 @@ class UserRepositoryEnsureProfileTest {
     /**
      * @param photoUrl What `FirebaseUser.photoUrl` reports. Google sign-in populates it;
      *   an email/password account never does, which is why the default here is null.
+     * @param providers What `FirebaseUser.providerData` reports. Empty by default — an
+     *   explicit empty list, not a relaxed-mock stub, so the name-less diagnostic's
+     *   provider ids never carry a mock identifier by accident.
      */
-    private fun signedIn(displayName: String?, email: String?, photoUrl: String? = null) {
+    private fun signedIn(
+        displayName: String?,
+        email: String?,
+        photoUrl: String? = null,
+        providers: List<UserInfo> = emptyList()
+    ) {
         val firebaseUser = mockk<FirebaseUser>(relaxed = true)
         every { firebaseUser.uid } returns UID
         every { firebaseUser.displayName } returns displayName
@@ -380,11 +446,42 @@ class UserRepositoryEnsureProfileTest {
         every { firebaseUser.photoUrl } returns photoUrl?.let { url ->
             mockk<Uri>(relaxed = true).also { uri -> every { uri.toString() } returns url }
         }
-        // Read by the name-less diagnostic; an explicit empty list keeps a relaxed mock
-        // from handing back a stub whose providerId is a mock identifier.
-        every { firebaseUser.providerData } returns mutableListOf()
+        every { firebaseUser.providerData } returns providers.toMutableList()
         every { firebaseUser.isAnonymous } returns false
         every { authService.getCurrentUser() } returns firebaseUser
+    }
+
+    /**
+     * A `UserInfo` entry as `google.com` reports it: name, email and photo together, the
+     * one Firebase provider this app treats as authoritative when the top-level session
+     * fields are empty. See [ProfileIdentity.bestProvider] for why `google.com` wins over
+     * any other real provider that might also be linked.
+     */
+    private fun googleProviderInfo(
+        displayName: String? = null,
+        email: String? = null,
+        photoUrl: String? = null
+    ): UserInfo {
+        val info = mockk<UserInfo>(relaxed = true)
+        every { info.providerId } returns "google.com"
+        every { info.displayName } returns displayName
+        every { info.email } returns email
+        every { info.photoUrl } returns photoUrl?.let { url ->
+            mockk<Uri>(relaxed = true).also { uri -> every { uri.toString() } returns url }
+        }
+        return info
+    }
+
+    /** The synthetic `firebase` entry every account carries — never a source of identity. */
+    private fun syntheticProviderInfo(): UserInfo {
+        val info = mockk<UserInfo>(relaxed = true)
+        every { info.providerId } returns "firebase"
+        every { info.displayName } returns "should never surface"
+        every { info.email } returns "synthetic@example.com"
+        every { info.photoUrl } returns mockk<Uri>(relaxed = true).also { uri ->
+            every { uri.toString() } returns "https://example.com/synthetic.png"
+        }
+        return info
     }
 
     private fun localRow(name: String) = UserEntity(

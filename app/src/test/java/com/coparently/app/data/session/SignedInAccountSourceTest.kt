@@ -5,6 +5,7 @@ import com.coparently.app.data.local.dao.UserDao
 import com.coparently.app.data.local.entity.UserEntity
 import com.coparently.app.data.remote.firebase.FirebaseAuthService
 import com.google.firebase.auth.FirebaseUser
+import com.google.firebase.auth.UserInfo
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -80,6 +81,22 @@ class SignedInAccountSourceTest {
     }
 
     @Test
+    fun `recovers name and photo from providerData when the session carries neither`() = runTest {
+        // The same Samsung shape UserRepositoryImpl.ensureProfile repairs: a genuine Google
+        // session whose account record predates linking the provider, top-level fields
+        // empty, google.com entry in providerData carrying all three.
+        val provider = googleProviderInfo(displayName = "Alice Novak", email = "alice@example.com", photoUrl = PHOTO)
+        signedIn(displayName = null, email = null, photoUrl = null, providers = listOf(provider))
+        storedRow(null)
+
+        val account = source().observe().first()
+
+        assertEquals("Alice Novak", account?.name)
+        assertEquals("alice@example.com", account?.email)
+        assertEquals(PHOTO, account?.photoUrl)
+    }
+
+    @Test
     fun `reports nothing while signed out`() = runTest {
         every { authService.getAuthStateFlow() } returns flowOf(null)
 
@@ -111,7 +128,12 @@ class SignedInAccountSourceTest {
 
     private fun source() = SignedInAccountSource(authService, userDao)
 
-    private fun signedIn(displayName: String?, email: String?, photoUrl: String?) {
+    private fun signedIn(
+        displayName: String?,
+        email: String?,
+        photoUrl: String?,
+        providers: List<UserInfo> = emptyList()
+    ) {
         val firebaseUser = mockk<FirebaseUser>(relaxed = true)
         every { firebaseUser.uid } returns UID
         every { firebaseUser.displayName } returns displayName
@@ -121,7 +143,24 @@ class SignedInAccountSourceTest {
         every { firebaseUser.photoUrl } returns photoUrl?.let { url ->
             mockk<Uri>(relaxed = true).also { uri -> every { uri.toString() } returns url }
         }
+        every { firebaseUser.providerData } returns providers.toMutableList()
         every { authService.getAuthStateFlow() } returns flowOf(firebaseUser)
+    }
+
+    /** A `UserInfo` entry as `google.com` reports it — see [ProfileIdentity.bestProvider]. */
+    private fun googleProviderInfo(
+        displayName: String? = null,
+        email: String? = null,
+        photoUrl: String? = null
+    ): UserInfo {
+        val info = mockk<UserInfo>(relaxed = true)
+        every { info.providerId } returns "google.com"
+        every { info.displayName } returns displayName
+        every { info.email } returns email
+        every { info.photoUrl } returns photoUrl?.let { url ->
+            mockk<Uri>(relaxed = true).also { uri -> every { uri.toString() } returns url }
+        }
+        return info
     }
 
     private fun storedRow(entity: UserEntity?) {

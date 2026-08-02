@@ -5,6 +5,7 @@ import com.coparently.app.data.local.entity.UserEntity
 import com.coparently.app.data.remote.firebase.FirebaseAuthService
 import com.coparently.app.domain.model.AccountSummary
 import com.google.firebase.auth.FirebaseUser
+import com.google.firebase.auth.UserInfo
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -65,12 +66,21 @@ class SignedInAccountSource @Inject constructor(
      * block would be worse than no block at all.
      */
     private fun summarize(user: FirebaseUser, row: UserEntity?): AccountSummary? {
-        val email = user.email?.takeIf { it.isNotBlank() } ?: row?.email.orEmpty()
+        // Same gap [UserRepositoryImpl.ensureProfile] fills in: a real Google session whose
+        // account record predates linking the provider has nothing at the top level.
+        val providers = user.providerData.map { it.toProviderIdentity() }
+        val email = ProfileIdentity.resolveEmail(
+            topLevelEmail = user.email,
+            storedRemoteEmail = null,
+            storedLocalEmail = row?.email,
+            providers = providers
+        ).orEmpty()
         val name = ProfileIdentity.resolveName(
             displayName = user.displayName,
             storedRemoteName = null,
             storedLocalName = row?.name,
-            email = email
+            email = email,
+            providers = providers
         ).orEmpty()
         if (name.isBlank() && email.isBlank()) return null
 
@@ -81,8 +91,22 @@ class SignedInAccountSource @Inject constructor(
             photoUrl = ProfileIdentity.resolvePhotoUrl(
                 authPhotoUrl = user.photoUrl?.toString(),
                 storedRemoteUrl = null,
-                storedLocalUrl = row?.profilePhotoUrl
+                storedLocalUrl = row?.profilePhotoUrl,
+                providers = providers
             )
         )
     }
+
+    /**
+     * Projects one `FirebaseUser.providerData` entry into the plain-string shape
+     * [ProfileIdentity] works with. Mirrors
+     * `UserRepositoryImpl.toProviderIdentity` — kept as a small private duplicate rather
+     * than a shared helper, the same way `nonBlank()` is duplicated across this data layer.
+     */
+    private fun UserInfo.toProviderIdentity() = ProfileIdentity.ProviderIdentity(
+        providerId = providerId,
+        displayName = displayName,
+        email = email,
+        photoUrl = photoUrl?.toString()
+    )
 }

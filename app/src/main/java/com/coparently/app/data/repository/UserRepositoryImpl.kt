@@ -9,6 +9,7 @@ import com.coparently.app.data.session.ProfileIdentity
 import com.coparently.app.domain.model.User
 import com.coparently.app.domain.repository.UserRepository
 import com.google.firebase.auth.FirebaseUser
+import com.google.firebase.auth.UserInfo
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
@@ -75,12 +76,14 @@ class UserRepositoryImpl @Inject constructor(
      *    dormant `upsertUser`, a full `.set()` that would have deleted every key it did not
      *    list — including `pendingRevocationOf`, the marker `unpairCoParent` leaves behind
      *    to remember whose shared access a partial revocation sweep still has to reach.
-     * 2. **No downgrade.** Name and photo are resolved by [ProfileIdentity] in a strict
-     *    preference order, so a session where Firebase Auth has no `displayName` and no
-     *    `photoUrl` (every email/password account) keeps whatever real name and avatar are
-     *    already stored instead of falling back to the email local part and to nothing.
-     *    A null photo is never written: "this session does not know one" must not be
-     *    mistaken for "the user removed theirs".
+     * 2. **No downgrade.** Name, email and photo are resolved by [ProfileIdentity] in a
+     *    strict preference order, so a session where Firebase Auth's top-level fields have
+     *    no `displayName`, `email` or `photoUrl` (every email/password account, and a Google
+     *    account whose record predates linking the provider — see
+     *    [ProfileIdentity.ProviderIdentity]) keeps whatever real identity is already stored
+     *    or, failing that, falls back to `providerData` before ever resorting to the email
+     *    local part. A null photo is never written: "this session does not know one" must
+     *    not be mistaken for "the user removed theirs".
      * 3. **Idempotent.** Nothing is written when the stored picture already matches, so the
      *    per-session and per-sync calls cost one cached document read.
      *
@@ -96,26 +99,44 @@ class UserRepositoryImpl @Inject constructor(
             // Null here means either "no document" or "the read failed"; both are safe,
             // because every write below is a merge and the name resolution falls back to
             // the local row rather than to a guess.
-            val remote = firestoreUserDataSource.getUserById(uid)
-            val local = userDao.getUserById(uid)
+            //
+            // `providers` covers the gap the other two can't: a real, non-anonymous session
+            // (Google, in practice) whose account record predates linking the provider
+            // reports nothing at the top level but carries the name/email/photo here. See
+            // ProfileIdentity's class doc for why this is a fallback and not a competing
+            // source.
+            val snapshot = ProfileSnapshot(
+                remote = firestoreUserDataSource.getUserById(uid),
+                local = userDao.getUserById(uid),
+                providers = firebaseUser.providerData.map { it.toProviderIdentity() }
+            )
+            val (remote, local, providers) = snapshot
 
+            val email = ProfileIdentity.resolveEmail(
+                topLevelEmail = firebaseUser.email,
+                storedRemoteEmail = remote?.string("email"),
+                storedLocalEmail = local?.email,
+                providers = providers
+            )
             val name = ProfileIdentity.resolveName(
                 displayName = firebaseUser.displayName,
                 storedRemoteName = remote?.string("name"),
                 storedLocalName = local?.name,
-                email = firebaseUser.email ?: local?.email
+                email = email,
+                providers = providers
             )
             if (name == null) {
-                writeIdentityWithoutName(uid, firebaseUser, remote, local)
+                writeIdentityWithoutName(uid, firebaseUser, snapshot, email)
                 return
             }
             val identity = ResolvedIdentity(
                 name = name,
-                email = firebaseUser.email?.nonBlank() ?: remote?.string("email") ?: local?.email.orEmpty(),
+                email = email.orEmpty(),
                 photoUrl = ProfileIdentity.resolvePhotoUrl(
                     authPhotoUrl = firebaseUser.photoUrl?.toString(),
                     storedRemoteUrl = remote?.string("profilePhotoUrl"),
-                    storedLocalUrl = local?.profilePhotoUrl
+                    storedLocalUrl = local?.profilePhotoUrl,
+                    providers = providers
                 )
             )
 
@@ -153,28 +174,40 @@ class UserRepositoryImpl @Inject constructor(
      * The log line is the point of the rest of this: it reports which inputs were absent
      * and what kind of session this is, so a device that keeps landing here can be
      * diagnosed instead of guessed at. See [ProfileIdentity.describeNameSources] for why
-     * it carries presence flags and provider ids and no personal data.
+     * it carries presence flags and provider ids and no personal data — and, now that
+     * [ProfileIdentity.resolveName] itself checks `providerData`, for why reaching this
+     * method at all means that check already came back empty too.
+     *
+     * @param snapshot The same remote/local/provider data [ensureProfile] already read and
+     *   built for [ProfileIdentity.resolveName]/[ProfileIdentity.resolveEmail] — passed in
+     *   rather than re-read or rebuilt, so the log's `hasProviderName` reflects exactly what
+     *   resolution just tried, and grouped into one parameter to stay under detekt's
+     *   parameter-count limit (the same reason [ResolvedIdentity] exists).
+     * @param email The output of [ProfileIdentity.resolveEmail], already provider-aware, so
+     *   this method does not re-derive it with a narrower rule than the caller used.
      */
     private suspend fun writeIdentityWithoutName(
         uid: String,
         firebaseUser: FirebaseUser,
-        remote: Map<String, Any?>?,
-        local: UserEntity?
+        snapshot: ProfileSnapshot,
+        email: String?
     ) {
-        val email = firebaseUser.email?.nonBlank() ?: remote?.string("email") ?: local?.email?.nonBlank()
+        val (remote, local, providers) = snapshot
         val photoUrl = ProfileIdentity.resolvePhotoUrl(
             authPhotoUrl = firebaseUser.photoUrl?.toString(),
             storedRemoteUrl = remote?.string("profilePhotoUrl"),
-            storedLocalUrl = local?.profilePhotoUrl
+            storedLocalUrl = local?.profilePhotoUrl,
+            providers = providers
         )
         val sources = ProfileIdentity.describeNameSources(
             hasDisplayName = firebaseUser.displayName?.nonBlank() != null,
             hasRemoteName = remote?.string("name") != null,
             hasLocalName = local?.name?.nonBlank() != null,
+            hasProviderName = ProfileIdentity.bestProvider(providers)?.displayName?.nonBlank() != null,
             hasEmail = email != null,
             hasRemoteProfile = remote != null,
             isAnonymous = firebaseUser.isAnonymous,
-            providerIds = firebaseUser.providerData.map { it.providerId }
+            providerIds = providers.map { it.providerId }
         )
         val outcome = if (remote == null) {
             "No readable profile document, so a name-less merge would hit the create rule; " +
@@ -221,6 +254,18 @@ class UserRepositoryImpl @Inject constructor(
         val name: String,
         val email: String,
         val photoUrl: String?
+    )
+
+    /**
+     * The remote document, local row and linked-provider data [ensureProfile] reads once and
+     * hands to [writeIdentityWithoutName], for the same reason [ResolvedIdentity] exists:
+     * one parameter instead of three keeps that function under detekt's parameter-count
+     * limit.
+     */
+    private data class ProfileSnapshot(
+        val remote: Map<String, Any?>?,
+        val local: UserEntity?,
+        val providers: List<ProfileIdentity.ProviderIdentity>
     )
 
     /**
@@ -421,4 +466,20 @@ class UserRepositoryImpl @Inject constructor(
         const val DEFAULT_COLOR_CODE = "#FF4081"
     }
 }
+
+/**
+ * Projects one `FirebaseUser.providerData` entry into the plain-string shape
+ * [ProfileIdentity] works with, so that pure object never has to depend on the Firebase
+ * `UserInfo`/`android.net.Uri` types.
+ *
+ * Kept as a top-level function rather than a member of [UserRepositoryImpl]: it needs no
+ * access to that class's state, and [UserRepositoryImpl] is already at detekt's
+ * function-count limit.
+ */
+private fun UserInfo.toProviderIdentity() = ProfileIdentity.ProviderIdentity(
+    providerId = providerId,
+    displayName = displayName,
+    email = email,
+    photoUrl = photoUrl?.toString()
+)
 

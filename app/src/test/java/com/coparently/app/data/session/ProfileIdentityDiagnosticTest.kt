@@ -17,6 +17,13 @@ import org.junit.Test
  * presence flags and provider constants and nothing else. Logcat is readable by anything
  * with adb access to the device, and an email address in a log line is a leak that was
  * already removed once on this branch.
+ *
+ * `hasProviderName` is pinned separately: now that [ProfileIdentity.resolveName] itself
+ * falls back to `providerData`, this diagnostic is only ever reached once that fallback has
+ * *also* failed — so `providers=[google.com]` alone would read exactly like the original
+ * bug (a linked Google provider with nothing usable), when it is a strictly narrower and
+ * stranger case (a linked Google provider whose own fields are blank too). The flag is what
+ * tells the two apart from the log line alone.
  */
 class ProfileIdentityDiagnosticTest {
 
@@ -26,6 +33,7 @@ class ProfileIdentityDiagnosticTest {
             hasDisplayName = false,
             hasRemoteName = false,
             hasLocalName = false,
+            hasProviderName = false,
             hasEmail = false,
             hasRemoteProfile = true,
             isAnonymous = false,
@@ -33,8 +41,8 @@ class ProfileIdentityDiagnosticTest {
         )
 
         assertEquals(
-            "displayName=absent remoteName=absent localName=absent email=absent " +
-                "remoteProfile=present anonymous=false providers=[google.com]",
+            "displayName=absent remoteName=absent localName=absent providerName=absent " +
+                "email=absent remoteProfile=present anonymous=false providers=[google.com]",
             line
         )
     }
@@ -47,6 +55,7 @@ class ProfileIdentityDiagnosticTest {
             hasDisplayName = false,
             hasRemoteName = false,
             hasLocalName = false,
+            hasProviderName = false,
             hasEmail = false,
             hasRemoteProfile = false,
             isAnonymous = true,
@@ -54,8 +63,31 @@ class ProfileIdentityDiagnosticTest {
         )
 
         assertEquals(
-            "displayName=absent remoteName=absent localName=absent email=absent " +
-                "remoteProfile=absent anonymous=true providers=[none]",
+            "displayName=absent remoteName=absent localName=absent providerName=absent " +
+                "email=absent remoteProfile=absent anonymous=true providers=[none]",
+            line
+        )
+    }
+
+    @Test
+    fun `distinguishes a linked provider whose own fields are also blank`() {
+        // The case that would look identical to the original bug without the new flag:
+        // google.com is linked (providers=[google.com]) but this provider's own displayName
+        // was itself blank or missing, so the fallback this branch exists for still failed.
+        val line = ProfileIdentity.describeNameSources(
+            hasDisplayName = false,
+            hasRemoteName = false,
+            hasLocalName = false,
+            hasProviderName = false,
+            hasEmail = false,
+            hasRemoteProfile = true,
+            isAnonymous = false,
+            providerIds = listOf("firebase", "google.com")
+        )
+
+        assertEquals(
+            "displayName=absent remoteName=absent localName=absent providerName=absent " +
+                "email=absent remoteProfile=present anonymous=false providers=[firebase,google.com]",
             line
         )
     }
@@ -66,6 +98,7 @@ class ProfileIdentityDiagnosticTest {
             hasDisplayName = true,
             hasRemoteName = true,
             hasLocalName = true,
+            hasProviderName = true,
             hasEmail = true,
             hasRemoteProfile = true,
             isAnonymous = false,
@@ -76,8 +109,8 @@ class ProfileIdentityDiagnosticTest {
         // can only pass booleans, so no future edit can accidentally interpolate a name.
         assertFalse(line.contains("@"))
         assertEquals(
-            "displayName=present remoteName=present localName=present email=present " +
-                "remoteProfile=present anonymous=false providers=[password,google.com]",
+            "displayName=present remoteName=present localName=present providerName=present " +
+                "email=present remoteProfile=present anonymous=false providers=[password,google.com]",
             line
         )
     }
