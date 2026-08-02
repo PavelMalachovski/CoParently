@@ -49,6 +49,9 @@ class PairingRepositoryImplTest {
     private lateinit var repository: PairingRepositoryImpl
 
     private lateinit var usersCollection: CollectionReference
+
+    /** The `users/{id}` snapshot every profile read in this class resolves to. */
+    private lateinit var userSnapshot: DocumentSnapshot
     private lateinit var invitationsCollection: CollectionReference
     private lateinit var invitationsQuery: Query
 
@@ -71,7 +74,7 @@ class PairingRepositoryImplTest {
         // class hang for a full minute on "redeem normalizes the code...".
         usersCollection = mockk(relaxed = true)
         val userDocument = mockk<DocumentReference>(relaxed = true)
-        val userSnapshot = mockk<DocumentSnapshot>(relaxed = true)
+        userSnapshot = mockk(relaxed = true)
         every { firestore.collection("users") } returns usersCollection
         every { usersCollection.document(any()) } returns userDocument
         every { userDocument.get() } returns Tasks.forResult(userSnapshot)
@@ -279,6 +282,41 @@ class PairingRepositoryImplTest {
         assertTrue(result.isSuccess)
         assertNotEquals("OLDCOD", result.getOrNull()?.code)
         verify { newInviteRef.set(any()) }
+    }
+
+    /**
+     * Knock-on of the profile gap, not a regression test for the fix itself.
+     *
+     * `writeNewInvite` takes `fromUserName` from the inviter's own profile document and
+     * falls back to the raw email address. That name is what the share text says and what
+     * the co-parent's incoming-invitation card shows, so while nothing wrote a profile the
+     * invitation was degraded in exactly the same way the partner card was. These two cases
+     * pin the dependency: the fallback is only reached when the profile carries no name.
+     */
+    @Test
+    fun `a new invite carries the profile name once the profile has one`() = runTest {
+        every { userSnapshot.getString("name") } returns "Alice Novak"
+        stubOwnInvitesQuery()
+        val newInviteRef = mockk<DocumentReference>(relaxed = true)
+        every { invitationsCollection.document(any()) } returns newInviteRef
+        every { newInviteRef.set(any()) } returns Tasks.forResult<Void>(null)
+
+        val result = repository.createOrReuseInviteCode()
+
+        assertEquals("Alice Novak", result.getOrNull()?.fromUserName)
+    }
+
+    @Test
+    fun `a new invite falls back to the email address when the profile has no name`() = runTest {
+        every { userSnapshot.getString("name") } returns null
+        stubOwnInvitesQuery()
+        val newInviteRef = mockk<DocumentReference>(relaxed = true)
+        every { invitationsCollection.document(any()) } returns newInviteRef
+        every { newInviteRef.set(any()) } returns Tasks.forResult<Void>(null)
+
+        val result = repository.createOrReuseInviteCode()
+
+        assertEquals("a@example.com", result.getOrNull()?.fromUserName)
     }
 
     @Test
