@@ -50,6 +50,16 @@ service cloud.firestore {
                   .affectedKeys().hasOnly([request.auth.uid]);
     }
 
+    // True when the map at `key` in a *newly created* document carries no foreign uid.
+    // There is no `before` document to diff against on create, so `ownMarkOnly` cannot
+    // apply here; the strictest safe shape is enforced directly instead: the map must be
+    // absent, empty, or contain only the creator's own uid. Without this, whoever's
+    // client wins the race to create the (deterministic-id) conversation could plant a
+    // forged mark for the other participant baked into the initial document.
+    function noForeignMarksOnCreate(data, key) {
+      return data.get(key, {}).keys().hasOnly([request.auth.uid]);
+    }
+
     // ---- Users ---------------------------------------------------------
     // Users can read/write their own profile and read their partner's profile.
     match /users/{userId} {
@@ -291,11 +301,16 @@ service cloud.firestore {
                       ownMarkOnly(resource.data, request.resource.data, 'lastReadAt') &&
                       ownMarkOnly(resource.data, request.resource.data, 'lastDeliveredAt');
 
+      // A newly created conversation may not carry a foreign uid in either mark map (see
+      // `noForeignMarksOnCreate`) — otherwise the update-time restriction above is moot,
+      // since a forged mark could be baked into the document at creation instead.
       allow create: if isAuthenticated() &&
                       request.auth.uid in request.resource.data.participants &&
                       request.resource.data.participants.size() == 2 &&
                       (isPartnerOf(request.resource.data.participants[0]) ||
-                       isPartnerOf(request.resource.data.participants[1]));
+                       isPartnerOf(request.resource.data.participants[1])) &&
+                      noForeignMarksOnCreate(request.resource.data, 'lastReadAt') &&
+                      noForeignMarksOnCreate(request.resource.data, 'lastDeliveredAt');
 
       allow delete: if false;
     }

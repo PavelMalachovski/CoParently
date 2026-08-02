@@ -150,3 +150,51 @@ describe('Part 1e: conversation read/delivery marks', () => {
         db.doc('conversations/conv-1').update({'lastReadAt.carol-uid': 1722500000000}));
   });
 });
+
+describe('Part 1f: conversation creation cannot forge a mark', () => {
+  // `ensureConversation` writes with set(..., merge), so the very first write to a
+  // deterministic conversation id is a create, not an update -- the `ownMarkOnly` gate on
+  // `allow update` never runs for it. Without a matching constraint on `allow create`,
+  // whichever participant's client wins the race to create the document could plant a
+  // forged mark for the *other* participant baked directly into the initial document (e.g.
+  // a far-future `lastReadAt` entry for the other uid), permanently suppressing their
+  // unread badge. This closes that one lifecycle stage earlier than the update path.
+  let env;
+
+  before(async () => {
+    env = await testEnv(PROJECT, CURRENT_RULES);
+  });
+
+  beforeEach(async () => {
+    await env.clearFirestore();
+    await seed(env, PAIRED_USERS);
+  });
+
+  it('denies creating with a foreign key already in lastReadAt', async () => {
+    const db = env.authenticatedContext(ALICE).firestore();
+    await assertFails(db.doc('conversations/conv-1').set(
+        conversationDoc({lastReadAt: {[BOB]: 9999999999999}})));
+  });
+
+  it('denies creating with a foreign key already in lastDeliveredAt', async () => {
+    const db = env.authenticatedContext(ALICE).firestore();
+    await assertFails(db.doc('conversations/conv-1').set(
+        conversationDoc({lastDeliveredAt: {[BOB]: 9999999999999}})));
+  });
+
+  it('allows creating with only the creator own key in both maps', async () => {
+    const db = env.authenticatedContext(ALICE).firestore();
+    await assertSucceeds(db.doc('conversations/conv-1').set(conversationDoc({
+      lastReadAt: {[ALICE]: 1722500000000},
+      lastDeliveredAt: {[ALICE]: 1722500000000},
+    })));
+  });
+
+  it('allows creating with the maps absent entirely (what ensureConversation does)', async () => {
+    const doc = conversationDoc({});
+    delete doc.lastReadAt;
+    delete doc.lastDeliveredAt;
+    const db = env.authenticatedContext(ALICE).firestore();
+    await assertSucceeds(db.doc('conversations/conv-1').set(doc));
+  });
+});
