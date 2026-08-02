@@ -9,6 +9,7 @@ import android.net.Uri
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import com.coparently.app.R
+import com.coparently.app.domain.chat.ChatUri
 import com.coparently.app.domain.pairing.PairingUri
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
@@ -87,25 +88,33 @@ class CoPlanlyMessagingService : FirebaseMessagingService() {
 
     /**
      * Shows a notification, deep-linking pairing events into the pairing
-     * screen and everything else into the app's launcher activity.
+     * screen, a chat message into the Chat tab, and everything else into the
+     * app's launcher activity.
      *
      * Pairing notifications reuse [PAIRING_NOTIFICATION_ID] instead of a
      * timestamp-derived id: a `pairing_accepted` followed by a `pairing_removed`
      * (or vice versa) describes the *current* pairing state, not two separate
      * things worth reviewing together, so the second should replace the first
-     * in the tray rather than stack next to it. Every other notification type
-     * keeps a timestamp id so unrelated notifications keep accumulating.
+     * in the tray rather than stack next to it. A chat message reuses
+     * [CHAT_NOTIFICATION_ID] for the same reason — the latest preview is what
+     * matters, and the thread itself holds the full history — and, being a
+     * distinct constant, never collides with (or is replaced by) a pairing
+     * notification. Every other notification type keeps a timestamp id so
+     * unrelated notifications keep accumulating.
      */
     private fun showNotification(title: String, body: String, type: String?) {
         val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
         val isPairingEvent = type == TYPE_PAIRING_ACCEPTED || type == TYPE_PAIRING_REMOVED
-        val intent = if (isPairingEvent) {
-            Intent(Intent.ACTION_VIEW, Uri.parse(PAIRING_DEEP_LINK)).apply {
+        val isChatMessage = type == TYPE_CHAT_MESSAGE
+        val intent = when {
+            isPairingEvent -> Intent(Intent.ACTION_VIEW, Uri.parse(PAIRING_DEEP_LINK)).apply {
                 setPackage(packageName)
             }
-        } else {
-            packageManager.getLaunchIntentForPackage(packageName)
+            isChatMessage -> Intent(Intent.ACTION_VIEW, Uri.parse(CHAT_DEEP_LINK)).apply {
+                setPackage(packageName)
+            }
+            else -> packageManager.getLaunchIntentForPackage(packageName)
         }
 
         // Distinct per notification type so a pairing-accepted notification's
@@ -131,7 +140,11 @@ class CoPlanlyMessagingService : FirebaseMessagingService() {
             .setDefaults(NotificationCompat.DEFAULT_ALL)
             .build()
 
-        val notificationId = if (isPairingEvent) PAIRING_NOTIFICATION_ID else System.currentTimeMillis().toInt()
+        val notificationId = when {
+            isPairingEvent -> PAIRING_NOTIFICATION_ID
+            isChatMessage -> CHAT_NOTIFICATION_ID
+            else -> System.currentTimeMillis().toInt()
+        }
         notificationManager.notify(notificationId, notification)
     }
 
@@ -164,6 +177,9 @@ class CoPlanlyMessagingService : FirebaseMessagingService() {
         /** Queued by `unpairCoParent` (`functions/index.js`) for the ex-partner. */
         private const val TYPE_PAIRING_REMOVED = "pairing_removed"
 
+        /** Queued by `onChatMessageCreated` (`functions/index.js`) for the message recipient. */
+        private const val TYPE_CHAT_MESSAGE = "chat_message"
+
         /**
          * Opens the pairing screen with no prefilled code — see
          * [MainActivity][com.coparently.app.presentation.MainActivity]'s
@@ -173,10 +189,26 @@ class CoPlanlyMessagingService : FirebaseMessagingService() {
         private val PAIRING_DEEP_LINK = "${PairingUri.SCHEME}://${PairingUri.HOST}"
 
         /**
+         * Opens the Chat tab — see
+         * [MainActivity][com.coparently.app.presentation.MainActivity]'s
+         * `readChatDeepLink`. Carries no conversation id: the two co-parents
+         * share exactly one conversation, whose id the client resolves for
+         * itself.
+         */
+        private val CHAT_DEEP_LINK = ChatUri.build()
+
+        /**
          * Stable id shared by both pairing notification types so a newer one
          * replaces an older one in the tray instead of stacking (see
          * [showNotification]).
          */
         private const val PAIRING_NOTIFICATION_ID = 918_273
+
+        /**
+         * Stable id for a chat-message notification, distinct from
+         * [PAIRING_NOTIFICATION_ID] so neither type ever replaces the other in
+         * the tray (see [showNotification]).
+         */
+        private const val CHAT_NOTIFICATION_ID = 918_274
     }
 }

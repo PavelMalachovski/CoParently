@@ -29,9 +29,11 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.compose.rememberNavController
 import com.coparently.app.data.notification.NotificationManager
+import com.coparently.app.domain.chat.ChatUri
 import com.coparently.app.domain.pairing.PairingUri
 import com.coparently.app.domain.repository.PreferencesRepository
 import com.coparently.app.presentation.navigation.NavGraph
+import com.coparently.app.presentation.navigation.PendingChatOpen
 import com.coparently.app.presentation.splash.SplashScreen
 import com.coparently.app.presentation.sync.SyncViewModel
 import com.coparently.app.presentation.theme.CoPlanlyTheme
@@ -78,6 +80,19 @@ class MainActivity : AppCompatActivity() {
     private val _pendingPairingCode = MutableStateFlow<String?>(null)
     private val pendingPairingCode: StateFlow<String?> = _pendingPairingCode
 
+    /**
+     * Whether a `coplanly://chat` deep link (opened by a chat-message push notification) is
+     * awaiting hand-off to the Chat tab. [NavGraph] consumes it (setting it back to `false`)
+     * once it has navigated there — same hand-off shape as [pendingPairingCode], bundled into
+     * a single [PendingChatOpen] so [NavGraph]'s own parameter count does not grow by two for
+     * every deep link it gains (see [NavGraph]'s doc).
+     */
+    private val _pendingChatOpen = MutableStateFlow(false)
+    private val pendingChatOpen = PendingChatOpen(
+        isPending = _pendingChatOpen,
+        onConsumed = { _pendingChatOpen.value = false }
+    )
+
     private val syncViewModel: SyncViewModel by viewModels()
 
     // Google Sign-In Activity Result launcher for sync
@@ -111,6 +126,7 @@ class MainActivity : AppCompatActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         readPairingCode(intent)
+        readChatDeepLink(intent)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -162,6 +178,7 @@ class MainActivity : AppCompatActivity() {
         // re-arm the confirmation dialog for a code the user already handled.
         if (savedInstanceState == null) {
             readPairingCode(intent)
+            readChatDeepLink(intent)
         }
 
         setContent {
@@ -197,7 +214,8 @@ class MainActivity : AppCompatActivity() {
                                 navController = navController,
                                 syncViewModel = syncViewModel,
                                 pendingPairingCode = pendingPairingCode,
-                                onPairingCodeConsumed = { _pendingPairingCode.value = null }
+                                onPairingCodeConsumed = { _pendingPairingCode.value = null },
+                                pendingChatOpen = pendingChatOpen
                             )
                         }
 
@@ -237,5 +255,22 @@ class MainActivity : AppCompatActivity() {
         val data = intent?.data ?: return
         if (!PairingUri.isPairingUri(data.scheme, data.host)) return
         _pendingPairingCode.value = PairingUri.extractCode(data.toString()).orEmpty()
+    }
+
+    /**
+     * Recognises a `coplanly://chat` intent (opened by a chat-message push
+     * notification — see [com.coparently.app.data.remote.firebase.CoPlanlyMessagingService])
+     * and arms [pendingChatOpen] so [NavGraph] navigates to the Chat tab.
+     *
+     * The link carries no conversation id: the two co-parents share exactly one
+     * conversation, whose id [NavGraph] resolves for itself, so there is nothing
+     * to extract here beyond "a chat link arrived" — mirroring how
+     * [readPairingCode] treats a code-less pairing link as "land on the screen,
+     * nothing more to read".
+     */
+    private fun readChatDeepLink(intent: Intent?) {
+        val data = intent?.data ?: return
+        if (!ChatUri.isChatUri(data.scheme, data.host)) return
+        _pendingChatOpen.value = true
     }
 }

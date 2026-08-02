@@ -784,3 +784,97 @@ function hasPartner(snap) {
   const partnerId = snap.data().partnerId;
   return typeof partnerId === 'string' && partnerId.length > 0;
 }
+
+/**
+ * How many characters of a chat message body are carried into the push notification preview.
+ *
+ * @const {number}
+ */
+const CHAT_MESSAGE_PREVIEW_LENGTH = 120;
+
+/**
+ * Queues a push notification for the other participant when a chat message is created,
+ * unless they have already read past it.
+ *
+ * Exposed separately from the `onChatMessageCreated` trigger (mirroring
+ * `unpairCoParentImpl`) purely so it can be exercised against a fake Firestore in tests.
+ *
+ * Every failure mode below is a quiet no-op rather than a thrown error, because a Firestore
+ * `onCreate` trigger retries an uncaught rejection indefinitely, and none of these describes
+ * something a retry could fix:
+ * - the conversation document does not exist (deleted, or the message somehow predates it),
+ * - `participants` holds no second uid distinct from the sender (a malformed or legacy
+ *   conversation document),
+ * - the sender is not one of the conversation's participants (the same malformed-document
+ *   case, from the other side).
+ *
+ * The suppression rule reads `lastReadAt[recipient]` — an epoch-millis number, written a
+ * dotted-path field at a time by `FirestoreMessageDataSource.markRead` — and skips the push
+ * once that mark is at or past the message. A conversation that predates the read-mark
+ * feature, or one the recipient has simply never opened, carries no `lastReadAt` entry at
+ * all: `(conversation.lastReadAt || {})[recipient]` is `undefined` either way, defaulted to
+ * `0` here so a never-read conversation always favours notifying rather than silently
+ * swallowing the very first message.
+ *
+ * `message.timestamp` is the naive `LocalDateTime` string `Message.toFirestoreMap` writes
+ * (`DateTimeFormatter.ISO_LOCAL_DATE_TIME`, no zone offset — see `ChatMappers.kt`), not an
+ * epoch number the way the marks are stored. `Date.parse` treats a date-time string with no
+ * offset as local time in the *runtime's own* timezone, so the recovered instant is only
+ * exact when the sender's device and this function's runtime agree on offset — the same
+ * accepted skew `LocalDateTime.toEpochMillis()` already documents for this project, not a
+ * new one introduced here. A timestamp that fails to parse falls back to "now" rather than
+ * to epoch `0`: falling back to `0` would make a malformed value look "already read" against
+ * a never-read conversation's own `0` default and silently swallow the push instead of
+ * sending one.
+ *
+ * @param {FirebaseFirestore.Firestore} db Firestore instance.
+ * @param {Object} message The created `messages/{messageId}` document's data.
+ * @return {Promise<void>}
+ */
+async function notifyOfChatMessage(db, message) {
+  const conversationId = message && message.conversationId;
+  if (!conversationId) return;
+
+  const conversationSnap = await db.collection('conversations').doc(conversationId).get();
+  const conversation = conversationSnap.data();
+  if (!conversation) return;
+
+  const participants = conversation.participants || [];
+  if (!participants.includes(message.senderId)) return;
+
+  const recipient = participants.find((uid) => uid !== message.senderId);
+  if (!recipient) return;
+
+  const readMark = (conversation.lastReadAt || {})[recipient] || 0;
+  const parsedTimestamp = Date.parse(message.timestamp);
+  const sentAt = Number.isFinite(parsedTimestamp) ? parsedTimestamp : Date.now();
+  if (readMark >= sentAt) return;
+
+  await db.collection('notification_queue').add({
+    targetUserId: recipient,
+    data: {
+      type: 'chat_message',
+      conversationId: conversationId,
+      title: message.senderName || 'CoPlanly',
+      body: String(message.content || '').slice(0, CHAT_MESSAGE_PREVIEW_LENGTH),
+    },
+    status: 'pending',
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+}
+
+exports.notifyOfChatMessage = notifyOfChatMessage;
+
+/**
+ * Notifies the other parent when a message is created.
+ *
+ * Skipped when the recipient's read mark is already at or past this message — they are
+ * looking at the thread as it arrives, and a push would be noise. See
+ * [notifyOfChatMessage] for the suppression rule and the no-reader guards.
+ */
+exports.onChatMessageCreated = functions.firestore
+    .document('messages/{messageId}')
+    .onCreate(async (snap) => {
+      await notifyOfChatMessage(admin.firestore(), snap.data());
+      return null;
+    });
