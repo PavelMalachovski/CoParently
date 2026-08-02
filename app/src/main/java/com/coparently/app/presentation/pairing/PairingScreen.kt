@@ -65,6 +65,7 @@ import com.coparently.app.domain.model.PairingState
 import com.coparently.app.domain.model.PartnerSummary
 import com.coparently.app.domain.pairing.PairingUri
 import com.coparently.app.presentation.common.ConfirmationDialog
+import com.coparently.app.presentation.common.SignedInAsRow
 import com.coparently.app.presentation.pairing.components.CodeEntryField
 import com.coparently.app.presentation.pairing.components.IncomingInviteCard
 import com.coparently.app.presentation.pairing.components.InviteCodeCard
@@ -87,6 +88,7 @@ fun PairingScreen(
 ) {
     val state by viewModel.state.collectAsState()
     val form by viewModel.form.collectAsState()
+    val account by viewModel.account.collectAsState()
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
     val snackbarHostState = remember { SnackbarHostState() }
@@ -122,6 +124,14 @@ fun PairingScreen(
             contentPadding = PaddingValues(24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            // First, above every state: which of the two phones is this? The invite code
+            // looks identical on both, so the account is what tells them apart. Kept to a
+            // quiet strip so it never competes with the code, which is the real action.
+            account?.let { signedIn ->
+                item { SignedInAsRow(account = signedIn) }
+                item { HorizontalDivider() }
+            }
+
             when (val current = state) {
                 is PairingState.Loading -> loadingSection(form, viewModel, actions)
                 is PairingState.Paired -> pairedSection(current.partner) { showUnpairConfirm.value = true }

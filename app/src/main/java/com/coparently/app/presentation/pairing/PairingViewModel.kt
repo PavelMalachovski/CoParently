@@ -8,6 +8,8 @@ import com.coparently.app.R
 import com.coparently.app.data.analytics.AnalyticsManager
 import com.coparently.app.data.remote.firebase.PairingException
 import com.coparently.app.data.remote.firebase.QRCodeService
+import com.coparently.app.data.session.SignedInAccountSource
+import com.coparently.app.domain.model.AccountSummary
 import com.coparently.app.domain.model.PairingError
 import com.coparently.app.domain.model.PairingState
 import com.coparently.app.domain.pairing.InviteCodeGenerator
@@ -59,11 +61,22 @@ data class PairingFormState(
 class PairingViewModel @Inject constructor(
     private val pairingRepository: PairingRepository,
     private val qrCodeService: QRCodeService,
-    private val analyticsManager: AnalyticsManager
+    private val analyticsManager: AnalyticsManager,
+    signedInAccountSource: SignedInAccountSource
 ) : ViewModel() {
 
     val state: StateFlow<PairingState> = pairingRepository.observePairingState()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), PairingState.Loading)
+
+    /**
+     * The account this phone is signed in as, or null while signed out.
+     *
+     * Both parents' phones render the same invite-code layout, so without this the screen
+     * carries nothing that distinguishes one device from the other — which is precisely
+     * how two accounts get mixed up during pairing.
+     */
+    val account: StateFlow<AccountSummary?> = signedInAccountSource.observe()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), null)
 
     private val _form = MutableStateFlow(PairingFormState())
     val form: StateFlow<PairingFormState> = _form.asStateFlow()

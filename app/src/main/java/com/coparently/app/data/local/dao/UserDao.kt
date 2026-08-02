@@ -33,6 +33,16 @@ interface UserDao {
     suspend fun getUserByEmail(email: String): UserEntity?
 
     /**
+     * Observes a user by ID, re-emitting whenever the row changes.
+     *
+     * Emits null while no row exists yet: the profile row is written by
+     * `UserRepositoryImpl.ensureProfile` shortly after sign-in, so a fresh session
+     * legitimately observes nothing for a moment.
+     */
+    @Query("SELECT * FROM users WHERE id = :id")
+    fun observeUserById(id: String): Flow<UserEntity?>
+
+    /**
      * Inserts a new user.
      */
     @Insert(onConflict = OnConflictStrategy.REPLACE)

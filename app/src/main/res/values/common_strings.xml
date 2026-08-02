@@ -27,4 +27,6 @@
     <string name="common_quick_action_today_subtitle">Navigate to current date</string>
     <string name="common_quick_action_settings">Settings</string>
     <string name="common_quick_action_settings_subtitle">App preferences</string>
+    <!-- Label above the signed-in account's name and email (pairing screen, Settings) -->
+    <string name="common_signed_in_as">Signed in as</string>
 </resources>

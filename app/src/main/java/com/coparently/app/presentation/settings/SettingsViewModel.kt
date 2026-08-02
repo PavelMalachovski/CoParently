@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.coparently.app.data.analytics.AnalyticsManager
 import com.coparently.app.data.remote.firebase.FcmService
+import com.coparently.app.data.session.SignedInAccountSource
+import com.coparently.app.domain.model.AccountSummary
 import com.coparently.app.domain.money.SupportedCurrency
 import com.coparently.app.domain.repository.PreferencesRepository
 import com.coparently.app.domain.repository.UserRepository
@@ -28,8 +30,20 @@ class SettingsViewModel @Inject constructor(
     private val fcmService: FcmService,
     private val userRepository: UserRepository,
     private val preferencesRepository: PreferencesRepository,
-    private val analyticsManager: AnalyticsManager
+    private val analyticsManager: AnalyticsManager,
+    signedInAccountSource: SignedInAccountSource
 ) : ViewModel() {
+
+    /**
+     * The account the app itself is signed in as — distinct from the Google account used
+     * for calendar sync, which `SyncViewModel` reports separately further up this screen.
+     *
+     * Null while signed out. Unlike [settingsState], this keeps following the profile, so
+     * the name and avatar fill in as soon as `ensureProfile` writes them rather than
+     * staying at whatever a one-shot read saw at startup.
+     */
+    val account: StateFlow<AccountSummary?> = signedInAccountSource.observe()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(ACCOUNT_STOP_TIMEOUT_MS), null)
 
     private val _settingsState = MutableStateFlow(SettingsUiState())
     val settingsState: StateFlow<SettingsUiState> = _settingsState.asStateFlow()
@@ -216,6 +230,11 @@ class SettingsViewModel @Inject constructor(
             errorMessage = null
         )
         _operationState.value = UiState.Idle
+    }
+
+    private companion object {
+        /** Keeps the account subscription alive across a configuration change. */
+        const val ACCOUNT_STOP_TIMEOUT_MS = 5_000L
     }
 }
 

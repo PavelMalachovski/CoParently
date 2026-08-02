@@ -1,24 +1,20 @@
 package com.coparently.app.presentation.pairing.components
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.coparently.app.R
 import com.coparently.app.domain.model.PartnerSummary
+import com.coparently.app.presentation.common.AccountAvatar
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -33,6 +29,10 @@ import java.time.format.FormatStyle
  * This card must not render that as if it were real data: a blank name shows
  * a translated placeholder (and feeds the avatar initial instead of an empty
  * circle), and a blank email shows its own placeholder.
+ *
+ * [PartnerSummary.photoUrl] is null until the co-parent's own phone runs a build
+ * that stores one, so the initial-letter fallback in [AccountAvatar] is the
+ * normal case here for as long as the other device is behind.
  */
 @Composable
 fun PairedPartnerCard(
@@ -47,19 +47,7 @@ fun PairedPartnerCard(
             modifier = Modifier.fillMaxWidth().padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(
-                modifier = Modifier
-                    .size(48.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.secondaryContainer),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = displayName.take(1).uppercase(),
-                    style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer
-                )
-            }
+            AccountAvatar(name = displayName, photoUrl = partner.photoUrl)
             Column(modifier = Modifier.padding(start = 16.dp)) {
                 Text(text = displayName, style = MaterialTheme.typography.titleMedium)
                 Text(
