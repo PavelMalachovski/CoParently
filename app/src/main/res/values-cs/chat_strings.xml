@@ -30,4 +30,14 @@
     <string name="chat_no_coparent_action">Propojit</string>
     <!-- Shown when the pairing state has not resolved in time; the action is worth retrying. -->
     <string name="chat_coparent_link_pending">Stále ověřujeme propojení s druhým rodičem. Zkuste to prosím za chvíli znovu.</string>
+
+    <!-- Screen-reader content description for the unread-message badge on the bottom nav's Chat tab. -->
+    <plurals name="chat_unread_messages_badge">
+        <item quantity="one">%1$d nepřečtená zpráva</item>
+        <item quantity="few">%1$d nepřečtené zprávy</item>
+        <item quantity="many">%1$d nepřečtených zpráv</item>
+        <item quantity="other">%1$d nepřečtených zpráv</item>
+    </plurals>
+    <!-- Visible badge text once the unread count passes the display cap, e.g. "99+". -->
+    <string name="chat_unread_count_overflow">%1$d+</string>
 </resources>

@@ -32,4 +32,12 @@
     <string name="chat_no_coparent_action">Pair</string>
     <!-- Shown when the pairing state has not resolved in time; the action is worth retrying. -->
     <string name="chat_coparent_link_pending">Still checking your co-parent link. Try again in a moment.</string>
+
+    <!-- Screen-reader content description for the unread-message badge on the bottom nav's Chat tab. -->
+    <plurals name="chat_unread_messages_badge">
+        <item quantity="one">%1$d unread message</item>
+        <item quantity="other">%1$d unread messages</item>
+    </plurals>
+    <!-- Visible badge text once the unread count passes the display cap, e.g. "99+". -->
+    <string name="chat_unread_count_overflow">%1$d+</string>
 </resources>

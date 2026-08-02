@@ -33,6 +33,7 @@ import androidx.navigation.navArgument
 import com.coparently.app.presentation.LocalGoogleSignInCallback
 import com.coparently.app.presentation.auth.AuthScreen
 import com.coparently.app.presentation.calendar.CalendarScreen
+import com.coparently.app.presentation.chat.ChatViewModel
 import com.coparently.app.presentation.childinfo.ChildInfoScreen
 import com.coparently.app.presentation.common.animations.*
 import com.coparently.app.presentation.event.AddEditEventScreen
@@ -68,6 +69,15 @@ fun NavGraph(
     val isAuthenticated by authStateViewModel.isAuthenticated.collectAsState()
     val isLoading by authStateViewModel.isLoading.collectAsState()
 
+    // Scoped the same way as authStateViewModel above (the ambient ViewModelStoreOwner at
+    // this level, not a NavBackStackEntry) so this instance — and its unreadCount — survives
+    // for as long as the app does, not just while the Chat tab happens to be on screen. The
+    // Chat/Conversations screens create their *own* hiltViewModel() instance scoped to their
+    // back stack entry, independent of this one; both merely observe the same repository, so
+    // there is no conflict between them.
+    val chatViewModelForBadge: ChatViewModel = hiltViewModel()
+    val chatUnreadCount by chatViewModelForBadge.unreadCount.collectAsState()
+
     // Determine start destination based on authentication state
     val startDestination = when {
         isLoading -> Screen.Loading.route
@@ -96,7 +106,8 @@ fun NavGraph(
                             launchSingleTop = true
                             restoreState = true
                         }
-                    }
+                    },
+                    chatUnreadCount = chatUnreadCount
                 )
             }
         }
