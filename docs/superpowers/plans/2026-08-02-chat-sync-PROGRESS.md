@@ -88,3 +88,5 @@ Task 8: unproven (accepted): the with-id deep link was never exercised on a devi
 Task 8: minor (deferred): extractConversationId checks blankness on the still-percent-encoded string, so a percent-encoded all-whitespace id would pass through as an id (harmless empty thread).
 Task 8: complete (commits 2128bc2..7f740b2, review clean)
 ALL C1 TASKS 1-8 COMPLETE. Remaining: Task 9 (deploy rules/indexes/function, six-scenario two-phone acceptance, CLAUDE.md).
+
+OWNER RULING (after Task 8): the single-timezone limitation accepted in Task 1 is REVERSED. Chat must work when the two parents are in different zones. Added as Task 9; the deploy/acceptance task is now Task 10. Scope is chat only - Event/Expense/Budget/ChildInfo dates are deliberately untouched, because a calendar naive local time is often correct and "whose 18:00 is the handover" is an unmade product decision.
