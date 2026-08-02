@@ -35,7 +35,11 @@
     <plurals name="chat_unread_messages_badge">
         <item quantity="one">%1$d nepřečtená zpráva</item>
         <item quantity="few">%1$d nepřečtené zprávy</item>
-        <item quantity="many">%1$d nepřečtených zpráv</item>
+        <!-- "many" is Czech's non-integer category (e.g. 1,5) and takes the genitive
+             singular ("nepřečtené zprávy"), not the genitive plural used by "other" below
+             — it is a coincidence of Czech declension that the genitive singular of
+             "zpráva" is spelled the same as the nominative plural used in "few". -->
+        <item quantity="many">%1$d nepřečtené zprávy</item>
         <item quantity="other">%1$d nepřečtených zpráv</item>
     </plurals>
     <!-- Visible badge text once the unread count passes the display cap, e.g. "99+". -->

@@ -68,15 +68,7 @@ fun NavGraph(
     val authStateViewModel: AuthStateViewModel = hiltViewModel()
     val isAuthenticated by authStateViewModel.isAuthenticated.collectAsState()
     val isLoading by authStateViewModel.isLoading.collectAsState()
-
-    // Scoped the same way as authStateViewModel above (the ambient ViewModelStoreOwner at
-    // this level, not a NavBackStackEntry) so this instance — and its unreadCount — survives
-    // for as long as the app does, not just while the Chat tab happens to be on screen. The
-    // Chat/Conversations screens create their *own* hiltViewModel() instance scoped to their
-    // back stack entry, independent of this one; both merely observe the same repository, so
-    // there is no conflict between them.
-    val chatViewModelForBadge: ChatViewModel = hiltViewModel()
-    val chatUnreadCount by chatViewModelForBadge.unreadCount.collectAsState()
+    val chatUnreadCount = rememberChatUnreadCount()
 
     // Determine start destination based on authentication state
     val startDestination = when {
@@ -604,6 +596,29 @@ fun NavGraph(
             }
         }
     }
+}
+
+/**
+ * The Chat tab's unread-message count, for [CoPlanlyBottomBar]'s badge.
+ *
+ * `hiltViewModel()` resolves against [androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner],
+ * which is decided by *composition position*, not by which Kotlin function the call happens
+ * to sit in — so calling it here, from the same place [NavGraph] calls it for
+ * `authStateViewModel`, keeps this [ChatViewModel] instance scoped to that same ambient owner
+ * (the hosting Activity, so it survives for the app's lifetime) exactly as if the two lines
+ * were inlined into [NavGraph] itself. They are pulled out into this small composable purely
+ * to avoid growing [NavGraph] — already the codebase's longest function and already flagged
+ * by detekt's `LongMethod` check — by lines that have nothing to do with routing.
+ *
+ * The Chat/Conversations screens keep creating their *own* `hiltViewModel()` instance, scoped
+ * to their own back-stack entry, independent of this one; both merely observe the same
+ * repository-backed flows, so there is no read-mark or state conflict between the two.
+ */
+@Composable
+private fun rememberChatUnreadCount(): Int {
+    val chatViewModel: ChatViewModel = hiltViewModel()
+    val unreadCount by chatViewModel.unreadCount.collectAsState()
+    return unreadCount
 }
 
 /**
