@@ -1,52 +1,70 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Co-parent pairing feature strings (PairingScreen, QRScannerActivity). Kept out of
-     strings.xml because strings.xml is gitignored in this project (it holds local OAuth
-     values). Key names deliberately avoid the legacy pairing_* keys that may exist in a
-     local strings.xml (e.g. pairing_title, pairing_accept) to prevent duplicate-resource
-     build errors. -->
+<!-- Co-parent pairing strings (PairingScreen, QR scanner, deep link confirmation).
+     Feature-named resource file per the project's i18n convention; every key here
+     must also exist in values-cs, values-de, values-ru and values-uk. -->
 <resources>
     <!-- PairingScreen -->
     <string name="pairing_screen_title">Co-Parent Pairing</string>
     <string name="pairing_back">Back</string>
-    <string name="pairing_paired_with_label">Paired with</string>
     <string name="pairing_unpair_button">Unpair</string>
     <string name="pairing_partner_email_label">Partner email</string>
-    <string name="pairing_send_email_invitation">Send Email Invitation</string>
-    <string name="pairing_share_qr_code">Share QR Code</string>
     <string name="pairing_scan_qr_code">Scan QR Code</string>
-    <string name="pairing_pending_invitations_title">Pending Invitations</string>
     <string name="pairing_unknown_sender">Unknown</string>
     <string name="pairing_accept_button">Accept</string>
     <string name="pairing_reject_button">Reject</string>
     <string name="pairing_qr_dialog_title">Co-Parent Invitation QR Code</string>
     <string name="pairing_qr_dialog_message">Share this QR code with your co-parent. They can scan it to accept your invitation.</string>
     <string name="pairing_qr_code_content_description">Pairing QR Code</string>
-    <string name="pairing_qr_expired">QR code has expired</string>
-    <string name="pairing_generate_new_qr_code">Generate New QR Code</string>
-    <string name="pairing_time_remaining_hours">%1$dh %2$dm remaining</string>
-    <string name="pairing_time_remaining_minutes">%1$dm %2$ds remaining</string>
-    <string name="pairing_time_remaining_seconds">%1$ds remaining</string>
-    <string name="pairing_expires_in">Expires in: %1$s</string>
     <string name="pairing_close">Close</string>
-    <string name="pairing_confirm_title">Pair with Co-Parent?</string>
-    <string name="pairing_confirm_message">Are you sure you want to pair with %1$s (%2$s)? This will allow you to share calendar events and communicate with them.</string>
-    <string name="pairing_accept_pairing">Accept Pairing</string>
     <string name="pairing_cancel">Cancel</string>
-    <string name="pairing_unknown_user">Unknown User</string>
 
-    <!-- QRScannerActivity results -->
-    <string name="pairing_camera_permission_needed_result">Camera permission required for QR scanning</string>
-    <string name="pairing_scanning_cancelled">Scanning cancelled</string>
-    <string name="pairing_invalid_qr_format">Invalid QR code format</string>
-    <string name="pairing_error_processing_qr">Error processing QR code: %1$s</string>
-    <string name="pairing_qr_expired_ask_new">QR code has expired. Please ask your partner to generate a new one.</string>
-
-    <!-- QRScannerScreen -->
+    <!-- QrScannerScreen -->
     <string name="pairing_camera_permission_title">Camera permission required</string>
     <string name="pairing_camera_permission_message">Please grant camera permission to scan QR codes for co-parent invitations.</string>
+    <string name="pairing_camera_permission_denied_message">Camera access was denied. Enable it in system settings to scan QR codes.</string>
+    <string name="pairing_open_app_settings">Open Settings</string>
     <string name="pairing_grant_permission">Grant Permission</string>
-    <string name="pairing_processing_qr">Processing QR code…</string>
-    <string name="pairing_position_qr">Position QR code within the camera view</string>
     <string name="pairing_qr_hint">Make sure the QR code is well lit and fits within the frame.</string>
-    <string name="pairing_camera_preview">Camera Preview</string>
+
+    <!-- Pairing errors (Task 6) -->
+    <string name="pairing_error_not_found">No invitation matches that code.</string>
+    <string name="pairing_error_expired">That code has expired. Ask for a new one.</string>
+    <string name="pairing_error_not_pending">That invitation is no longer active.</string>
+    <string name="pairing_error_self_pairing">That is your own invitation.</string>
+    <string name="pairing_error_already_paired">One of the accounts already has a co-parent.</string>
+    <string name="pairing_error_wrong_recipient">That invitation was sent to a different email address.</string>
+    <string name="pairing_error_network">No connection. Check your internet and try again.</string>
+    <string name="pairing_error_unknown">Something went wrong. Please try again.</string>
+    <string name="pairing_error_code_incomplete">Enter all 6 characters of the code.</string>
+    <string name="pairing_error_invalid_email">Enter a valid email address.</string>
+
+    <!-- Invite code hero card -->
+    <string name="pairing_your_code_title">Your invite code</string>
+    <string name="pairing_your_code_hint">Give this code to your co-parent. It is valid for 24 hours.</string>
+    <string name="pairing_code_copied">Code copied</string>
+    <string name="pairing_share_invite">Share</string>
+    <string name="pairing_show_qr">Show QR</string>
+    <string name="pairing_new_code">New code</string>
+    <string name="pairing_expires_in_hours">Valid for %1$d h %2$d min</string>
+    <string name="pairing_expires_in_minutes">Valid for %1$d min</string>
+    <string name="pairing_code_expired_generate">Code expired — tap “New code”</string>
+    <string name="pairing_share_message">%1$s invites you to CoPlanly. Code: %2$s · %3$s</string>
+    <!-- Code entry -->
+    <string name="pairing_have_a_code">I have a code</string>
+    <string name="pairing_code_field_label">Invite code</string>
+    <string name="pairing_link_accounts">Link accounts</string>
+    <string name="pairing_or">or</string>
+    <!-- Email invite -->
+    <string name="pairing_invite_by_email">Invite by email</string>
+    <!-- Paired state -->
+    <string name="pairing_paired_since">Paired since %1$s</string>
+    <string name="pairing_partner_email_unknown">Email unavailable</string>
+    <string name="pairing_unpair_confirm_title">Unlink your co-parent?</string>
+    <string name="pairing_unpair_confirm_message">You will stop sharing the calendar, chat and expenses with %1$s. Data already on this phone is kept.</string>
+    <string name="pairing_unpair_confirm_action">Unlink</string>
+    <!-- Deep link confirmation from a bare code (no sender identity known yet) -->
+    <string name="pairing_deep_link_confirm_title">Link with this invite code?</string>
+    <string name="pairing_deep_link_confirm_message">%1$s — the person who sent you this code will see your shared calendar, chat and expenses.</string>
+    <!-- Fallback conversation title when the co-parent has no display name yet -->
+    <string name="pairing_default_partner_name">Co-parent</string>
 </resources>

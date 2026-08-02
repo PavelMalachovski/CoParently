@@ -1,0 +1,5 @@
+{
+  "require": ["./root-hooks.js"],
+  "spec": ["rules/**/*.test.js"],
+  "timeout": 20000
+}

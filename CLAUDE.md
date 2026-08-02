@@ -70,6 +70,15 @@ crash with "migration from 3 to 9 required but not found".
 ./gradlew lint detekt            # static analysis (detekt config in app/config/detekt)
 ```
 
+```bash
+cd functions && npm test && npm run lint    # Cloud Functions (mocha + eslint)
+cd firestore-tests && npm test              # firestore.rules against the local emulator
+```
+
+- **Never debug `firestore.rules` by deploying to production and watching a phone.** That
+  is how a broken `expenses` delete rule shipped once already. `firestore-tests/` runs the
+  rules offline against the Firestore emulator; add a case there first. See its README —
+  it needs a JDK 21+ on `PATH`, not just in `JAVA_HOME`.
 - Windows dev machine; Gradle wrapper works from Git Bash and PowerShell.
 - `google-services.json` is required for the Google Services plugin, but the build
   degrades gracefully if it is missing (see the conditional apply in `app/build.gradle.kts`).
@@ -131,6 +140,30 @@ Data flow: UI → ViewModel → UseCase → Repository → Room (source of truth
     `ReceiptParser`, wired up in `AddExpenseScreen`/`ExpenseViewModel.scanReceipt`) — no
     receipt text or photo may be sent to Gemini or any other remote service without an
     explicit product decision.
+11. **Pairing writes never touch the other parent's user document from the client.**
+    Accepting an invitation and unpairing go through the `acceptPairingInvitation` /
+    `unpairCoParent` callables (`functions/index.js`) — `firestore.rules` allows a user
+    to write only their own `users/{uid}`, and the old client-side path is why the
+    permissive `firestore.rules.simple` had to be deployed. The strict rules are live
+    as of this change.
+12. **A Firestore list query needs a `where` filter matching whatever field the security
+    rule keys its `allow read` on.** Firestore validates a *query* by checking whether
+    its structure guarantees every possible result satisfies the rule — it does not
+    execute the rule per already-fetched document and drop the ones that fail. An
+    unfiltered collection query is rejected outright (`PERMISSION_DENIED`) the moment the
+    rule references a field the query doesn't constrain, even if, coincidentally, every
+    document in the collection would have passed. This is why
+    `FirestoreExpenseDataSource.getAllExpenses()` takes a `creatorUids` list and filters
+    with `.whereIn("createdByFirebaseUid", creatorUids)` — mirroring
+    `FirestoreEventDataSource.observeEventsForParents()` — instead of reading the whole
+    `expenses` collection. Also keep the rule's field names in sync with what the writer
+    actually sets: the expenses rule used to reference a `sharedWith` array that
+    `ExpenseRepositoryImpl.addExpense()` never writes (the model shares expenses via the
+    `partnerId` pairing relationship, not a per-document list), so the co-parent's own
+    expenses were unreadable even by document id until the rule was changed to
+    `isPartnerOf(resource.data.createdByFirebaseUid)`. A `whereIn`/`whereEqualTo` +
+    `orderBy` combination on different fields also needs a composite index
+    (`firestore.indexes.json`) — Firestore's error message links directly to the fix.
 
 ## Known issues / do not "fix" silently
 
@@ -143,10 +176,42 @@ Data flow: UI → ViewModel → UseCase → Repository → Room (source of truth
 - `firestore.rules` (strict) was realigned with the real document schema (ISO **string**
   dates, presence-based key validation, `change_requests`/`expenses` collections added,
   over-strict `lastModifiedBy`/`canModify` gates dropped) so it no longer rejects the app's
-  own writes. `firebase.json` deploys this file; it still needs an actual
-  `firebase deploy --only firestore:rules,storage` — until then the live project runs
-  whatever was last deployed and `change_requests` returns `PERMISSION_DENIED`.
-  `firestore.rules.simple` remains as the permissive fallback.
+  own writes, and now also covers `invitations`, `custody_schedules`, `conversations` and
+  `messages` for co-parent pairing and chat. It was deployed live to `coparently-a39c9`
+  as of this change (`firebase deploy --only firestore:rules`), replacing the permissive
+  `firestore.rules.simple` the project ran on until the client's last write to another
+  user's `users/{uid}` document was removed. `firestore.rules.simple` remains in the repo
+  only as a historical fallback — it is no longer deployed.
+- The `budgets` collection now has a rule block (`firestore.rules`, gated on
+  `createdByFirebaseUid` + `isPartnerOf`, deployed live). The gap this closed was worse
+  than the pre-fix `expenses` bug: budget documents written by
+  `BudgetRepositoryImpl.addBudget()` carried **no owner field at all** — not even a wrong
+  one — so there was nothing a rule could gate on. The fix stamps `createdByFirebaseUid`
+  on write and filters `FirestoreBudgetDataSource.getAllBudgets()` on it via
+  `creatorUids`/`whereIn`, the same shape as `expenses`. `addBudget`/`deleteBudget` also
+  gained the same try/catch guard `ExpenseRepositoryImpl` has, since an uncaught
+  `PERMISSION_DENIED` (or any Firestore error) from an unguarded suspend call inside
+  `viewModelScope.launch` crashes the app, not just fails the sync. **Caveat:** any
+  `budgets` documents that synced to Firestore *before* this fix have no
+  `createdByFirebaseUid` field and will silently stop matching the filtered read query
+  (no error — they're just excluded from `whereIn`'s results). Room stays the source of
+  truth so nothing visibly disappears on the device that created them, but they won't
+  restore on a reinstall or a second device until re-saved. No backfill migration was run
+  as part of this fix.
+- A full audit (grep every `.collection(...)` call in `app/src/main/java` and
+  `functions/index.js`, diff against `firestore.rules`' match blocks) found two more
+  mismatches, both left as-is because neither is reachable in production:
+  - `FirestoreMedicalDataSource` (`medicalRecords`, `allergies`) and
+    `FirestoreEducationDataSource` (`grades`, `schoolEvents`) have no rule coverage, but
+    `MedicalRepositoryImpl`/`EducationRepositoryImpl` are never bound in
+    `RepositoryModule` and no ViewModel/UseCase references either interface — dead code
+    with the same shape as the `CoParentPairingService` Task 11 deleted. Decide (delete,
+    or wire up + add rules) before anyone binds them; don't add rules for unreachable
+    collections speculatively.
+  - `custody_schedules` has a rule block but no Firestore data source anywhere touches
+    it — `CustodyScheduleEntity`/`CustodyScheduleDao` are Room-only (the table name just
+    happens to match the rule's collection name). The rule is dead, not dangerous;
+    left in place rather than removed mid-pairing-feature-work.
 - `strings.xml` is **no longer gitignored** (older docs/audit §2.1 claim otherwise —
   stale). No secrets live in resources: the OAuth client secret is injected via
   BuildConfig (`GOOGLE_CLIENT_SECRET` gradle property / env var), `GEMINI_API_KEY`

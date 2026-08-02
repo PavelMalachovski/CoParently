@@ -5,8 +5,11 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import androidx.core.app.NotificationCompat
+import com.coparently.app.R
+import com.coparently.app.domain.pairing.PairingUri
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import dagger.hilt.android.AndroidEntryPoint
@@ -19,6 +22,20 @@ import javax.inject.Inject
 /**
  * Firebase Cloud Messaging service for handling push notifications.
  * Extends FirebaseMessagingService to receive and process FCM messages.
+ *
+ * `functions/index.js`'s `sendNotification` sends a **data-only** message —
+ * there is no top-level `notification` block. A message that has one is
+ * auto-displayed by the OS from the system tray whenever the app is
+ * backgrounded or killed, and [onMessageReceived] is never called for it in
+ * that case, so this class's deep links, icon and per-type notification id
+ * would only ever run while the app happened to be in the foreground. A
+ * data-only message with `android.priority: "high"` is instead delivered to
+ * [onMessageReceived] uniformly across foreground, background and killed
+ * app states, so this class is always the one deciding how — and whether —
+ * to show it. The one state neither message shape reaches is a
+ * user-force-stopped app: the OS blocks FCM delivery there regardless, and a
+ * `notification`-block message would have still surfaced from the tray in
+ * that case where a data-only one will not.
  */
 @AndroidEntryPoint
 class CoPlanlyMessagingService : FirebaseMessagingService() {
@@ -31,26 +48,29 @@ class CoPlanlyMessagingService : FirebaseMessagingService() {
         createNotificationChannel()
     }
 
+    /**
+     * Handles a push message, delivered here in every app state (see the
+     * class doc) because the backend sends data-only messages.
+     *
+     * `data["title"]`/`data["body"]` are authoritative — every producer in
+     * `functions/index.js` sets them, and the backend no longer sends a
+     * `notification` block for them to be missing from. `remoteMessage.notification`
+     * is kept purely as a defensive fallback for a message that didn't come
+     * from our backend (e.g. a test push sent from the Firebase console,
+     * which defaults to a `notification` block).
+     */
     override fun onMessageReceived(remoteMessage: RemoteMessage) {
         super.onMessageReceived(remoteMessage)
 
-        // Handle data payload
-        remoteMessage.data.let { data ->
-            val title = data["title"] ?: "CoPlanly"
-            val body = data["body"] ?: "You have a new notification"
-            val type = data["type"] // e.g., "event_created", "invitation_received"
+        val data = remoteMessage.data
+        val type = data["type"] // e.g., "event_created", "pairing_accepted"
+        val title = data["title"] ?: remoteMessage.notification?.title
+        val body = data["body"] ?: remoteMessage.notification?.body
+        // A malformed queue entry or an empty manual test push has neither -
+        // skip rather than post a title-only or fully blank-looking notification.
+        if (title.isNullOrEmpty() && body.isNullOrEmpty()) return
 
-            showNotification(title, body, type)
-        }
-
-        // Handle notification payload
-        remoteMessage.notification?.let { notification ->
-            showNotification(
-                notification.title ?: "CoPlanly",
-                notification.body ?: "You have a new notification",
-                null
-            )
-        }
+        showNotification(title ?: getString(R.string.app_name), body.orEmpty(), type)
     }
 
     override fun onNewToken(token: String) {
@@ -66,17 +86,35 @@ class CoPlanlyMessagingService : FirebaseMessagingService() {
     }
 
     /**
-     * Shows a notification to the user.
+     * Shows a notification, deep-linking pairing events into the pairing
+     * screen and everything else into the app's launcher activity.
+     *
+     * Pairing notifications reuse [PAIRING_NOTIFICATION_ID] instead of a
+     * timestamp-derived id: a `pairing_accepted` followed by a `pairing_removed`
+     * (or vice versa) describes the *current* pairing state, not two separate
+     * things worth reviewing together, so the second should replace the first
+     * in the tray rather than stack next to it. Every other notification type
+     * keeps a timestamp id so unrelated notifications keep accumulating.
      */
-    @Suppress("UNUSED_PARAMETER")
     private fun showNotification(title: String, body: String, type: String?) {
-        // type parameter reserved for future use
         val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
-        val intent = packageManager.getLaunchIntentForPackage(packageName)
+        val isPairingEvent = type == TYPE_PAIRING_ACCEPTED || type == TYPE_PAIRING_REMOVED
+        val intent = if (isPairingEvent) {
+            Intent(Intent.ACTION_VIEW, Uri.parse(PAIRING_DEEP_LINK)).apply {
+                setPackage(packageName)
+            }
+        } else {
+            packageManager.getLaunchIntentForPackage(packageName)
+        }
+
+        // Distinct per notification type so a pairing-accepted notification's
+        // tap target can never overwrite a differently-typed one's PendingIntent
+        // (PendingIntent identity is request code + intent action/data/component).
+        val requestCode = type?.hashCode() ?: 0
         val pendingIntent = PendingIntent.getActivity(
             this,
-            0,
+            requestCode,
             intent,
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
@@ -84,14 +122,17 @@ class CoPlanlyMessagingService : FirebaseMessagingService() {
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle(title)
             .setContentText(body)
-            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            // android.R.drawable.ic_dialog_info is a framework placeholder and
+            // renders as a grey blob in the status bar.
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setDefaults(NotificationCompat.DEFAULT_ALL)
             .build()
 
-        notificationManager.notify(System.currentTimeMillis().toInt(), notification)
+        val notificationId = if (isPairingEvent) PAIRING_NOTIFICATION_ID else System.currentTimeMillis().toInt()
+        notificationManager.notify(notificationId, notification)
     }
 
     /**
@@ -116,5 +157,26 @@ class CoPlanlyMessagingService : FirebaseMessagingService() {
         private const val CHANNEL_ID = "coparently_notifications"
         private const val CHANNEL_NAME = "CoPlanly Notifications"
         private const val CHANNEL_DESCRIPTION = "Notifications for events and invitations"
+
+        /** Queued by `acceptPairingInvitation` (`functions/index.js`) for the inviter. */
+        private const val TYPE_PAIRING_ACCEPTED = "pairing_accepted"
+
+        /** Queued by `unpairCoParent` (`functions/index.js`) for the ex-partner. */
+        private const val TYPE_PAIRING_REMOVED = "pairing_removed"
+
+        /**
+         * Opens the pairing screen with no prefilled code — see
+         * [MainActivity][com.coparently.app.presentation.MainActivity]'s
+         * `readPairingCode`, which treats a code-less pairing link as "land on
+         * the pairing screen with nothing pre-filled" rather than a no-op.
+         */
+        private val PAIRING_DEEP_LINK = "${PairingUri.SCHEME}://${PairingUri.HOST}"
+
+        /**
+         * Stable id shared by both pairing notification types so a newer one
+         * replaces an older one in the tray instead of stacking (see
+         * [showNotification]).
+         */
+        private const val PAIRING_NOTIFICATION_ID = 918_273
     }
 }

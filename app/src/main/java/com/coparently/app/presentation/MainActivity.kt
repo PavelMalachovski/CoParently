@@ -1,5 +1,6 @@
 package com.coparently.app.presentation
 
+import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
@@ -28,6 +29,7 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.compose.rememberNavController
 import com.coparently.app.data.notification.NotificationManager
+import com.coparently.app.domain.pairing.PairingUri
 import com.coparently.app.domain.repository.PreferencesRepository
 import com.coparently.app.presentation.navigation.NavGraph
 import com.coparently.app.presentation.splash.SplashScreen
@@ -67,6 +69,15 @@ class MainActivity : AppCompatActivity() {
     private val _darkThemeState = MutableStateFlow<Boolean?>(null)
     private val darkThemeState: StateFlow<Boolean?> = _darkThemeState
 
+    /**
+     * A pairing code carried by a `coplanly://pair` deep link, awaiting hand-off
+     * to the pairing screen. [NavGraph] consumes it (setting it back to null)
+     * once it has navigated there — see [readPairingCode] for why redeeming it
+     * is never automatic.
+     */
+    private val _pendingPairingCode = MutableStateFlow<String?>(null)
+    private val pendingPairingCode: StateFlow<String?> = _pendingPairingCode
+
     private val syncViewModel: SyncViewModel by viewModels()
 
     // Google Sign-In Activity Result launcher for sync
@@ -89,6 +100,17 @@ class MainActivity : AppCompatActivity() {
             Log.w("MainActivity", "Google sign-in aborted: resultCode=${result.resultCode}")
             syncViewModel.handleSignInCancellation(message)
         }
+    }
+
+    /**
+     * Handles a `coplanly://pair` link (or any other) arriving while the app is
+     * already running. `MainActivity` is `singleTask`, so a warm launch is
+     * routed here instead of creating a new instance.
+     */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        readPairingCode(intent)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -134,6 +156,14 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        // Only a genuine cold start carries a launching deep link worth reading.
+        // A config-change recreation (e.g. rotation) reports a non-null
+        // savedInstanceState; re-reading the same launching intent there would
+        // re-arm the confirmation dialog for a code the user already handled.
+        if (savedInstanceState == null) {
+            readPairingCode(intent)
+        }
+
         setContent {
             val darkTheme by darkThemeState.collectAsState()
             val systemDarkTheme = isSystemInDarkTheme()
@@ -165,7 +195,9 @@ class MainActivity : AppCompatActivity() {
                         ) {
                             NavGraph(
                                 navController = navController,
-                                syncViewModel = syncViewModel
+                                syncViewModel = syncViewModel,
+                                pendingPairingCode = pendingPairingCode,
+                                onPairingCodeConsumed = { _pendingPairingCode.value = null }
                             )
                         }
 
@@ -180,5 +212,30 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
+    }
+
+    /**
+     * Extracts a pairing code from a `coplanly://pair?code=…` intent.
+     *
+     * The code is only pre-filled on the pairing screen — redeeming it still
+     * needs an explicit confirmation, because a share link may have been
+     * forwarded on to someone else.
+     *
+     * A `coplanly://pair` link with no `code` (e.g. the one a pairing-status
+     * push notification opens — see [com.coparently.app.data.remote.firebase.CoPlanlyMessagingService])
+     * still needs to land on the pairing screen, just without a prefill. Empty
+     * string is used as that "link present, no code" signal rather than null,
+     * because [NavGraph][com.coparently.app.presentation.navigation.NavGraph]'s
+     * deep-link effect only navigates when this flow holds a non-null value;
+     * null is reserved for "no pairing link is pending" so a plain app launch
+     * does not force a navigation. `Screen.Pairing.routeWithCode` already
+     * treats null and empty identically, so the pairing screen itself sees no
+     * difference from the existing code-less navigations (e.g. the Settings
+     * menu entry).
+     */
+    private fun readPairingCode(intent: Intent?) {
+        val data = intent?.data ?: return
+        if (!PairingUri.isPairingUri(data.scheme, data.host)) return
+        _pendingPairingCode.value = PairingUri.extractCode(data.toString()).orEmpty()
     }
 }

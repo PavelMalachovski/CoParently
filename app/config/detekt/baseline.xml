@@ -479,7 +479,6 @@
     <ID>NoConsecutiveBlankLines:ChildInfoRepositoryImpl.kt$ </ID>
     <ID>NoConsecutiveBlankLines:ChildInfoScreen.kt$ </ID>
     <ID>NoConsecutiveBlankLines:ChildInfoViewModel.kt$ </ID>
-    <ID>NoConsecutiveBlankLines:CoParentPairingService.kt$ </ID>
     <ID>NoConsecutiveBlankLines:CoPlanlyApplication.kt$ </ID>
     <ID>NoConsecutiveBlankLines:CoPlanlyDatabase.kt$ </ID>
     <ID>NoConsecutiveBlankLines:Color.kt$ </ID>
@@ -551,7 +550,6 @@
     <ID>NoUnusedImports:BudgetRepository.kt$com.coparently.app.domain.repository.BudgetRepository.kt</ID>
     <ID>NoUnusedImports:CalendarSyncRepository.kt$com.coparently.app.data.sync.CalendarSyncRepository.kt</ID>
     <ID>NoUnusedImports:ChatScreen.kt$com.coparently.app.presentation.chat.ChatScreen.kt</ID>
-    <ID>NoUnusedImports:CoParentPairingService.kt$com.coparently.app.data.remote.firebase.CoParentPairingService.kt</ID>
     <ID>NoUnusedImports:CoPlanlyMessagingService.kt$com.coparently.app.data.remote.firebase.CoPlanlyMessagingService.kt</ID>
     <ID>NoUnusedImports:ConflictResolver.kt$com.coparently.app.data.sync.ConflictResolver.kt</ID>
     <ID>NoUnusedImports:ConversationsScreen.kt$com.coparently.app.presentation.chat.ConversationsScreen.kt</ID>
@@ -667,7 +665,6 @@
     <ID>TooGenericExceptionCaught:AuthViewModel.kt$AuthViewModel$e: Exception</ID>
     <ID>TooGenericExceptionCaught:CalendarSyncRepository.kt$CalendarSyncRepository$e: Exception</ID>
     <ID>TooGenericExceptionCaught:ChildInfoViewModel.kt$ChildInfoViewModel$e: Exception</ID>
-    <ID>TooGenericExceptionCaught:CoParentPairingService.kt$CoParentPairingService$e: Exception</ID>
     <ID>TooGenericExceptionCaught:CoPlanlyMessagingService.kt$CoPlanlyMessagingService$e: Exception</ID>
     <ID>TooGenericExceptionCaught:ConflictMonitorViewModel.kt$ConflictMonitorViewModel$e: Exception</ID>
     <ID>TooGenericExceptionCaught:CreateEventUseCase.kt$CreateEventUseCase$e: Exception</ID>
@@ -757,9 +754,6 @@
     <ID>UnusedPrivateMember:TimePicker.kt$@Preview(name = "Morning Time", showBackground = true) @Composable private fun TimePickerDialogMorningPreview()</ID>
     <ID>UnusedPrivateProperty:AuthViewModel.kt$AuthViewModel$private val credentialManagerService: CredentialManagerService</ID>
     <ID>UnusedPrivateProperty:CalendarNavigation.kt$val density = LocalDensity.current</ID>
-    <ID>UnusedPrivateProperty:CoParentPairingService.kt$CoParentPairingService$private val firebaseMessaging: FirebaseMessaging</ID>
-    <ID>UnusedPrivateProperty:CoParentPairingService.kt$CoParentPairingService$private val firestore: FirebaseFirestore</ID>
-    <ID>UnusedPrivateProperty:CoParentPairingService.kt$CoParentPairingService$private val invitationsCollection = "invitations"</ID>
     <ID>UnusedPrivateProperty:ConversationSummarizer.kt$ConversationSummarizer$private val messageRepository: MessageRepository</ID>
     <ID>UnusedPrivateProperty:CredentialManagerService.kt$CredentialManagerService$private val credentialManager: CredentialManager? = try { CredentialManager.create(context) } catch (e: Exception) { Log.e(TAG, "Failed to create CredentialManager", e) null }</ID>
     <ID>UnusedPrivateProperty:DayWeekView.kt$val headerHeight = dims.buttonHeight * 1.6f // Match header height</ID>

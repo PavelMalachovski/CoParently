@@ -3,45 +3,65 @@
     <!-- PairingScreen -->
     <string name="pairing_screen_title">Kopplung mit Co-Elternteil</string>
     <string name="pairing_back">Zurück</string>
-    <string name="pairing_paired_with_label">Gekoppelt mit</string>
     <string name="pairing_unpair_button">Kopplung aufheben</string>
     <string name="pairing_partner_email_label">E-Mail des Partners</string>
-    <string name="pairing_send_email_invitation">Einladung per E-Mail senden</string>
-    <string name="pairing_share_qr_code">QR-Code teilen</string>
     <string name="pairing_scan_qr_code">QR-Code scannen</string>
-    <string name="pairing_pending_invitations_title">Ausstehende Einladungen</string>
     <string name="pairing_unknown_sender">Unbekannt</string>
     <string name="pairing_accept_button">Annehmen</string>
     <string name="pairing_reject_button">Ablehnen</string>
     <string name="pairing_qr_dialog_title">QR-Code für Co-Eltern-Einladung</string>
     <string name="pairing_qr_dialog_message">Teilen Sie diesen QR-Code mit dem anderen Elternteil. Durch Scannen kann er Ihre Einladung annehmen.</string>
     <string name="pairing_qr_code_content_description">QR-Code zur Kopplung</string>
-    <string name="pairing_qr_expired">QR-Code ist abgelaufen</string>
-    <string name="pairing_generate_new_qr_code">Neuen QR-Code erstellen</string>
-    <string name="pairing_time_remaining_hours">Noch %1$d Std. %2$d Min.</string>
-    <string name="pairing_time_remaining_minutes">Noch %1$d Min. %2$d Sek.</string>
-    <string name="pairing_time_remaining_seconds">Noch %1$d Sek.</string>
-    <string name="pairing_expires_in">Läuft ab in: %1$s</string>
     <string name="pairing_close">Schließen</string>
-    <string name="pairing_confirm_title">Mit Co-Elternteil koppeln?</string>
-    <string name="pairing_confirm_message">Möchten Sie sich wirklich mit %1$s (%2$s) koppeln? Sie können dann Kalendereinträge teilen und miteinander kommunizieren.</string>
-    <string name="pairing_accept_pairing">Kopplung annehmen</string>
     <string name="pairing_cancel">Abbrechen</string>
-    <string name="pairing_unknown_user">Unbekannter Benutzer</string>
 
-    <!-- QRScannerActivity results -->
-    <string name="pairing_camera_permission_needed_result">Zum Scannen von QR-Codes ist die Kameraberechtigung erforderlich</string>
-    <string name="pairing_scanning_cancelled">Scannen abgebrochen</string>
-    <string name="pairing_invalid_qr_format">Ungültiges QR-Code-Format</string>
-    <string name="pairing_error_processing_qr">Fehler beim Verarbeiten des QR-Codes: %1$s</string>
-    <string name="pairing_qr_expired_ask_new">QR-Code ist abgelaufen. Bitten Sie Ihren Partner, einen neuen zu erstellen.</string>
-
-    <!-- QRScannerScreen -->
+    <!-- QrScannerScreen -->
     <string name="pairing_camera_permission_title">Kameraberechtigung erforderlich</string>
     <string name="pairing_camera_permission_message">Bitte erteilen Sie die Kameraberechtigung, um QR-Codes für Einladungen zu scannen.</string>
+    <string name="pairing_camera_permission_denied_message">Der Kamerazugriff wurde verweigert. Aktivieren Sie ihn in den Systemeinstellungen, um QR-Codes zu scannen.</string>
+    <string name="pairing_open_app_settings">Einstellungen öffnen</string>
     <string name="pairing_grant_permission">Berechtigung erteilen</string>
-    <string name="pairing_processing_qr">QR-Code wird verarbeitet…</string>
-    <string name="pairing_position_qr">Halten Sie den QR-Code in das Kamerabild</string>
     <string name="pairing_qr_hint">Achten Sie darauf, dass der QR-Code gut beleuchtet ist und vollständig in den Rahmen passt.</string>
-    <string name="pairing_camera_preview">Kameravorschau</string>
+
+    <!-- Pairing errors (Task 6) -->
+    <string name="pairing_error_not_found">Keine Einladung entspricht diesem Code.</string>
+    <string name="pairing_error_expired">Dieser Code ist abgelaufen. Bitten Sie um einen neuen.</string>
+    <string name="pairing_error_not_pending">Diese Einladung ist nicht mehr aktiv.</string>
+    <string name="pairing_error_self_pairing">Das ist Ihre eigene Einladung.</string>
+    <string name="pairing_error_already_paired">Eines der Konten hat bereits einen Co-Elternteil.</string>
+    <string name="pairing_error_wrong_recipient">Diese Einladung wurde an eine andere E-Mail-Adresse gesendet.</string>
+    <string name="pairing_error_network">Keine Verbindung. Prüfen Sie Ihr Internet und versuchen Sie es erneut.</string>
+    <string name="pairing_error_unknown">Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut.</string>
+    <string name="pairing_error_code_incomplete">Geben Sie alle 6 Zeichen des Codes ein.</string>
+    <string name="pairing_error_invalid_email">Geben Sie eine gültige E-Mail-Adresse ein.</string>
+
+    <!-- Invite code hero card -->
+    <string name="pairing_your_code_title">Ihr Einladungscode</string>
+    <string name="pairing_your_code_hint">Geben Sie diesen Code an den anderen Elternteil weiter. Er ist 24 Stunden gültig.</string>
+    <string name="pairing_code_copied">Code kopiert</string>
+    <string name="pairing_share_invite">Teilen</string>
+    <string name="pairing_show_qr">QR anzeigen</string>
+    <string name="pairing_new_code">Neuer Code</string>
+    <string name="pairing_expires_in_hours">Gültig noch %1$d Std. %2$d Min.</string>
+    <string name="pairing_expires_in_minutes">Gültig noch %1$d Min.</string>
+    <string name="pairing_code_expired_generate">Code abgelaufen — tippen Sie auf „Neuer Code“</string>
+    <string name="pairing_share_message">%1$s lädt Sie zu CoPlanly ein. Code: %2$s · %3$s</string>
+    <!-- Code entry -->
+    <string name="pairing_have_a_code">Ich habe einen Code</string>
+    <string name="pairing_code_field_label">Einladungscode</string>
+    <string name="pairing_link_accounts">Konten verknüpfen</string>
+    <string name="pairing_or">oder</string>
+    <!-- Email invite -->
+    <string name="pairing_invite_by_email">Per E-Mail einladen</string>
+    <!-- Paired state -->
+    <string name="pairing_paired_since">Gekoppelt seit %1$s</string>
+    <string name="pairing_partner_email_unknown">E-Mail nicht verfügbar</string>
+    <string name="pairing_unpair_confirm_title">Kopplung mit dem Co-Elternteil aufheben?</string>
+    <string name="pairing_unpair_confirm_message">Sie teilen dann keinen Kalender, Chat und keine Ausgaben mehr mit %1$s. Bereits auf diesem Telefon gespeicherte Daten bleiben erhalten.</string>
+    <string name="pairing_unpair_confirm_action">Trennen</string>
+    <!-- Deep link confirmation from a bare code (no sender identity known yet) -->
+    <string name="pairing_deep_link_confirm_title">Mit diesem Einladungscode verknüpfen?</string>
+    <string name="pairing_deep_link_confirm_message">%1$s — die Person, die Ihnen diesen Code geschickt hat, sieht dann Ihren gemeinsamen Kalender, Chat und Ausgaben.</string>
+    <!-- Fallback conversation title when the co-parent has no display name yet -->
+    <string name="pairing_default_partner_name">Mitelternteil</string>
 </resources>

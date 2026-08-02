@@ -195,6 +195,14 @@ dependencies {
     // ML Kit for QR code scanning
     implementation("com.google.mlkit:barcode-scanning:17.3.0")
 
+    // CameraX — live preview for the pairing QR scanner. ML Kit only analyses
+    // frames; something has to produce them.
+    val cameraxVersion = "1.4.1"
+    implementation("androidx.camera:camera-core:$cameraxVersion")
+    implementation("androidx.camera:camera-camera2:$cameraxVersion")
+    implementation("androidx.camera:camera-lifecycle:$cameraxVersion")
+    implementation("androidx.camera:camera-view:$cameraxVersion")
+
     // ML Kit text recognition for receipts — bundled Latin model, so OCR works offline
     // and from first launch (~4 MB) instead of waiting on a Play Services download.
     implementation("com.google.mlkit:text-recognition:16.0.1")
@@ -220,6 +228,10 @@ dependencies {
     implementation("com.google.firebase:firebase-crashlytics-ktx")
     implementation("com.google.firebase:firebase-config-ktx")
     implementation("com.google.firebase:firebase-storage-ktx")
+
+    // Callable Cloud Functions — pairing accept/unpair write both parents'
+    // user documents, which is only safe server-side.
+    implementation("com.google.firebase:firebase-functions-ktx")
 
     // Coil for async image loading in Compose (receipt photos)
     implementation("io.coil-kt:coil-compose:2.7.0")

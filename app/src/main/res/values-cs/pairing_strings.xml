@@ -3,45 +3,65 @@
     <!-- PairingScreen -->
     <string name="pairing_screen_title">Párování rodičů</string>
     <string name="pairing_back">Zpět</string>
-    <string name="pairing_paired_with_label">Spárováno s</string>
     <string name="pairing_unpair_button">Zrušit párování</string>
     <string name="pairing_partner_email_label">E-mail partnera</string>
-    <string name="pairing_send_email_invitation">Odeslat pozvánku e-mailem</string>
-    <string name="pairing_share_qr_code">Sdílet QR kód</string>
     <string name="pairing_scan_qr_code">Naskenovat QR kód</string>
-    <string name="pairing_pending_invitations_title">Čekající pozvánky</string>
     <string name="pairing_unknown_sender">Neznámý</string>
     <string name="pairing_accept_button">Přijmout</string>
     <string name="pairing_reject_button">Odmítnout</string>
     <string name="pairing_qr_dialog_title">QR kód pozvánky pro druhého rodiče</string>
     <string name="pairing_qr_dialog_message">Sdílejte tento QR kód s druhým rodičem. Jeho naskenováním může přijmout vaši pozvánku.</string>
     <string name="pairing_qr_code_content_description">QR kód pro párování</string>
-    <string name="pairing_qr_expired">Platnost QR kódu vypršela</string>
-    <string name="pairing_generate_new_qr_code">Vygenerovat nový QR kód</string>
-    <string name="pairing_time_remaining_hours">Zbývá %1$d h %2$d min</string>
-    <string name="pairing_time_remaining_minutes">Zbývá %1$d min %2$d s</string>
-    <string name="pairing_time_remaining_seconds">Zbývá %1$d s</string>
-    <string name="pairing_expires_in">Vyprší za: %1$s</string>
     <string name="pairing_close">Zavřít</string>
-    <string name="pairing_confirm_title">Spárovat s druhým rodičem?</string>
-    <string name="pairing_confirm_message">Opravdu se chcete spárovat s %1$s (%2$s)? Budete moci sdílet události v kalendáři a vzájemně komunikovat.</string>
-    <string name="pairing_accept_pairing">Přijmout párování</string>
     <string name="pairing_cancel">Zrušit</string>
-    <string name="pairing_unknown_user">Neznámý uživatel</string>
 
-    <!-- QRScannerActivity results -->
-    <string name="pairing_camera_permission_needed_result">Ke skenování QR kódů je vyžadováno oprávnění ke kameře</string>
-    <string name="pairing_scanning_cancelled">Skenování zrušeno</string>
-    <string name="pairing_invalid_qr_format">Neplatný formát QR kódu</string>
-    <string name="pairing_error_processing_qr">Chyba při zpracování QR kódu: %1$s</string>
-    <string name="pairing_qr_expired_ask_new">Platnost QR kódu vypršela. Požádejte partnera o vygenerování nového.</string>
-
-    <!-- QRScannerScreen -->
+    <!-- QrScannerScreen -->
     <string name="pairing_camera_permission_title">Je vyžadováno oprávnění ke kameře</string>
     <string name="pairing_camera_permission_message">Ke skenování QR kódů pozvánek prosím udělte oprávnění ke kameře.</string>
+    <string name="pairing_camera_permission_denied_message">Přístup ke kameře byl zamítnut. Povolte jej v nastavení systému, abyste mohli skenovat QR kódy.</string>
+    <string name="pairing_open_app_settings">Otevřít nastavení</string>
     <string name="pairing_grant_permission">Udělit oprávnění</string>
-    <string name="pairing_processing_qr">Zpracovávání QR kódu…</string>
-    <string name="pairing_position_qr">Umístěte QR kód do záběru kamery</string>
     <string name="pairing_qr_hint">Ujistěte se, že je QR kód dobře osvětlený a vejde se celý do rámečku.</string>
-    <string name="pairing_camera_preview">Náhled kamery</string>
+
+    <!-- Pairing errors (Task 6) -->
+    <string name="pairing_error_not_found">Žádná pozvánka s tímto kódem nebyla nalezena.</string>
+    <string name="pairing_error_expired">Platnost kódu vypršela. Požádejte o nový.</string>
+    <string name="pairing_error_not_pending">Tato pozvánka již není aktivní.</string>
+    <string name="pairing_error_self_pairing">Toto je vaše vlastní pozvánka.</string>
+    <string name="pairing_error_already_paired">Jeden z účtů už má druhého rodiče.</string>
+    <string name="pairing_error_wrong_recipient">Tato pozvánka byla odeslána na jinou e-mailovou adresu.</string>
+    <string name="pairing_error_network">Žádné připojení. Zkontrolujte internet a zkuste to znovu.</string>
+    <string name="pairing_error_unknown">Něco se pokazilo. Zkuste to prosím znovu.</string>
+    <string name="pairing_error_code_incomplete">Zadejte všech 6 znaků kódu.</string>
+    <string name="pairing_error_invalid_email">Zadejte platnou e-mailovou adresu.</string>
+
+    <!-- Invite code hero card -->
+    <string name="pairing_your_code_title">Váš pozvánkový kód</string>
+    <string name="pairing_your_code_hint">Předejte tento kód druhému rodiči. Platí 24 hodin.</string>
+    <string name="pairing_code_copied">Kód zkopírován</string>
+    <string name="pairing_share_invite">Sdílet</string>
+    <string name="pairing_show_qr">Zobrazit QR</string>
+    <string name="pairing_new_code">Nový kód</string>
+    <string name="pairing_expires_in_hours">Platný ještě %1$d h %2$d min</string>
+    <string name="pairing_expires_in_minutes">Platný ještě %1$d min</string>
+    <string name="pairing_code_expired_generate">Kód vypršel — klepněte na „Nový kód“</string>
+    <string name="pairing_share_message">%1$s vás zve do CoPlanly. Kód: %2$s · %3$s</string>
+    <!-- Code entry -->
+    <string name="pairing_have_a_code">Mám kód</string>
+    <string name="pairing_code_field_label">Pozvánkový kód</string>
+    <string name="pairing_link_accounts">Propojit účty</string>
+    <string name="pairing_or">nebo</string>
+    <!-- Email invite -->
+    <string name="pairing_invite_by_email">Pozvat e-mailem</string>
+    <!-- Paired state -->
+    <string name="pairing_paired_since">Spárováno od %1$s</string>
+    <string name="pairing_partner_email_unknown">E-mail není k dispozici</string>
+    <string name="pairing_unpair_confirm_title">Zrušit propojení s druhým rodičem?</string>
+    <string name="pairing_unpair_confirm_message">Přestanete sdílet kalendář, chat a výdaje s %1$s. Data již uložená v telefonu zůstanou zachována.</string>
+    <string name="pairing_unpair_confirm_action">Odpojit</string>
+    <!-- Deep link confirmation from a bare code (no sender identity known yet) -->
+    <string name="pairing_deep_link_confirm_title">Propojit pomocí tohoto pozvánkového kódu?</string>
+    <string name="pairing_deep_link_confirm_message">%1$s — osoba, která vám tento kód poslala, uvidí váš sdílený kalendář, chat a výdaje.</string>
+    <!-- Fallback conversation title when the co-parent has no display name yet -->
+    <string name="pairing_default_partner_name">Spolurodič</string>
 </resources>

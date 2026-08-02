@@ -1,396 +1,462 @@
 package com.coparently.app.presentation.pairing
 
+import android.app.Activity
+import android.content.Context
+import android.content.Intent
+import android.graphics.Bitmap
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.ActivityResultLauncher
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.StringRes
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.QrCode
 import androidx.compose.material.icons.filled.QrCodeScanner
-import androidx.compose.material3.*
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.ClipboardManager
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
 import com.coparently.app.R
+import com.coparently.app.domain.model.PairingInvite
+import com.coparently.app.domain.model.PairingState
+import com.coparently.app.domain.model.PartnerSummary
+import com.coparently.app.domain.pairing.PairingUri
 import com.coparently.app.presentation.common.ConfirmationDialog
-import kotlinx.coroutines.delay
-import java.util.concurrent.TimeUnit
+import com.coparently.app.presentation.pairing.components.CodeEntryField
+import com.coparently.app.presentation.pairing.components.IncomingInviteCard
+import com.coparently.app.presentation.pairing.components.InviteCodeCard
+import com.coparently.app.presentation.pairing.components.PairedPartnerCard
+import kotlinx.coroutines.launch
 
 /**
- * Screen for managing co-parent pairing and invitations.
- * Stateless composable that receives navigation callbacks and ViewModel.
+ * Co-parent pairing: hand over a code, scan a QR, open a shared link, or send
+ * an email invitation — and unlink again.
  *
- * @param onNavigateBack Navigation callback to go back
- * @param viewModel ViewModel for pairing operations
+ * @param onNavigateBack Up navigation.
+ * @param prefilledCode Code carried by a `coplanly://pair` deep link, if any.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PairingScreen(
     onNavigateBack: () -> Unit,
+    prefilledCode: String? = null,
     viewModel: PairingViewModel = hiltViewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsState()
-    val context = androidx.compose.ui.platform.LocalContext.current
+    val state by viewModel.state.collectAsState()
+    val form by viewModel.form.collectAsState()
+    val context = LocalContext.current
+    val clipboard = LocalClipboardManager.current
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    val codeCopiedMessage = stringResource(R.string.pairing_code_copied)
+    val qrScannerLauncher = rememberQrScannerLauncher(viewModel)
+    val actions = rememberNotPairedActions(
+        context = context,
+        clipboard = clipboard,
+        onCodeCopied = { scope.launch { snackbarHostState.showSnackbar(codeCopiedMessage) } },
+        onScanQr = { qrScannerLauncher.launch(Intent(context, QRScannerActivity::class.java)) }
+    )
 
-    // QR Scanner launcher
-    val qrScannerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        when (result.resultCode) {
-            android.app.Activity.RESULT_OK -> {
-                val data = result.data
-                val invitationId = data?.getStringExtra(QRScannerActivity.EXTRA_INVITATION_ID)
+    // rememberSaveable so a config change never silently drops a decision the
+    // user hasn't made yet, and keyed on prefilledCode so a second deep link
+    // re-arms the consent dialog instead of being swallowed by a stale value.
+    // Held as MutableState (rather than `by`-delegated vars) so they can be
+    // passed by reference into UnpairFlow/DeepLinkFlow below.
+    val showUnpairConfirm = rememberSaveable { mutableStateOf(false) }
+    val pendingDeepLinkCode = rememberSaveable(prefilledCode) { mutableStateOf(prefilledCode) }
 
-                if (invitationId != null) {
-                    viewModel.acceptInvitation(invitationId)
-                }
-            }
-            android.app.Activity.RESULT_CANCELED -> {
-                val message = result.data?.getStringExtra(QRScannerActivity.EXTRA_MESSAGE)
-                if (message != null) {
-                    viewModel.showError(message)
-                }
-            }
-        }
+    LaunchedEffect(prefilledCode) {
+        prefilledCode?.let { viewModel.onCodeInputChange(it) }
     }
-
-    // State for confirmation dialog
-    var showConfirmDialog by remember { mutableStateOf(false) }
-    var invitationToAccept by remember { mutableStateOf<Map<String, Any?>?>(null) }
+    ActionErrorSnackbar(form.actionErrorRes, snackbarHostState, context, viewModel::consumeActionError)
 
     Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.pairing_screen_title)) },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = stringResource(R.string.pairing_back)
-                        )
-                    }
-                }
-            )
-        }
-    ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .padding(paddingValues)
-                .padding(24.dp)
+        topBar = { PairingTopBar(onNavigateBack) },
+        snackbarHost = { SnackbarHost(snackbarHostState) }
+    ) { padding ->
+        LazyColumn(
+            modifier = Modifier.fillMaxSize().padding(padding),
+            contentPadding = PaddingValues(24.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-
-        if (uiState.partnerEmail != null) {
-            Card(
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp)
-                ) {
-                    Text(
-                        text = stringResource(R.string.pairing_paired_with_label),
-                        style = MaterialTheme.typography.titleSmall
-                    )
-                    Text(
-                        text = uiState.partnerEmail ?: "",
-                        style = MaterialTheme.typography.bodyLarge
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Button(
-                        onClick = { viewModel.removePairing() },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.error
-                        )
-                    ) {
-                        Text(stringResource(R.string.pairing_unpair_button))
-                    }
-                }
+            when (val current = state) {
+                is PairingState.Loading -> loadingSection(form, viewModel, actions)
+                is PairingState.Paired -> pairedSection(current.partner) { showUnpairConfirm.value = true }
+                is PairingState.NotPaired -> notPairedSection(current, form, viewModel, actions)
             }
-        } else {
-            // Show invitation or send invitation section
-            OutlinedTextField(
-                value = uiState.invitationEmail,
-                onValueChange = viewModel::updateInvitationEmail,
-                label = { Text(stringResource(R.string.pairing_partner_email_label)) },
-                modifier = Modifier.fillMaxWidth(),
-                enabled = !uiState.isLoading,
-                isError = uiState.emailError != null,
-                supportingText = if (uiState.emailError != null) {
-                    { Text(
-                        text = uiState.emailError ?: "",
-                        color = MaterialTheme.colorScheme.error
-                    ) }
-                } else null,
-                singleLine = true
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            if (uiState.errorMessage != null) {
-                Text(
-                    text = uiState.errorMessage ?: "",
-                    color = MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.bodySmall
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-            }
-
-            if (uiState.isLoading) {
-                CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
-            } else {
-                // Email invitation button
-                Button(
-                    onClick = { viewModel.sendInvitation(onNavigateBack) },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(stringResource(R.string.pairing_send_email_invitation))
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // QR code sharing button
-                OutlinedButton(
-                    onClick = { viewModel.generateQRCode() },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.QrCode,
-                        contentDescription = null,
-                        modifier = Modifier.padding(end = 8.dp)
-                    )
-                    Text(stringResource(R.string.pairing_share_qr_code))
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // QR code scanning button
-                OutlinedButton(
-                    onClick = {
-                        val intent = android.content.Intent(
-                            context,
-                            QRScannerActivity::class.java
-                        )
-                        qrScannerLauncher.launch(intent)
-                    },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.QrCodeScanner,
-                        contentDescription = null,
-                        modifier = Modifier.padding(end = 8.dp)
-                    )
-                    Text(stringResource(R.string.pairing_scan_qr_code))
-                }
-            }
-        }
-
-        if (uiState.pendingInvitations.isNotEmpty()) {
-            Spacer(modifier = Modifier.height(32.dp))
-            Text(
-                text = stringResource(R.string.pairing_pending_invitations_title),
-                style = MaterialTheme.typography.titleMedium
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            uiState.pendingInvitations.forEach { invitation ->
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp)
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column {
-                            Text(
-                                text = invitation["fromUserName"] as? String
-                                    ?: stringResource(R.string.pairing_unknown_sender),
-                                style = MaterialTheme.typography.titleSmall
-                            )
-                            Text(
-                                text = invitation["fromUserEmail"] as? String ?: "",
-                                style = MaterialTheme.typography.bodySmall
-                            )
-                        }
-                        Row {
-                            TextButton(
-                                onClick = {
-                                    invitationToAccept = invitation
-                                    showConfirmDialog = true
-                                }
-                            ) {
-                                Text(stringResource(R.string.pairing_accept_button))
-                            }
-                            TextButton(
-                                onClick = {
-                                    viewModel.rejectInvitation(
-                                        invitation["id"] as? String ?: ""
-                                    )
-                                }
-                            ) {
-                                Text(stringResource(R.string.pairing_reject_button))
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // QR Code sharing dialog
-        uiState.qrCodeBitmap?.let { qrBitmap ->
-            if (uiState.showQRCodeDialog) {
-                AlertDialog(
-                    onDismissRequest = { viewModel.dismissQRCodeDialog() },
-                    title = {
-                        Text(
-                            text = stringResource(R.string.pairing_qr_dialog_title),
-                            style = MaterialTheme.typography.headlineSmall
-                        )
-                    },
-                    text = {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(16.dp)
-                        ) {
-                            Text(
-                                text = stringResource(R.string.pairing_qr_dialog_message),
-                                style = MaterialTheme.typography.bodyMedium,
-                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                            )
-
-                            Card(
-                                modifier = Modifier.size(256.dp),
-                                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .padding(16.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Image(
-                                        bitmap = qrBitmap.asImageBitmap(),
-                                        contentDescription = stringResource(
-                                            R.string.pairing_qr_code_content_description
-                                        ),
-                                        modifier = Modifier.fillMaxSize()
-                                    )
-                                }
-                            }
-
-                            // Countdown timer for QR code expiration
-                            var currentTime by remember { mutableStateOf(System.currentTimeMillis()) }
-
-                            LaunchedEffect(uiState.qrCodeExpirationTime) {
-                                while (uiState.qrCodeExpirationTime != null && uiState.showQRCodeDialog) {
-                                    currentTime = System.currentTimeMillis()
-                                    delay(1000) // Update every second
-                                }
-                            }
-
-                            val timeRemaining = uiState.qrCodeExpirationTime?.let { expiration ->
-                                (expiration - currentTime).coerceAtLeast(0)
-                            } ?: 0
-
-                            val isExpired = timeRemaining <= 0
-
-                            if (isExpired && uiState.qrCodeExpirationTime != null) {
-                                // Show expired message and regenerate button
-                                Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    Text(
-                                        text = stringResource(R.string.pairing_qr_expired),
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.error
-                                    )
-                                    Button(
-                                        onClick = { viewModel.regenerateQRCode() }
-                                    ) {
-                                        Text(stringResource(R.string.pairing_generate_new_qr_code))
-                                    }
-                                }
-                            } else {
-                                val hours = TimeUnit.MILLISECONDS.toHours(timeRemaining)
-                                val minutes = TimeUnit.MILLISECONDS.toMinutes(timeRemaining % TimeUnit.HOURS.toMillis(1))
-                                val seconds = TimeUnit.MILLISECONDS.toSeconds(timeRemaining % TimeUnit.MINUTES.toMillis(1))
-
-                                val timeText = when {
-                                    hours > 0 -> stringResource(
-                                        R.string.pairing_time_remaining_hours, hours, minutes
-                                    )
-                                    minutes > 0 -> stringResource(
-                                        R.string.pairing_time_remaining_minutes, minutes, seconds
-                                    )
-                                    else -> stringResource(
-                                        R.string.pairing_time_remaining_seconds, seconds
-                                    )
-                                }
-
-                                Text(
-                                    text = stringResource(R.string.pairing_expires_in, timeText),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = when {
-                                        hours < 1 -> MaterialTheme.colorScheme.error
-                                        hours < 6 -> MaterialTheme.colorScheme.errorContainer
-                                        else -> MaterialTheme.colorScheme.onSurfaceVariant
-                                    }
-                                )
-                            }
-                        }
-                    },
-                    confirmButton = {
-                        TextButton(onClick = { viewModel.dismissQRCodeDialog() }) {
-                            Text(stringResource(R.string.pairing_close))
-                        }
-                    }
-                )
-            }
-        }
-
-        // Confirmation dialog for accepting pairing
-        if (showConfirmDialog && invitationToAccept != null) {
-            val fromName = invitationToAccept?.get("fromUserName") as? String
-                ?: stringResource(R.string.pairing_unknown_user)
-            val fromEmail = invitationToAccept?.get("fromUserEmail") as? String ?: ""
-
-            ConfirmationDialog(
-                title = stringResource(R.string.pairing_confirm_title),
-                message = stringResource(R.string.pairing_confirm_message, fromName, fromEmail),
-                confirmText = stringResource(R.string.pairing_accept_pairing),
-                dismissText = stringResource(R.string.pairing_cancel),
-                onConfirm = {
-                    invitationToAccept?.get("id")?.let { invId ->
-                        viewModel.acceptInvitation(invId as String)
-                    }
-                    showConfirmDialog = false
-                    invitationToAccept = null
-                },
-                onDismiss = {
-                    showConfirmDialog = false
-                    invitationToAccept = null
-                }
-            )
         }
     }
+
+    UnpairFlow(state, showUnpairConfirm, viewModel::unpair)
+    DeepLinkFlow(pendingDeepLinkCode, viewModel::redeemCode)
+
+    if (form.showQrDialog && form.qrBitmap != null) {
+        QrDialog(bitmap = form.qrBitmap, onDismiss = viewModel::dismissQr)
     }
 }
 
+/** Confirms ending the co-parent link once [visible] is set, e.g. from the paired screen's danger action. */
+@Composable
+private fun UnpairFlow(state: PairingState, visible: MutableState<Boolean>, onUnpair: () -> Unit) {
+    if (!visible.value) return
+    UnpairConfirmationDialog(
+        partnerName = (state as? PairingState.Paired)?.partner?.name.orEmpty(),
+        onConfirm = {
+            onUnpair()
+            visible.value = false
+        },
+        onDismiss = { visible.value = false }
+    )
+}
 
+/**
+ * Confirms redeeming a code carried by a `coplanly://pair` deep link. A
+ * shared link may have been forwarded by a third party — never redeem it
+ * without the user saying yes.
+ */
+@Composable
+private fun DeepLinkFlow(pendingCode: MutableState<String?>, onRedeem: () -> Unit) {
+    val code = pendingCode.value ?: return
+    DeepLinkConfirmationDialog(
+        code = code,
+        onConfirm = {
+            onRedeem()
+            pendingCode.value = null
+        },
+        onDismiss = { pendingCode.value = null }
+    )
+}
+
+/**
+ * Surfaces a field-less action failure (accept/reject/unpair/regenerate) as a
+ * snackbar exactly once, then reports it consumed so it doesn't reappear —
+ * without this, e.g. a failed `unpair()` would have nowhere to show at all.
+ */
+@Composable
+private fun ActionErrorSnackbar(
+    @StringRes actionErrorRes: Int?,
+    snackbarHostState: SnackbarHostState,
+    context: Context,
+    onConsumed: () -> Unit
+) {
+    LaunchedEffect(actionErrorRes) {
+        actionErrorRes?.let { res ->
+            snackbarHostState.showSnackbar(context.getString(res))
+            onConsumed()
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun PairingTopBar(onNavigateBack: () -> Unit) {
+    TopAppBar(
+        title = { Text(stringResource(R.string.pairing_screen_title)) },
+        navigationIcon = {
+            IconButton(onClick = onNavigateBack) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = stringResource(R.string.pairing_back)
+                )
+            }
+        }
+    )
+}
+
+/**
+ * Launches [QRScannerActivity] and, on a successful scan, feeds the returned
+ * code straight into the redeem flow — the same path as typing it by hand.
+ */
+@Composable
+private fun rememberQrScannerLauncher(viewModel: PairingViewModel): ActivityResultLauncher<Intent> =
+    rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            result.data?.getStringExtra(QRScannerActivity.EXTRA_CODE)?.let { code ->
+                viewModel.onCodeInputChange(code)
+                viewModel.redeemCode()
+            }
+        }
+    }
+
+/** The screen-level side effects the not-paired/loading form needs but does not own itself. */
+private data class NotPairedActions(
+    val onShareInvite: (PairingInvite) -> Unit,
+    val onCopyCode: (String) -> Unit,
+    val onScanQr: () -> Unit
+)
+
+@Composable
+private fun rememberNotPairedActions(
+    context: Context,
+    clipboard: ClipboardManager,
+    onCodeCopied: () -> Unit,
+    onScanQr: () -> Unit
+): NotPairedActions = remember(context, clipboard, onCodeCopied, onScanQr) {
+    NotPairedActions(
+        onShareInvite = { invite -> context.startActivity(shareIntent(context, invite)) },
+        onCopyCode = { code ->
+            clipboard.setText(AnnotatedString(code))
+            onCodeCopied()
+        },
+        onScanQr = onScanQr
+    )
+}
+
+/** Builds the share-sheet intent for an outstanding invite. */
+private fun shareIntent(context: Context, invite: PairingInvite): Intent {
+    val message = context.getString(
+        R.string.pairing_share_message,
+        invite.fromUserName,
+        invite.code,
+        PairingUri.build(invite.code)
+    )
+    val sendIntent = Intent(Intent.ACTION_SEND).apply {
+        type = "text/plain"
+        putExtra(Intent.EXTRA_TEXT, message)
+    }
+    return Intent.createChooser(sendIntent, context.getString(R.string.pairing_share_invite))
+}
+
+/**
+ * [PairingState.Loading] is reached both on first subscription and after a
+ * permanent Firestore failure — Task 5's flow re-emits it from `.catch`
+ * rather than terminating, so it is a real, possibly indefinite state, not
+ * just a brief flash. The spinner alone would be a dead end if the recovery
+ * never comes, so the code-entry, scan-QR and email paths render underneath
+ * it too — they only need [form] and the [viewModel] actions, never the
+ * active invite or incoming list that only [PairingState.NotPaired] carries.
+ */
+private fun LazyListScope.loadingSection(
+    form: PairingFormState,
+    viewModel: PairingViewModel,
+    actions: NotPairedActions
+) {
+    item { CircularProgressIndicator(Modifier.padding(32.dp)) }
+    formSection(form, viewModel, actions)
+}
+
+private fun LazyListScope.pairedSection(partner: PartnerSummary, onUnpairClick: () -> Unit) {
+    item { PairedPartnerCard(partner = partner) }
+    item {
+        Button(
+            onClick = onUnpairClick,
+            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+            modifier = Modifier.fillMaxWidth()
+        ) { Text(stringResource(R.string.pairing_unpair_button)) }
+    }
+}
+
+/**
+ * The not-paired state: the hero invite card (when one exists), the shared
+ * [formSection], and any incoming invitations.
+ */
+private fun LazyListScope.notPairedSection(
+    current: PairingState.NotPaired,
+    form: PairingFormState,
+    viewModel: PairingViewModel,
+    actions: NotPairedActions
+) {
+    current.activeInvite?.let { invite ->
+        item {
+            InviteCodeCard(
+                invite = invite,
+                onCopy = { actions.onCopyCode(invite.code) },
+                onShare = { actions.onShareInvite(invite) },
+                onShowQr = viewModel::showQr,
+                onRegenerate = viewModel::regenerateInvite
+            )
+        }
+        item { OrDivider() }
+    }
+
+    formSection(form, viewModel, actions)
+
+    if (current.incoming.isNotEmpty()) {
+        items(current.incoming, key = { it.id }) { invite ->
+            IncomingInviteCard(
+                invite = invite,
+                onAccept = { viewModel.acceptIncoming(invite.id) },
+                onReject = { viewModel.rejectIncoming(invite.id) }
+            )
+        }
+    }
+}
+
+/**
+ * The code-entry, scan-QR and email-invite path — the three ways to link
+ * accounts that never depend on this user's own invite existing. Shared by
+ * [loadingSection] and [notPairedSection] so the user always has one of
+ * these available regardless of which of those two states they're in.
+ */
+private fun LazyListScope.formSection(
+    form: PairingFormState,
+    viewModel: PairingViewModel,
+    actions: NotPairedActions
+) {
+    item {
+        CodeEntryField(
+            value = form.codeInput,
+            onValueChange = viewModel::onCodeInputChange,
+            onSubmit = viewModel::redeemCode,
+            errorText = form.codeErrorRes?.let { stringResource(it) },
+            enabled = !form.isBusy
+        )
+    }
+    item { ScanQrButton(onClick = actions.onScanQr) }
+    item { EmailInviteSection(form = form, viewModel = viewModel) }
+}
+
+/** A labelled divider between "share your code" and "enter a code you were given". */
+@Composable
+private fun OrDivider() {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        HorizontalDivider(modifier = Modifier.weight(1f))
+        Text(
+            text = stringResource(R.string.pairing_or),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        HorizontalDivider(modifier = Modifier.weight(1f))
+    }
+}
+
+@Composable
+private fun ScanQrButton(onClick: () -> Unit) {
+    OutlinedButton(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
+        Icon(Icons.Default.QrCodeScanner, contentDescription = null)
+        Text(
+            text = stringResource(R.string.pairing_scan_qr_code),
+            modifier = Modifier.padding(start = 8.dp)
+        )
+    }
+}
+
+@Composable
+private fun EmailInviteSection(form: PairingFormState, viewModel: PairingViewModel) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        OutlinedTextField(
+            value = form.emailInput,
+            onValueChange = viewModel::onEmailInputChange,
+            label = { Text(stringResource(R.string.pairing_partner_email_label)) },
+            isError = form.emailErrorRes != null,
+            supportingText = form.emailErrorRes?.let { { Text(stringResource(it)) } },
+            singleLine = true,
+            enabled = !form.isBusy,
+            modifier = Modifier.fillMaxWidth()
+        )
+        OutlinedButton(
+            onClick = viewModel::sendEmailInvitation,
+            enabled = !form.isBusy,
+            modifier = Modifier.fillMaxWidth()
+        ) { Text(stringResource(R.string.pairing_invite_by_email)) }
+    }
+}
+
+/** Confirms ending the co-parent link; lives at the bottom of the screen, never mid-list. */
+@Composable
+private fun UnpairConfirmationDialog(
+    partnerName: String,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    ConfirmationDialog(
+        title = stringResource(R.string.pairing_unpair_confirm_title),
+        message = stringResource(R.string.pairing_unpair_confirm_message, partnerName),
+        confirmText = stringResource(R.string.pairing_unpair_confirm_action),
+        dismissText = stringResource(R.string.pairing_cancel),
+        onConfirm = onConfirm,
+        onDismiss = onDismiss
+    )
+}
+
+/**
+ * Confirms redeeming a code carried by a `coplanly://pair` deep link. The
+ * sender's identity isn't known until the code is actually redeemed, so this
+ * uses its own code-specific copy rather than the name/email pair used
+ * elsewhere on this screen — filling that pair with the code and an empty
+ * string produced a malformed sentence ("4F7K2M () will see...").
+ */
+@Composable
+private fun DeepLinkConfirmationDialog(
+    code: String,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    ConfirmationDialog(
+        title = stringResource(R.string.pairing_deep_link_confirm_title),
+        message = stringResource(R.string.pairing_deep_link_confirm_message, code),
+        confirmText = stringResource(R.string.pairing_link_accounts),
+        dismissText = stringResource(R.string.pairing_cancel),
+        onConfirm = onConfirm,
+        onDismiss = onDismiss
+    )
+}
+
+/** Shows the active invite's link as a scannable QR code. */
+@Composable
+private fun QrDialog(bitmap: Bitmap?, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.pairing_qr_dialog_title)) },
+        text = {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(stringResource(R.string.pairing_qr_dialog_message))
+                bitmap?.let {
+                    Image(
+                        bitmap = it.asImageBitmap(),
+                        contentDescription = stringResource(R.string.pairing_qr_code_content_description),
+                        modifier = Modifier.size(256.dp).padding(top = 16.dp)
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.pairing_close))
+            }
+        }
+    )
+}

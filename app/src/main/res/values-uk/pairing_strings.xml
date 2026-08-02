@@ -3,45 +3,65 @@
     <!-- PairingScreen -->
     <string name="pairing_screen_title">Створення пари батьків</string>
     <string name="pairing_back">Назад</string>
-    <string name="pairing_paired_with_label">Ви в парі з</string>
     <string name="pairing_unpair_button">Розірвати пару</string>
     <string name="pairing_partner_email_label">Ел. пошта партнера</string>
-    <string name="pairing_send_email_invitation">Надіслати запрошення електронною поштою</string>
-    <string name="pairing_share_qr_code">Поділитися QR-кодом</string>
     <string name="pairing_scan_qr_code">Сканувати QR-код</string>
-    <string name="pairing_pending_invitations_title">Запрошення в очікуванні</string>
     <string name="pairing_unknown_sender">Невідомо</string>
     <string name="pairing_accept_button">Прийняти</string>
     <string name="pairing_reject_button">Відхилити</string>
     <string name="pairing_qr_dialog_title">QR-код запрошення для другого з батьків</string>
     <string name="pairing_qr_dialog_message">Поділіться цим QR-кодом із другим із батьків. Відсканувавши його, він зможе прийняти ваше запрошення.</string>
     <string name="pairing_qr_code_content_description">QR-код для створення пари</string>
-    <string name="pairing_qr_expired">Термін дії QR-коду минув</string>
-    <string name="pairing_generate_new_qr_code">Створити новий QR-код</string>
-    <string name="pairing_time_remaining_hours">Залишилося %1$d год %2$d хв</string>
-    <string name="pairing_time_remaining_minutes">Залишилося %1$d хв %2$d с</string>
-    <string name="pairing_time_remaining_seconds">Залишилося %1$d с</string>
-    <string name="pairing_expires_in">Спливає через: %1$s</string>
     <string name="pairing_close">Закрити</string>
-    <string name="pairing_confirm_title">Створити пару з другим із батьків?</string>
-    <string name="pairing_confirm_message">Ви впевнені, що хочете створити пару з %1$s (%2$s)? Ви зможете ділитися подіями календаря та спілкуватися одне з одним.</string>
-    <string name="pairing_accept_pairing">Створити пару</string>
     <string name="pairing_cancel">Скасувати</string>
-    <string name="pairing_unknown_user">Невідомий користувач</string>
 
-    <!-- QRScannerActivity results -->
-    <string name="pairing_camera_permission_needed_result">Для сканування QR-кодів потрібен дозвіл на використання камери</string>
-    <string name="pairing_scanning_cancelled">Сканування скасовано</string>
-    <string name="pairing_invalid_qr_format">Недійсний формат QR-коду</string>
-    <string name="pairing_error_processing_qr">Помилка обробки QR-коду: %1$s</string>
-    <string name="pairing_qr_expired_ask_new">Термін дії QR-коду минув. Попросіть партнера створити новий.</string>
-
-    <!-- QRScannerScreen -->
+    <!-- QrScannerScreen -->
     <string name="pairing_camera_permission_title">Потрібен дозвіл на використання камери</string>
     <string name="pairing_camera_permission_message">Надайте доступ до камери, щоб сканувати QR-коди запрошень.</string>
+    <string name="pairing_camera_permission_denied_message">Доступ до камери заборонено. Увімкніть його в налаштуваннях системи, щоб сканувати QR-коди.</string>
+    <string name="pairing_open_app_settings">Відкрити налаштування</string>
     <string name="pairing_grant_permission">Надати дозвіл</string>
-    <string name="pairing_processing_qr">Обробка QR-коду…</string>
-    <string name="pairing_position_qr">Наведіть камеру на QR-код</string>
     <string name="pairing_qr_hint">Переконайтеся, що QR-код добре освітлений і повністю поміщається в рамку.</string>
-    <string name="pairing_camera_preview">Попередній перегляд камери</string>
+
+    <!-- Pairing errors (Task 6) -->
+    <string name="pairing_error_not_found">Запрошення з таким кодом не знайдено.</string>
+    <string name="pairing_error_expired">Термін дії коду минув. Попросіть новий.</string>
+    <string name="pairing_error_not_pending">Це запрошення більше не активне.</string>
+    <string name="pairing_error_self_pairing">Це ваше власне запрошення.</string>
+    <string name="pairing_error_already_paired">Один з акаунтів уже має другого з батьків.</string>
+    <string name="pairing_error_wrong_recipient">Це запрошення надіслано на іншу електронну адресу.</string>
+    <string name="pairing_error_network">Немає з’єднання. Перевірте інтернет і спробуйте ще раз.</string>
+    <string name="pairing_error_unknown">Щось пішло не так. Спробуйте ще раз.</string>
+    <string name="pairing_error_code_incomplete">Введіть усі 6 символів коду.</string>
+    <string name="pairing_error_invalid_email">Введіть коректну електронну адресу.</string>
+
+    <!-- Invite code hero card -->
+    <string name="pairing_your_code_title">Ваш код запрошення</string>
+    <string name="pairing_your_code_hint">Передайте цей код другому з батьків. Дійсний 24 години.</string>
+    <string name="pairing_code_copied">Код скопійовано</string>
+    <string name="pairing_share_invite">Поділитися</string>
+    <string name="pairing_show_qr">Показати QR</string>
+    <string name="pairing_new_code">Новий код</string>
+    <string name="pairing_expires_in_hours">Дійсний ще %1$d год %2$d хв</string>
+    <string name="pairing_expires_in_minutes">Дійсний ще %1$d хв</string>
+    <string name="pairing_code_expired_generate">Код прострочено — натисніть «Новий код»</string>
+    <string name="pairing_share_message">%1$s запрошує вас до CoPlanly. Код: %2$s · %3$s</string>
+    <!-- Code entry -->
+    <string name="pairing_have_a_code">У мене є код</string>
+    <string name="pairing_code_field_label">Код запрошення</string>
+    <string name="pairing_link_accounts">Пов’язати акаунти</string>
+    <string name="pairing_or">або</string>
+    <!-- Email invite -->
+    <string name="pairing_invite_by_email">Запросити електронною поштою</string>
+    <!-- Paired state -->
+    <string name="pairing_paired_since">У парі з %1$s</string>
+    <string name="pairing_partner_email_unknown">Електронна пошта недоступна</string>
+    <string name="pairing_unpair_confirm_title">Розірвати зв’язок із другим із батьків?</string>
+    <string name="pairing_unpair_confirm_message">Ви перестанете ділитися календарем, чатом і витратами з %1$s. Дані, вже збережені на цьому телефоні, залишаться.</string>
+    <string name="pairing_unpair_confirm_action">Розʼєднати</string>
+    <!-- Deep link confirmation from a bare code (no sender identity known yet) -->
+    <string name="pairing_deep_link_confirm_title">Пов’язати акаунти за цим кодом?</string>
+    <string name="pairing_deep_link_confirm_message">%1$s — людина, яка надіслала вам цей код, побачить ваш спільний календар, чат і витрати.</string>
+    <!-- Fallback conversation title when the co-parent has no display name yet -->
+    <string name="pairing_default_partner_name">Другий з батьків</string>
 </resources>

@@ -19,22 +19,36 @@
       "queryScope": "COLLECTION",
       "fields": [
         {
-          "fieldPath": "createdByFirebaseUid",
-          "order": "ASCENDING"
+          "fieldPath": "sharedWith",
+          "arrayConfig": "CONTAINS"
         },
         {
-          "fieldPath": "date",
-          "order": "DESCENDING"
+          "fieldPath": "startDateTime",
+          "order": "ASCENDING"
         }
       ]
     },
     {
-      "collectionGroup": "events",
+      "collectionGroup": "child_info",
       "queryScope": "COLLECTION",
       "fields": [
         {
           "fieldPath": "sharedWith",
           "arrayConfig": "CONTAINS"
+        },
+        {
+          "fieldPath": "childName",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "expenses",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "createdByFirebaseUid",
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "date",
@@ -45,4 +59,3 @@
   ],
   "fieldOverrides": []
 }
-

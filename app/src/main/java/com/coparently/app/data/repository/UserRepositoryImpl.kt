@@ -78,6 +78,15 @@ class UserRepositoryImpl @Inject constructor(
                     "partnerId" to (user.partnerId ?: ""),
                     "fcmToken" to (user.fcmToken ?: "")
                 )
+                // WARNING, currently dormant: `upsertUser` is a full `.set()`, so every key
+                // absent from `userData` above is *deleted* from `users/{uid}`. That
+                // includes `pendingRevocationOf`, the marker `unpairCoParent` writes to
+                // remember whose shared access still has to be revoked after a partial
+                // sweep; erasing it leaves the ex-partner in the `sharedWith` of every
+                // document the sweep did not reach, with nothing left that remembers who
+                // they were. Nothing calls `UserRepository.upsertUser` today. Before wiring
+                // it up, either switch the data source to `set(merge)` — as `updateUser`
+                // already does — or carry `pendingRevocationOf` through this map.
                 firestoreUserDataSource.upsertUser(firebaseUser.uid, userData).getOrThrow()
             } catch (e: Exception) {
                 android.util.Log.e("UserRepository", "Failed to sync user to Firestore", e)

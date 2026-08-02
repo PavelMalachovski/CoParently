@@ -1,583 +1,214 @@
 package com.coparently.app.presentation.pairing
 
 import android.graphics.Bitmap
+import androidx.annotation.StringRes
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.coparently.app.R
 import com.coparently.app.data.analytics.AnalyticsManager
-import com.coparently.app.data.remote.firebase.CoParentPairingService
-import com.coparently.app.data.remote.firebase.FirebaseAuthService
+import com.coparently.app.data.remote.firebase.PairingException
 import com.coparently.app.data.remote.firebase.QRCodeService
-import com.coparently.app.domain.model.Conversation
-import com.coparently.app.domain.repository.MessageRepository
-import com.coparently.app.domain.repository.UserRepository
+import com.coparently.app.domain.model.PairingError
+import com.coparently.app.domain.model.PairingState
+import com.coparently.app.domain.pairing.InviteCodeGenerator
+import com.coparently.app.domain.pairing.PairingUri
+import com.coparently.app.domain.repository.PairingRepository
 import com.coparently.app.utils.ValidationResult
 import com.coparently.app.utils.ValidationUtils
-import java.time.LocalDateTime
-import java.util.UUID
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeoutOrNull
-import kotlinx.coroutines.TimeoutCancellationException
 import javax.inject.Inject
 
 /**
- * ViewModel for pairing screen.
- * Управляет состоянием pairing и приглашений co-parent.
+ * Transient state of the pairing form — everything that is not the pairing
+ * itself. Errors are string resource ids, never English literals, so the
+ * screen renders them in the user's language.
  *
- * Обновлен для использования ValidationUtils для валидации email.
+ * Errors are split by where they belong: [codeErrorRes] and [emailErrorRes]
+ * sit under their respective input field (validation, or a redeem/invite
+ * failure that concerns exactly what the user typed there), while
+ * [actionErrorRes] is for actions with no associated field — accepting or
+ * declining an incoming invite, unpairing, regenerating a code — and is
+ * meant to be surfaced once (e.g. a snackbar) and then cleared with
+ * [PairingViewModel.consumeActionError]. Without this split, a failed
+ * `unpair()` — which has no field to attach to — would have nowhere to
+ * show and the button would look dead.
+ */
+data class PairingFormState(
+    val codeInput: String = "",
+    val emailInput: String = "",
+    val isBusy: Boolean = false,
+    @StringRes val codeErrorRes: Int? = null,
+    @StringRes val emailErrorRes: Int? = null,
+    @StringRes val actionErrorRes: Int? = null,
+    val qrBitmap: Bitmap? = null,
+    val showQrDialog: Boolean = false
+)
+
+/**
+ * ViewModel for the pairing screen: exposes the realtime [PairingState] from
+ * the repository plus the local form state, and forwards its actions.
  */
 @HiltViewModel
 class PairingViewModel @Inject constructor(
-    private val pairingService: CoParentPairingService,
-    private val firebaseAuthService: FirebaseAuthService,
-    private val userRepository: UserRepository,
-    private val messageRepository: MessageRepository,
-    private val analyticsManager: AnalyticsManager,
-    private val qrCodeService: QRCodeService
+    private val pairingRepository: PairingRepository,
+    private val qrCodeService: QRCodeService,
+    private val analyticsManager: AnalyticsManager
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(PairingUiState())
-    val uiState: StateFlow<PairingUiState> = _uiState.asStateFlow()
+    val state: StateFlow<PairingState> = pairingRepository.observePairingState()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), PairingState.Loading)
+
+    private val _form = MutableStateFlow(PairingFormState())
+    val form: StateFlow<PairingFormState> = _form.asStateFlow()
 
     init {
-        loadPairingInfo()
-        loadPendingInvitations()
-    }
-
-    private fun loadPairingInfo() {
         viewModelScope.launch {
-            val currentUser = userRepository.getCurrentUser()
-            currentUser?.partnerId?.takeIf { it.isNotBlank() }?.let { partnerId ->
-                val partnerInfo = pairingService.getPartnerInfo(partnerId)
-                _uiState.value = _uiState.value.copy(
-                    partnerEmail = partnerInfo?.get("email") as? String
-                )
-            }
+            // Only mint a code once the account is known to be unpaired. Minting one
+            // unconditionally left an already-paired account holding a live 24-hour invite:
+            // harmless while the callable rejects it, but the document stays redeemable and
+            // becomes live again the moment the user unpairs.
+            state.first { it !is PairingState.Loading }
+            if (state.value is PairingState.NotPaired) refreshInvite()
         }
     }
 
-    private fun loadPendingInvitations() {
-        viewModelScope.launch {
-            val currentUser = firebaseAuthService.getCurrentUser()
-            val userEmail = currentUser?.email
-            if (currentUser != null && !userEmail.isNullOrBlank()) {
-                val result = pairingService.getPendingInvitations(userEmail)
-                result.fold(
-                    onSuccess = { invitations ->
-                        _uiState.value = _uiState.value.copy(pendingInvitations = invitations)
-                    },
-                    onFailure = { error ->
-                        android.util.Log.w("PairingViewModel", "Failed to load pending invitations", error)
-                        // Don't show error to user - just log it
-                    }
-                )
-            } else {
-                android.util.Log.w("PairingViewModel", "Cannot load pending invitations: user email is null or blank")
-            }
-        }
+    /** Ensures an invite code exists so the hero card always has one to show. */
+    fun refreshInvite() {
+        viewModelScope.launch { pairingRepository.createOrReuseInviteCode() }
     }
 
-    fun updateInvitationEmail(email: String) {
-        _uiState.value = _uiState.value.copy(
-            invitationEmail = email,
-            errorMessage = null,
-            emailError = null
-        )
+    /**
+     * Withdraws the current code and issues a fresh one. Has no field of its
+     * own, so a failure surfaces through [PairingFormState.actionErrorRes].
+     */
+    fun regenerateInvite() = launchAction {
+        val revoked = pairingRepository.revokeActiveInvite()
+        if (revoked.isSuccess) pairingRepository.createOrReuseInviteCode() else revoked
     }
 
-    fun sendInvitation(onSuccess: () -> Unit) {
-        val state = _uiState.value
+    /**
+     * Accepts typed or pasted input: a bare code, a full pairing URI, or share
+     * text containing one. Anything else is kept as up-cased characters so the
+     * user can keep typing.
+     */
+    fun onCodeInputChange(raw: String) {
+        val code = PairingUri.extractCode(raw)
+            ?: raw.trim().uppercase().filter { it in InviteCodeGenerator.ALPHABET }
+                .take(InviteCodeGenerator.LENGTH)
+        _form.value = _form.value.copy(codeInput = code, codeErrorRes = null)
+    }
 
-        // Валидация email перед отправкой
-        val emailValidation = ValidationUtils.validateEmail(state.invitationEmail)
-        if (emailValidation is ValidationResult.Error) {
-            _uiState.value = state.copy(
-                emailError = emailValidation.message,
-                errorMessage = null
-            )
+    /** Updates the email-invite field, clearing its previous validation error. */
+    fun onEmailInputChange(email: String) {
+        _form.value = _form.value.copy(emailInput = email, emailErrorRes = null)
+    }
+
+    /** Redeems the code currently in the input field. */
+    fun redeemCode() {
+        val code = _form.value.codeInput
+        if (!InviteCodeGenerator.isValid(code)) {
+            _form.value = _form.value.copy(codeErrorRes = R.string.pairing_error_code_incomplete)
             return
         }
+        launchAction(
+            onError = { res -> _form.value = _form.value.copy(codeErrorRes = res) }
+        ) { pairingRepository.redeem(code) }
+    }
 
-        // Дополнительная проверка - нельзя отправить приглашение самому себе
-        val currentUserEmail = firebaseAuthService.getCurrentUser()?.email
-        if (state.invitationEmail.equals(currentUserEmail, ignoreCase = true)) {
-            _uiState.value = state.copy(
-                emailError = "You cannot invite yourself",
-                errorMessage = null
-            )
+    /** Sends an email invitation to the address currently in the email field. */
+    fun sendEmailInvitation() {
+        val email = _form.value.emailInput
+        val validation = ValidationUtils.validateEmail(email)
+        if (validation is ValidationResult.Error) {
+            _form.value = _form.value.copy(emailErrorRes = R.string.pairing_error_invalid_email)
             return
         }
-
-        _uiState.value = state.copy(
-            isLoading = true,
-            errorMessage = null,
-            emailError = null
-        )
-
-        viewModelScope.launch {
-            try {
-                // Wait for authentication to be ready (up to 5 seconds)
-                val currentUser = firebaseAuthService.waitForAuthReady()
-
-                if (currentUser == null) {
-                    _uiState.value = state.copy(
-                        isLoading = false,
-                        errorMessage = "User not authenticated. Please sign in."
-                    )
-                    return@launch
-                }
-
-                // Sync user data from Firestore before getting current user
-                // This ensures user data exists in local database
-                // Use timeout to prevent hanging (increased to 30 seconds for first connection)
-                try {
-                    withTimeoutOrNull(30000) {
-                        userRepository.syncWithFirestore()
-                    } ?: android.util.Log.w("PairingViewModel", "Sync with Firestore timed out")
-                } catch (e: Exception) {
-                    // Check if it's a NOT_FOUND error (database not created)
-                    if (e.message?.contains("NOT_FOUND") == true ||
-                        e.message?.contains("database (default) does not exist") == true) {
-                        _uiState.value = state.copy(
-                            isLoading = false,
-                            errorMessage = "Firestore database is not created. Please create it:\nhttps://console.cloud.google.com/datastore/setup?project=coparently-a39c9"
-                        )
-                        return@launch
-                    }
-                    android.util.Log.w("PairingViewModel", "Failed to sync user data, trying to get from local DB", e)
-                }
-
-                var currentUserData = userRepository.getCurrentUser()
-
-                // If user data still not found, try to create it from Firebase user
-                if (currentUserData == null) {
-                    android.util.Log.d("PairingViewModel", "User data not found in local DB, creating from Firebase user")
-                    try {
-                        // Use timeout to prevent hanging on Firestore operations (increased to 20 seconds)
-                        val firestoreData = withTimeoutOrNull(20000) {
-                            pairingService.getPartnerInfo(currentUser.uid)
-                        }
-
-                        if (firestoreData != null) {
-                            // User exists in Firestore, sync it (increased to 30 seconds)
-                            try {
-                                withTimeoutOrNull(30000) {
-                                    userRepository.syncWithFirestore()
-                                }
-                            } catch (e: Exception) {
-                                android.util.Log.w("PairingViewModel", "Failed to sync after getting Firestore data", e)
-                            }
-                            currentUserData = userRepository.getCurrentUser()
-                        } else {
-                            // User doesn't exist in Firestore or Firestore unavailable, create basic user profile
-                            val newUser = com.coparently.app.domain.model.User(
-                                id = currentUser.uid,
-                                email = currentUser.email ?: "",
-                                name = currentUser.displayName ?: currentUser.email?.substringBefore("@") ?: "User",
-                                role = "mom",
-                                colorCode = "#FF4081"
-                            )
-                            userRepository.upsertUser(newUser)
-                            currentUserData = userRepository.getCurrentUser()
-                        }
-                    } catch (e: Exception) {
-                        // Check if it's a NOT_FOUND error (database not created)
-                        if (e.message?.contains("NOT_FOUND") == true ||
-                            e.message?.contains("database (default) does not exist") == true) {
-                            _uiState.value = state.copy(
-                                isLoading = false,
-                                errorMessage = "Firestore database is not created. Please create it:\nhttps://console.cloud.google.com/datastore/setup?project=coparently-a39c9"
-                            )
-                            return@launch
-                        }
-                        // If Firestore is offline or unavailable, create user from Firebase auth data
-                        android.util.Log.w("PairingViewModel", "Firestore unavailable, creating user from Firebase auth", e)
-                        val newUser = com.coparently.app.domain.model.User(
-                            id = currentUser.uid,
-                            email = currentUser.email ?: "",
-                            name = currentUser.displayName ?: currentUser.email?.substringBefore("@") ?: "User",
-                            role = "mom",
-                            colorCode = "#FF4081"
-                        )
-                        userRepository.upsertUser(newUser)
-                        currentUserData = userRepository.getCurrentUser()
-                    }
-                }
-
-                if (currentUserData == null) {
-                    _uiState.value = state.copy(
-                        isLoading = false,
-                        errorMessage = "User data not found. Please try again."
-                    )
-                    return@launch
-                }
-
-                // Send invitation with timeout to prevent hanging (increased to 30 seconds)
-                val result = withTimeoutOrNull(30000) {
-                    pairingService.sendInvitation(
-                        currentUser.uid,
-                        currentUser.email ?: "",
-                        currentUserData.name,
-                        state.invitationEmail
-                    )
-                }
-
-                if (result == null) {
-                    // Timeout occurred
-                    _uiState.value = state.copy(
-                        isLoading = false,
-                        errorMessage = "Request timed out. Please check your internet connection and try again."
-                    )
-                    return@launch
-                }
-
-                result.fold(
-                    onSuccess = {
-                        analyticsManager.logInvitationSent()
-                        android.util.Log.d("PairingViewModel", "Invitation sent successfully")
-                        _uiState.value = state.copy(
-                            isLoading = false,
-                            invitationEmail = "", // Clear the email field
-                            errorMessage = null
-                        )
-                        onSuccess()
-                    },
-                    onFailure = { error ->
-                        // Log full error for debugging
-                        android.util.Log.e("PairingViewModel", "Failed to send invitation", error)
-                        android.util.Log.e("PairingViewModel", "Error type: ${error.javaClass.simpleName}")
-                        android.util.Log.e("PairingViewModel", "Error message: ${error.message}")
-
-                        // Check for specific Firestore errors
-                        val errorMessage = when {
-                            // Database not created
-                            error.message?.contains("NOT_FOUND") == true ||
-                            error.message?.contains("database (default) does not exist") == true ||
-                            error.message?.contains("add a Cloud Datastore or Cloud Firestore database") == true -> {
-                                "Firestore database is not created. Please create it:\nhttps://console.cloud.google.com/datastore/setup?project=coparently-a39c9"
-                            }
-                            // Permission denied - usually means security rules issue
-                            error.message?.contains("PERMISSION_DENIED") == true ||
-                            error.message?.contains("Missing or insufficient permissions") == true -> {
-                                "Permission denied. Please check Firestore security rules:\nhttps://console.firebase.google.com/project/coparently-a39c9/firestore/rules\n\nMake sure rules are deployed and allow authenticated users to read/write their data."
-                            }
-                            // API not enabled (less common, usually shows different error)
-                            error.message?.contains("Cloud Firestore API has not been used") == true ||
-                            error.message?.contains("API has not been enabled") == true -> {
-                                "Firestore API is not enabled. Please enable it in Google Cloud Console:\nhttps://console.developers.google.com/apis/api/firestore.googleapis.com/overview?project=coparently-a39c9"
-                            }
-                            // Network errors
-                            error.message?.contains("UNAVAILABLE") == true ||
-                            error.message?.contains("Unable to resolve host") == true ||
-                            error.message?.contains("UnknownHostException") == true -> {
-                                "No internet connection or DNS error. Please check your internet connection and try again."
-                            }
-                            error.message?.contains("offline") == true ||
-                            error.message?.contains("client is offline") == true -> {
-                                "No internet connection. Please check your connection and try again."
-                            }
-                            error.message?.contains("timeout") == true ||
-                            error.message?.contains("timed out") == true -> {
-                                "Request timed out. Please check your internet connection and try again."
-                            }
-                            else -> error.message ?: "Failed to send invitation"
-                        }
-
-                        _uiState.value = state.copy(
-                            isLoading = false,
-                            errorMessage = errorMessage
-                        )
-                    }
-                )
-            } catch (e: Exception) {
-                _uiState.value = state.copy(
-                    isLoading = false,
-                    errorMessage = "Error: ${e.message}"
-                )
-            }
-        }
+        launchAction(
+            onSuccess = {
+                analyticsManager.logInvitationSent()
+                _form.value = _form.value.copy(emailInput = "")
+            },
+            onError = { res -> _form.value = _form.value.copy(emailErrorRes = res) }
+        ) { pairingRepository.sendEmailInvitation(email) }
     }
 
-    fun acceptInvitation(invitationId: String) {
-        _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
-
-        viewModelScope.launch {
-            try {
-                val currentUser = firebaseAuthService.getCurrentUser()
-                if (currentUser == null) {
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        errorMessage = "User not authenticated. Please sign in."
-                    )
-                    return@launch
-                }
-
-                // Sync user data before accepting invitation (increased to 30 seconds)
-                try {
-                    withTimeoutOrNull(30000) {
-                        userRepository.syncWithFirestore()
-                    }
-                } catch (e: Exception) {
-                    android.util.Log.w("PairingViewModel", "Failed to sync user data before accepting invitation", e)
-                }
-
-                // Get invitation details to know who we're pairing with (increased to 30 seconds)
-                val pendingInvitationsResult = withTimeoutOrNull(30000) {
-                    pairingService.getPendingInvitations(currentUser.email ?: "")
-                } ?: run {
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        errorMessage = "Request timed out. Please check your internet connection and try again."
-                    )
-                    return@launch
-                }
-
-                val invitation = pendingInvitationsResult.getOrNull()?.firstOrNull { it["id"] == invitationId }
-                val fromUserId = invitation?.get("fromUserId") as? String
-
-                val result = withTimeoutOrNull(30000) {
-                    pairingService.acceptInvitation(invitationId, currentUser.uid)
-                } ?: run {
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        errorMessage = "Request timed out. Please check your internet connection and try again."
-                    )
-                    return@launch
-                }
-                result.fold(
-                    onSuccess = {
-                        analyticsManager.logInvitationAccepted()
-
-                        // Sync user data again to get updated partnerId (increased to 30 seconds)
-                        try {
-                            withTimeoutOrNull(30000) {
-                                userRepository.syncWithFirestore()
-                            }
-                        } catch (e: Exception) {
-                            android.util.Log.w("PairingViewModel", "Failed to sync user data after accepting invitation", e)
-                        }
-
-                        // Create conversation for chat between the two parents
-                        if (fromUserId != null) {
-                            try {
-                                val partnerInfo = pairingService.getPartnerInfo(fromUserId)
-                                val partnerName = partnerInfo?.get("name") as? String ?: "Co-Parent"
-
-                                // Create conversation - MessageRepository will handle duplicates
-                                val conversation = Conversation(
-                                    id = UUID.randomUUID().toString(),
-                                    participants = listOf(currentUser.uid, fromUserId),
-                                    title = partnerName,
-                                    createdAt = LocalDateTime.now(),
-                                    unreadCount = 0,
-                                    syncedToFirestore = false
-                                )
-                                messageRepository.createConversation(conversation)
-                                android.util.Log.d("PairingViewModel", "Created conversation with partner: $partnerName")
-                            } catch (e: Exception) {
-                                android.util.Log.e("PairingViewModel", "Failed to create conversation after pairing", e)
-                                // Don't fail the pairing if conversation creation fails
-                            }
-                        }
-
-                        loadPairingInfo()
-                        loadPendingInvitations()
-                        _uiState.value = _uiState.value.copy(
-                            isLoading = false,
-                            errorMessage = null
-                        )
-                    },
-                    onFailure = { error ->
-                        // Log full error for debugging
-                        android.util.Log.e("PairingViewModel", "Failed to accept invitation", error)
-                        android.util.Log.e("PairingViewModel", "Error type: ${error.javaClass.simpleName}")
-                        android.util.Log.e("PairingViewModel", "Error message: ${error.message}")
-
-                        // Check for specific Firestore errors
-                        val errorMessage = when {
-                            // Database not created
-                            error.message?.contains("NOT_FOUND") == true ||
-                            error.message?.contains("database (default) does not exist") == true ||
-                            error.message?.contains("add a Cloud Datastore or Cloud Firestore database") == true -> {
-                                "Firestore database is not created. Please create it:\nhttps://console.cloud.google.com/datastore/setup?project=coparently-a39c9"
-                            }
-                            // Permission denied - usually means security rules issue
-                            error.message?.contains("PERMISSION_DENIED") == true ||
-                            error.message?.contains("Missing or insufficient permissions") == true -> {
-                                "Permission denied. Please check Firestore security rules:\nhttps://console.firebase.google.com/project/coparently-a39c9/firestore/rules\n\nMake sure rules are deployed and allow authenticated users to read/write their data."
-                            }
-                            // API not enabled (less common, usually shows different error)
-                            error.message?.contains("Cloud Firestore API has not been used") == true ||
-                            error.message?.contains("API has not been enabled") == true -> {
-                                "Firestore API is not enabled. Please enable it in Google Cloud Console:\nhttps://console.developers.google.com/apis/api/firestore.googleapis.com/overview?project=coparently-a39c9"
-                            }
-                            // Network errors
-                            error.message?.contains("UNAVAILABLE") == true ||
-                            error.message?.contains("Unable to resolve host") == true ||
-                            error.message?.contains("UnknownHostException") == true -> {
-                                "No internet connection or DNS error. Please check your internet connection and try again."
-                            }
-                            error.message?.contains("offline") == true ||
-                            error.message?.contains("client is offline") == true -> {
-                                "No internet connection. Please check your connection and try again."
-                            }
-                            error.message?.contains("timeout") == true ||
-                            error.message?.contains("timed out") == true -> {
-                                "Request timed out. Please check your internet connection and try again."
-                            }
-                            else -> error.message ?: "Failed to accept invitation"
-                        }
-
-                        _uiState.value = _uiState.value.copy(
-                            isLoading = false,
-                            errorMessage = errorMessage
-                        )
-                    }
-                )
-            } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(
-                    isLoading = false,
-                    errorMessage = "Error accepting invitation: ${e.message}"
-                )
-            }
-        }
-    }
-
-    fun rejectInvitation(invitationId: String) {
-        viewModelScope.launch {
-            val result = pairingService.rejectInvitation(invitationId)
-            result.fold(
-                onSuccess = {
-                    loadPendingInvitations()
-                },
-                onFailure = { /* Handle error */ }
-            )
-        }
-    }
-
-    fun removePairing() {
-        viewModelScope.launch {
-            val currentUser = firebaseAuthService.getCurrentUser()
-            val currentUserData = userRepository.getCurrentUser()
-            if (currentUser != null && currentUserData?.partnerId != null) {
-                val result = pairingService.removePartnership(
-                    currentUser.uid,
-                    currentUserData.partnerId
-                )
-                result.fold(
-                    onSuccess = {
-                        loadPairingInfo()
-                    },
-                    onFailure = { /* Handle error */ }
-                )
-            }
-        }
-    }
+    /** Accepts an invitation addressed to this user. */
+    fun acceptIncoming(invitationId: String) = launchAction(
+        onSuccess = { analyticsManager.logInvitationAccepted() }
+    ) { pairingRepository.acceptIncoming(invitationId) }
 
     /**
-     * Generates a QR code for co-parent pairing invitation.
+     * Declines an invitation addressed to this user. Has no field of its own,
+     * so a failure surfaces through [PairingFormState.actionErrorRes].
      */
-    fun generateQRCode() {
+    fun rejectIncoming(invitationId: String) =
+        launchAction { pairingRepository.rejectIncoming(invitationId) }
+
+    /**
+     * Ends the co-parent link. Has no field of its own, so a failure surfaces
+     * through [PairingFormState.actionErrorRes] rather than being silent.
+     */
+    fun unpair() = launchAction { pairingRepository.unpair() }
+
+    /** Renders the active invite's link as a QR bitmap and opens the dialog. */
+    fun showQr() {
+        val invite = (state.value as? PairingState.NotPaired)?.activeInvite ?: return
         viewModelScope.launch {
-            try {
-                // Wait for authentication to be ready
-                val currentUser = firebaseAuthService.waitForAuthReady()
-                val currentUserData = userRepository.getCurrentUser()
-
-                if (currentUser == null || currentUserData == null) {
-                    _uiState.value = _uiState.value.copy(
-                        errorMessage = "User not authenticated. Please sign in."
-                    )
-                    return@launch
-                }
-
-                // Generate invitation ID for QR code
-                val invitationId = "qr_${currentUser.uid}_${System.currentTimeMillis()}"
-
-                // Generate QR code bitmap
-                val qrBitmap = qrCodeService.generatePairingQRCode(
-                    invitationId = invitationId,
-                    inviterName = currentUserData.name,
-                    inviterEmail = currentUser.email ?: ""
-                )
-
-                if (qrBitmap != null) {
-                    // QR code expires in 24 hours
-                    val expirationTime = System.currentTimeMillis() + (24 * 60 * 60 * 1000)
-                    _uiState.value = _uiState.value.copy(
-                        qrCodeBitmap = qrBitmap,
-                        showQRCodeDialog = true,
-                        qrCodeExpirationTime = expirationTime,
-                        errorMessage = null
-                    )
-                    analyticsManager.logInvitationSent() // Log QR code generation as invitation sent
-                } else {
-                    _uiState.value = _uiState.value.copy(
-                        errorMessage = "Failed to generate QR code. Please try again."
-                    )
-                }
-            } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(
-                    errorMessage = "Error generating QR code: ${e.message}"
-                )
-            }
+            val bitmap = qrCodeService.generatePairingQRCode(content = PairingUri.build(invite.code))
+            _form.value = _form.value.copy(qrBitmap = bitmap, showQrDialog = bitmap != null)
         }
     }
 
-    /**
-     * Dismisses the QR code dialog.
-     */
-    fun dismissQRCodeDialog() {
-        _uiState.value = _uiState.value.copy(
-            showQRCodeDialog = false,
-            qrCodeBitmap = null,
-            qrCodeExpirationTime = null
-        )
+    /** Closes the QR preview dialog and releases the bitmap. */
+    fun dismissQr() {
+        _form.value = _form.value.copy(showQrDialog = false, qrBitmap = null)
     }
 
-    /**
-     * Regenerates QR code when expired.
-     */
-    fun regenerateQRCode() {
-        generateQRCode()
+    /** Clears the two field-level errors, e.g. when the user starts over. */
+    fun clearError() {
+        _form.value = _form.value.copy(codeErrorRes = null, emailErrorRes = null)
     }
 
-    /**
-     * Shows an error message in the UI.
-     */
-    fun showError(message: String) {
-        _uiState.value = _uiState.value.copy(
-            errorMessage = message,
-            isLoading = false
-        )
+    /** Marks a field-less action error as shown; call once it has been presented (e.g. a snackbar). */
+    fun consumeActionError() {
+        _form.value = _form.value.copy(actionErrorRes = null)
+    }
+
+    private fun launchAction(
+        onSuccess: () -> Unit = {},
+        onError: (Int) -> Unit = { res -> _form.value = _form.value.copy(actionErrorRes = res) },
+        action: suspend () -> Result<*>
+    ) {
+        _form.value = _form.value.copy(isBusy = true, actionErrorRes = null)
+        viewModelScope.launch {
+            val result = action()
+            _form.value = _form.value.copy(isBusy = false)
+            val failure = result.exceptionOrNull()
+            if (failure != null) onError(messageFor(failure)) else onSuccess()
+        }
+    }
+
+    @StringRes
+    private fun messageFor(throwable: Throwable): Int =
+        when ((throwable as? PairingException)?.error) {
+            PairingError.NotFound -> R.string.pairing_error_not_found
+            PairingError.Expired -> R.string.pairing_error_expired
+            PairingError.NotPending -> R.string.pairing_error_not_pending
+            PairingError.SelfPairing -> R.string.pairing_error_self_pairing
+            PairingError.AlreadyPaired -> R.string.pairing_error_already_paired
+            PairingError.WrongRecipient -> R.string.pairing_error_wrong_recipient
+            PairingError.Network -> R.string.pairing_error_network
+            else -> R.string.pairing_error_unknown
+        }
+
+    private companion object {
+        const val STOP_TIMEOUT_MS = 5_000L
     }
 }
-
-/**
- * UI state for pairing screen.
- *
- * @param invitationEmail Email для отправки приглашения
- * @param partnerEmail Email текущего партнера (если есть)
- * @param pendingInvitations Список ожидающих приглашений
- * @param isLoading Состояние загрузки
- * @param errorMessage Общее сообщение об ошибке
- * @param emailError Ошибка валидации email
- * @param qrCodeBitmap Generated QR code bitmap for sharing
- * @param showQRCodeDialog Whether to show the QR code sharing dialog
- * @param qrCodeExpirationTime Timestamp when QR code expires (24 hours from generation)
- */
-data class PairingUiState(
-    val invitationEmail: String = "",
-    val partnerEmail: String? = null,
-    val pendingInvitations: List<Map<String, Any?>> = emptyList(),
-    val isLoading: Boolean = false,
-    val errorMessage: String? = null,
-    val emailError: String? = null,
-    val qrCodeBitmap: Bitmap? = null,
-    val showQRCodeDialog: Boolean = false,
-    val qrCodeExpirationTime: Long? = null
-)
-

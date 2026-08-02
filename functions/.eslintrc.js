@@ -21,11 +21,15 @@ module.exports = {
   },
   overrides: [
     {
-      files: ['**/*.spec.*'],
+      files: ['**/*.spec.*', 'test/**/*.test.js'],
       env: {
         mocha: true,
       },
-      rules: {},
+      rules: {
+        // Test files import stubbing helpers (e.g. firebase-admin) that not
+        // every spec in the file ends up using.
+        'no-unused-vars': 'off',
+      },
     },
   ],
   globals: {},

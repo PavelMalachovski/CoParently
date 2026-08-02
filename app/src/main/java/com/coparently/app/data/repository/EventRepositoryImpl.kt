@@ -1,6 +1,7 @@
 package com.coparently.app.data.repository
 
 import com.coparently.app.data.local.dao.EventDao
+import com.coparently.app.data.local.dao.UserDao
 import com.coparently.app.data.local.entity.EventEntity
 import com.coparently.app.data.remote.firebase.FirebaseAuthService
 import com.coparently.app.data.remote.firebase.FirestoreEventDataSource
@@ -26,6 +27,7 @@ import javax.inject.Singleton
 @Singleton
 class EventRepositoryImpl @Inject constructor(
     private val eventDao: EventDao,
+    private val userDao: UserDao,
     private val firebaseAuthService: FirebaseAuthService,
     private val firestoreEventDataSource: FirestoreEventDataSource
 ) : EventRepository {
@@ -78,9 +80,14 @@ class EventRepositoryImpl @Inject constructor(
 
         val firebaseUser = firebaseAuthService.getCurrentUser()
         if (firebaseUser != null && !event.syncedToFirestore && !event.isPrivate) {
-            firestoreEventDataSource.insertEvent(event.id, event.toFirestoreMap(firebaseUser.uid))
+            val audience = shareTargets(event, firebaseUser.uid, firebaseUser.uid)
+            firestoreEventDataSource.insertEvent(event.id, event.toFirestoreMap(firebaseUser.uid, audience))
 
-            val syncedEvent = event.copy(syncedToFirestore = true, createdByFirebaseUid = firebaseUser.uid)
+            val syncedEvent = event.copy(
+                syncedToFirestore = true,
+                createdByFirebaseUid = firebaseUser.uid,
+                sharedWith = audience
+            )
             eventDao.updateEvent(syncedEvent.toEntity())
         }
     }
@@ -97,7 +104,14 @@ class EventRepositoryImpl @Inject constructor(
             }
         } else {
             val uid = event.createdByFirebaseUid ?: firebaseUser.uid
-            firestoreEventDataSource.updateEvent(event.id, event.toFirestoreMap(uid))
+            val audience = shareTargets(event, uid, firebaseUser.uid)
+            firestoreEventDataSource.updateEvent(event.id, event.toFirestoreMap(uid, audience))
+            // Converge the Room copy on what was uploaded. Without this the stale audience
+            // survives locally until the next down-sync, which is exactly the window the
+            // unpair sweep cannot reach.
+            if (event.sharedWith != audience) {
+                eventDao.updateEvent(event.copy(sharedWith = audience).toEntity())
+            }
         }
     }
 
@@ -130,19 +144,57 @@ class EventRepositoryImpl @Inject constructor(
         entities.forEach { entity ->
             if (!entity.syncedToFirestore && !entity.isPrivate) {
                 val event = entity.toDomain()
-                firestoreEventDataSource.insertEvent(event.id, event.toFirestoreMap(firebaseUser.uid))
+                val audience = shareTargets(event, firebaseUser.uid, firebaseUser.uid)
+                firestoreEventDataSource.insertEvent(event.id, event.toFirestoreMap(firebaseUser.uid, audience))
 
-                val syncedEvent = event.copy(syncedToFirestore = true, createdByFirebaseUid = firebaseUser.uid)
+                val syncedEvent = event.copy(
+                    syncedToFirestore = true,
+                    createdByFirebaseUid = firebaseUser.uid,
+                    sharedWith = audience
+                )
                 eventDao.updateEvent(syncedEvent.toEntity())
             }
         }
     }
 
     /**
+     * Resolves the `sharedWith` audience for a remote event write.
+     *
+     * The audience is the *entitled* set derived from live state: the signed-in user, the
+     * document's creator, and the signed-in user's current co-parent. All three matter —
+     * `sharedWith` is what both the `events` read rule and
+     * [FirestoreEventDataSource.observeEventsSharedWith] are keyed on, so a parent missing
+     * from the list simply cannot see the event, and a co-parent editing an event must
+     * never drop the creator. Only the *current* user's pairing row is consulted, never the
+     * creator's, because that is the only one guaranteed to be mirrored locally.
+     *
+     * The event's stored list is **intersected** with that set rather than unioned into it.
+     * Unioning is what made `unpairCoParent`'s server-side revocation sweep undoable: the
+     * sweep narrows the remote document but never touches the local Room copy, so the very
+     * next edit re-uploaded the ex-partner and handed back read and `read_write` access for
+     * good. Intersecting means the audience can only ever contain people the *current*
+     * pairing state entitles, so it is correct on whichever device edits next — including
+     * the device that never called unpair and whose Room copy is still stale. Widening for
+     * a *new* co-parent still works, because the new partner is in the entitled set.
+     *
+     * @param event The event about to be written.
+     * @param creatorUid The document's `createdByFirebaseUid`.
+     * @param currentUid The signed-in user's Firebase UID.
+     */
+    private suspend fun shareTargets(event: Event, creatorUid: String, currentUid: String): List<String> {
+        val partnerId = userDao.getUserById(currentUid)?.partnerId
+        val entitled = (listOf(currentUid, creatorUid) + listOfNotNull(partnerId))
+            .filter { it.isNotBlank() }
+            .distinct()
+        // Stored order first, so an unchanged audience keeps a stable field value.
+        return (event.sharedWith.filter { it in entitled } + entitled).distinct()
+    }
+
+    /**
      * Builds the Firestore document map for this event.
      * Single source of truth for the remote schema.
      */
-    private fun Event.toFirestoreMap(creatorUid: String): Map<String, Any?> {
+    private fun Event.toFirestoreMap(creatorUid: String, audience: List<String>): Map<String, Any?> {
         return mapOf(
             "id" to id,
             "title" to title,
@@ -159,7 +211,7 @@ class EventRepositoryImpl @Inject constructor(
             "createdAt" to createdAt.format(dateFormatter),
             "updatedAt" to updatedAt.format(dateFormatter),
             "createdByFirebaseUid" to creatorUid,
-            "sharedWith" to sharedWith,
+            "sharedWith" to audience,
             "lastModifiedBy" to (lastModifiedBy ?: creatorUid),
             "permissions" to permissions,
             "imageUrl" to (imageUrl ?: "")

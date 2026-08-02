@@ -1,0 +1,310 @@
+rules_version = '2';
+
+// Production Firestore rules for CoPlanly.
+//
+// These rules are aligned with the ACTUAL document schema the app writes
+// (EventRepositoryImpl.toFirestoreMap / SyncService): date fields are ISO
+// *strings*, not Firestore timestamps, and documents carry the full field set
+// (~18 keys for events), not a fixed minimal subset. Earlier versions of this
+// file validated `is timestamp` and an exact key set, which rejected every
+// real write — that is why the permissive `firestore.rules.simple` had to be
+// deployed instead. Keep these in sync with `toFirestoreMap()`.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---- Helpers -------------------------------------------------------
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isPartnerOf(userId) {
+      return isAuthenticated() &&
+             exists(/databases/$(database)/documents/users/$(userId)) &&
+             get(/databases/$(database)/documents/users/$(userId)).data.partnerId == request.auth.uid;
+    }
+
+    // Validate string field length (inclusive bounds).
+    function isValidLength(str, minLen, maxLen) {
+      return str is string && str.size() >= minLen && str.size() <= maxLen;
+    }
+
+    // ---- Users ---------------------------------------------------------
+    // Users can read/write their own profile and read their partner's profile.
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isPartnerOf(userId);
+
+      allow create: if isOwner(userId) &&
+                      'email' in request.resource.data &&
+                      'name' in request.resource.data &&
+                      isValidLength(request.resource.data.name, 1, 100) &&
+                      (!('firebaseUid' in request.resource.data) ||
+                       request.resource.data.firebaseUid == null ||
+                       request.resource.data.firebaseUid == request.auth.uid);
+
+      allow update: if isOwner(userId) &&
+                      (!('firebaseUid' in request.resource.data) ||
+                       request.resource.data.firebaseUid == null ||
+                       request.resource.data.firebaseUid == request.auth.uid);
+
+      allow delete: if isOwner(userId);
+    }
+
+    // ---- Events --------------------------------------------------------
+    // Owners and shared partners have access. Date fields are ISO strings, so
+    // no timestamp-type or ordering checks here (that is enforced app-side).
+    match /events/{eventId} {
+      allow read: if isAuthenticated() && (
+        resource.data.createdByFirebaseUid == request.auth.uid ||
+        request.auth.uid in resource.data.sharedWith
+      );
+
+      // Presence-based validation only — the real document carries the full
+      // schema, so an exact key-set match must NOT be required.
+      allow create: if isAuthenticated() &&
+                      request.resource.data.createdByFirebaseUid == request.auth.uid &&
+                      request.resource.data.keys().hasAll(['title', 'startDateTime', 'eventType', 'parentOwner']) &&
+                      isValidLength(request.resource.data.title, 1, 200);
+
+      // Creator, or a partner with read_write permission, may update. The creator
+      // field is immutable. lastModifiedBy is intentionally NOT required to equal
+      // the caller: the client doesn't reliably stamp the editor on every write
+      // path, and forcing it here silently denied legitimate partner edits.
+      allow update: if isAuthenticated() && (
+        resource.data.createdByFirebaseUid == request.auth.uid ||
+        (request.auth.uid in resource.data.sharedWith &&
+         resource.data.permissions == 'read_write')
+      ) && request.resource.data.createdByFirebaseUid == resource.data.createdByFirebaseUid;
+
+      allow delete: if isAuthenticated() &&
+                      resource.data.createdByFirebaseUid == request.auth.uid;
+    }
+
+    // ---- Child info ----------------------------------------------------
+    // Shared between a parent pair via the sharedWith list.
+    match /child_info/{childInfoId} {
+      allow read: if isAuthenticated() &&
+                    request.auth.uid in resource.data.sharedWith;
+
+      allow create: if isAuthenticated() &&
+                      request.resource.data.createdByFirebaseUid == request.auth.uid &&
+                      request.auth.uid in request.resource.data.sharedWith &&
+                      request.resource.data.keys().hasAll(['childName', 'createdByFirebaseUid', 'sharedWith']) &&
+                      isValidLength(request.resource.data.childName, 1, 100);
+
+      allow update: if isAuthenticated() &&
+                      request.auth.uid in resource.data.sharedWith &&
+                      request.resource.data.createdByFirebaseUid == resource.data.createdByFirebaseUid;
+
+      allow delete: if isAuthenticated() &&
+                      resource.data.createdByFirebaseUid == request.auth.uid;
+    }
+
+    // ---- Expenses (receipt sync) --------------------------------------
+    // Only the two paired parents involved may read/write. The document schema
+    // (ExpenseRepositoryImpl.addExpense) has no `sharedWith` field — expenses carry
+    // `splitBetween` for cost-splitting math, not visibility — so partner access is
+    // gated the same way as `users`: via the paired `partnerId` relationship, not a
+    // per-document list. An earlier version of this rule referenced `sharedWith` here,
+    // which never exists on an expense document, so the partner branch could never be
+    // true and the co-parent's expenses were unreadable even by document id.
+    match /expenses/{expenseId} {
+      allow read: if isAuthenticated() && (
+        resource.data.createdByFirebaseUid == request.auth.uid ||
+        isPartnerOf(resource.data.createdByFirebaseUid)
+      );
+
+      allow create: if isAuthenticated() &&
+                      request.resource.data.createdByFirebaseUid == request.auth.uid;
+
+      allow update: if isAuthenticated() && (
+        resource.data.createdByFirebaseUid == request.auth.uid ||
+        isPartnerOf(resource.data.createdByFirebaseUid)
+      ) && request.resource.data.createdByFirebaseUid == resource.data.createdByFirebaseUid;
+
+      // Symmetric with update: an expense is a record shared by exactly two paired
+      // parents, and update already lets either of them rewrite every field of it, so
+      // admitting only the creator on delete bought no protection while guaranteeing
+      // divergence — the co-parent's delete removed the local Room row, was rejected
+      // here, and the next sync pulled the document straight back.
+      allow delete: if isAuthenticated() && (
+        resource.data.createdByFirebaseUid == request.auth.uid ||
+        isPartnerOf(resource.data.createdByFirebaseUid)
+      );
+    }
+
+    // ---- Budgets ---------------------------------------------------------
+    // Category spending limits, same posture as `expenses`: only the two paired
+    // parents involved may read/write. The document written by
+    // `BudgetRepositoryImpl.addBudget()` previously carried no owner field at all
+    // (not even a broken `sharedWith`), so an unfiltered query synced every user's
+    // budgets under the old permissive rules and would have been denied outright,
+    // structurally, by any non-trivial rule under the strict ones. Fixed the same
+    // way as `expenses`: the client now stamps `createdByFirebaseUid` on write and
+    // filters its read query on it; the rule gates on that field plus `isPartnerOf`.
+    match /budgets/{budgetId} {
+      allow read: if isAuthenticated() && (
+        resource.data.createdByFirebaseUid == request.auth.uid ||
+        isPartnerOf(resource.data.createdByFirebaseUid)
+      );
+
+      allow create: if isAuthenticated() &&
+                      request.resource.data.createdByFirebaseUid == request.auth.uid &&
+                      request.resource.data.keys().hasAll(
+                        ['category', 'monthlyLimit', 'createdByFirebaseUid']);
+
+      allow update: if isAuthenticated() && (
+        resource.data.createdByFirebaseUid == request.auth.uid ||
+        isPartnerOf(resource.data.createdByFirebaseUid)
+      ) && request.resource.data.createdByFirebaseUid == resource.data.createdByFirebaseUid;
+
+      allow delete: if isAuthenticated() &&
+                      resource.data.createdByFirebaseUid == request.auth.uid;
+    }
+
+    // ---- Change requests ----------------------------------------------
+    // Event change requests: only the requester or the addressee may access.
+    match /change_requests/{requestId} {
+      allow read, update, delete: if isAuthenticated() && (
+        request.auth.uid == resource.data.requestedBy ||
+        request.auth.uid == resource.data.requestedTo
+      );
+
+      allow create: if isAuthenticated() && (
+        request.auth.uid == request.resource.data.requestedBy ||
+        request.auth.uid == request.resource.data.requestedTo
+      );
+    }
+
+    // ---- Invitations ---------------------------------------------------
+    // A single document backs the short code, the QR image and the share
+    // link. Redemption goes through the acceptPairingInvitation callable —
+    // the Admin SDK there is what looks a code up, so clients never need to
+    // read invitations addressed to somebody else.
+    match /invitations/{invitationId} {
+      allow read: if isAuthenticated() && (
+        resource.data.fromUserId == request.auth.uid ||
+        (request.auth.token.email != null && resource.data.toEmail == request.auth.token.email)
+      );
+
+      allow create: if isAuthenticated() &&
+                      request.resource.data.fromUserId == request.auth.uid &&
+                      request.resource.data.keys().hasAll(
+                        ['code', 'toEmail', 'status', 'createdAt', 'expiresAt']) &&
+                      isValidLength(request.resource.data.code, 6, 6) &&
+                      request.resource.data.status == 'pending';
+
+      // The inviter may withdraw their own invite (status -> cancelled); the
+      // addressed recipient may decline it (status -> rejected). Accept goes
+      // through the callable, which bypasses rules with Admin credentials.
+      allow update: if isAuthenticated() &&
+                      (
+                        (resource.data.fromUserId == request.auth.uid &&
+                         resource.data.status == 'pending' &&
+                         request.resource.data.status == 'cancelled' &&
+                         request.resource.data.code == resource.data.code &&
+                         request.resource.data.toEmail == resource.data.toEmail &&
+                         request.resource.data.expiresAt == resource.data.expiresAt &&
+                         request.resource.data.fromUserId == resource.data.fromUserId &&
+                         request.resource.data.createdAt == resource.data.createdAt) ||
+                        (request.auth.token.email != null &&
+                         resource.data.toEmail == request.auth.token.email &&
+                         resource.data.status == 'pending' &&
+                         request.resource.data.status == 'rejected' &&
+                         request.resource.data.code == resource.data.code &&
+                         request.resource.data.toEmail == resource.data.toEmail &&
+                         request.resource.data.expiresAt == resource.data.expiresAt &&
+                         request.resource.data.fromUserId == resource.data.fromUserId &&
+                         request.resource.data.createdAt == resource.data.createdAt)
+                      );
+
+      allow delete: if isAuthenticated() &&
+                      resource.data.fromUserId == request.auth.uid;
+    }
+
+    // ---- Notification queue -------------------------------------------
+    // Drained by the `sendNotification` Cloud Function; clients may only enqueue.
+    //
+    // A queued document carries `targetUserId` plus a free-form `data.title`/`data.body`
+    // that `sendNotification` now delivers data-only for the client to render verbatim.
+    // While `create` was open to any authenticated caller, anyone who learned another
+    // user's UID could push arbitrary notification text to them — a phishing primitive in
+    // an app about family conflict. A client may now only notify itself or its real
+    // co-parent, using the same `isPartnerOf` relationship the rest of this file gates on.
+    //
+    // The Cloud Functions that write here (`onEventCreated`, `onChildInfoUpdated`,
+    // `acceptPairingInvitation`, `unpairCoParent`) all use the Admin SDK, which bypasses
+    // security rules entirely, so this restriction does not affect them.
+    match /notification_queue/{notificationId} {
+      allow read: if false;
+      allow create: if isAuthenticated() &&
+                      'targetUserId' in request.resource.data &&
+                      (
+                        request.resource.data.targetUserId == request.auth.uid ||
+                        isPartnerOf(request.resource.data.targetUserId)
+                      );
+      allow update, delete: if false;
+    }
+
+    // ---- Custody schedules --------------------------------------------
+    match /custody_schedules/{scheduleId} {
+      allow read, update, delete: if isAuthenticated() && (
+        resource.data.momUserId == request.auth.uid ||
+        resource.data.dadUserId == request.auth.uid
+      );
+
+      allow create: if isAuthenticated() && (
+        request.resource.data.momUserId == request.auth.uid ||
+        request.resource.data.dadUserId == request.auth.uid
+      );
+    }
+
+    // ---- Conversations & messages --------------------------------------
+    // 1:1 threads between the two paired parents. Deliberately minimal —
+    // the chat feature's own hardening is a separate spec; without these
+    // blocks the collections are deny-by-default and pairing's auto-created
+    // conversation fails to sync.
+    match /conversations/{conversationId} {
+      allow read: if isAuthenticated() &&
+                    request.auth.uid in resource.data.participants;
+
+      allow update: if isAuthenticated() &&
+                      request.auth.uid in resource.data.participants &&
+                      request.resource.data.participants == resource.data.participants;
+
+      allow create: if isAuthenticated() &&
+                      request.auth.uid in request.resource.data.participants &&
+                      request.resource.data.participants.size() == 2 &&
+                      (isPartnerOf(request.resource.data.participants[0]) ||
+                       isPartnerOf(request.resource.data.participants[1]));
+
+      allow delete: if false;
+    }
+
+    match /messages/{messageId} {
+      allow read: if isAuthenticated() &&
+                    request.auth.uid in
+                      get(/databases/$(database)/documents/conversations/$(resource.data.conversationId))
+                        .data.participants;
+
+      allow create: if isAuthenticated() &&
+                      request.resource.data.senderId == request.auth.uid &&
+                      request.auth.uid in
+                        get(/databases/$(database)/documents/conversations/$(request.resource.data.conversationId))
+                          .data.participants;
+
+      // Participants may only flip the read flag; all other fields are immutable.
+      allow update: if isAuthenticated() &&
+                      request.auth.uid in
+                        get(/databases/$(database)/documents/conversations/$(resource.data.conversationId))
+                          .data.participants &&
+                      request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isRead']);
+
+      allow delete: if false;
+    }
+  }
+}

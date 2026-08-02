@@ -16,6 +16,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -40,6 +41,7 @@ import com.coparently.app.presentation.pairing.PairingScreen
 import com.coparently.app.presentation.settings.SettingsScreen
 import com.coparently.app.presentation.sync.AuthStateViewModel
 import com.coparently.app.presentation.sync.SyncViewModel
+import kotlinx.coroutines.flow.StateFlow
 
 /**
  * Navigation graph for the app.
@@ -47,11 +49,20 @@ import com.coparently.app.presentation.sync.SyncViewModel
  * Includes authentication guard to redirect unauthenticated users to AuthScreen.
  * Top-level destinations (Calendar / Chat / Expenses / Settings) share a bottom
  * navigation bar; detail screens hide it.
+ *
+ * @param pendingPairingCode A code carried by a `coplanly://pair` deep link
+ *   ([MainActivity][com.coparently.app.presentation.MainActivity] owns it), or
+ *   null when none is outstanding.
+ * @param onPairingCodeConsumed Called once [pendingPairingCode] has been
+ *   handed to the pairing screen, so the caller can clear it and avoid
+ *   re-navigating on the next recomposition.
  */
 @Composable
 fun NavGraph(
     navController: NavHostController,
-    syncViewModel: SyncViewModel
+    syncViewModel: SyncViewModel,
+    pendingPairingCode: StateFlow<String?>,
+    onPairingCodeConsumed: () -> Unit
 ) {
     val authStateViewModel: AuthStateViewModel = hiltViewModel()
     val isAuthenticated by authStateViewModel.isAuthenticated.collectAsState()
@@ -63,6 +74,8 @@ fun NavGraph(
         isAuthenticated == true -> Screen.Home.route
         else -> Screen.Auth.route
     }
+
+    PairingDeepLinkEffect(pendingPairingCode, isAuthenticated, navController, onPairingCodeConsumed)
 
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
@@ -147,7 +160,7 @@ fun NavGraph(
                         navController.navigate(Screen.Settings.route)
                     },
                     onNavigateToPairing = {
-                        navController.navigate(Screen.Pairing.route)
+                        navController.navigate(Screen.Pairing.routeWithCode(null))
                     }
                 )
             }
@@ -348,7 +361,7 @@ fun NavGraph(
                         navController.navigate(Screen.ChildInfo.route)
                     },
                     onNavigateToPairing = {
-                        navController.navigate(Screen.Pairing.route)
+                        navController.navigate(Screen.Pairing.routeWithCode(null))
                     },
                     onNavigateToCustodySetup = {
                         navController.navigate(Screen.CustodySetup.route)
@@ -403,15 +416,24 @@ fun NavGraph(
 
             composable(
                 route = Screen.Pairing.route,
+                arguments = listOf(
+                    navArgument(Screen.Pairing.ARG_CODE) {
+                        type = NavType.StringType
+                        defaultValue = ""
+                    }
+                ),
                 enterTransition = { slideInFromRight() },
                 exitTransition = { slideOutToLeft() },
                 popEnterTransition = { slideInFromLeft() },
                 popExitTransition = { slideOutToRight() }
-            ) {
+            ) { backStackEntry ->
                 PairingScreen(
                     onNavigateBack = {
                         navController.popBackStack()
-                    }
+                    },
+                    prefilledCode = backStackEntry.arguments
+                        ?.getString(Screen.Pairing.ARG_CODE)
+                        ?.takeIf { it.isNotEmpty() }
                 )
             }
 
@@ -452,7 +474,7 @@ fun NavGraph(
                         )
                     },
                     onNavigateToPairing = {
-                        navController.navigate(Screen.Pairing.route)
+                        navController.navigate(Screen.Pairing.routeWithCode(null))
                     },
                     onOpenSettings = {
                         navController.navigate(Screen.Settings.route)
@@ -574,6 +596,57 @@ fun NavGraph(
 }
 
 /**
+ * Navigates to [Screen.Pairing] once a `coplanly://pair` deep link's code is
+ * both present and safe to act on.
+ *
+ * A deep-linked pairing code must never be redeemed automatically, and it
+ * must never land an unauthenticated user on the pairing screen behind the
+ * auth gate: it is only actioned once [isAuthenticated] is confirmed `true`
+ * (never while still loading — `null` — never while confirmed `false`).
+ * Until then the code stays pending and the user follows the normal Auth
+ * flow; once they sign in, this recomposes and fires.
+ *
+ * `popUpTo(...) { inclusive = true }` (rather than `launchSingleTop`) is
+ * deliberate: it drops any Pairing entry already on the back stack before
+ * pushing a fresh one, so a second link opened while already on that screen
+ * still creates a brand-new entry. That matters because `PairingScreen`
+ * re-arms its confirmation dialog via `rememberSaveable(prefilledCode)` — a
+ * reused (singleTop) entry keeps the old saved state and never shows the
+ * dialog for the new code, verified on-device before switching to this
+ * approach. One side effect of dropping the old entry: if the user was
+ * mid-way through typing a code by hand on that screen, the in-progress
+ * text and any open confirmation dialog are discarded along with it. That is
+ * accepted as correct here — a deep-linked code must never silently win over
+ * what the user is doing, so replacing rather than merging keeps the two
+ * paths from bleeding into each other.
+ *
+ * @param pendingPairingCode The code awaiting hand-off, or null when none is
+ *   outstanding — see [NavGraph]'s parameter of the same name.
+ * @param isAuthenticated Current auth state (`null` while loading).
+ * @param navController Used to perform the navigation once conditions are met.
+ * @param onPairingCodeConsumed Called once the code has been handed to the
+ *   pairing screen, so the caller can clear it and avoid re-navigating on
+ *   the next recomposition.
+ */
+@Composable
+private fun PairingDeepLinkEffect(
+    pendingPairingCode: StateFlow<String?>,
+    isAuthenticated: Boolean?,
+    navController: NavHostController,
+    onPairingCodeConsumed: () -> Unit
+) {
+    val pairingCode by pendingPairingCode.collectAsState()
+    LaunchedEffect(pairingCode, isAuthenticated) {
+        if (pairingCode != null && isAuthenticated == true) {
+            navController.navigate(Screen.Pairing.routeWithCode(pairingCode)) {
+                popUpTo(Screen.Pairing.route) { inclusive = true }
+            }
+            onPairingCodeConsumed()
+        }
+    }
+}
+
+/**
  * Loading screen displayed while checking authentication state.
  */
 @Composable
@@ -617,7 +690,14 @@ sealed class Screen(val route: String) {
     }
     data object Settings : Screen("settings")
     data object ChildInfo : Screen("child_info")
-    data object Pairing : Screen("pairing")
+    data object Pairing : Screen("pairing?code={code}") {
+        /** Optional invite code carried by a `coplanly://pair` deep link. */
+        const val ARG_CODE = "code"
+
+        /** Builds the route, with [code] pre-filled when a deep link supplied one. */
+        fun routeWithCode(code: String?): String =
+            if (code.isNullOrEmpty()) "pairing" else "pairing?code=$code"
+    }
     data object CustodySetup : Screen("custody_setup")
 
     data object EditEvent : Screen("edit_event/{eventId}") {

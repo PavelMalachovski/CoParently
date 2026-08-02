@@ -1,6 +1,7 @@
 package com.coparently.app.data.repository
 
 import com.coparently.app.data.local.dao.ExpenseDao
+import com.coparently.app.data.local.dao.UserDao
 import com.coparently.app.data.local.entity.ExpenseEntity
 import com.coparently.app.data.remote.firebase.FirebaseAuthService
 import com.coparently.app.data.remote.firebase.FirestoreExpenseDataSource
@@ -23,6 +24,7 @@ import javax.inject.Singleton
 @Singleton
 class ExpenseRepositoryImpl @Inject constructor(
     private val expenseDao: ExpenseDao,
+    private val userDao: UserDao,
     private val firebaseAuthService: FirebaseAuthService,
     private val firestoreExpenseDataSource: FirestoreExpenseDataSource
 ) : ExpenseRepository {
@@ -79,40 +81,74 @@ class ExpenseRepositoryImpl @Inject constructor(
     override suspend fun addExpense(expense: Expense) {
         // Room is the source of truth — persist locally first so the expense is never
         // lost, even if the Firestore push below fails.
-        val entity = expense.toEntity()
-        expenseDao.insertExpense(entity)
+        expenseDao.insertExpense(expense.toEntity())
 
         val firebaseUser = firebaseAuthService.getCurrentUser() ?: return
-        val expenseData = mapOf(
-            "id" to expense.id,
-            "childId" to (expense.childId ?: ""),
-            "title" to expense.title,
-            "amount" to expense.amount,
-            "currency" to expense.currency,
-            "category" to expense.category.name,
-            // createdByFirebaseUid mirrors the events schema so the Firestore rules can
-            // gate ownership consistently; paidBy stays for split/summary logic.
-            "createdByFirebaseUid" to firebaseUser.uid,
-            "paidBy" to expense.paidBy,
-            "splitBetween" to expense.splitBetween,
-            "date" to expense.date.format(dateFormatter),
-            "receiptUrl" to (expense.receiptUrl ?: ""),
-            "notes" to (expense.notes ?: ""),
-            "createdAt" to expense.createdAt.format(dateTimeFormatter)
-        )
-        // A rejected/failed sync must never crash the app — the expense is already saved
-        // locally and will re-sync later. (A PERMISSION_DENIED here used to be fatal.)
+        // A brand-new document has no prior owner, so the current user is the owner.
+        pushToFirestore(expense, ownerUid = firebaseUser.uid)
+    }
+
+    override suspend fun updateExpense(expense: Expense) {
+        expenseDao.insertExpense(expense.toEntity())
+
+        val firebaseUser = firebaseAuthService.getCurrentUser() ?: return
         try {
-            firestoreExpenseDataSource.setExpense(expense.id, expenseData)
+            // Ownership is immutable in `firestore.rules` (update requires
+            // request.resource.data.createdByFirebaseUid == resource.data.createdByFirebaseUid).
+            // Read back the existing owner instead of re-stamping the caller's uid — the
+            // stamping addExpense does is only correct for a document that does not exist yet.
+            // Without this, a co-parent editing an expense they didn't create would flip the
+            // owner field, Firestore would reject the write, and the edit would sit in Room
+            // with syncedToFirestore = false forever, failing again on every retry.
+            // Same fix as BudgetRepositoryImpl.updateBudget.
+            val existingOwnerUid = firestoreExpenseDataSource.getExpense(expense.id)
+                ?.get("createdByFirebaseUid") as? String
+            pushToFirestore(expense, ownerUid = existingOwnerUid ?: firebaseUser.uid)
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+            android.util.Log.w("ExpenseRepo", "Expense owner lookup failed; kept locally", e)
+        }
+    }
+
+    /**
+     * Writes [expense] to Firestore stamped with [ownerUid] and, on success, marks the local
+     * row as synced.
+     *
+     * A rejected or failed write must never crash the app — the expense is already saved
+     * locally and will re-sync later. (A PERMISSION_DENIED here used to be fatal.)
+     */
+    private suspend fun pushToFirestore(expense: Expense, ownerUid: String) {
+        try {
+            firestoreExpenseDataSource.setExpense(expense.id, expenseToFirestoreMap(expense, ownerUid))
             expenseDao.insertExpense(expense.copy(syncedToFirestore = true).toEntity())
         } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             android.util.Log.w("ExpenseRepo", "Expense Firestore sync failed; kept locally", e)
         }
     }
 
-    override suspend fun updateExpense(expense: Expense) {
-        addExpense(expense) // Same logic for add/update
-    }
+    /**
+     * Builds the Firestore document map for an expense, stamping [ownerUid] as
+     * `createdByFirebaseUid`.
+     *
+     * `createdByFirebaseUid` mirrors the events schema so the Firestore rules can gate
+     * ownership consistently; `paidBy` stays for split/summary logic. Callers decide
+     * [ownerUid]: [addExpense] passes the current user, [updateExpense] passes the document's
+     * existing owner so ownership stays immutable across edits, as `firestore.rules` requires.
+     */
+    private fun expenseToFirestoreMap(expense: Expense, ownerUid: String): Map<String, Any> = mapOf(
+        "id" to expense.id,
+        "childId" to (expense.childId ?: ""),
+        "title" to expense.title,
+        "amount" to expense.amount,
+        "currency" to expense.currency,
+        "category" to expense.category.name,
+        "createdByFirebaseUid" to ownerUid,
+        "paidBy" to expense.paidBy,
+        "splitBetween" to expense.splitBetween,
+        "date" to expense.date.format(dateFormatter),
+        "receiptUrl" to (expense.receiptUrl ?: ""),
+        "notes" to (expense.notes ?: ""),
+        "createdAt" to expense.createdAt.format(dateTimeFormatter)
+    )
 
     override suspend fun deleteExpense(expenseId: String) {
         expenseDao.deleteExpense(expenseId)
@@ -120,9 +156,25 @@ class ExpenseRepositoryImpl @Inject constructor(
         val firebaseUser = firebaseAuthService.getCurrentUser()
         if (firebaseUser != null) {
             // Same guard as addExpense above, which the delete path never got: the row is
-            // already gone locally, and a rejected remote delete (PERMISSION_DENIED against the
-            // deployed rules) arrives from Firestore's write-rejection path and takes the whole
-            // app down if nothing catches it.
+            // already gone locally, and a rejected remote delete arrives from Firestore's
+            // write-rejection path and takes the whole app down if nothing catches it.
+            //
+            // KNOWN GAP (not a transient failure): the `expenses` delete rule admits only the
+            // creator, so a co-parent deleting a shared expense loses the local row while the
+            // remote document survives, and the next sync pulls it back.
+            //
+            // Widening that rule to `isPartnerOf` the way `update` does was tried on this
+            // branch and reverted after a device sweep reported PERMISSION_DENIED on the
+            // *creator's own* delete. That attribution has since been disproved: under the
+            // exact reverted ruleset the creator's delete succeeds for every shape the
+            // creator's `users` document can have, and the two rulesets differ only for the
+            // co-parent. See firestore-tests/rules/expenses-delete-incident.test.js.
+            //
+            // A denial here is real but comes from document state, not from the rule clause,
+            // and reproduces under the shipped rules too: `resource` is null when the remote
+            // document never landed (pushToFirestore swallows a failed create), and the
+            // ownership read errors on documents written before `createdByFirebaseUid` was
+            // stamped. Both raise exactly the log line the sweep recorded.
             try {
                 firestoreExpenseDataSource.deleteExpense(expenseId)
             } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
@@ -132,7 +184,11 @@ class ExpenseRepositoryImpl @Inject constructor(
     }
 
     override suspend fun syncWithFirestore() {
-        firestoreExpenseDataSource.getAllExpenses()
+        val firebaseUser = firebaseAuthService.getCurrentUser() ?: return
+        val partnerId = userDao.getUserById(firebaseUser.uid)?.partnerId
+        val creatorUids = listOfNotNull(firebaseUser.uid, partnerId)
+
+        firestoreExpenseDataSource.getAllExpenses(creatorUids)
             .catch { e -> android.util.Log.w("ExpenseRepo", "Expense sync failed", e) }
             .collect { expenses ->
                 expenses.forEach { data ->

@@ -111,15 +111,35 @@ class FirestoreEventDataSource @Inject constructor(
     }
 
     /**
-     * Observes real-time changes to events for a specific parent pair.
+     * Reads every event shared with [uid] — the user's own events plus the ones their
+     * co-parent shared with them.
+     *
+     * The filter is `array-contains sharedWith` and not `whereIn("createdByFirebaseUid", …)`
+     * on purpose. Firestore validates a *query* against its potential result set rather than
+     * against the documents it actually returns, so a query is only accepted when its
+     * constraints structurally guarantee the read rule. The `events` read rule is
+     * `createdByFirebaseUid == request.auth.uid || request.auth.uid in resource.data.sharedWith`;
+     * `array-contains sharedWith == uid` implies the second branch for every possible result,
+     * whereas `whereIn("createdByFirebaseUid", [uid, partnerUid])` implies neither branch for the
+     * partner half of the union and would be rejected outright.
+     *
+     * It is also the correct *result set*: a paired parent must see what their co-parent shared
+     * with them, which ownership-keyed filtering cannot express. Writers stamp both parents into
+     * `sharedWith` (see `EventRepositoryImpl.toFirestoreMap` and `SyncService.syncEvents`).
+     *
+     * This previously filtered on `parentOwner`, which holds "mom"/"dad" rather than a UID, so it
+     * could never match — and, being unconstrained on any field the rule authorizes, it was
+     * rejected wholesale, aborting the rest of the sync.
+     *
+     * @param uid Firebase UID of the reader.
      */
-    fun observeEventsForParents(parentIds: List<String>): Flow<List<Map<String, Any?>>> = flow {
+    fun observeEventsSharedWith(uid: String): Flow<List<Map<String, Any?>>> = flow {
         val snapshot = firestore.collection(eventsCollection)
-            .whereIn("parentOwner", parentIds)
+            .whereArrayContains("sharedWith", uid)
             .orderBy("startDateTime")
             .get()
             .await()
-        emit(snapshot.documents.map { it.data!! })
+        emit(snapshot.documents.mapNotNull { it.data })
     }
 }
 

@@ -78,8 +78,15 @@ class SyncService @Inject constructor(
     private suspend fun syncEvents(userId: String) {
         // Upload unsynced local events; private events never leave the device
         val unsyncedEvents = eventDao.getUnsyncedEvents().filterNot { it.isPrivate }
+        val partnerId = userDao.getUserById(userId)?.partnerId?.takeIf { it.isNotBlank() }
 
         for (entity in unsyncedEvents) {
+            val audience = shareTargets(
+                sharedWithJson = entity.sharedWithJson,
+                creatorUid = entity.createdByFirebaseUid,
+                userId = userId,
+                partnerId = partnerId
+            )
             val eventData = mapOf(
                 "id" to entity.id,
                 "title" to entity.title,
@@ -96,7 +103,7 @@ class SyncService @Inject constructor(
                 "createdAt" to entity.createdAt.format(formatter),
                 "updatedAt" to entity.updatedAt.format(formatter),
                 "createdByFirebaseUid" to entity.createdByFirebaseUid,
-                "sharedWith" to gson.fromJson(entity.sharedWithJson, List::class.java),
+                "sharedWith" to audience,
                 "lastModifiedBy" to entity.lastModifiedBy,
                 "permissions" to entity.permissions,
                 "imageUrl" to entity.imageUrl
@@ -106,75 +113,112 @@ class SyncService @Inject constructor(
             if (result.isSuccess) {
                 eventDao.markAsSynced(entity.id)
 
-                // Notify partner if event is shared
-                val sharedWith = gson.fromJson(entity.sharedWithJson, Array<String>::class.java).toList()
-                for (partnerId in sharedWith) {
-                    if (partnerId != userId) {
-                        notifyEventUpdate(partnerId, entity.id, entity.title, "created")
+                // Notify everyone the event is shared with, except the uploader
+                for (recipientId in audience) {
+                    if (recipientId != userId) {
+                        notifyEventUpdate(recipientId, entity.id, entity.title, "created")
                     }
                 }
             }
         }
 
-        // Download events from Firestore with conflict resolution
-        val localUser = userDao.getUserById(userId)
-        val partnerId = localUser?.partnerId
+        // Download every event shared with this user (own + co-parent's). Unlike the
+        // previous partner-gated block this runs whether or not the account is paired:
+        // the query is authorized by `sharedWith` alone, so there is nothing to gate on.
+        firestoreEventDataSource.observeEventsSharedWith(userId).collect { firestoreEvents ->
+            for (firestoreData in firestoreEvents) {
+                val remoteEntity = firestoreData.toEventEntity()
+                val localEntity = eventDao.getEventById(remoteEntity.id)
 
-        if (partnerId != null) {
-            firestoreEventDataSource.observeEventsForParents(listOf(userId, partnerId)).collect { firestoreEvents ->
-                for (firestoreData in firestoreEvents) {
-                    val remoteEntity = firestoreData.toEventEntity()
-                    val localEntity = eventDao.getEventById(remoteEntity.id)
+                if (localEntity != null && !localEntity.syncedToFirestore) {
+                    // Conflict detected - resolve it
+                    val resolution = conflictResolver.resolveEventConflict(
+                        local = localEntity,
+                        remote = remoteEntity,
+                        currentUserId = userId
+                    )
 
-                    if (localEntity != null && !localEntity.syncedToFirestore) {
-                        // Conflict detected - resolve it
-                        val resolution = conflictResolver.resolveEventConflict(
-                            local = localEntity,
-                            remote = remoteEntity,
-                            currentUserId = userId
-                        )
-
-                        when (resolution) {
-                            is ConflictResolution.UseLocal -> {
-                                // Keep local, upload to remote
-                                val localData = mapOf(
-                                    "id" to localEntity.id,
-                                    "title" to localEntity.title,
-                                    "description" to localEntity.description,
-                                    "startDateTime" to localEntity.startDateTime.format(formatter),
-                                    "endDateTime" to localEntity.endDateTime?.format(formatter),
-                                    "eventType" to localEntity.eventType,
-                                    "parentOwner" to localEntity.parentOwner,
-                                    "isRecurring" to localEntity.isRecurring,
-                                    "recurrencePattern" to localEntity.recurrencePattern,
-                                    "recurrenceEndDate" to localEntity.recurrenceEndDate?.toString(),
-                                    "pickupConfirmedBy" to localEntity.pickupConfirmedBy,
-                                    "pickupConfirmedAt" to localEntity.pickupConfirmedAt?.format(formatter),
-                                    "createdAt" to localEntity.createdAt.format(formatter),
-                                    "updatedAt" to LocalDateTime.now().format(formatter),
-                                    "createdByFirebaseUid" to localEntity.createdByFirebaseUid,
-                                    "lastModifiedBy" to userId,
-                                    "imageUrl" to localEntity.imageUrl
-                                )
-                                firestoreEventDataSource.updateEvent(localEntity.id, localData)
-                                eventDao.markAsSynced(localEntity.id)
-                            }
-                            is ConflictResolution.UseRemote -> {
-                                // Use remote version
-                                eventDao.insertEvent(remoteEntity.copy(syncedToFirestore = true))
-                            }
-                            is ConflictResolution.Merged -> {
-                                // Future: handle merged data
-                                eventDao.insertEvent(resolution.data.copy(syncedToFirestore = true))
-                            }
+                    when (resolution) {
+                        is ConflictResolution.UseLocal -> {
+                            // Keep local, upload to remote. This is a partial `update()`,
+                            // so `sharedWith` on the remote document is left as it is
+                            // rather than being narrowed to this device's stale copy.
+                            val localData = mapOf(
+                                "id" to localEntity.id,
+                                "title" to localEntity.title,
+                                "description" to localEntity.description,
+                                "startDateTime" to localEntity.startDateTime.format(formatter),
+                                "endDateTime" to localEntity.endDateTime?.format(formatter),
+                                "eventType" to localEntity.eventType,
+                                "parentOwner" to localEntity.parentOwner,
+                                "isRecurring" to localEntity.isRecurring,
+                                "recurrencePattern" to localEntity.recurrencePattern,
+                                "recurrenceEndDate" to localEntity.recurrenceEndDate?.toString(),
+                                "pickupConfirmedBy" to localEntity.pickupConfirmedBy,
+                                "pickupConfirmedAt" to localEntity.pickupConfirmedAt?.format(formatter),
+                                "createdAt" to localEntity.createdAt.format(formatter),
+                                "updatedAt" to LocalDateTime.now().format(formatter),
+                                "createdByFirebaseUid" to localEntity.createdByFirebaseUid,
+                                "lastModifiedBy" to userId,
+                                "imageUrl" to localEntity.imageUrl
+                            )
+                            firestoreEventDataSource.updateEvent(localEntity.id, localData)
+                            eventDao.markAsSynced(localEntity.id)
                         }
-                    } else {
-                        // No conflict - just insert/update
-                        eventDao.insertEvent(remoteEntity.copy(syncedToFirestore = true))
+                        is ConflictResolution.UseRemote -> {
+                            // Use remote version
+                            eventDao.insertEvent(remoteEntity.copy(syncedToFirestore = true))
+                        }
+                        is ConflictResolution.Merged -> {
+                            // Future: handle merged data
+                            eventDao.insertEvent(resolution.data.copy(syncedToFirestore = true))
+                        }
                     }
+                } else {
+                    // No conflict - just insert/update
+                    eventDao.insertEvent(remoteEntity.copy(syncedToFirestore = true))
                 }
             }
         }
+    }
+
+    /**
+     * Resolves the `sharedWith` audience for an event upload.
+     *
+     * The audience is the entitled set derived from live state — the uploader, the
+     * document's creator and the uploader's current co-parent — and the stored
+     * [sharedWithJson] is **intersected** with it, never unioned into it. All three
+     * entitled UIDs must be present because the `events` read rule and
+     * [FirestoreEventDataSource.observeEventsSharedWith] are both keyed on this list: an
+     * event missing from it is invisible to the parent it belongs to, and the whole
+     * down-sync is only meaningful once co-parent events actually carry the reader's UID.
+     *
+     * Intersecting is what makes `unpairCoParent`'s revocation survive this code path. The
+     * server sweep narrows the remote document but never the local Room copy, and this
+     * upload runs *before* the down-sync that would heal it — so under the previous
+     * widen-only rule every event still sitting `syncedToFirestore = false` at unpair time
+     * re-granted the ex-partner access on the very next sync. See
+     * `EventRepositoryImpl.shareTargets` for the same reasoning on the edit path.
+     *
+     * @param sharedWithJson The entity's stored JSON array of Firebase UIDs.
+     * @param creatorUid The entity's `createdByFirebaseUid`, or null if it never synced.
+     * @param userId The uploading user's Firebase UID.
+     * @param partnerId The co-parent's Firebase UID, or null when unpaired.
+     */
+    private fun shareTargets(
+        sharedWithJson: String,
+        creatorUid: String?,
+        userId: String,
+        partnerId: String?
+    ): List<String> {
+        val stored = runCatching {
+            gson.fromJson(sharedWithJson, Array<String>::class.java)?.toList()
+        }.getOrNull().orEmpty()
+        val entitled = (listOf(userId) + listOfNotNull(creatorUid, partnerId))
+            .filter { it.isNotBlank() }
+            .distinct()
+        // Stored order first, so an unchanged audience keeps a stable field value.
+        return (stored.filter { it in entitled } + entitled).distinct()
     }
 
     /**
@@ -199,6 +243,12 @@ class SyncService @Inject constructor(
                 "updatedAt" to entity.updatedAt.format(formatter),
                 "createdByFirebaseUid" to entity.createdByFirebaseUid,
                 "lastModifiedBy" to entity.lastModifiedBy,
+                // SEPARATE CONCERN, deliberately not changed here: the co-parent is never
+                // added, so a paired parent cannot see child info the other created. That is
+                // a missing-visibility feature needing an audience policy of its own (the
+                // entitled-set `shareTargets` above is the shape it would take), not the
+                // data-corruption bug the UseLocal branch below fixes. Widening it silently
+                // would also change what the unpair sweep has to undo.
                 "sharedWith" to listOfNotNull(entity.createdByFirebaseUid, entity.lastModifiedBy).distinct()
             )
 
@@ -231,7 +281,15 @@ class SyncService @Inject constructor(
 
                     when (resolution) {
                         is ConflictResolution.UseLocal -> {
-                            // Keep local, upload to remote
+                            // Keep local, upload to remote. This is a partial `update()`, not
+                            // a `set()`: `ChildInfoEntity` carries no `sharedWith`, so a full
+                            // overwrite from local state dropped the field entirely. The write
+                            // itself passed — the update rule reads the *old* `resource` — but
+                            // the resulting document was then invisible to
+                            // `getChildInfoForParent` for both parents and permanently
+                            // un-updatable, because `request.auth.uid in resource.data.sharedWith`
+                            // is a missing-field error from then on. The only way back was
+                            // deleting the document. Same reasoning as the events branch above.
                             val localData = mapOf(
                                 "id" to localEntity.id,
                                 "childName" to localEntity.childName,
@@ -247,7 +305,7 @@ class SyncService @Inject constructor(
                                 "createdByFirebaseUid" to localEntity.createdByFirebaseUid,
                                 "lastModifiedBy" to userId
                             )
-                            firestoreChildInfoDataSource.upsertChildInfo(localEntity.id, localData)
+                            firestoreChildInfoDataSource.updateChildInfo(localEntity.id, localData)
                             childInfoDao.markAsSynced(localEntity.id)
                         }
                         is ConflictResolution.UseRemote -> {
