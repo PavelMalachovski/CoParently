@@ -164,6 +164,35 @@ class ConversationMigratorTest {
             coVerify(exactly = 0) { firestoreMessageDataSource.setConversation(any(), any()) }
         }
 
+    @Test
+    fun `an unexpected local failure on one candidate does not block another candidate`() =
+        runTest {
+            val secondLegacyId = "random-uuid-legacy-2"
+            val secondLegacy = ConversationEntity(
+                id = secondLegacyId,
+                participantsJson = """["$UID_A","$UID_B"]""",
+                title = "Another old thread",
+                archived = false,
+                createdAt = CREATED_AT
+            )
+            coEvery { messageDao.getActiveConversations() } returns
+                flowOf(listOf(legacyRow(), secondLegacy))
+            // The first candidate's local read blows up unexpectedly (a Room I/O error, say).
+            coEvery { messageDao.getMessagesOnce(LEGACY_ID) } throws IllegalStateException("disk full")
+            coEvery { messageDao.getMessagesOnce(secondLegacyId) } returns listOf(messageRow("msg-9"))
+            coEvery { messageDao.getConversationById(secondLegacyId) } returns secondLegacy
+
+            // Must not throw: PairingRepositoryImpl relies on this to never escape.
+            migrator.mergeLegacyConversations(UID_A, UID_B)
+
+            // The second candidate still gets fully merged despite the first one's failure.
+            coVerify(exactly = 1) { firestoreMessageDataSource.repointMessage("msg-9", CANONICAL_ID) }
+            coVerify(exactly = 1) { messageDao.repointMessages(secondLegacyId, CANONICAL_ID) }
+            coVerify(exactly = 1) {
+                messageDao.insertConversation(match { it.id == secondLegacyId && it.archived })
+            }
+        }
+
     // ---- fixtures -----------------------------------------------------------
 
     private fun legacyRow() = ConversationEntity(

@@ -71,7 +71,34 @@ class ConversationMigrator @Inject constructor(
                     conversation.toDomain().participants.toSet() == pair
             }
 
-        legacyConversations.forEach { legacy -> mergeOne(legacy.id, canonicalId) }
+        legacyConversations.forEach { legacy -> mergeOneSafely(legacy.id, canonicalId) }
+    }
+
+    /**
+     * Runs [mergeOne] for a single candidate, containing an unexpected failure (a local Room
+     * error, say) to that one candidate.
+     *
+     * Without this, a pair with more than one legacy conversation — possible across repeated
+     * pair/unpair cycles — would have every candidate *after* the failing one silently skipped
+     * for the rest of this pass, not just the one that actually failed. [mergeOne] already
+     * handles the *expected* remote failure modes internally (a refused or offline re-point,
+     * a refused archive); this is the outer net for everything else.
+     */
+    private suspend fun mergeOneSafely(legacyId: String, canonicalId: String) {
+        try {
+            mergeOne(legacyId, canonicalId)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (
+            @Suppress("TooGenericExceptionCaught") e: Exception
+        ) {
+            Log.w(
+                TAG,
+                "Chat merge: unexpected failure merging $legacyId into $canonicalId; " +
+                    "continuing with any other candidates, the next launch retries this one.",
+                e
+            )
+        }
     }
 
     /**
