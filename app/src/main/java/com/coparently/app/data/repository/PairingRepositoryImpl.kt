@@ -86,6 +86,10 @@ class PairingRepositoryImpl @Inject constructor(
                             PairingState.Paired(
                                 partner = runCatching { loadPartner(partnerId, pairedAt) }
                                     .getOrElse {
+                                        // The UI renders a blank name identically whether the
+                                        // profile could not be read or genuinely has none; the
+                                        // log is what tells the two apart after the fact.
+                                        Log.w(TAG, "Could not read the partner profile $partnerId", it)
                                         PartnerSummary(
                                             id = partnerId,
                                             name = "",
