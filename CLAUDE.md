@@ -187,6 +187,20 @@ Data flow: UI → ViewModel → UseCase → Repository → Room (source of truth
   no FX conversion between currencies (spec §10) — deliberately: totals stay honest within each
   currency rather than being normalised. Do not reintroduce a single cross-currency total.
 
+- **A failed chat Firestore listener is never re-established** (known, accepted at merge time —
+  backlog with the time-zone item below). Both mirror branches in `MessageRepositoryImpl` end in
+  `.catch { Log.w(...) }`, which *completes* the mirror flow, so `merge(mirror, local)` then runs
+  on Room alone for the rest of the process. `SharingStarted.WhileSubscribed` cannot restart it:
+  `rememberChatUnreadCount()` in `NavGraph` holds an Activity-scoped `ChatViewModel` collecting
+  `unreadCount` for the whole process lifetime, so the subscriber count never reaches zero.
+  Observed once in production, on the first launch after install — both chat listeners were
+  denied ~0.5 s before `ensureConversation` created the canonical conversation document, and that
+  session ran on local data only. Nothing is lost and a cold restart clears it, but the app looks
+  entirely healthy while receiving nothing. Recurs on any reinstall, factory reset or account
+  switch. Fix when touching this code: `retryWhen` with backoff on both branches, or await
+  `ensureConversation` before subscribing the observers. Don't "fix" it by removing the `.catch` —
+  an uncaught failure in `viewModelScope.launch` terminates the process.
+
 - **Cross-time-zone chat is implemented but never verified on two devices.** The August 2026
   chat sync moved message times to epoch millis specifically so two parents in different zones
   agree (see item 13 above), and it is covered by unit tests that drive the two zones explicitly
