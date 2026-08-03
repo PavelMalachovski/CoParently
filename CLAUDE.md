@@ -187,6 +187,14 @@ Data flow: UI → ViewModel → UseCase → Repository → Room (source of truth
   no FX conversion between currencies (spec §10) — deliberately: totals stay honest within each
   currency rather than being normalised. Do not reintroduce a single cross-currency total.
 
+- **Cross-time-zone chat is implemented but never verified on two devices.** The August 2026
+  chat sync moved message times to epoch millis specifically so two parents in different zones
+  agree (see item 13 above), and it is covered by unit tests that drive the two zones explicitly
+  (`ChatReadStateTimeZoneTest`) plus a 12→13 migration test. The two-phone acceptance scenario —
+  set one phone's zone 2–3 hours apart, send a message, and confirm it counts as unread, the
+  badge clears on open, and the ticks reach READ — was **deferred, not run**. Backlog item for
+  the next review round. Everything else in that acceptance run passed on real devices.
+
 - `firestore.rules` (strict) was realigned with the real document schema (ISO **string**
   dates, presence-based key validation, `change_requests`/`expenses` collections added,
   over-strict `lastModifiedBy`/`canModify` gates dropped) so it no longer rejects the app's
