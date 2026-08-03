@@ -323,6 +323,152 @@ as 1a and 1b. That makes ten.
 | 8 | Symmetric month swipe in Calendar | Time both directions; describe the asymmetry precisely (see 4.2.3) |
 | 9 | Agenda strip shows today, only in the current month | Confirm paging a month selects the 1st; note how often the strip shows "nothing scheduled" for a day nobody chose |
 
+### Baseline recorded — 3 August 2026
+
+**Run.** Samsung SM-A176B (the Parent A handset), Android 15, dark theme, device language Russian,
+density 450, wireless ADB. Build `main` @ `ebb45390`; `app-debug.apk` rebuilt and reinstalled over
+the existing install before the run (`assembleDebug` → `adb install -r`), versionName 1.1.0
+(versionCode 2). Account state: paired, one child record ("test 2"), one conversation with ~20
+messages, expenses in July but none in August, **no active custody model**.
+
+This is a one-phone pass. Every row below is `[A]` — a screenshot, a frame counter or the code
+path that produces the behaviour. The one `[H]` question inside item 8 (what the asymmetry *feels*
+like, per 4.2.3) is left open and marked as such. Nothing here was unpaired, deleted or reset.
+
+**1a — Pets as a subject.** The family record is Settings → Family → "Информация о ребёнке": a list
+of `ChildInfo` rows, one per child. A row holds name, date of birth, medications, activities,
+allergies, medical notes, emergency contacts and school info — and nothing else. There is no
+species, kind or subject-type field anywhere in the model, and no second subject entity: `ChildInfo`
+is the only one. Downstream, only `Expense.childId` and `Budget.childId` point at a subject at all
+(both nullable, both unset in this account); `Event` has no link to a child. Sync is
+`FirestoreChildInfoDataSource` → collection `child_info`, which has its own rule block.
+**Where a pet would have to live today:** in a fake child row — a `ChildInfo` named "Rex" with the
+vet stuffed into `medicalNotes` or `schoolInfo`. Nothing in the UI would mark it as anything other
+than a child, and the screen title is singular ("Информация о ребёнке").
+
+**1b — Documents and photos.** There is no attach affordance in the child record at all: the view
+screen shows name and DOB only, and the editor, scrolled top to bottom, offers Medications /
+Activities / Allergies / Medical notes / Emergency contacts / School info and a Save button. A
+parent has nothing to tap.
+
+The only binary storage in the app is `FirebaseImageStorage`, implementing `ReceiptStorage` and
+`EventImageStorage`. Both write to a path derived from the owning entity's id —
+`receipts/{expenseId}.jpg`, `event_images/{eventId}.jpg` — so a second upload **replaces** the
+first: exactly one object per entity, by construction. Every upload is decoded as a bitmap,
+downscaled to ≤1600 px and re-encoded (`Bitmap.compress(JPEG, 85)`) with `contentType` hardcoded to
+`image/jpeg`. A PDF or a Word file cannot pass through that path at all — it is not a bitmap, and it
+would fail in `compressImage` before it ever reached Storage. So the improvement is not a widening
+of the current mechanism: it needs a per-subject *collection* of objects, the original MIME type
+preserved, and no re-encode.
+
+**2 — Custody at pairing.** There is no Firestore path for custody, in either direction.
+`CustodyModelRepository` talks only to `CustodyModelDao`; there is no custody data source among the
+Firestore sources, and the `custody_schedules` rule block in `firestore.rules` matches no client
+code (already recorded in `CLAUDE.md`). Pairing itself (`PairingFunctions` → the
+`acceptPairingInvitation` callable) exchanges user documents only. So after pairing, the second
+phone has **no** custody pattern: each parent sets one locally, the two are never compared, and
+nothing tells either parent that they disagree. Not re-verified by unpairing — that is destructive
+and this account is paired; the conclusion is from the code and from the absence of any custody
+Firestore source.
+
+**3 — Edit and propose.** Settings → Family → "График опеки" is: four radio cards (Week On/Week
+Off, 2-2-3, 3-4-4-3, Custom), a cycle anchor date, and one button, "Сохранить график опеки". Saving
+runs `CustodyModelRepository.saveAndActivate`, which deactivates every existing model and inserts
+the new one — locally, silently, immediately. The screen never mentions the co-parent, never shows
+what the co-parent has, and has no propose/accept step. The only agreement mechanism that exists in
+the app is `ChangeRequest`, and it is bound to a single event (`eventId`, `requestedBy`,
+`requestedTo`, PENDING/ACCEPTED/DECLINED/CANCELLED) — it cannot carry a custody pattern. (The
+option cards are also still untranslated English on a Russian device.)
+
+**4 — Where the chat opens.** At the **oldest** message, not the newest. After a cold start, opening
+the Chat tab lands on the "Вчера" day separator and yesterday's first three bubbles; today's ten-odd
+messages, including the newest (22:10), are roughly four screens below. Reproduced twice.
+
+It does depend on thread length, and sharply. `MessagesList` has no initial scroll at all. Its only
+scroll is `LaunchedEffect(entries.size)`, which animates to the last item **only if** the list is
+already near the bottom (`lastVisibleIndex >= total-2 || firstVisibleIndex >= total-3`). On first
+composition both indices are 0, so that condition holds only when the thread is ≤3 entries — and day
+separators count as entries. Anything longer opens at the top. A short thread therefore looks
+correct and hides the defect, which is why it reads as "sometimes fine". Within a session the
+landing point is the last scroll offset instead (`rememberLazyListState` is saveable), so switching
+tabs and back keeps the bottom — the wrong landing is what you get after launch and after process
+death.
+
+The same gap swallows outgoing messages: a message sent while the list is parked at the top
+produces no visible change (see 6).
+
+**5 — The change-request card is inert.** Starting a change request from a thread does post a card:
+`RequestChangeViewModel.postChatMessage` sends a message with `messageType = EVENT_LINK` and
+`attachments = listOf(event.id)`. But `MessagesList.MessageItem` renders `message.content` and
+nothing else — it never reads `messageType` or `attachments`, and no bubble carries a click
+modifier. On device, three taps (single, then double) on 🔁 `Change requested for "Работа" → po,
+srp 3 · 18:30 – 19:50` did nothing: no navigation, no ripple, no state change, screen pixel-identical.
+
+Two things to know before wiring the link: the card carries the **event** id, not the change-request
+id, so the target has to be looked up by event (or the payload changed; note an event can have more
+than one request over its life). And the card's text is composed on the *sender's* device from a
+hardcoded English prefix plus a locale-formatted date, then stored — which is why a Russian-locale
+phone is showing an English sentence with a Czech date in it.
+
+**6 — Templates send immediately.** Confirmed, and worse than "no preview". `onTemplateSelected`
+calls `viewModel.sendTemplateMessage(template, template.content)` and closes the sheet;
+`sendTemplateMessage` delegates straight to `sendMessage`. No preview, no edit, no confirmation, no
+undo — and the placeholders go out raw. Three taps on "Ранний приезд" put three identical bubbles
+into the co-parent's thread at 22:10: *"Привет! Я приеду раньше обычного, примерно в [время]. Это
+удобно?"* — `[время]` unfilled, three times.
+
+The three taps were not a stress test. Because the list was parked at the top (item 4), the first
+send produced no visible change, so it read as a missed tap and was repeated. That is precisely how
+a real parent sends the same message three times, and it makes 4 and 6 one defect with two halves.
+
+The plumbing for the fix already exists: `ChatScreen(draft = …)` → `MessageInput(initialText = …)`
+already pre-fills the composer for the Expenses settle-up flow, documented there as *"Never sent
+automatically — a message to the co-parent is the user's to send."* Templates simply do not use it.
+(The sheet's own chrome — "Message Templates", "Pickup & Drop-off", "Illness & Medical" — is
+hardcoded English.)
+
+**7 — Expenses is buttons only.** Confirmed. `MonthSwitcherBar` / `MonthNavigation` chevrons are the
+whole navigation; there is no `pointerInput`, `draggable` or pager anywhere in
+`presentation/expenses`. On device, swipes in both directions across the summary card, across the
+list area and across the month bar itself changed nothing — August 2026 stayed August, July 2026
+stayed July — while the chevron moved months instantly. Two things for whoever implements the swipe:
+on an empty month the summary card is not rendered, so those two chevrons are the only affordance on
+the screen; and the expense rows already own the horizontal gesture for swipe-to-delete, so a month
+pager has to coexist with it.
+
+**8 — Calendar swipe is still asymmetric.** Two cold-start runs, five scripted swipes each
+(`input swipe`, 250 ms, 1.5 s apart), `dumpsys gfxinfo` reset before each run, both starting from
+the current month:
+
+| Direction | Frames rendered | Janky | p50 | p90 |
+|---|---|---|---|---|
+| Forward (next month, right→left) | 142 | 20.4% | 15 ms | 105 ms |
+| Backward (previous month, left→right) | 36 | 58.3% | 93 ms | 200 ms |
+
+A warm repeat of the same pair gave 155 vs 62 frames. Both runs moved exactly five months, so the
+gestures all registered. Same distance, same duration, same content: backward draws roughly a
+quarter of the frames — the transition is a handful of long frames rather than an animation.
+
+Worth flagging for whoever picks this up: `MonthView` already carries three fixes aimed at this
+symptom — a stable `anchorMonth` so the pager's loaded range does not shift on every settle,
+propagating the month only after `isScrollInProgress` goes false, and `OutDateStyle.EndOfGrid` so
+short and tall months are the same height. Whatever remains is *not* those three causes.
+
+`[H]` **not done:** the 4.2.3 characterisation ("first right-swipe slow, the next fast") needs a
+hand on the glass. Frame counters cannot express inertia, and this pass was scripted.
+
+**9 — The agenda strip.** Confirmed exactly as suspected. Paging one month forward moved the
+selection to the 1st — `MonthView.onMonthChange` → `setSelectedDate(newMonth.atDay(1))`
+(`CalendarScreen.kt:527`) — and the card below read **"вт, сент. 1 · Ничего не запланировано."**
+Paging backward behaves the same way: five swipes back landed on "вс, мар. 1", again nothing
+scheduled. In the current month the card does show today, because `selectedDate` starts at
+`LocalDate.now()` — so "today" survives exactly until the first swipe.
+
+With this account's data the card said "Ничего не запланировано" on **every** month paged to, in
+both directions: August has two days with events (the 3rd and the 21st) and neither is the 1st, and
+September and March have none at all. The strip is showing an empty day nobody chose, on every
+screen except the one you started on.
+
 ---
 
 ## §12 Known issues — confirm or clear
