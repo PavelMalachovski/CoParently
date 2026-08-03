@@ -13,12 +13,11 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -27,24 +26,30 @@ import com.coparently.app.R
 /**
  * The message composer.
  *
+ * Stateless: the text lives in `ChatScreen`, because more than one thing seeds it — a draft
+ * arriving from Expenses, and a message template — and a composable that owns its own text
+ * cannot be re-seeded with a value it already held. Picking the same template twice has to
+ * work.
+ *
  * The leading `+` this used to carry is gone. It was captioned "attach" but opened message
  * templates — the August 2026 audit's clearest "icon promises one thing, does another". The
  * templates now live in a labelled chip above this row (see `ChatScreen`), and a real attach
  * button will land with attachments themselves rather than ahead of them.
  *
- * @param onSendMessage Called with the composed text when the user sends
+ * @param value Current composer text
+ * @param onValueChange Called on every edit
+ * @param onSendMessage Called with the text when the user sends; the caller clears [value]
  * @param modifier Modifier for the row
- * @param initialText Seed text for the composer. Keyed on the value so arriving with a new
- *   draft replaces the field, while ordinary recomposition leaves what the user typed alone.
+ * @param focusRequester Lets the caller move focus here when it seeds the field
  */
 @Composable
 fun MessageInput(
+    value: String,
+    onValueChange: (String) -> Unit,
     onSendMessage: (String) -> Unit,
     modifier: Modifier = Modifier,
-    initialText: String = ""
+    focusRequester: FocusRequester = remember { FocusRequester() }
 ) {
-    var text by remember(initialText) { mutableStateOf(initialText) }
-
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -52,11 +57,12 @@ fun MessageInput(
         verticalAlignment = Alignment.CenterVertically
     ) {
         OutlinedTextField(
-            value = text,
-            onValueChange = { text = it },
+            value = value,
+            onValueChange = onValueChange,
             modifier = Modifier
                 .weight(1f)
-                .padding(end = 8.dp),
+                .padding(end = 8.dp)
+                .focusRequester(focusRequester),
             placeholder = { Text(stringResource(R.string.chat_type_message)) },
             shape = RoundedCornerShape(24.dp),
             colors = TextFieldDefaults.colors(
@@ -67,18 +73,13 @@ fun MessageInput(
         )
 
         IconButton(
-            onClick = {
-                if (text.isNotBlank()) {
-                    onSendMessage(text)
-                    text = ""
-                }
-            },
-            enabled = text.isNotBlank()
+            onClick = { if (value.isNotBlank()) onSendMessage(value) },
+            enabled = value.isNotBlank()
         ) {
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.Send,
                 contentDescription = stringResource(R.string.chat_send),
-                tint = if (text.isNotBlank()) MaterialTheme.colorScheme.primary else Color.Gray
+                tint = if (value.isNotBlank()) MaterialTheme.colorScheme.primary else Color.Gray
             )
         }
     }

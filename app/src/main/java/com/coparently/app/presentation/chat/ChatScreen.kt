@@ -32,14 +32,17 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -92,6 +95,11 @@ fun ChatScreen(
 
     var showTemplates by remember { mutableStateOf(false) }
     var showEventPicker by remember { mutableStateOf(false) }
+
+    // Seeded by the incoming draft (Expenses settle-up) and by message templates. rememberSaveable
+    // so a rotation does not throw away a message the user is halfway through writing.
+    var composerText by rememberSaveable(draft) { mutableStateOf(draft) }
+    val composerFocus = remember { FocusRequester() }
 
     // DisposableEffect, not LaunchedEffect: the "thread is open" signal that gates the
     // read/delivered marks must clear when this composable leaves — see
@@ -172,11 +180,14 @@ fun ChatScreen(
             }
 
             MessageInput(
-                initialText = draft,
+                value = composerText,
+                onValueChange = { composerText = it },
                 onSendMessage = { content ->
                     viewModel.sendMessage(content)
+                    composerText = ""
                 },
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                focusRequester = composerFocus
             )
         }
     }
@@ -184,9 +195,10 @@ fun ChatScreen(
     if (showTemplates) {
         MessageTemplatesBottomSheet(
             onTemplateSelected = { template ->
-                // For now, just send the template content directly
-                // In a real app, we might want to show a dialog to fill placeholders
-                viewModel.sendTemplateMessage(template, template.content)
+                // A template prepares the message; it does not send it. Sending on tap put three
+                // identical placeholders-and-all messages into a real thread during the August
+                // 2026 baseline run, because the send was invisible and read as a missed tap.
+                composerText = template.content
                 showTemplates = false
             },
             onDismiss = { showTemplates = false }
@@ -202,6 +214,14 @@ fun ChatScreen(
             },
             onDismiss = { showEventPicker = false }
         )
+    }
+
+    // Runs when the sheet closes after a pick: the field is seeded, so put the cursor in it and
+    // raise the keyboard — otherwise the text appears somewhere the user is not looking.
+    LaunchedEffect(composerText) {
+        if (composerText.isNotEmpty() && !showTemplates) {
+            composerFocus.requestFocus()
+        }
     }
 }
 

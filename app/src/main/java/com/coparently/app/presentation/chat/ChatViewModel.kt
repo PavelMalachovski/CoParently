@@ -9,7 +9,6 @@ import com.coparently.app.domain.model.Conversation
 import com.coparently.app.domain.model.Event
 import com.coparently.app.domain.model.Message
 import com.coparently.app.domain.model.MessageSendStatus
-import com.coparently.app.domain.model.MessageTemplate
 import com.coparently.app.domain.model.MessageType
 import com.coparently.app.domain.model.PairingState
 import com.coparently.app.domain.repository.EventRepository
@@ -438,10 +437,6 @@ class ChatViewModel @Inject constructor(
             )
             messageRepository.sendMessage(message)
         }
-    }
-
-    fun sendTemplateMessage(template: MessageTemplate, filledContent: String) {
-        sendMessage(filledContent, MessageType.TEXT)
     }
 
     /**
