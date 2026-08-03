@@ -54,6 +54,14 @@ private const val PAYER_TINT_ALPHA = 0.18f
 private val TILE_SIZE = 40.dp
 
 /**
+ * Corner radius of an expense row **and** of the delete surface behind it.
+ *
+ * The two must be the same value: the swipe backdrop sits directly under the row at rest, so a
+ * backdrop with tighter corners shows as a red outline around every row in the list.
+ */
+private val ROW_CORNER = 12.dp
+
+/**
  * List of expenses for the period. Each row swipes left to delete, matching [EventListScreen].
  *
  * @param expenses Expenses to show, already ordered
@@ -171,7 +179,7 @@ fun ExpenseItem(
     }
 
     Surface(
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(ROW_CORNER),
         // Was surfaceContainerLow, a 1.2:1 separation from the background in dark — the rows
         // barely read as cards at all.
         color = MaterialTheme.colorScheme.surfaceContainer,
@@ -281,7 +289,7 @@ private fun SwipeToDeleteRow(
                     .fillMaxSize()
                     .background(
                         color = MaterialTheme.colorScheme.error,
-                        shape = RoundedCornerShape(10.dp)
+                        shape = RoundedCornerShape(ROW_CORNER)
                     )
                     .padding(horizontal = 20.dp),
                 contentAlignment = Alignment.CenterEnd
