@@ -33,6 +33,9 @@
     <plurals name="expenses_count">
         <item quantity="one">%1$d výdaj</item>
         <item quantity="few">%1$d výdaje</item>
+        <!-- Czech uses "many" for decimal counts ("1,5 výdaje"), which takes the genitive
+             singular, not the genitive plural that "other" carries. -->
+        <item quantity="many">%1$d výdaje</item>
         <item quantity="other">%1$d výdajů</item>
     </plurals>
     <string name="expenses_row_subtitle">%1$s · zaplatil(a) %2$s · %3$s</string>

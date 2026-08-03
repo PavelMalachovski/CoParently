@@ -44,4 +44,7 @@
     <string name="chat_templates">Шаблоны</string>
     <string name="chat_day_today">Сегодня</string>
     <string name="chat_day_yesterday">Вчера</string>
+
+    <!-- Thread header: whether your own messages actually left the device. -->
+    <string name="chat_header_synced">Всё отправлено</string>
 </resources>

@@ -44,4 +44,7 @@
     <string name="chat_templates">Templates</string>
     <string name="chat_day_today">Today</string>
     <string name="chat_day_yesterday">Yesterday</string>
+
+    <!-- Thread header: whether your own messages actually left the device. -->
+    <string name="chat_header_synced">Up to date</string>
 </resources>

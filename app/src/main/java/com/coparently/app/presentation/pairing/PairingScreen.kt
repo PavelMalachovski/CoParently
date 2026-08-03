@@ -21,9 +21,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.LinkOff
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.QrCodeScanner
-import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -68,6 +68,8 @@ import com.coparently.app.domain.model.PairingState
 import com.coparently.app.domain.model.PartnerSummary
 import com.coparently.app.domain.pairing.PairingUri
 import com.coparently.app.presentation.common.ConfirmationDialog
+import com.coparently.app.presentation.common.SectionGroup
+import com.coparently.app.presentation.common.SectionRow
 import com.coparently.app.presentation.common.SignedInAsRow
 import com.coparently.app.presentation.pairing.components.CodeEntryField
 import com.coparently.app.presentation.pairing.components.IncomingInviteCard
@@ -325,11 +327,18 @@ private fun LazyListScope.loadingSection(
 private fun LazyListScope.pairedSection(partner: PartnerSummary, onUnpairClick: () -> Unit) {
     item { PairedPartnerCard(partner = partner) }
     item {
-        Button(
-            onClick = onUnpairClick,
-            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-            modifier = Modifier.fillMaxWidth()
-        ) { Text(stringResource(R.string.pairing_unpair_button)) }
+        // Same anatomy as signing out of the app: a destructive action is a red text row that
+        // confirms, not a filled error button competing with the partner card above it.
+        // The confirmation already existed; only the affordance changed.
+        SectionGroup {
+            SectionRow(
+                icon = Icons.Default.LinkOff,
+                iconTint = MaterialTheme.colorScheme.error,
+                title = stringResource(R.string.pairing_unpair_button),
+                titleColor = MaterialTheme.colorScheme.error,
+                onClick = onUnpairClick
+            )
+        }
     }
 }
 

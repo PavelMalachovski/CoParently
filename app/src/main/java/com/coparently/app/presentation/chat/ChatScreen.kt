@@ -1,16 +1,20 @@
 package com.coparently.app.presentation.chat
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Bolt
@@ -33,12 +37,18 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.coparently.app.R
 import com.coparently.app.domain.model.Event
+import com.coparently.app.domain.model.Message
+import com.coparently.app.domain.model.MessageSendStatus
 import com.coparently.app.presentation.common.PillChip
 import java.time.format.DateTimeFormatter
 
@@ -101,7 +111,7 @@ fun ChatScreen(
                     // successful `ensureConversation` set it — `?:` alone never catches that.
                     val title = conversation?.title?.takeIf { it.isNotBlank() }
                         ?: stringResource(R.string.chat_title_fallback)
-                    Text(title)
+                    ChatThreadHeader(title = title, messages = messages, currentUserId = currentUserId)
                 },
                 navigationIcon = {
                     onBack?.let { back ->
@@ -244,6 +254,72 @@ private fun ChangeRequestEventPicker(
                     }
                 }
             }
+        }
+    }
+}
+
+/** Diameter of the co-parent avatar in the thread header. */
+private val HEADER_AVATAR_SIZE = 36.dp
+
+/**
+ * The thread's identity line: who you are talking to, and whether what you sent actually left
+ * the device.
+ *
+ * The status is derived from **your own** messages only. A co-parent's message that is still
+ * SENDING is their problem to see, not yours, and folding it in here would make the header
+ * flicker on every incoming message. The wording deliberately says "up to date" rather than the
+ * mock's "synced just now": the app tracks no chat sync timestamp, and printing one it does not
+ * have is exactly the kind of affordance this refresh removed elsewhere.
+ *
+ * @param title Conversation title — the co-parent's name once `ensureConversation` has run
+ * @param messages Thread contents, newest last
+ * @param currentUserId Whose messages count towards the status
+ */
+@Composable
+private fun ChatThreadHeader(title: String, messages: List<Message>, currentUserId: String) {
+    val mine = messages.filter { it.senderId == currentUserId }
+    val status = when {
+        mine.any { it.status == MessageSendStatus.ERROR } -> R.string.chat_failed_to_send
+        mine.any { it.status == MessageSendStatus.SENDING } -> R.string.chat_sending_ellipsis
+        else -> R.string.chat_header_synced
+    }
+    // Same three-way colour split as the sync row in Settings: errors shout, in-flight is muted,
+    // settled is the tertiary accent.
+    val statusColor: Color = when (status) {
+        R.string.chat_failed_to_send -> MaterialTheme.colorScheme.error
+        R.string.chat_sending_ellipsis -> MaterialTheme.colorScheme.onSurfaceVariant
+        else -> MaterialTheme.colorScheme.tertiary
+    }
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(HEADER_AVATAR_SIZE)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.primaryContainer),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = title.take(1).uppercase(),
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onPrimaryContainer
+            )
+        }
+        Column {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = stringResource(status),
+                style = MaterialTheme.typography.labelMedium,
+                color = statusColor
+            )
         }
     }
 }

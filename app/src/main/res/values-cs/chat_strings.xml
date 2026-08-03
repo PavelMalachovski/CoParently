@@ -48,4 +48,7 @@
     <string name="chat_templates">Šablony</string>
     <string name="chat_day_today">Dnes</string>
     <string name="chat_day_yesterday">Včera</string>
+
+    <!-- Thread header: whether your own messages actually left the device. -->
+    <string name="chat_header_synced">Aktuální</string>
 </resources>

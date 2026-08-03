@@ -47,7 +47,12 @@ replace) the July 2026 overhaul below — those invariants still hold except whe
    off a list that immediately forwards again.
 8. **No affordance may promise a feature that doesn't exist.** The composer's `+` was
    captioned "attach" and opened message templates; templates are now a labelled chip and
-   there is no attach button until attachments actually ship.
+   there is no attach button until attachments actually ship. Same rule shaped the thread
+   header (`ChatThreadHeader`): it shows the co-parent's initial, their name and whether
+   **your own** messages left the device (derived from `Message.status`), not the mock's
+   "Synced just now" — the app tracks no chat sync timestamp, so printing one would be the
+   same defect. Destructive actions follow the sign-out anatomy: a red `SectionRow` that
+   confirms, not a filled error button (Settings sign-out, Pairing unpair).
 9. **New user-facing strings go into all five locales** (`values`, `values-cs`, `values-de`,
    `values-ru`, `values-uk`) in the same commit — see "Localization" below.
 
