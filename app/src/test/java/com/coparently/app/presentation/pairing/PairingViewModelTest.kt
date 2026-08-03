@@ -5,6 +5,8 @@ import com.coparently.app.R
 import com.coparently.app.data.analytics.AnalyticsManager
 import com.coparently.app.data.remote.firebase.PairingException
 import com.coparently.app.data.remote.firebase.QRCodeService
+import com.coparently.app.data.session.SignedInAccountSource
+import com.coparently.app.domain.model.AccountSummary
 import com.coparently.app.domain.model.PairingError
 import com.coparently.app.domain.model.PairingState
 import com.coparently.app.domain.repository.PairingRepository
@@ -26,6 +28,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Before
 import org.junit.Test
 
@@ -35,6 +38,7 @@ class PairingViewModelTest {
     private val dispatcher = StandardTestDispatcher()
     private lateinit var repository: PairingRepository
     private lateinit var analyticsManager: AnalyticsManager
+    private lateinit var signedInAccountSource: SignedInAccountSource
     private lateinit var viewModel: PairingViewModel
 
     @Before
@@ -50,10 +54,13 @@ class PairingViewModelTest {
         analyticsManager = mockk(relaxed = true)
         coEvery { repository.observePairingState() } returns
             flowOf(PairingState.NotPaired())
+        signedInAccountSource = mockk(relaxed = true)
+        every { signedInAccountSource.observe() } returns flowOf(ACCOUNT)
         viewModel = PairingViewModel(
             pairingRepository = repository,
             qrCodeService = mockk<QRCodeService>(relaxed = true),
-            analyticsManager = analyticsManager
+            analyticsManager = analyticsManager,
+            signedInAccountSource = signedInAccountSource
         )
     }
 
@@ -203,5 +210,26 @@ class PairingViewModelTest {
             assertEquals(PairingState.NotPaired(), awaitItem())
             cancelAndIgnoreRemainingEvents()
         }
+    }
+
+    @Test
+    fun `exposes the signed-in account so the screen can name this device`() =
+        runTest(dispatcher) {
+            // Both parents' phones render the same invite code; the account is the only
+            // thing on the screen that distinguishes them.
+            viewModel.account.test {
+                assertNull(awaitItem())
+                assertEquals(ACCOUNT, awaitItem())
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    private companion object {
+        val ACCOUNT = AccountSummary(
+            id = "user-a",
+            name = "Alice Novak",
+            email = "alice@example.com",
+            photoUrl = "https://lh3.googleusercontent.com/a/alice"
+        )
     }
 }

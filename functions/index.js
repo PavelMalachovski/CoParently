@@ -784,3 +784,126 @@ function hasPartner(snap) {
   const partnerId = snap.data().partnerId;
   return typeof partnerId === 'string' && partnerId.length > 0;
 }
+
+/**
+ * How many characters of a chat message body are carried into the push notification preview.
+ *
+ * @const {number}
+ */
+const CHAT_MESSAGE_PREVIEW_LENGTH = 120;
+
+/**
+ * A chat message document's `timestamp` as epoch millis, in either wire format.
+ *
+ * A **number** is epoch millis already — that is what `Message.toFirestoreMap` writes now, the
+ * same unit the read marks use, and the only form two devices in different timezones can agree
+ * on. A **string** is the naive `DateTimeFormatter.ISO_LOCAL_DATE_TIME` value the previous
+ * format used: it carries no offset, so `Date.parse` reads it in this runtime's own timezone
+ * (UTC on Cloud Functions), which is the best available reading of a value that never recorded
+ * where it was written. Both are accepted because both exist — documents written before the
+ * change, and documents a phone still running an older build keeps writing.
+ *
+ * Returns `NaN` for anything unreadable, so the caller's `Number.isFinite` fallback still
+ * covers it.
+ *
+ * @param {*} timestamp The document's `timestamp` field, of whatever type it happens to be.
+ * @return {number} Epoch millis, or `NaN`.
+ */
+function sentAtMillisOf(timestamp) {
+  if (typeof timestamp === 'number') return timestamp;
+  if (typeof timestamp === 'string') return Date.parse(timestamp);
+  return NaN;
+}
+
+/**
+ * Queues a push notification for the other participant when a chat message is created,
+ * unless they have already read past it.
+ *
+ * Exposed separately from the `onChatMessageCreated` trigger (mirroring
+ * `unpairCoParentImpl`) purely so it can be exercised against a fake Firestore in tests.
+ *
+ * Every failure mode below is a quiet no-op rather than a thrown error, because a Firestore
+ * `onCreate` trigger retries an uncaught rejection indefinitely, and none of these describes
+ * something a retry could fix:
+ * - the conversation document does not exist (deleted, or the message somehow predates it),
+ * - `participants` holds no second uid distinct from the sender (a malformed or legacy
+ *   conversation document),
+ * - the sender is not one of the conversation's participants (the same malformed-document
+ *   case, from the other side).
+ *
+ * The suppression rule reads `lastReadAt[recipient]` — an epoch-millis number, written a
+ * dotted-path field at a time by `FirestoreMessageDataSource.markRead` — and skips the push
+ * once that mark is at or past the message. A conversation that predates the read-mark
+ * feature, or one the recipient has simply never opened, carries no `lastReadAt` entry at
+ * all: `(conversation.lastReadAt || {})[recipient]` is `undefined` either way, defaulted to
+ * `0` here so a never-read conversation always favours notifying rather than silently
+ * swallowing the very first message.
+ *
+ * `message.timestamp` comes in either wire format — see [sentAtMillisOf]. A timestamp that
+ * cannot be read at all falls back to "now" rather than to epoch `0`: falling back to `0`
+ * would make an unreadable value look "already read" against a never-read conversation's own
+ * `0` default and silently swallow the push instead of sending one.
+ *
+ * Only the first non-sender uid in `participants` is ever notified. `ConversationKey.of`
+ * only ever produces a two-uid conversation today, so a third participant is unreachable in
+ * practice — but if that ever changes, this silently notifies just one of the other
+ * participants rather than all of them, which would need a deliberate decision, not a
+ * side effect of `Array.prototype.find`.
+ *
+ * `messageType` is not read here: only `TEXT` messages are sent today (`MessageType.IMAGE`
+ * and `VOICE` exist on the model but nothing produces them yet), so `message.content` is
+ * always the right preview source. Once either ships, this will push an empty-body
+ * notification for it — not a live bug, but worth fixing at that point rather than being
+ * rediscovered as one.
+ *
+ * @param {FirebaseFirestore.Firestore} db Firestore instance.
+ * @param {Object} message The created `messages/{messageId}` document's data.
+ * @return {Promise<void>}
+ */
+async function notifyOfChatMessage(db, message) {
+  const conversationId = message && message.conversationId;
+  if (!conversationId) return;
+
+  const conversationSnap = await db.collection('conversations').doc(conversationId).get();
+  const conversation = conversationSnap.data();
+  if (!conversation) return;
+
+  const participants = conversation.participants || [];
+  if (!participants.includes(message.senderId)) return;
+
+  const recipient = participants.find((uid) => uid !== message.senderId);
+  if (!recipient) return;
+
+  const readMark = (conversation.lastReadAt || {})[recipient] || 0;
+  const parsedTimestamp = sentAtMillisOf(message.timestamp);
+  const sentAt = Number.isFinite(parsedTimestamp) ? parsedTimestamp : Date.now();
+  if (readMark >= sentAt) return;
+
+  await db.collection('notification_queue').add({
+    targetUserId: recipient,
+    data: {
+      type: 'chat_message',
+      conversationId,
+      title: message.senderName || 'CoPlanly',
+      body: String(message.content || '').slice(0, CHAT_MESSAGE_PREVIEW_LENGTH),
+    },
+    status: 'pending',
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+}
+
+exports.notifyOfChatMessage = notifyOfChatMessage;
+
+/**
+ * Notifies the other parent when a message is created.
+ *
+ * Skipped when the recipient's read mark is already at or past this message — they are
+ * looking at the thread as it arrives, and a push would be noise. See
+ * [notifyOfChatMessage] for the suppression rule and the no-reader guards.
+ */
+exports.onChatMessageCreated = functions.firestore
+    .document('messages/{messageId}')
+    .onCreate(async (snap) => {
+      await notifyOfChatMessage(admin.firestore(), snap.data());
+      return null;
+    });

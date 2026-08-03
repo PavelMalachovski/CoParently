@@ -1,8 +1,11 @@
 package com.coparently.app.presentation.home
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.coparently.app.data.repository.CustodyModelRepository
+import com.coparently.app.domain.chat.ChatReadState
+import com.coparently.app.domain.chat.ConversationKey
 import com.coparently.app.domain.custody.HandoverCalculator
 import com.coparently.app.domain.custody.HandoverInfo
 import com.coparently.app.domain.model.Event
@@ -20,6 +23,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
@@ -186,14 +190,38 @@ class HomeViewModel @Inject constructor(
         MonthSpend(listOf(CurrencyAmount(SupportedCurrency.DEFAULT.code, 0.0)))
     )
 
-    /** Total unread messages across all conversations. */
-    val unreadCount: StateFlow<Int> = _userId
-        .flatMapLatest { id ->
-            if (id.isEmpty()) {
+    /**
+     * Number of unread **messages** from the co-parent, matching the tile's label.
+     *
+     * Counted per message by [ChatReadState.unreadCount], from the co-parent thread's own
+     * messages against this user's `lastReadAt` mark. The interim version counted
+     * *conversations* with activity, which — chat being 1:1 — could only ever render 0 or 1
+     * under a label that says messages.
+     *
+     * Both the id and the flows are derived, not fetched: the conversation id is a pure
+     * function of the two uids, so the tile needs no list query. A remote failure inside the
+     * repository is already contained there; the [catch] here is the last resort that keeps
+     * a Room-level failure from taking down `viewModelScope` and, with it, the process.
+     */
+    val unreadCount: StateFlow<Int> = combine(_userId, _partnerId) { userId, partnerId ->
+        userId to partnerId
+    }
+        .flatMapLatest { (userId, partnerId) ->
+            val conversationId = partnerId?.let { conversationIdOrNull(userId, it) }
+            if (conversationId == null) {
                 flowOf(0)
             } else {
-                messageRepository.getConversations(id).map { convs -> convs.sumOf { it.unreadCount } }
+                combine(
+                    messageRepository.observeConversation(conversationId),
+                    messageRepository.observeMessages(conversationId)
+                ) { conversation, messages ->
+                    ChatReadState.unreadCount(messages, userId, conversation?.lastReadAt?.get(userId))
+                }
             }
+        }
+        .catch { e ->
+            Log.w(TAG, "Home unread count failed; showing zero", e)
+            emit(0)
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), 0)
 
@@ -233,6 +261,14 @@ class HomeViewModel @Inject constructor(
         initialValue = emptyList()
     )
 
+    /**
+     * The deterministic conversation id for [userId] and [partnerId], or `null` when the
+     * pair cannot form one — an unresolved session (blank uid), or a partner id that
+     * somehow equals this user's.
+     */
+    private fun conversationIdOrNull(userId: String, partnerId: String): String? =
+        runCatching { ConversationKey.of(userId, partnerId) }.getOrNull()
+
     private fun Event.toActivityItem(): ActivityItem {
         val kind = when {
             pickupConfirmedBy != null && pickupConfirmedAt != null &&
@@ -257,6 +293,7 @@ class HomeViewModel @Inject constructor(
         const val MAX_UPCOMING = 3
         const val LOOKAHEAD_DAYS = 60L
         const val STOP_TIMEOUT_MS = 5000L
+        const val TAG = "HomeViewModel"
         val NEAR_THRESHOLD: Duration = Duration.ofSeconds(2)
     }
 }

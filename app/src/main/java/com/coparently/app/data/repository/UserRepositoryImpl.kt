@@ -5,9 +5,13 @@ import com.coparently.app.data.local.entity.UserEntity
 import com.coparently.app.data.remote.firebase.FcmService
 import com.coparently.app.data.remote.firebase.FirebaseAuthService
 import com.coparently.app.data.remote.firebase.FirestoreUserDataSource
+import com.coparently.app.data.session.ProfileIdentity
 import com.coparently.app.domain.model.User
 import com.coparently.app.domain.repository.UserRepository
+import com.google.firebase.auth.FirebaseUser
+import com.google.firebase.auth.UserInfo
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import java.util.UUID
 import javax.inject.Inject
@@ -53,46 +57,280 @@ class UserRepositoryImpl @Inject constructor(
 
     override suspend fun getCurrentUserId(): String? = firebaseAuthService.getCurrentUser()?.uid
 
-    override suspend fun upsertUser(user: User) {
-        try {
-            userDao.insertUser(user.toEntity())
-        } catch (e: Exception) {
-            android.util.Log.e("UserRepository", "Failed to save user to local database", e)
-            throw e
-        }
+    override fun observeCurrentUserId(): Flow<String?> = firebaseAuthService.getAuthStateFlow()
+        .map { it?.uid }
+        // Firebase re-emits the same user on every token refresh; only a real session
+        // change is interesting to a subscriber.
+        .distinctUntilChanged()
 
-        // Also sync to Firestore
-        val firebaseUser = firebaseAuthService.getCurrentUser()
-        if (firebaseUser != null) {
-            try {
-                val userData = mapOf(
-                    "id" to user.id,
-                    "firebaseUid" to firebaseUser.uid, // Required by Firestore security rules
-                    "email" to user.email,
-                    "name" to user.name,
-                    "role" to user.role,
-                    "colorCode" to user.colorCode,
-                    "profilePhotoUrl" to (user.profilePhotoUrl ?: ""),
-                    "googleCalendarSyncEnabled" to user.googleCalendarSyncEnabled,
-                    "googleCalendarId" to (user.googleCalendarId ?: ""),
-                    "partnerId" to (user.partnerId ?: ""),
-                    "fcmToken" to (user.fcmToken ?: "")
+    /**
+     * Fills in the signed-in user's identity (`name`, `email`) in `users/{uid}` and in the
+     * local Room row, without disturbing anything else either side already holds.
+     *
+     * Three properties this has to get right:
+     *
+     * 1. **Merge, never overwrite.** The remote write goes through
+     *    [FirestoreUserDataSource.updateUser], which is `set(..., SetOptions.merge())`, and
+     *    carries only the keys that actually need to change. `partnerId`, `pairedAt`,
+     *    `fcmToken` and `pendingRevocationOf` are therefore untouched. This replaces the
+     *    dormant `upsertUser`, a full `.set()` that would have deleted every key it did not
+     *    list — including `pendingRevocationOf`, the marker `unpairCoParent` leaves behind
+     *    to remember whose shared access a partial revocation sweep still has to reach.
+     * 2. **No downgrade.** Name, email and photo are resolved by [ProfileIdentity] in a
+     *    strict preference order, so a session where Firebase Auth's top-level fields have
+     *    no `displayName`, `email` or `photoUrl` (every email/password account, and a Google
+     *    account whose record predates linking the provider — see
+     *    [ProfileIdentity.ProviderIdentity]) keeps whatever real identity is already stored
+     *    or, failing that, falls back to `providerData` before ever resorting to the email
+     *    local part. A null photo is never written: "this session does not know one" must
+     *    not be mistaken for "the user removed theirs".
+     * 3. **Idempotent.** Nothing is written when the stored picture already matches, so the
+     *    per-session and per-sync calls cost one cached document read.
+     *
+     * Best-effort by design: this runs in the background off the auth-state boundary, no
+     * user action is waiting on it, and the next session (or the next `SyncWorker` pass)
+     * retries. Failures are logged and swallowed.
+     */
+    override suspend fun ensureProfile() {
+        val firebaseUser = firebaseAuthService.getCurrentUser() ?: return
+        val uid = firebaseUser.uid
+
+        try {
+            // Null here means either "no document" or "the read failed"; both are safe,
+            // because every write below is a merge and the name resolution falls back to
+            // the local row rather than to a guess.
+            //
+            // `providers` covers the gap the other two can't: a real, non-anonymous session
+            // (Google, in practice) whose account record predates linking the provider
+            // reports nothing at the top level but carries the name/email/photo here. See
+            // ProfileIdentity's class doc for why this is a fallback and not a competing
+            // source.
+            val snapshot = ProfileSnapshot(
+                remote = firestoreUserDataSource.getUserById(uid),
+                local = userDao.getUserById(uid),
+                providers = firebaseUser.providerData.map { it.toProviderIdentity() }
+            )
+            val (remote, local, providers) = snapshot
+
+            val email = ProfileIdentity.resolveEmail(
+                topLevelEmail = firebaseUser.email,
+                storedRemoteEmail = remote?.string("email"),
+                storedLocalEmail = local?.email,
+                providers = providers
+            )
+            val name = ProfileIdentity.resolveName(
+                displayName = firebaseUser.displayName,
+                storedRemoteName = remote?.string("name"),
+                storedLocalName = local?.name,
+                email = email,
+                providers = providers
+            )
+            if (name == null) {
+                writeIdentityWithoutName(uid, firebaseUser, snapshot, email)
+                return
+            }
+            val identity = ResolvedIdentity(
+                name = name,
+                email = email.orEmpty(),
+                photoUrl = ProfileIdentity.resolvePhotoUrl(
+                    authPhotoUrl = firebaseUser.photoUrl?.toString(),
+                    storedRemoteUrl = remote?.string("profilePhotoUrl"),
+                    storedLocalUrl = local?.profilePhotoUrl,
+                    providers = providers
                 )
-                // WARNING, currently dormant: `upsertUser` is a full `.set()`, so every key
-                // absent from `userData` above is *deleted* from `users/{uid}`. That
-                // includes `pendingRevocationOf`, the marker `unpairCoParent` writes to
-                // remember whose shared access still has to be revoked after a partial
-                // sweep; erasing it leaves the ex-partner in the `sharedWith` of every
-                // document the sweep did not reach, with nothing left that remembers who
-                // they were. Nothing calls `UserRepository.upsertUser` today. Before wiring
-                // it up, either switch the data source to `set(merge)` — as `updateUser`
-                // already does — or carry `pendingRevocationOf` through this map.
-                firestoreUserDataSource.upsertUser(firebaseUser.uid, userData).getOrThrow()
-            } catch (e: Exception) {
-                android.util.Log.e("UserRepository", "Failed to sync user to Firestore", e)
-                // Don't throw here - local save succeeded, Firestore sync failed
+            )
+
+            writeRemoteProfile(uid, remote, identity)
+            writeLocalProfile(uid, remote, local, identity)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (
+            @Suppress("TooGenericExceptionCaught") e: Exception
+        ) {
+            android.util.Log.e(TAG, "Failed to ensure the user profile for $uid", e)
+        }
+    }
+
+    /**
+     * Salvages whatever identity *is* known when no display name could be derived.
+     *
+     * A blank name genuinely cannot be written: the `users` **create** rule requires
+     * `name` to be 1..100 characters, so a merge onto a document that does not exist yet
+     * is rejected outright. The **update** rule says nothing about `name` at all, so a
+     * document that already exists — the `fcmToken`-only one the FCM registration leaves
+     * behind is the common case — can be merged into without one. Both halves of that are
+     * pinned in `firestore-tests/rules/users-profile.test.js`.
+     *
+     * So the skip is narrowed from "write nothing" to "write everything except the name":
+     * the email address and the avatar are real data the co-parent's pairing card renders,
+     * and `id`/`firebaseUid` are what keep [syncWithFirestore] from minting a random local
+     * id later. Discarding them because one *other* field is unknown helped nobody.
+     *
+     * A null [remote] is deliberately treated as "do not write remotely". It means either
+     * "no document" — where the create rule would reject this patch — or "the read failed",
+     * where nothing is known about what is already stored. Neither is worth a denied write;
+     * the next session retries.
+     *
+     * The log line is the point of the rest of this: it reports which inputs were absent
+     * and what kind of session this is, so a device that keeps landing here can be
+     * diagnosed instead of guessed at. See [ProfileIdentity.describeNameSources] for why
+     * it carries presence flags and provider ids and no personal data — and, now that
+     * [ProfileIdentity.resolveName] itself checks `providerData`, for why reaching this
+     * method at all means that check already came back empty too.
+     *
+     * @param snapshot The same remote/local/provider data [ensureProfile] already read and
+     *   built for [ProfileIdentity.resolveName]/[ProfileIdentity.resolveEmail] — passed in
+     *   rather than re-read or rebuilt, so the log's `hasProviderName` reflects exactly what
+     *   resolution just tried, and grouped into one parameter to stay under detekt's
+     *   parameter-count limit (the same reason [ResolvedIdentity] exists).
+     * @param email The output of [ProfileIdentity.resolveEmail], already provider-aware, so
+     *   this method does not re-derive it with a narrower rule than the caller used.
+     */
+    private suspend fun writeIdentityWithoutName(
+        uid: String,
+        firebaseUser: FirebaseUser,
+        snapshot: ProfileSnapshot,
+        email: String?
+    ) {
+        val (remote, local, providers) = snapshot
+        val photoUrl = ProfileIdentity.resolvePhotoUrl(
+            authPhotoUrl = firebaseUser.photoUrl?.toString(),
+            storedRemoteUrl = remote?.string("profilePhotoUrl"),
+            storedLocalUrl = local?.profilePhotoUrl,
+            providers = providers
+        )
+        val sources = ProfileIdentity.describeNameSources(
+            hasDisplayName = firebaseUser.displayName?.nonBlank() != null,
+            hasRemoteName = remote?.string("name") != null,
+            hasLocalName = local?.name?.nonBlank() != null,
+            hasProviderName = ProfileIdentity.bestProvider(providers)?.displayName?.nonBlank() != null,
+            hasEmail = email != null,
+            hasRemoteProfile = remote != null,
+            isAnonymous = firebaseUser.isAnonymous,
+            providerIds = providers.map { it.providerId }
+        )
+        val outcome = if (remote == null) {
+            "No readable profile document, so a name-less merge would hit the create rule; " +
+                "nothing written remotely."
+        } else {
+            "Merging the fields that are known into the existing document."
+        }
+        android.util.Log.w(TAG, "No name could be derived for $uid; $sources. $outcome")
+
+        if (remote != null) {
+            val patch = buildMap<String, Any> {
+                email?.takeIf { it != remote.string("email") }?.let { put("email", it) }
+                if (remote.string("id") == null) put("id", uid)
+                if (remote.string("firebaseUid") == null) put("firebaseUid", uid)
+                photoUrl?.takeIf { it != remote.string("profilePhotoUrl") }
+                    ?.let { put("profilePhotoUrl", it) }
+            }
+            if (patch.isNotEmpty()) {
+                firestoreUserDataSource.updateUser(uid, patch).onFailure {
+                    android.util.Log.e(TAG, "Failed to merge the name-less profile into Firestore for $uid", it)
+                }
             }
         }
+
+        // Only an existing local row is touched. Creating one whose `name` is blank would
+        // put a nameless user into every list that reads Room, which is worse than the gap.
+        if (local != null) {
+            val updated = local.copy(
+                email = email ?: local.email,
+                profilePhotoUrl = photoUrl ?: local.profilePhotoUrl
+            )
+            if (updated != local) userDao.insertUser(updated)
+        }
+    }
+
+    /**
+     * The identity [ensureProfile] resolved, on its way to both stores.
+     *
+     * Grouped rather than passed as three loose parameters so the two writers below stay
+     * under detekt's parameter-count limit, and so a fourth identity field can be added
+     * later without touching their signatures.
+     */
+    private data class ResolvedIdentity(
+        val name: String,
+        val email: String,
+        val photoUrl: String?
+    )
+
+    /**
+     * The remote document, local row and linked-provider data [ensureProfile] reads once and
+     * hands to [writeIdentityWithoutName], for the same reason [ResolvedIdentity] exists:
+     * one parameter instead of three keeps that function under detekt's parameter-count
+     * limit.
+     */
+    private data class ProfileSnapshot(
+        val remote: Map<String, Any?>?,
+        val local: UserEntity?,
+        val providers: List<ProfileIdentity.ProviderIdentity>
+    )
+
+    /**
+     * Merges the identity keys that are missing or stale into `users/{uid}`.
+     *
+     * `id` and `firebaseUid` are only added when the document does not carry them:
+     * [syncWithFirestore] reads `id` back and would otherwise mint a random UUID for the
+     * local row, and the `users` rules require `firebaseUid`, when present, to equal the
+     * caller's UID.
+     *
+     * `profilePhotoUrl` is only added when this session actually resolved one, so an
+     * email/password sign-in — where Firebase Auth reports no photo at all — cannot blank
+     * out an avatar a Google session stored earlier.
+     */
+    private suspend fun writeRemoteProfile(
+        uid: String,
+        remote: Map<String, Any?>?,
+        identity: ResolvedIdentity
+    ) {
+        val patch = buildMap<String, Any> {
+            if (remote?.string("name") != identity.name) put("name", identity.name)
+            if (remote?.string("email") != identity.email.nonBlank()) put("email", identity.email)
+            if (remote?.string("id") == null) put("id", uid)
+            if (remote?.string("firebaseUid") == null) put("firebaseUid", uid)
+            identity.photoUrl
+                ?.takeIf { it != remote?.string("profilePhotoUrl") }
+                ?.let { put("profilePhotoUrl", it) }
+        }
+        if (patch.isEmpty()) return
+
+        firestoreUserDataSource.updateUser(uid, patch)
+            .onFailure { android.util.Log.e(TAG, "Failed to merge the profile into Firestore for $uid", it) }
+    }
+
+    /**
+     * Mirrors the same identity into Room, so the local picture agrees with the remote one.
+     *
+     * An existing row is `copy()`-ed rather than rebuilt, so role, colour, calendar
+     * settings, `partnerId` and the FCM token survive the REPLACE insert. The photo is
+     * only overwritten when one was resolved, for the same no-downgrade reason as the
+     * remote patch.
+     */
+    private suspend fun writeLocalProfile(
+        uid: String,
+        remote: Map<String, Any?>?,
+        local: UserEntity?,
+        identity: ResolvedIdentity
+    ) {
+        val updated = local?.copy(
+            name = identity.name,
+            email = identity.email,
+            profilePhotoUrl = identity.photoUrl ?: local.profilePhotoUrl
+        ) ?: UserEntity(
+            id = uid,
+            email = identity.email,
+            name = identity.name,
+            role = remote?.string("role") ?: DEFAULT_ROLE,
+            colorCode = remote?.string("colorCode") ?: DEFAULT_COLOR_CODE,
+            profilePhotoUrl = identity.photoUrl,
+            googleCalendarSyncEnabled = remote?.get("googleCalendarSyncEnabled") as? Boolean ?: false,
+            googleCalendarId = remote?.string("googleCalendarId"),
+            partnerId = remote?.string("partnerId"),
+            fcmToken = remote?.string("fcmToken")
+        )
+        if (updated != local) userDao.insertUser(updated)
     }
 
     override suspend fun updateUser(user: User) {
@@ -160,6 +398,12 @@ class UserRepositoryImpl @Inject constructor(
         updateUser(updatedUser)
     }
 
+    /** This string unless it is blank, in which case null. */
+    private fun String.nonBlank(): String? = takeIf { it.isNotBlank() }
+
+    /** The value at [key] as a non-blank string, or null. */
+    private fun Map<String, Any?>.string(key: String): String? = (this[key] as? String)?.nonBlank()
+
     /**
      * Maps UserEntity to User domain model.
      */
@@ -213,5 +457,29 @@ class UserRepositoryImpl @Inject constructor(
             fcmToken = this["fcmToken"] as? String
         )
     }
+
+    private companion object {
+        const val TAG = "UserRepository"
+
+        /** Same defaults [toUser] applies to a Firestore document that omits them. */
+        const val DEFAULT_ROLE = "mom"
+        const val DEFAULT_COLOR_CODE = "#FF4081"
+    }
 }
+
+/**
+ * Projects one `FirebaseUser.providerData` entry into the plain-string shape
+ * [ProfileIdentity] works with, so that pure object never has to depend on the Firebase
+ * `UserInfo`/`android.net.Uri` types.
+ *
+ * Kept as a top-level function rather than a member of [UserRepositoryImpl]: it needs no
+ * access to that class's state, and [UserRepositoryImpl] is already at detekt's
+ * function-count limit.
+ */
+private fun UserInfo.toProviderIdentity() = ProfileIdentity.ProviderIdentity(
+    providerId = providerId,
+    displayName = displayName,
+    email = email,
+    photoUrl = photoUrl?.toString()
+)
 

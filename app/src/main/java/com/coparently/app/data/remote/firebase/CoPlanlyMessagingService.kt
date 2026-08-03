@@ -9,6 +9,7 @@ import android.net.Uri
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import com.coparently.app.R
+import com.coparently.app.domain.chat.ChatUri
 import com.coparently.app.domain.pairing.PairingUri
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
@@ -70,7 +71,12 @@ class CoPlanlyMessagingService : FirebaseMessagingService() {
         // skip rather than post a title-only or fully blank-looking notification.
         if (title.isNullOrEmpty() && body.isNullOrEmpty()) return
 
-        showNotification(title ?: getString(R.string.app_name), body.orEmpty(), type)
+        // Only meaningful for TYPE_CHAT_MESSAGE (see notifyOfChatMessage in
+        // functions/index.js, which is the only producer that sets it); null for every
+        // other type, and showNotification only reads it for that one branch.
+        val conversationId = data["conversationId"]
+
+        showNotification(title ?: getString(R.string.app_name), body.orEmpty(), type, conversationId)
     }
 
     override fun onNewToken(token: String) {
@@ -87,25 +93,37 @@ class CoPlanlyMessagingService : FirebaseMessagingService() {
 
     /**
      * Shows a notification, deep-linking pairing events into the pairing
-     * screen and everything else into the app's launcher activity.
+     * screen, a chat message into its conversation (or the Chat tab's list
+     * when [conversationId] is null — a manual test push or an older payload),
+     * and everything else into the app's launcher activity.
      *
      * Pairing notifications reuse [PAIRING_NOTIFICATION_ID] instead of a
      * timestamp-derived id: a `pairing_accepted` followed by a `pairing_removed`
      * (or vice versa) describes the *current* pairing state, not two separate
      * things worth reviewing together, so the second should replace the first
-     * in the tray rather than stack next to it. Every other notification type
-     * keeps a timestamp id so unrelated notifications keep accumulating.
+     * in the tray rather than stack next to it. A chat message reuses
+     * [CHAT_NOTIFICATION_ID] for the same reason — the latest preview is what
+     * matters, and the thread itself holds the full history — and, being a
+     * distinct constant, never collides with (or is replaced by) a pairing
+     * notification. Every other notification type keeps a timestamp id so
+     * unrelated notifications keep accumulating.
+     *
+     * @param conversationId The `data["conversationId"]` [onMessageReceived] read off the
+     *   message; only meaningful (and only ever non-null) for [TYPE_CHAT_MESSAGE].
      */
-    private fun showNotification(title: String, body: String, type: String?) {
+    private fun showNotification(title: String, body: String, type: String?, conversationId: String? = null) {
         val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
         val isPairingEvent = type == TYPE_PAIRING_ACCEPTED || type == TYPE_PAIRING_REMOVED
-        val intent = if (isPairingEvent) {
-            Intent(Intent.ACTION_VIEW, Uri.parse(PAIRING_DEEP_LINK)).apply {
+        val isChatMessage = type == TYPE_CHAT_MESSAGE
+        val intent = when {
+            isPairingEvent -> Intent(Intent.ACTION_VIEW, Uri.parse(PAIRING_DEEP_LINK)).apply {
                 setPackage(packageName)
             }
-        } else {
-            packageManager.getLaunchIntentForPackage(packageName)
+            isChatMessage -> Intent(Intent.ACTION_VIEW, Uri.parse(ChatUri.build(conversationId))).apply {
+                setPackage(packageName)
+            }
+            else -> packageManager.getLaunchIntentForPackage(packageName)
         }
 
         // Distinct per notification type so a pairing-accepted notification's
@@ -131,7 +149,11 @@ class CoPlanlyMessagingService : FirebaseMessagingService() {
             .setDefaults(NotificationCompat.DEFAULT_ALL)
             .build()
 
-        val notificationId = if (isPairingEvent) PAIRING_NOTIFICATION_ID else System.currentTimeMillis().toInt()
+        val notificationId = when {
+            isPairingEvent -> PAIRING_NOTIFICATION_ID
+            isChatMessage -> CHAT_NOTIFICATION_ID
+            else -> System.currentTimeMillis().toInt()
+        }
         notificationManager.notify(notificationId, notification)
     }
 
@@ -164,6 +186,9 @@ class CoPlanlyMessagingService : FirebaseMessagingService() {
         /** Queued by `unpairCoParent` (`functions/index.js`) for the ex-partner. */
         private const val TYPE_PAIRING_REMOVED = "pairing_removed"
 
+        /** Queued by `onChatMessageCreated` (`functions/index.js`) for the message recipient. */
+        private const val TYPE_CHAT_MESSAGE = "chat_message"
+
         /**
          * Opens the pairing screen with no prefilled code — see
          * [MainActivity][com.coparently.app.presentation.MainActivity]'s
@@ -178,5 +203,12 @@ class CoPlanlyMessagingService : FirebaseMessagingService() {
          * [showNotification]).
          */
         private const val PAIRING_NOTIFICATION_ID = 918_273
+
+        /**
+         * Stable id for a chat-message notification, distinct from
+         * [PAIRING_NOTIFICATION_ID] so neither type ever replaces the other in
+         * the tray (see [showNotification]).
+         */
+        private const val CHAT_NOTIFICATION_ID = 918_274
     }
 }

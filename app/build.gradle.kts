@@ -108,6 +108,16 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1,DEPENDENCIES}"
         }
     }
+
+    // Exported Room schemas (see the "room.schemaLocation" kapt arg below) are the fixtures
+    // MigrationTestHelper reads to create a database at a past version and to validate the
+    // rebuilt schema after a migration — without this, CoPlanlyDatabaseMigrationTest cannot
+    // find 11.json/12.json at instrumentation runtime.
+    sourceSets {
+        getByName("androidTest") {
+            assets.srcDir("$projectDir/schemas")
+        }
+    }
 }
 
 dependencies {
@@ -153,6 +163,9 @@ dependencies {
     implementation("androidx.room:room-runtime:$roomVersion")
     implementation("androidx.room:room-ktx:$roomVersion")
     kapt("androidx.room:room-compiler:$roomVersion")
+    // MigrationTestHelper — instrumented tests that run a real migration against a real
+    // SQLite database and validate the result against the exported schema JSON.
+    androidTestImplementation("androidx.room:room-testing:$roomVersion")
 
     // Coroutines - Updated to latest stable
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
@@ -269,6 +282,20 @@ dependencies {
 
     // Navigation Testing
     androidTestImplementation("androidx.navigation:navigation-testing:2.9.3")
+}
+
+// androidx.room:room-testing-android pulls in JUnit 5 (junit-jupiter/junit-platform)
+// transitively for its own Kotlin-multiplatform test fixtures, which this project never uses
+// (everything here is JUnit 4). Left in, six of those jars all ship META-INF/LICENSE.md and
+// fail androidTest resource merging. An exclude on the room-testing dependency declaration
+// itself does not reach this: room-testing is a Kotlin Multiplatform umbrella artifact that
+// Gradle resolves to room-testing-android via variant metadata ("available-at"), and per-
+// dependency exclude rules do not propagate across that redirect. A configuration-level
+// exclude does, since it is enforced against every resolved module regardless of how it
+// entered the graph.
+configurations.named("androidTestImplementation") {
+    exclude(group = "org.junit.jupiter")
+    exclude(group = "org.junit.platform")
 }
 
 kapt {

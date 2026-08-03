@@ -12,6 +12,10 @@
     <string name="chat_status_sending">Wird gesendet</string>
     <string name="chat_status_error">Fehler</string>
     <string name="chat_status_sent">Gesendet</string>
+    <!-- Tick content description: the message reached the co-parent's device but has not been read yet. -->
+    <string name="chat_status_delivered">Zugestellt</string>
+    <!-- Tick content description: the co-parent has opened the thread past this message. -->
+    <string name="chat_status_read">Gelesen</string>
     <string name="chat_sending_ellipsis">Wird gesendet…</string>
     <string name="chat_failed_to_send">Senden fehlgeschlagen</string>
     <string name="chat_title_fallback">Chat</string>
@@ -20,4 +24,18 @@
     <string name="chat_request_change_title">Änderung anfragen</string>
     <string name="chat_no_upcoming_events">Keine anstehenden Termine, für die eine Änderung vorgeschlagen werden kann.</string>
     <string name="chat_pick_event_to_reschedule">Wähle den Termin, den du verschieben möchtest:</string>
+    <!-- Shown when the co-parent action is used on an account that has no co-parent linked. -->
+    <string name="chat_no_coparent">Du bist noch nicht mit dem anderen Elternteil verbunden.</string>
+    <!-- Snackbar action next to chat_no_coparent; opens the pairing screen. -->
+    <string name="chat_no_coparent_action">Verbinden</string>
+    <!-- Shown when the pairing state has not resolved in time; the action is worth retrying. -->
+    <string name="chat_coparent_link_pending">Die Verbindung zum anderen Elternteil wird noch geprüft. Bitte versuche es gleich noch einmal.</string>
+
+    <!-- Screen-reader content description for the unread-message badge on the bottom nav's Chat tab. -->
+    <plurals name="chat_unread_messages_badge">
+        <item quantity="one">%1$d ungelesene Nachricht</item>
+        <item quantity="other">%1$d ungelesene Nachrichten</item>
+    </plurals>
+    <!-- Visible badge text once the unread count passes the display cap, e.g. "99+". -->
+    <string name="chat_unread_count_overflow">%1$d+</string>
 </resources>

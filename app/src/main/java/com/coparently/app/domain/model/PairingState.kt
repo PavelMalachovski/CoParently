@@ -1,11 +1,18 @@
 package com.coparently.app.domain.model
 
-/** The paired co-parent, as shown on the pairing screen. */
+/**
+ * The paired co-parent, as shown on the pairing screen.
+ *
+ * @property photoUrl The co-parent's avatar, read from their profile document. Null
+ *   whenever their phone has not yet run a build that stores one, so the initial-letter
+ *   fallback stays load-bearing rather than decorative.
+ */
 data class PartnerSummary(
     val id: String,
     val name: String,
     val email: String,
-    val pairedSinceMillis: Long?
+    val pairedSinceMillis: Long?,
+    val photoUrl: String? = null
 )
 
 /**

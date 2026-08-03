@@ -22,7 +22,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -58,14 +58,26 @@ fun ChatScreen(
     var showTemplates by remember { mutableStateOf(false) }
     var showEventPicker by remember { mutableStateOf(false) }
 
-    LaunchedEffect(conversationId) {
-        viewModel.setConversationId(conversationId)
+    // DisposableEffect, not LaunchedEffect: the "thread is open" signal that gates the
+    // read/delivered marks must clear when this composable leaves — see
+    // ChatViewModel.onThreadClosed. A configuration change disposes and recomposes this
+    // screen while the same ChatViewModel instance survives, and onDispose is what closes
+    // that window.
+    DisposableEffect(conversationId) {
+        viewModel.onThreadOpened(conversationId)
+        onDispose { viewModel.onThreadClosed() }
     }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(conversation?.title ?: stringResource(R.string.chat_title_fallback)) },
+                title = {
+                    // A blank (not null) title means this row was mirrored locally before any
+                    // successful `ensureConversation` set it — `?:` alone never catches that.
+                    val title = conversation?.title?.takeIf { it.isNotBlank() }
+                        ?: stringResource(R.string.chat_title_fallback)
+                    Text(title)
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.chat_back))
@@ -91,7 +103,7 @@ fun ChatScreen(
                 messages = messages,
                 currentUserId = currentUserId,
                 onRefresh = {
-                    viewModel.refreshMessages()
+                    viewModel.refreshThread()
                 },
                 modifier = Modifier.weight(1f)
             )

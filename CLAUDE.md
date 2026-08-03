@@ -164,6 +164,20 @@ Data flow: UI → ViewModel → UseCase → Repository → Room (source of truth
     `isPartnerOf(resource.data.createdByFirebaseUid)`. A `whereIn`/`whereEqualTo` +
     `orderBy` combination on different fields also needs a composite index
     (`firestore.indexes.json`) — Firestore's error message links directly to the fix.
+13. **The conversation id is derived, never generated.** `ConversationKey.of(uidA, uidB)`
+    sorts the two UIDs and joins them, so both devices compute the same id without
+    coordination and creating the conversation is idempotent. Randomly generated ids are
+    what made the two phones settle on separate threads. Read and delivery state live on
+    the conversation as `{uid: epochMillis}` maps — one write per event — and the ticks and
+    unread badge are derived from them by `ChatReadState`, never stored per message.
+    Message times are stored the same way: `Message.sentAtMillis`, epoch millis (Room
+    schema v13), not a naive `LocalDateTime`, so two parents in different time zones agree
+    on what a mark means and on when a message was sent. The Firestore field keeps its name
+    (`timestamp`) and the read path still accepts a legacy ISO string, so a co-parent on an
+    older build stays readable. Deliberately *not* changed: `Event`, `Expense`, `Budget`
+    and `ChildInfo` dates, where a naive local time is often the right model — whether a
+    custody handover follows the child's zone or the viewer's is an unmade product
+    decision, not an oversight.
 
 ## Known issues / do not "fix" silently
 
@@ -172,6 +186,28 @@ Data flow: UI → ViewModel → UseCase → Repository → Room (source of truth
   on the Expenses screen; the Home "this month" tile joins per-currency subtotals). There is still
   no FX conversion between currencies (spec §10) — deliberately: totals stay honest within each
   currency rather than being normalised. Do not reintroduce a single cross-currency total.
+
+- **A failed chat Firestore listener is never re-established** (known, accepted at merge time —
+  backlog with the time-zone item below). Both mirror branches in `MessageRepositoryImpl` end in
+  `.catch { Log.w(...) }`, which *completes* the mirror flow, so `merge(mirror, local)` then runs
+  on Room alone for the rest of the process. `SharingStarted.WhileSubscribed` cannot restart it:
+  `rememberChatUnreadCount()` in `NavGraph` holds an Activity-scoped `ChatViewModel` collecting
+  `unreadCount` for the whole process lifetime, so the subscriber count never reaches zero.
+  Observed once in production, on the first launch after install — both chat listeners were
+  denied ~0.5 s before `ensureConversation` created the canonical conversation document, and that
+  session ran on local data only. Nothing is lost and a cold restart clears it, but the app looks
+  entirely healthy while receiving nothing. Recurs on any reinstall, factory reset or account
+  switch. Fix when touching this code: `retryWhen` with backoff on both branches, or await
+  `ensureConversation` before subscribing the observers. Don't "fix" it by removing the `.catch` —
+  an uncaught failure in `viewModelScope.launch` terminates the process.
+
+- **Cross-time-zone chat is implemented but never verified on two devices.** The August 2026
+  chat sync moved message times to epoch millis specifically so two parents in different zones
+  agree (see item 13 above), and it is covered by unit tests that drive the two zones explicitly
+  (`ChatReadStateTimeZoneTest`) plus a 12→13 migration test. The two-phone acceptance scenario —
+  set one phone's zone 2–3 hours apart, send a message, and confirm it counts as unread, the
+  badge clears on open, and the ticks reach READ — was **deferred, not run**. Backlog item for
+  the next review round. Everything else in that acceptance run passed on real devices.
 
 - `firestore.rules` (strict) was realigned with the real document schema (ISO **string**
   dates, presence-based key validation, `change_requests`/`expenses` collections added,

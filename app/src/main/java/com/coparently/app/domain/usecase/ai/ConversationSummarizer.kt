@@ -7,7 +7,9 @@ import com.coparently.app.domain.model.ai.ActionItemStatus
 import com.coparently.app.domain.model.ai.ConversationSummary
 import com.coparently.app.domain.model.ai.MessageTone
 import com.coparently.app.domain.repository.MessageRepository
+import java.time.Instant
 import java.time.LocalDateTime
+import java.time.ZoneId
 import java.util.UUID
 import javax.inject.Inject
 
@@ -42,9 +44,18 @@ class ConversationSummarizer @Inject constructor(
             agreements = aiSummary.agreements,
             conflicts = aiSummary.conflicts,
             sentiment = parseSentiment(aiSummary.overallSentiment),
-            timeRange = messages.first().timestamp to messages.last().timestamp
+            timeRange = messages.first().localSentAt() to messages.last().localSentAt()
         )
     }
+
+    /**
+     * The message's send instant as a local date-time, for the summary's human-facing range.
+     *
+     * `Message.sentAtMillis` is an instant; `ConversationSummary.timeRange` describes it to a
+     * reader, so it is resolved in this device's zone — the same zone the chat renders in.
+     */
+    private fun Message.localSentAt(): LocalDateTime =
+        Instant.ofEpochMilli(sentAtMillis).atZone(ZoneId.systemDefault()).toLocalDateTime()
 
     suspend fun extractActionItems(conversationId: String): List<ActionItem> {
         val summary = summarizeConversation(conversationId)

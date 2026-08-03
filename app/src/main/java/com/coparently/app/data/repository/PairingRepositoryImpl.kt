@@ -7,13 +7,11 @@ import com.coparently.app.data.local.dao.UserDao
 import com.coparently.app.data.remote.firebase.FirebaseAuthService
 import com.coparently.app.data.remote.firebase.PairingException
 import com.coparently.app.data.remote.firebase.PairingFunctions
-import com.coparently.app.domain.model.Conversation
 import com.coparently.app.domain.model.PairingError
 import com.coparently.app.domain.model.PairingInvite
 import com.coparently.app.domain.model.PairingState
 import com.coparently.app.domain.model.PartnerSummary
 import com.coparently.app.domain.pairing.InviteCodeGenerator
-import com.coparently.app.domain.repository.MessageRepository
 import com.coparently.app.domain.repository.PairingRepository
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
@@ -26,13 +24,11 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.tasks.await
-import java.time.LocalDateTime
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicReference
 import javax.inject.Inject
@@ -49,7 +45,7 @@ class PairingRepositoryImpl @Inject constructor(
     private val firestore: FirebaseFirestore,
     private val authService: FirebaseAuthService,
     private val pairingFunctions: PairingFunctions,
-    private val messageRepository: MessageRepository,
+    private val postPairingConversationSetup: PostPairingConversationSetup,
     private val userDao: UserDao,
     // Application context only, for the localized conversation-title fallback. This is a
     // repository, not a ViewModel, so it is allowed to resolve resources directly.
@@ -86,6 +82,10 @@ class PairingRepositoryImpl @Inject constructor(
                             PairingState.Paired(
                                 partner = runCatching { loadPartner(partnerId, pairedAt) }
                                     .getOrElse {
+                                        // The UI renders a blank name identically whether the
+                                        // profile could not be read or genuinely has none; the
+                                        // log is what tells the two apart after the fact.
+                                        Log.w(TAG, "Could not read the partner profile $partnerId", it)
                                         PartnerSummary(
                                             id = partnerId,
                                             name = "",
@@ -291,7 +291,12 @@ class PairingRepositoryImpl @Inject constructor(
             id = partnerId,
             name = data.getString("name").orEmpty(),
             email = data.getString("email").orEmpty(),
-            pairedSinceMillis = pairedAt
+            pairedSinceMillis = pairedAt,
+            // Written by the co-parent's own `ensureProfile`, so it stays null until their
+            // phone runs a build that stores one — the card falls back to the initial.
+            // Blank is normalized to null: the legacy full-profile write stores "" for a
+            // missing photo, and an empty URL must read as "no photo", not as a broken one.
+            photoUrl = data.getString("profilePhotoUrl")?.takeIf { it.isNotBlank() }
         )
     }
 
@@ -337,31 +342,28 @@ class PairingRepositoryImpl @Inject constructor(
      * runs, so a failure here must not surface as a failure of the pairing — it is logged
      * and swallowed instead. This is safe because nothing depends on it having run:
      * `ChatViewModel.startConversationWithPartner` creates the conversation on demand the
-     * first time either parent opens chat, using the same participant-pair lookup as here.
+     * first time either parent opens chat, through the same idempotent call as here.
+     *
+     * There is no get-or-create lookup any more. The id is derived from the participant
+     * pair, so both devices compute the same one and a duplicate thread is impossible to
+     * create — the lookup existed only to prevent duplicates that can no longer happen.
+     *
+     * [PostPairingConversationSetup] also folds any legacy conversation for this pair into the
+     * canonical one right after creating it, inside this same `try` — so a merge failure
+     * degrades exactly like a create failure: logged and swallowed, never surfaced as a failed
+     * pairing.
      */
     private suspend fun ensureConversationWith(partnerId: String) {
         val uid = authService.getCurrentUser()?.uid ?: return
         if (partnerId.isEmpty()) return
         try {
-            val pair = setOf(uid, partnerId)
-            val alreadyExists = messageRepository.getConversations(uid).first().any {
-                it.participants.toSet() == pair
-            }
-            if (alreadyExists) return
             // The partner's display name titles the thread; their profile may not carry one
             // yet, in which case a localized placeholder stands in.
             val partnerName = firestore.collection(USERS).document(partnerId).get().await()
                 .getString("name")
                 .orEmpty()
                 .ifEmpty { context.getString(R.string.pairing_default_partner_name) }
-            messageRepository.createConversation(
-                Conversation(
-                    id = UUID.randomUUID().toString(),
-                    participants = listOf(uid, partnerId),
-                    title = partnerName,
-                    createdAt = LocalDateTime.now()
-                )
-            )
+            postPairingConversationSetup.run(uid, partnerId, partnerName)
         } catch (e: CancellationException) {
             throw e
         } catch (

@@ -33,6 +33,7 @@ import androidx.navigation.navArgument
 import com.coparently.app.presentation.LocalGoogleSignInCallback
 import com.coparently.app.presentation.auth.AuthScreen
 import com.coparently.app.presentation.calendar.CalendarScreen
+import com.coparently.app.presentation.chat.ChatViewModel
 import com.coparently.app.presentation.childinfo.ChildInfoScreen
 import com.coparently.app.presentation.common.animations.*
 import com.coparently.app.presentation.event.AddEditEventScreen
@@ -56,17 +57,24 @@ import kotlinx.coroutines.flow.StateFlow
  * @param onPairingCodeConsumed Called once [pendingPairingCode] has been
  *   handed to the pairing screen, so the caller can clear it and avoid
  *   re-navigating on the next recomposition.
+ * @param pendingChatOpen A `coplanly://chat` deep link awaiting hand-off to the Chat tab,
+ *   bundled with its own consumption callback (see [PendingChatOpen]) rather than as two more
+ *   loose parameters alongside [pendingPairingCode]/[onPairingCodeConsumed] — that shape
+ *   would have pushed this function's parameter count to detekt's `LongParameterList`
+ *   threshold of 6.
  */
 @Composable
 fun NavGraph(
     navController: NavHostController,
     syncViewModel: SyncViewModel,
     pendingPairingCode: StateFlow<String?>,
-    onPairingCodeConsumed: () -> Unit
+    onPairingCodeConsumed: () -> Unit,
+    pendingChatOpen: PendingChatOpen
 ) {
     val authStateViewModel: AuthStateViewModel = hiltViewModel()
     val isAuthenticated by authStateViewModel.isAuthenticated.collectAsState()
     val isLoading by authStateViewModel.isLoading.collectAsState()
+    val chatUnreadCount = rememberChatUnreadCount()
 
     // Determine start destination based on authentication state
     val startDestination = when {
@@ -76,6 +84,7 @@ fun NavGraph(
     }
 
     PairingDeepLinkEffect(pendingPairingCode, isAuthenticated, navController, onPairingCodeConsumed)
+    ChatDeepLinkEffect(pendingChatOpen, isAuthenticated, navController)
 
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
@@ -96,7 +105,8 @@ fun NavGraph(
                             launchSingleTop = true
                             restoreState = true
                         }
-                    }
+                    },
+                    chatUnreadCount = chatUnreadCount
                 )
             }
         }
@@ -596,6 +606,29 @@ fun NavGraph(
 }
 
 /**
+ * The Chat tab's unread-message count, for [CoPlanlyBottomBar]'s badge.
+ *
+ * `hiltViewModel()` resolves against [androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner],
+ * which is decided by *composition position*, not by which Kotlin function the call happens
+ * to sit in — so calling it here, from the same place [NavGraph] calls it for
+ * `authStateViewModel`, keeps this [ChatViewModel] instance scoped to that same ambient owner
+ * (the hosting Activity, so it survives for the app's lifetime) exactly as if the two lines
+ * were inlined into [NavGraph] itself. They are pulled out into this small composable purely
+ * to avoid growing [NavGraph] — already the codebase's longest function and already flagged
+ * by detekt's `LongMethod` check — by lines that have nothing to do with routing.
+ *
+ * The Chat/Conversations screens keep creating their *own* `hiltViewModel()` instance, scoped
+ * to their own back-stack entry, independent of this one; both merely observe the same
+ * repository-backed flows, so there is no read-mark or state conflict between the two.
+ */
+@Composable
+private fun rememberChatUnreadCount(): Int {
+    val chatViewModel: ChatViewModel = hiltViewModel()
+    val unreadCount by chatViewModel.unreadCount.collectAsState()
+    return unreadCount
+}
+
+/**
  * Navigates to [Screen.Pairing] once a `coplanly://pair` deep link's code is
  * both present and safe to act on.
  *
@@ -642,6 +675,81 @@ private fun PairingDeepLinkEffect(
                 popUpTo(Screen.Pairing.route) { inclusive = true }
             }
             onPairingCodeConsumed()
+        }
+    }
+}
+
+/**
+ * A `coplanly://chat` deep link awaiting hand-off, or null while none is pending.
+ *
+ * [conversationId] carries the id from the link's `?conversationId=…` query parameter (see
+ * [com.coparently.app.domain.chat.ChatUri]), or null for a bare `coplanly://chat` link — a
+ * manual test push, an older payload, or a hand-typed link may carry none, and that must
+ * degrade to opening the Chat tab's list rather than fail.
+ */
+data class PendingChatLink(val conversationId: String?)
+
+/**
+ * A [PendingChatLink] awaiting hand-off, bundled with the callback that clears it once
+ * consumed.
+ *
+ * Exists purely to keep [NavGraph]'s own signature from growing by two more loose parameters
+ * every time another deep link is added — see [NavGraph]'s `pendingChatOpen` doc.
+ *
+ * @property link The pending link, or null when none is outstanding.
+ * @property onConsumed Called once the link has been acted on, so the owner (
+ *   [MainActivity][com.coparently.app.presentation.MainActivity]) can clear it and avoid
+ *   re-navigating on the next recomposition.
+ */
+class PendingChatOpen(val link: StateFlow<PendingChatLink?>, val onConsumed: () -> Unit)
+
+/**
+ * The route a [PendingChatLink] should open: the specific thread when it carries a
+ * conversation id, otherwise the Chat tab's conversation list.
+ *
+ * A pure function (no [Composable] dependency) purely so this fallback — the part the review
+ * that added it cared about — is pinned by a plain unit test rather than only exercised
+ * through Compose UI test infrastructure this project does not otherwise use.
+ *
+ * @param conversationId The id from the link, or null/blank for a bare `coplanly://chat` link.
+ * @return The route to navigate to.
+ */
+internal fun chatDeepLinkRoute(conversationId: String?): String =
+    if (conversationId.isNullOrBlank()) {
+        Screen.Conversations.createRoute()
+    } else {
+        Screen.Chat.createRoute(conversationId)
+    }
+
+/**
+ * Navigates to the Chat tab (or a specific thread) once a `coplanly://chat` deep link is both
+ * pending and safe to act on — same authentication guard as [PairingDeepLinkEffect], for the
+ * same reason: an unauthenticated user must follow the normal Auth flow rather than being
+ * dropped straight onto a screen behind the auth gate.
+ *
+ * Unlike [PairingDeepLinkEffect], this never pops [Screen.Conversations] off the back stack
+ * first: `PairingScreen` needed that because it re-arms a confirmation dialog via
+ * `rememberSaveable`, but nothing in `ChatScreen`/`ConversationsScreen` has an analogous
+ * stale-state problem, so a plain [NavHostController.navigate] with `launchSingleTop` is
+ * enough to avoid stacking duplicate entries from a repeated tap.
+ *
+ * @param pendingChatOpen The pending link and its consumption callback.
+ * @param isAuthenticated Current auth state (`null` while loading).
+ * @param navController Used to perform the navigation once conditions are met.
+ */
+@Composable
+private fun ChatDeepLinkEffect(
+    pendingChatOpen: PendingChatOpen,
+    isAuthenticated: Boolean?,
+    navController: NavHostController
+) {
+    val chatLink by pendingChatOpen.link.collectAsState()
+    LaunchedEffect(chatLink, isAuthenticated) {
+        if (chatLink != null && isAuthenticated == true) {
+            navController.navigate(chatDeepLinkRoute(chatLink?.conversationId)) {
+                launchSingleTop = true
+            }
+            pendingChatOpen.onConsumed()
         }
     }
 }

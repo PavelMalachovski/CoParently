@@ -44,6 +44,18 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="coplanly" android:host="pair" />
             </intent-filter>
+
+            <!-- Chat deep link, opened by a chat-message push notification
+                 (see CoPlanlyMessagingService). Same shape as the pairing link
+                 above: a separate filter rather than a second <data> tag on it,
+                 since combining <data> tags within one filter would cross their
+                 attributes into every scheme/host pairing. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="coplanly" android:host="chat" />
+            </intent-filter>
         </activity>
 
         <!--

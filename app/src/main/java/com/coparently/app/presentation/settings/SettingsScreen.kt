@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.coparently.app.R
 import com.coparently.app.domain.money.SupportedCurrency
+import com.coparently.app.presentation.common.SignedInAsRow
 import com.coparently.app.presentation.settings.components.SettingsNavigationCard
 import com.coparently.app.presentation.settings.components.SettingsSwitchCard
 import com.coparently.app.presentation.sync.GoogleCalendarSyncState
@@ -71,6 +72,7 @@ fun SettingsScreen(
     val settingsUiState by settingsViewModel.settingsState.collectAsState()
     val operationState by settingsViewModel.operationState.collectAsState()
     val darkTheme by settingsViewModel.darkThemeFlow.collectAsState()
+    val account by settingsViewModel.account.collectAsState()
     val defaultCurrency by settingsViewModel.defaultCurrency.collectAsState()
     var showCurrencyPicker by remember { mutableStateOf(false) }
     var showLanguagePicker by remember { mutableStateOf(false) }
@@ -557,6 +559,16 @@ fun SettingsScreen(
                         style = MaterialTheme.typography.titleLarge,
                         modifier = Modifier.padding(bottom = 8.dp)
                     )
+
+                    // The app account, not the Google Calendar one reported higher up.
+                    // Same strip as the pairing screen, so "who am I signed in as" reads
+                    // identically in both places it can be asked.
+                    account?.let { signedIn ->
+                        SignedInAsRow(
+                            account = signedIn,
+                            modifier = Modifier.padding(bottom = 12.dp)
+                        )
+                    }
 
                     Text(
                         text = stringResource(R.string.settings_account_description),

@@ -9,14 +9,28 @@ import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Payments
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import com.coparently.app.R
+
+/**
+ * Above this many unread messages the badge stops growing the digit count and shows
+ * `"$MAX_BADGE_DISPLAY_COUNT+"` instead — a three- or four-digit pill would overflow the
+ * small badge shape Material 3 draws for it. The screen-reader announcement is unaffected:
+ * it always speaks the real count via [pluralStringResource].
+ */
+private const val MAX_BADGE_DISPLAY_COUNT = 99
 
 /**
  * Top-level destinations reachable from the bottom navigation bar.
@@ -76,13 +90,22 @@ enum class BottomNavDestination(
 /**
  * Material 3 bottom navigation bar with the four top-level destinations.
  *
+ * Stateless by design: [chatUnreadCount] is a plain `Int` rather than this composable
+ * reaching for a ViewModel itself, so the caller decides how (and how widely) that count
+ * is scoped — see `NavGraph`, which reads it from a ViewModel shared across every tab so
+ * the badge is correct even while a different tab is showing.
+ *
  * @param currentRoute Route of the currently displayed destination
  * @param onNavigate Callback invoked with the destination the user tapped
+ * @param chatUnreadCount Number of messages from the co-parent not yet read. A badge is
+ *   shown on the Chat tab's icon while this is above zero, and hidden entirely at zero —
+ *   it is not decorative, so nothing is rendered when there is nothing to report.
  */
 @Composable
 fun CoPlanlyBottomBar(
     currentRoute: String?,
-    onNavigate: (BottomNavDestination) -> Unit
+    onNavigate: (BottomNavDestination) -> Unit,
+    chatUnreadCount: Int = 0
 ) {
     NavigationBar {
         BottomNavDestination.entries.forEach { destination ->
@@ -91,10 +114,30 @@ fun CoPlanlyBottomBar(
                 selected = selected,
                 onClick = { if (!selected) onNavigate(destination) },
                 icon = {
-                    Icon(
-                        imageVector = if (selected) destination.selectedIcon else destination.unselectedIcon,
-                        contentDescription = null
-                    )
+                    val icon = if (selected) destination.selectedIcon else destination.unselectedIcon
+                    if (destination == BottomNavDestination.CHAT && chatUnreadCount > 0) {
+                        val unreadDescription = pluralStringResource(
+                            R.plurals.chat_unread_messages_badge,
+                            chatUnreadCount,
+                            chatUnreadCount
+                        )
+                        val badgeText = if (chatUnreadCount > MAX_BADGE_DISPLAY_COUNT) {
+                            stringResource(R.string.chat_unread_count_overflow, MAX_BADGE_DISPLAY_COUNT)
+                        } else {
+                            chatUnreadCount.toString()
+                        }
+                        BadgedBox(
+                            badge = {
+                                Badge(modifier = Modifier.semantics { contentDescription = unreadDescription }) {
+                                    Text(badgeText)
+                                }
+                            }
+                        ) {
+                            Icon(imageVector = icon, contentDescription = null)
+                        }
+                    } else {
+                        Icon(imageVector = icon, contentDescription = null)
+                    }
                 },
                 label = { Text(stringResource(destination.labelRes)) }
             )

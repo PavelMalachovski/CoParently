@@ -12,6 +12,10 @@
     <string name="chat_status_sending">Отправка</string>
     <string name="chat_status_error">Ошибка</string>
     <string name="chat_status_sent">Отправлено</string>
+    <!-- Tick content description: the message reached the co-parent's device but has not been read yet. -->
+    <string name="chat_status_delivered">Доставлено</string>
+    <!-- Tick content description: the co-parent has opened the thread past this message. -->
+    <string name="chat_status_read">Прочитано</string>
     <string name="chat_sending_ellipsis">Отправка…</string>
     <string name="chat_failed_to_send">Не удалось отправить</string>
     <string name="chat_title_fallback">Чат</string>
@@ -20,4 +24,20 @@
     <string name="chat_request_change_title">Запросить изменение</string>
     <string name="chat_no_upcoming_events">Нет предстоящих событий, для которых можно предложить изменение.</string>
     <string name="chat_pick_event_to_reschedule">Выберите событие, которое хотите перенести:</string>
+    <!-- Shown when the co-parent action is used on an account that has no co-parent linked. -->
+    <string name="chat_no_coparent">Вы ещё не связаны со вторым родителем.</string>
+    <!-- Snackbar action next to chat_no_coparent; opens the pairing screen. -->
+    <string name="chat_no_coparent_action">Связать</string>
+    <!-- Shown when the pairing state has not resolved in time; the action is worth retrying. -->
+    <string name="chat_coparent_link_pending">Проверяем связь со вторым родителем. Попробуйте ещё раз через мгновение.</string>
+
+    <!-- Screen-reader content description for the unread-message badge on the bottom nav's Chat tab. -->
+    <plurals name="chat_unread_messages_badge">
+        <item quantity="one">%1$d непрочитанное сообщение</item>
+        <item quantity="few">%1$d непрочитанных сообщения</item>
+        <item quantity="many">%1$d непрочитанных сообщений</item>
+        <item quantity="other">%1$d непрочитанного сообщения</item>
+    </plurals>
+    <!-- Visible badge text once the unread count passes the display cap, e.g. "99+". -->
+    <string name="chat_unread_count_overflow">%1$d+</string>
 </resources>

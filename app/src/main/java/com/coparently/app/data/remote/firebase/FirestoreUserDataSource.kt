@@ -43,23 +43,12 @@ class FirestoreUserDataSource @Inject constructor(
     }
 
     /**
-     * Inserts or updates a user profile.
-     */
-    suspend fun upsertUser(uid: String, userData: Map<String, Any?>): Result<Unit> {
-        return try {
-            firestore.collection(usersCollection)
-                .document(uid)
-                .set(userData)
-                .await()
-            Result.success(Unit)
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
-    }
-
-    /**
-     * Updates a user profile.
-     * Uses set with merge to create document if it doesn't exist.
+     * Writes [userData] into the user profile, creating the document if it does not exist.
+     *
+     * Always a `set(..., merge)`: `users/{uid}` carries state this app is not the only
+     * writer of — `partnerId` and `pairedAt` come from the pairing Cloud Function,
+     * `pendingRevocationOf` from the unpair sweep — so a full `.set()` here would silently
+     * delete whichever of them the caller's map happened to omit.
      */
     suspend fun updateUser(uid: String, userData: Map<String, Any?>): Result<Unit> {
         return try {
