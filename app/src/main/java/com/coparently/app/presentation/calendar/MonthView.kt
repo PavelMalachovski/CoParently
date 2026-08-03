@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -36,7 +37,6 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.coparently.app.R
@@ -63,9 +63,6 @@ private const val MONTH_PAGER_RANGE = 24L
 /** Days per week for the weekday header. */
 private const val DAYS_PER_WEEK = 7L
 
-/** Width of the school-vacation strip relative to the day cell. */
-private const val VACATION_STRIP_WIDTH_FRACTION = 0.6f
-
 /** Full-hue edge marking the first day of a custody run. */
 private val CUSTODY_EDGE_WIDTH = 2.dp
 
@@ -73,8 +70,9 @@ private val CUSTODY_EDGE_WIDTH = 2.dp
  * Classic month grid: always starts at the 1st of the month, pages horizontally
  * between months with follow-the-finger physics (kizitonwose HorizontalCalendar).
  *
- * Day cells show custody coloring (Mom pink / Dad blue), public holidays,
- * a subtle school-vacation marker and up to one event pill with a "+N" overflow.
+ * Day cells show custody coloring (Mom pink / Dad blue), public holidays and
+ * parent-coloured event dots. School vacation is a month-level banner above the grid,
+ * not a per-day marker.
  */
 @Suppress("LongParameterList") // screen-level composable: callbacks are its API surface
 @Composable
@@ -164,7 +162,7 @@ fun MonthView(
                         day = day,
                         cellHeight = cellHeight,
                         isSelected = selectedDate == day.date,
-                        events = eventsForDate(events, day.date),
+                        events = eventsOn(events, day.date),
                         getCustody = getCustody,
                         onDayClick = onDayClick,
                         holiday = holidays[day.date]
@@ -172,16 +170,6 @@ fun MonthView(
                 }
             )
         }
-    }
-}
-
-/** Events covering [date], including multi-day/overnight spans. */
-private fun eventsForDate(events: List<Event>, date: LocalDate): List<Event> {
-    val dayStart = date.atStartOfDay()
-    val dayEnd = date.plusDays(1).atStartOfDay()
-    return events.filter { e ->
-        val end = e.endDateTime ?: e.startDateTime
-        e.startDateTime.isBefore(dayEnd) && !end.isBefore(dayStart)
     }
 }
 
@@ -243,8 +231,7 @@ private fun WeekdayHeader(firstDayOfWeek: DayOfWeek) {
 }
 
 /**
- * Individual day cell: day number, custody/holiday backgrounds, subtle vacation
- * strip, first event pill and "+N" overflow.
+ * Individual day cell: day number, custody/holiday backgrounds and event dots.
  */
 // A day cell renders many orthogonal visual states (today/selected/custody/
 // holiday/vacation/events) — the branching is inherent to the design.
@@ -277,7 +264,6 @@ private fun DayCell(
     }
 
     val isPublicHoliday = holiday != null && !holiday.isSchoolVacation
-    val isVacation = holiday?.isSchoolVacation == true
 
     // Custody is the product's core signal — it wins over holiday/weekend tints.
     // School vacation is intentionally NOT a full-cell fill (it used to drown
@@ -417,63 +403,63 @@ private fun DayCell(
                 )
             }
 
-            events.firstOrNull()?.let { event ->
-                // Solid fill, and the *Dark parent variants rather than MomPink/DadBlue:
-                // white text on solid MomPink is only 4.35:1 and fails AA, while white on
-                // MomPinkDark is 5.87:1. Still unmistakably pink/blue.
-                val eventColor = when (event.parentOwner) {
-                    "mom" -> CoPlanlyColors.MomChipFill
-                    "dad" -> CoPlanlyColors.DadChipFill
-                    else -> MaterialTheme.colorScheme.tertiary
-                }
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(
-                            color = eventColor,
-                            shape = RoundedCornerShape(3.dp)
-                        )
-                        .padding(horizontal = 2.dp, vertical = 1.dp),
-                    contentAlignment = Alignment.Center
+            // Parent-coloured dots, one per event up to MAX_EVENT_DOTS, then a "+" marker.
+            //
+            // These replace a single full-width event chip plus a "+N" counter. The chip's
+            // label rendered at roughly 9sp inside a 48dp cell — below the legibility floor —
+            // and it showed only the *first* event, so a day with three things on it looked
+            // much like a day with one. Dots make the count the signal and hand the titles to
+            // the agenda card under the grid, where there is room to read them.
+            if (events.isNotEmpty()) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(3.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = event.title,
-                        style = MaterialTheme.typography.labelSmall,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        color = Color.White,
-                        fontWeight = FontWeight.Medium
-                    )
+                    events.take(MAX_EVENT_DOTS).forEach { event ->
+                        Box(
+                            modifier = Modifier
+                                .size(EVENT_DOT_SIZE)
+                                .background(
+                                    color = eventDotColor(event.parentOwner, isCurrentMonth),
+                                    shape = CircleShape
+                                )
+                        )
+                    }
+                    if (events.size > MAX_EVENT_DOTS) {
+                        Text(
+                            text = "+",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
             }
-
-            if (events.size > 1) {
-                Text(
-                    text = "+${events.size - 1}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = if (isCurrentMonth) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
-                    },
-                    fontWeight = FontWeight.Bold
-                )
-            }
-        }
-
-        // Subtle school-vacation marker
-        if (isVacation && isCurrentMonth) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth(VACATION_STRIP_WIDTH_FRACTION)
-                    .height(3.dp)
-                    .background(
-                        // Full opacity so the teal strip stays legible in dark theme
-                        color = CoPlanlyColors.VacationTint,
-                        shape = RoundedCornerShape(2.dp)
-                    )
-            )
         }
     }
 }
+
+/**
+ * Dot colour for an event, dimmed on days outside the shown month.
+ *
+ * Full-strength parent hue — a dot is a fill, not text, so the AA floor that forces the event
+ * *chip* onto the darker `MomChipFill`/`DadChipFill` variants does not apply here.
+ */
+@Composable
+private fun eventDotColor(parentOwner: String, isCurrentMonth: Boolean): Color {
+    val base = when (parentOwner) {
+        "mom" -> CoPlanlyColors.MomPink
+        "dad" -> CoPlanlyColors.DadBlue
+        else -> MaterialTheme.colorScheme.tertiary
+    }
+    return if (isCurrentMonth) base else base.copy(alpha = OUTSIDE_MONTH_DOT_ALPHA)
+}
+
+/** Most event dots a cell shows before collapsing the rest into a "+". */
+private const val MAX_EVENT_DOTS = 3
+
+/** Diameter of an event dot in a month cell. */
+private val EVENT_DOT_SIZE = 6.dp
+
+/** Dot opacity on leading/trailing days from the neighbouring months. */
+private const val OUTSIDE_MONTH_DOT_ALPHA = 0.4f

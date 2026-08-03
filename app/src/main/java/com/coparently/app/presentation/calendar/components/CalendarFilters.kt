@@ -46,7 +46,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi as FoundationExp
  *
  * The Mom/Both/Dad control used to be a permanent row under the header. It moved in here so the
  * header could collapse to two rows; the trade-off is one extra tap to switch parent, which the
- * Filters button on [CalendarViewModeBar] makes explicit.
+ * Filters action in the calendar header makes explicit.
  */
 @OptIn(ExperimentalMaterial3Api::class, FoundationExperimentalLayoutApi::class)
 @Composable

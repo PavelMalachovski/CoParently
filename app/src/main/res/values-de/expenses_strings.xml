@@ -21,7 +21,6 @@
     <string name="budgets_empty_description">Lege pro Kategorie ein monatliches Limit fest, um die gemeinsamen Ausgaben im Blick zu behalten.</string>
     <string name="expenses_empty_title">Noch keine Ausgaben</string>
     <string name="expenses_empty_description">Erfasse eine gemeinsame Ausgabe — Kita, Kleidung, Arztbesuch — und teile sie mit dem anderen Elternteil.</string>
-    <string name="expenses_month_shared_spend">%1$s · gemeinsame Ausgaben</string>
     <string name="expenses_mom_paid">Mama hat %1$s bezahlt</string>
     <string name="expenses_dad_paid">Papa hat %1$s bezahlt</string>
     <string name="expenses_balance_owed_to_you">Der andere Elternteil schuldet dir %1$s</string>
@@ -70,4 +69,12 @@
     <string name="budget_alert_percent_spent">Du hast %1$d%% deines Limits ausgegeben.</string>
     <string name="budget_spent_of_limit">%1$s / %2$s</string>
     <string name="budget_percent_used">%1$d%% genutzt</string>
+
+    <!-- Summary card: month switcher, total, and the budget chip strip. -->
+    <string name="expenses_shared_spend">gemeinsame Ausgaben</string>
+    <string name="expenses_month_and_count">%1$s · %2$s</string>
+    <string name="expenses_row_meta">%1$s · %2$s</string>
+    <string name="expenses_row_meta_with_receipt">%1$s · %2$s · Beleg</string>
+    <string name="expenses_budget_chip">%1$s %2$s / %3$s</string>
+    <string name="expenses_budget_add">+ Budget</string>
 </resources>

@@ -1,48 +1,113 @@
 package com.coparently.app.presentation.settings
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.filled.ChildCare
+import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.EventAvailable
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Group
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Payments
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.coparently.app.R
+import com.coparently.app.data.sync.SyncStatus
 import com.coparently.app.domain.money.SupportedCurrency
+import com.coparently.app.presentation.common.ConfirmationDialog
+import com.coparently.app.presentation.common.GroupLabel
+import com.coparently.app.presentation.common.SectionGroup
+import com.coparently.app.presentation.common.SectionRow
 import com.coparently.app.presentation.common.SignedInAsRow
-import com.coparently.app.presentation.settings.components.SettingsNavigationCard
-import com.coparently.app.presentation.settings.components.SettingsSwitchCard
 import com.coparently.app.presentation.sync.GoogleCalendarSyncState
-import com.coparently.app.presentation.sync.SyncStatusIndicator
 import com.coparently.app.presentation.sync.SyncViewModel
 import kotlinx.coroutines.launch
+import java.time.format.DateTimeFormatter
+
+private val syncTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 
 /**
- * Settings screen для управления настройками приложения и синхронизацией.
- * Stateless composable, который делегирует управление состоянием ViewModels.
+ * Settings screen.
  *
- * Использует Google Sign-In API для аутентификации с OAuth2 токенами.
+ * Restructured by the August 2026 design review, which found eleven differently-shaped cards
+ * on one flat scroll: family setup (pairing, child, custody) sat *below* the two sync cards it
+ * is a prerequisite for, and no two cards agreed on whether a title got an icon, whether a row
+ * was a `ListItem` or bespoke, or how many controls one card could carry.
  *
- * @param onNavigateUp Навигационный callback для возврата назад
- * @param onNavigateToChildInfo Навигационный callback для экрана информации о ребенке
- * @param onNavigateToPairing Навигационный callback для экрана pairing
- * @param onStartGoogleSignIn Callback для запуска Google Sign-In Activity
- * @param syncViewModel ViewModel для операций синхронизации
- * @param settingsViewModel ViewModel для состояния настроек
+ * What replaced it: four labelled groups in dependency order — **Family** (the product),
+ * **Sync**, **App**, **Account** — sharing one row anatomy (icon, title, status or value, at
+ * most one trailing control). Google Calendar's toggle-plus-status-plus-two-buttons collapses
+ * into a single row that expands on demand, and signing out is a red text row at the bottom
+ * rather than a full-width error-coloured button.
+ *
+ * Stateless composable: state lives in the ViewModels, this only renders and forwards events.
+ *
+ * @param onNavigateUp Returns to the screen that opened Settings
+ * @param onNavigateToChildInfo Opens child information
+ * @param onNavigateToPairing Opens co-parent pairing
+ * @param onNavigateToCustodySetup Opens custody schedule setup
+ * @param onStartGoogleSignIn Launches the Google Sign-In activity
+ * @param onSignOut Called after the user signs out of the app
+ * @param syncViewModel Sync operations
+ * @param settingsViewModel Settings state
+ * @param authStateViewModel Firebase auth state, used to sign out
  */
-// Was baselined before the onNavigateUp signature change; splitting this legacy
-// screen into cards is tracked separately.
+// The complexity is the optional-callback fan-out: each group is only rendered when the route
+// behind it was wired, and every one of those checks is a separate branch.
 @Suppress("LongParameterList", "LongMethod", "CyclomaticComplexMethod")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -61,21 +126,22 @@ fun SettingsScreen(
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
 
-    // Sync ViewModel states
     val isSignedIn by syncViewModel.isSignedIn.collectAsState()
     val isSyncEnabled by syncViewModel.isSyncEnabled.collectAsState()
     val googleSyncState by syncViewModel.syncState.collectAsState()
     val firestoreSyncStatus by syncViewModel.firestoreSyncStatus.collectAsState()
     val userEmail by syncViewModel.userEmail.collectAsState()
 
-    // Settings ViewModel states
     val settingsUiState by settingsViewModel.settingsState.collectAsState()
-    val operationState by settingsViewModel.operationState.collectAsState()
     val darkTheme by settingsViewModel.darkThemeFlow.collectAsState()
     val account by settingsViewModel.account.collectAsState()
     val defaultCurrency by settingsViewModel.defaultCurrency.collectAsState()
+
     var showCurrencyPicker by remember { mutableStateOf(false) }
     var showLanguagePicker by remember { mutableStateOf(false) }
+    var showThemePicker by remember { mutableStateOf(false) }
+    var showSignOutConfirm by remember { mutableStateOf(false) }
+    var googleExpanded by remember { mutableStateOf(false) }
     // AppCompat is the source of truth for the per-app language; selecting a new value
     // recreates the activity, so a plain remember is enough to keep the label fresh.
     var currentLanguage by remember { mutableStateOf(AppLanguage.current()) }
@@ -85,7 +151,6 @@ fun SettingsScreen(
             TopAppBar(
                 title = { Text(stringResource(R.string.settings_title)) },
                 navigationIcon = {
-                    // Hidden when Settings is opened as a top-level bottom-bar tab
                     onNavigateUp?.let { navigateUp ->
                         IconButton(onClick = navigateUp) {
                             Icon(
@@ -103,292 +168,118 @@ fun SettingsScreen(
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
                 .padding(paddingValues)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
-            // Theme Settings
-            Card(
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp)
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Palette,
-                            contentDescription = null,
-                            modifier = Modifier.padding(end = 8.dp)
+            // ── FAMILY ─────────────────────────────────────────────────────────
+            // First, because it is what the product is. It used to sit below the sync
+            // cards that depend on it being set up.
+            Column {
+                GroupLabel(stringResource(R.string.settings_group_family))
+                SectionGroup {
+                    onNavigateToPairing?.let { navigate ->
+                        SectionRow(
+                            icon = Icons.Default.Group,
+                            title = stringResource(R.string.settings_pairing_title),
+                            supporting = stringResource(R.string.settings_pairing_description),
+                            onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                navigate()
+                            },
+                            trailing = { Chevron() }
                         )
-                        Text(
-                            text = stringResource(R.string.settings_theme),
-                            style = MaterialTheme.typography.titleLarge
-                        )
+                        Divider()
                     }
-
-                    Text(
-                        text = stringResource(R.string.settings_theme_description),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(bottom = 16.dp)
-                    )
-
-                    // Theme options
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        // System Default
-                        FilterChip(
-                            selected = darkTheme == null,
+                    onNavigateToChildInfo?.let { navigate ->
+                        SectionRow(
+                            icon = Icons.Default.ChildCare,
+                            title = stringResource(R.string.settings_child_info_title),
+                            supporting = stringResource(R.string.settings_child_info_description),
                             onClick = {
                                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                settingsViewModel.resetThemeToSystemDefault()
+                                navigate()
                             },
-                            label = { Text(stringResource(R.string.settings_theme_system), fontSize = 12.sp) },
-                            leadingIcon = if (darkTheme == null) {
-                                { Icon(Icons.Default.Check, contentDescription = null, Modifier.size(16.dp)) }
-                            } else {
-                                null
-                            },
-                            modifier = Modifier.weight(1f)
+                            trailing = { Chevron() }
                         )
-
-                        // Light Theme
-                        FilterChip(
-                            selected = darkTheme == false,
+                        Divider()
+                    }
+                    onNavigateToCustodySetup?.let { navigate ->
+                        SectionRow(
+                            icon = Icons.Default.DateRange,
+                            title = stringResource(R.string.settings_custody_title),
+                            supporting = stringResource(R.string.settings_custody_description),
                             onClick = {
                                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                settingsViewModel.toggleDarkTheme(false)
+                                navigate()
                             },
-                            label = { Text(stringResource(R.string.settings_theme_light), fontSize = 12.sp) },
-                            leadingIcon = if (darkTheme == false) {
-                                { Icon(Icons.Default.Check, contentDescription = null, Modifier.size(16.dp)) }
-                            } else {
-                                { Icon(Icons.Default.LightMode, contentDescription = null, Modifier.size(16.dp)) }
-                            },
-                            modifier = Modifier.weight(1f)
-                        )
-
-                        // Dark Theme
-                        FilterChip(
-                            selected = darkTheme == true,
-                            onClick = {
-                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                settingsViewModel.toggleDarkTheme(true)
-                            },
-                            label = { Text(stringResource(R.string.settings_theme_dark), fontSize = 12.sp) },
-                            leadingIcon = if (darkTheme == true) {
-                                { Icon(Icons.Default.Check, contentDescription = null, Modifier.size(16.dp)) }
-                            } else {
-                                { Icon(Icons.Default.DarkMode, contentDescription = null, Modifier.size(16.dp)) }
-                            },
-                            modifier = Modifier.weight(1f)
+                            trailing = { Chevron() }
                         )
                     }
                 }
             }
 
-            // App Language
-            Card(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Language,
-                            contentDescription = null,
-                            modifier = Modifier.padding(end = 8.dp)
-                        )
-                        Text(
-                            text = stringResource(R.string.settings_language_title),
-                            style = MaterialTheme.typography.titleLarge
-                        )
-                    }
-                    ListItem(
-                        headlineContent = {
-                            Text(stringResource(currentLanguage.labelRes))
-                        },
-                        supportingContent = {
-                            Text(stringResource(R.string.settings_language_description))
-                        },
-                        modifier = Modifier.clickable { showLanguagePicker = true }
-                    )
-                }
-            }
-
-            // Default Currency
-            Card(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Payments,
-                            contentDescription = null,
-                            modifier = Modifier.padding(end = 8.dp)
-                        )
-                        Text(
-                            text = stringResource(R.string.currency_settings_title),
-                            style = MaterialTheme.typography.titleLarge
-                        )
-                    }
-                    ListItem(
-                        headlineContent = {
-                            Text(stringResource(R.string.currency_settings_default))
-                        },
-                        supportingContent = {
-                            Text(stringResource(R.string.currency_settings_description))
-                        },
-                        trailingContent = {
-                            TextButton(onClick = { showCurrencyPicker = true }) {
-                                Text("${defaultCurrency.code} ${defaultCurrency.symbol}")
+            // ── SYNC ───────────────────────────────────────────────────────────
+            Column {
+                GroupLabel(stringResource(R.string.settings_group_sync))
+                SectionGroup {
+                    SectionRow(
+                        icon = Icons.Default.Sync,
+                        title = stringResource(R.string.settings_co_parent_sync),
+                        supporting = firestoreSyncStatus.summary(),
+                        supportingColor = firestoreSyncStatus.summaryColor(),
+                        supportingIcon = firestoreSyncStatus.summaryDot(),
+                        trailing = {
+                            IconButton(onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                syncViewModel.performFirestoreSync()
+                            }) {
+                                Icon(
+                                    imageVector = Icons.Default.Refresh,
+                                    contentDescription = stringResource(R.string.settings_sync)
+                                )
                             }
                         }
                     )
-                }
-            }
-
-            // Firestore Sync Status
-            Card(
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = stringResource(R.string.settings_co_parent_sync),
-                            style = MaterialTheme.typography.titleLarge
-                        )
-                        IconButton(onClick = {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            syncViewModel.performFirestoreSync()
-                        }) {
-                            Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.settings_sync))
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    SyncStatusIndicator(
-                        syncStatus = firestoreSyncStatus,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Text(
-                        text = stringResource(R.string.settings_co_parent_sync_description),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-
-            // Google Calendar Sync
-            Card(
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp)
-                ) {
-                    Text(
-                        text = stringResource(R.string.settings_google_sync),
-                        style = MaterialTheme.typography.titleLarge,
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    )
-
-                    // Sync enabled toggle
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = stringResource(R.string.settings_gcal_enable_sync),
-                            style = MaterialTheme.typography.bodyLarge,
-                            modifier = Modifier.weight(1f)
-                        )
-                        Switch(
-                            checked = isSyncEnabled,
-                            onCheckedChange = { enabled ->
-                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                syncViewModel.toggleSync(enabled)
-                            },
-                            enabled = isSignedIn || !isSyncEnabled
-                        )
-                    }
-
-                    // Sign-in status
-                    Text(
-                        text = if (isSignedIn) {
-                            stringResource(
-                                R.string.settings_signed_in_as,
-                                userEmail ?: stringResource(R.string.settings_unknown)
-                            )
+                    Divider()
+                    // One row, expanded on demand — the card this replaces stacked a toggle,
+                    // a status line and two full-width buttons into a single surface.
+                    SectionRow(
+                        icon = Icons.Default.EventAvailable,
+                        title = stringResource(R.string.settings_google_sync),
+                        supporting = if (isSignedIn) {
+                            userEmail ?: stringResource(R.string.settings_unknown)
                         } else {
                             stringResource(R.string.settings_gcal_not_signed_in)
                         },
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = if (isSignedIn) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                        },
-                        modifier = Modifier.padding(vertical = 8.dp)
-                    )
-
-                    // Sync status
-                    when (val state = googleSyncState) {
-                        is GoogleCalendarSyncState.Syncing -> {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(vertical = 4.dp)
-                            ) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(16.dp),
-                                    strokeWidth = 2.dp
+                        onClick = { googleExpanded = !googleExpanded },
+                        trailing = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Switch(
+                                    checked = isSyncEnabled,
+                                    onCheckedChange = { enabled ->
+                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                        syncViewModel.toggleSync(enabled)
+                                    },
+                                    enabled = isSignedIn || !isSyncEnabled
                                 )
-                                Text(
-                                    text = state.message,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    modifier = Modifier.padding(start = 8.dp)
+                                Icon(
+                                    imageVector = if (googleExpanded) {
+                                        Icons.Default.ExpandLess
+                                    } else {
+                                        Icons.Default.ExpandMore
+                                    },
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                         }
-                        is GoogleCalendarSyncState.Success -> {
-                            Text(
-                                text = "✓ ${state.message}",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.padding(vertical = 4.dp)
-                            )
-                        }
-                        is GoogleCalendarSyncState.Error -> {
-                            Text(
-                                text = "✗ ${state.message}",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.error,
-                                modifier = Modifier.padding(vertical = 4.dp)
-                            )
-                        }
-                        else -> {}
-                    }
-
-                    // Action buttons
-                    if (!isSignedIn) {
-                        Button(
-                            onClick = {
+                    )
+                    AnimatedVisibility(visible = googleExpanded) {
+                        GoogleCalendarActions(
+                            isSignedIn = isSignedIn,
+                            isSyncEnabled = isSyncEnabled,
+                            syncState = googleSyncState,
+                            onSignIn = {
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                 val signInIntent = syncViewModel.createGoogleSignInIntent()
                                 if (signInIntent != null) {
@@ -401,286 +292,435 @@ fun SettingsScreen(
                                     }
                                 }
                             },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = 16.dp),
-                            enabled = googleSyncState !is GoogleCalendarSyncState.Syncing
-                        ) {
-                            if (googleSyncState is GoogleCalendarSyncState.Syncing) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(20.dp),
-                                    strokeWidth = 2.dp,
-                                    color = MaterialTheme.colorScheme.onPrimary
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                            }
-                            Text(stringResource(R.string.sync_sign_in_google))
-                        }
-                    } else {
-                        Button(
-                            onClick = {
+                            onSyncNow = {
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                 syncViewModel.syncFromGoogle()
                             },
-                            enabled = isSyncEnabled && googleSyncState !is GoogleCalendarSyncState.Syncing,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = 16.dp)
-                        ) {
-                            if (googleSyncState is GoogleCalendarSyncState.Syncing) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(20.dp),
-                                    strokeWidth = 2.dp,
-                                    color = MaterialTheme.colorScheme.onPrimary
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                            }
-                            Text(stringResource(R.string.settings_sync_from_google))
-                        }
-
-                        OutlinedButton(
-                            onClick = {
+                            onCalendarSignOut = {
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                coroutineScope.launch {
-                                    syncViewModel.signOut()
-                                }
-                            },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = 8.dp),
-                            enabled = googleSyncState !is GoogleCalendarSyncState.Syncing
-                        ) {
-                            Text(stringResource(R.string.settings_calendar_sign_out))
-                        }
+                                coroutineScope.launch { syncViewModel.signOut() }
+                            }
+                        )
                     }
                 }
             }
 
-            // Co-Parent Pairing
-            onNavigateToPairing?.let { navigate ->
-                SettingsNavigationCard(
-                    title = stringResource(R.string.settings_pairing_title),
-                    description = stringResource(R.string.settings_pairing_description),
-                    icon = Icons.Default.Group,
-                    onClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        navigate()
-                    }
-                )
-            }
-
-            // Child Information
-            onNavigateToChildInfo?.let { navigate ->
-                SettingsNavigationCard(
-                    title = stringResource(R.string.settings_child_info_title),
-                    description = stringResource(R.string.settings_child_info_description),
-                    icon = Icons.Default.ChildCare,
-                    onClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        navigate()
-                    }
-                )
-            }
-
-            // Custody Schedule Setup
-            onNavigateToCustodySetup?.let { navigate ->
-                SettingsNavigationCard(
-                    title = stringResource(R.string.settings_custody_title),
-                    description = stringResource(R.string.settings_custody_description),
-                    icon = Icons.Default.DateRange,
-                    onClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        navigate()
-                    }
-                )
-            }
-
-            // Notifications Settings — POST_NOTIFICATIONS is requested here,
-            // contextually, instead of on app start
-            val notificationPermissionRequester =
-                com.coparently.app.presentation.common.rememberNotificationPermissionRequester()
-            SettingsSwitchCard(
-                title = stringResource(R.string.settings_push_notifications),
-                description = stringResource(R.string.settings_push_notifications_description),
-                icon = Icons.Default.Notifications,
-                checked = settingsUiState.notificationsEnabled &&
-                    com.coparently.app.presentation.common.hasNotificationPermission(context),
-                onCheckedChange = { enabled ->
-                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                    if (enabled) {
-                        notificationPermissionRequester.request {
-                            settingsViewModel.toggleNotifications(true)
+            // ── APP ────────────────────────────────────────────────────────────
+            Column {
+                GroupLabel(stringResource(R.string.settings_group_app))
+                SectionGroup {
+                    SectionRow(
+                        icon = Icons.Default.Palette,
+                        title = stringResource(R.string.settings_theme),
+                        onClick = { showThemePicker = true },
+                        trailing = { ValueLabel(stringResource(themeLabelRes(darkTheme))) }
+                    )
+                    Divider()
+                    SectionRow(
+                        icon = Icons.Default.Language,
+                        title = stringResource(R.string.settings_language_title),
+                        onClick = { showLanguagePicker = true },
+                        trailing = { ValueLabel(stringResource(currentLanguage.labelRes)) }
+                    )
+                    Divider()
+                    SectionRow(
+                        icon = Icons.Default.Payments,
+                        title = stringResource(R.string.currency_settings_title),
+                        onClick = { showCurrencyPicker = true },
+                        trailing = {
+                            ValueLabel("${defaultCurrency.code} ${defaultCurrency.symbol}")
                         }
-                    } else {
-                        settingsViewModel.toggleNotifications(false)
-                    }
-                },
-                enabled = !settingsUiState.isLoading
-            )
-
-            // About
-            Card(
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp)
-                ) {
-                    Text(
-                        text = stringResource(R.string.settings_about),
-                        style = MaterialTheme.typography.titleMedium
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = stringResource(
-                            R.string.settings_version,
-                            com.coparently.app.BuildConfig.VERSION_NAME
-                        ),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        text = stringResource(R.string.settings_about_tagline),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    Divider()
+                    // POST_NOTIFICATIONS is requested here, contextually, not on app start.
+                    val notificationPermissionRequester =
+                        com.coparently.app.presentation.common.rememberNotificationPermissionRequester()
+                    SectionRow(
+                        icon = Icons.Default.Notifications,
+                        title = stringResource(R.string.settings_push_notifications),
+                        supporting = stringResource(R.string.settings_push_notifications_description),
+                        trailing = {
+                            Switch(
+                                checked = settingsUiState.notificationsEnabled &&
+                                    com.coparently.app.presentation.common.hasNotificationPermission(context),
+                                onCheckedChange = { enabled ->
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    if (enabled) {
+                                        notificationPermissionRequester.request {
+                                            settingsViewModel.toggleNotifications(true)
+                                        }
+                                    } else {
+                                        settingsViewModel.toggleNotifications(false)
+                                    }
+                                },
+                                enabled = !settingsUiState.isLoading
+                            )
+                        }
                     )
                 }
             }
 
-            // Account Management — danger action lives at the very bottom so the
-            // destructive "Sign out of app" isn't mid-list where it's easy to hit
-            Card(
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp)
-                ) {
-                    Text(
-                        text = stringResource(R.string.settings_account),
-                        style = MaterialTheme.typography.titleLarge,
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    )
-
-                    // The app account, not the Google Calendar one reported higher up.
-                    // Same strip as the pairing screen, so "who am I signed in as" reads
-                    // identically in both places it can be asked.
+            // ── ACCOUNT ────────────────────────────────────────────────────────
+            Column {
+                GroupLabel(stringResource(R.string.settings_group_account))
+                SectionGroup {
+                    // The app account, not the Google Calendar one reported under Sync. Same
+                    // strip as the pairing screen, so "who am I signed in as" reads identically
+                    // in both places it can be asked. It leads the group because it is the
+                    // subject the other two rows are about.
                     account?.let { signedIn ->
                         SignedInAsRow(
                             account = signedIn,
-                            modifier = Modifier.padding(bottom = 12.dp)
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp)
                         )
+                        Divider()
                     }
-
-                    Text(
-                        text = stringResource(R.string.settings_account_description),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(bottom = 16.dp)
+                    SectionRow(
+                        icon = Icons.Default.Info,
+                        title = stringResource(R.string.settings_about),
+                        supporting = stringResource(R.string.settings_about_tagline),
+                        trailing = {
+                            ValueLabel(
+                                text = com.coparently.app.BuildConfig.VERSION_NAME,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     )
-
-                    Button(
-                        onClick = {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            // First sign out from Google Calendar sync
-                            coroutineScope.launch {
-                                syncViewModel.signOut()
-                            }
-                            // Then sign out from Firebase authentication
-                            authStateViewModel.signOut()
-                            // Navigate back to auth screen
-                            onSignOut?.invoke()
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.error
-                        )
-                    ) {
-                        Text(stringResource(R.string.settings_account_sign_out))
-                    }
+                    Divider()
+                    // Destructive, so it stays at the very bottom of the screen. It reads as
+                    // a red text row rather than a filled error button — but a row is easier
+                    // to hit by accident than a deliberate button was, so it now confirms.
+                    SectionRow(
+                        icon = Icons.AutoMirrored.Filled.Logout,
+                        iconTint = MaterialTheme.colorScheme.error,
+                        title = stringResource(R.string.settings_account_sign_out),
+                        titleColor = MaterialTheme.colorScheme.error,
+                        onClick = { showSignOutConfirm = true }
+                    )
                 }
             }
 
-            if (showLanguagePicker) {
-                AlertDialog(
-                    onDismissRequest = { showLanguagePicker = false },
-                    title = { Text(stringResource(R.string.settings_language_picker_title)) },
-                    text = {
-                        Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                            AppLanguage.entries.forEach { language ->
-                                val select = {
-                                    showLanguagePicker = false
-                                    if (language != currentLanguage) {
-                                        currentLanguage = language
-                                        // Recreates the activity with the new locale and
-                                        // persists the choice (autoStoreLocales).
-                                        AppLanguage.apply(language)
-                                    }
-                                }
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable { select() }
-                                        .padding(vertical = 8.dp)
-                                ) {
-                                    RadioButton(
-                                        selected = language == currentLanguage,
-                                        onClick = { select() }
-                                    )
-                                    Text(
-                                        text = stringResource(language.labelRes),
-                                        modifier = Modifier.padding(start = 8.dp)
-                                    )
-                                }
-                            }
-                        }
-                    },
-                    confirmButton = {
-                        TextButton(onClick = { showLanguagePicker = false }) {
-                            Text(stringResource(R.string.settings_language_picker_cancel))
-                        }
-                    }
-                )
-            }
+            Spacer(modifier = Modifier.height(8.dp))
+        }
+    }
 
-            if (showCurrencyPicker) {
-                AlertDialog(
-                    onDismissRequest = { showCurrencyPicker = false },
-                    title = { Text(stringResource(R.string.currency_picker_title)) },
-                    text = {
-                        Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                            SupportedCurrency.entries.forEach { currency ->
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable {
-                                            settingsViewModel.setDefaultCurrency(currency)
-                                            showCurrencyPicker = false
-                                        }
-                                        .padding(vertical = 8.dp)
-                                ) {
-                                    RadioButton(
-                                        selected = currency == defaultCurrency,
-                                        onClick = {
-                                            settingsViewModel.setDefaultCurrency(currency)
-                                            showCurrencyPicker = false
-                                        }
-                                    )
-                                    Text(
-                                        text = "${currency.code}  ${currency.symbol}",
-                                        modifier = Modifier.padding(start = 8.dp)
-                                    )
-                                }
-                            }
-                        }
-                    },
-                    confirmButton = {
-                        TextButton(onClick = { showCurrencyPicker = false }) {
-                            Text(stringResource(R.string.currency_picker_cancel))
-                        }
-                    }
-                )
+    if (showSignOutConfirm) {
+        ConfirmationDialog(
+            title = stringResource(R.string.settings_account_sign_out),
+            message = stringResource(R.string.settings_account_description),
+            confirmText = stringResource(R.string.settings_account_sign_out),
+            dismissText = stringResource(R.string.settings_language_picker_cancel),
+            isDestructive = true,
+            onDismiss = { showSignOutConfirm = false },
+            onConfirm = {
+                showSignOutConfirm = false
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                // Google Calendar sync first, then Firebase auth, then leave the screen.
+                coroutineScope.launch { syncViewModel.signOut() }
+                authStateViewModel.signOut()
+                onSignOut?.invoke()
+            }
+        )
+    }
+
+    if (showThemePicker) {
+        ThemePickerDialog(
+            selected = darkTheme,
+            onSelect = { choice ->
+                showThemePicker = false
+                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                if (choice == null) {
+                    settingsViewModel.resetThemeToSystemDefault()
+                } else {
+                    settingsViewModel.toggleDarkTheme(choice)
+                }
+            },
+            onDismiss = { showThemePicker = false }
+        )
+    }
+
+    if (showLanguagePicker) {
+        SingleChoiceDialog(
+            title = stringResource(R.string.settings_language_picker_title),
+            options = AppLanguage.entries.map { it to stringResource(it.labelRes) },
+            selected = currentLanguage,
+            onSelect = { language ->
+                showLanguagePicker = false
+                if (language != currentLanguage) {
+                    currentLanguage = language
+                    // Recreates the activity with the new locale and persists the choice
+                    // (autoStoreLocales).
+                    AppLanguage.apply(language)
+                }
+            },
+            onDismiss = { showLanguagePicker = false }
+        )
+    }
+
+    if (showCurrencyPicker) {
+        SingleChoiceDialog(
+            title = stringResource(R.string.currency_picker_title),
+            options = SupportedCurrency.entries.map { it to "${it.code}  ${it.symbol}" },
+            selected = defaultCurrency,
+            onSelect = { currency ->
+                showCurrencyPicker = false
+                settingsViewModel.setDefaultCurrency(currency)
+            },
+            onDismiss = { showCurrencyPicker = false }
+        )
+    }
+}
+
+/** The trailing chevron on a row that opens another screen. */
+@Composable
+private fun Chevron() {
+    Icon(
+        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+        contentDescription = null,
+        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.size(20.dp)
+    )
+}
+
+/** The trailing current-value text on a row that opens a picker. */
+@Composable
+private fun ValueLabel(
+    text: String,
+    color: Color = MaterialTheme.colorScheme.primary
+) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodyMedium,
+        color = color
+    )
+}
+
+/**
+ * The Google Calendar actions, revealed under its row.
+ *
+ * @param isSignedIn Whether a Google account is connected
+ * @param isSyncEnabled Whether syncing is switched on
+ * @param syncState Current Google sync state
+ * @param onSignIn Starts Google Sign-In
+ * @param onSyncNow Pulls events from Google now
+ * @param onCalendarSignOut Disconnects the Google account (does not sign out of the app)
+ */
+@Composable
+@Suppress("LongParameterList") // one call site; splitting it would only add a wrapper type
+private fun GoogleCalendarActions(
+    isSignedIn: Boolean,
+    isSyncEnabled: Boolean,
+    syncState: GoogleCalendarSyncState,
+    onSignIn: () -> Unit,
+    onSyncNow: () -> Unit,
+    onCalendarSignOut: () -> Unit
+) {
+    val syncing = syncState is GoogleCalendarSyncState.Syncing
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        when (syncState) {
+            is GoogleCalendarSyncState.Syncing -> StatusLine(
+                text = syncState.message,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                busy = true
+            )
+            is GoogleCalendarSyncState.Success -> StatusLine(
+                text = syncState.message,
+                color = MaterialTheme.colorScheme.tertiary
+            )
+            is GoogleCalendarSyncState.Error -> StatusLine(
+                text = syncState.message,
+                color = MaterialTheme.colorScheme.error
+            )
+            else -> Unit
+        }
+
+        if (!isSignedIn) {
+            Button(
+                onClick = onSignIn,
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !syncing
+            ) {
+                Text(stringResource(R.string.sync_sign_in_google))
+            }
+        } else {
+            Button(
+                onClick = onSyncNow,
+                modifier = Modifier.fillMaxWidth(),
+                enabled = isSyncEnabled && !syncing
+            ) {
+                Text(stringResource(R.string.settings_sync_from_google))
+            }
+            OutlinedButton(
+                onClick = onCalendarSignOut,
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !syncing
+            ) {
+                Text(stringResource(R.string.settings_calendar_sign_out))
             }
         }
     }
+}
+
+/**
+ * A sync status line: a coloured dot (or spinner while working) and a message.
+ *
+ * Replaces the "✓ …" / "✗ …" text glyphs the audit flagged — a tick typed into a string is not
+ * a status component, and it carries no colour or accessibility meaning.
+ *
+ * @param text Status message
+ * @param color Dot and text colour, carrying the state
+ * @param busy Shows a spinner instead of the dot while a sync is running
+ */
+@Composable
+private fun StatusLine(text: String, color: Color, busy: Boolean = false) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        if (busy) {
+            CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
+        } else {
+            Box(
+                modifier = Modifier
+                    .size(8.dp)
+                    .clip(CircleShape)
+                    .background(color)
+            )
+        }
+        Text(text = text, style = MaterialTheme.typography.bodySmall, color = color)
+    }
+}
+
+/**
+ * Theme picker. The three FilterChips this replaces were 12sp labels squeezed three-across;
+ * a single-choice list is the Material pattern for picking one of three.
+ *
+ * @param selected Current choice — null means "follow the system"
+ * @param onSelect Called with the new choice
+ * @param onDismiss Dismisses without changing anything
+ */
+@Composable
+private fun ThemePickerDialog(
+    selected: Boolean?,
+    onSelect: (Boolean?) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val options = listOf<Pair<Boolean?, String>>(
+        null to stringResource(R.string.settings_theme_system),
+        false to stringResource(R.string.settings_theme_light),
+        true to stringResource(R.string.settings_theme_dark)
+    )
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.settings_theme)) },
+        text = {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                options.forEach { (value, label) ->
+                    ChoiceRow(
+                        label = label,
+                        selected = value == selected,
+                        onSelect = { onSelect(value) }
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.settings_language_picker_cancel))
+            }
+        }
+    )
+}
+
+/**
+ * A single-choice dialog, shared by the language and currency pickers so the two stop being
+ * two hand-rolled copies of the same list.
+ *
+ * @param title Dialog title
+ * @param options Value/label pairs, in display order
+ * @param selected Currently selected value
+ * @param onSelect Called with the chosen value
+ * @param onDismiss Dismisses without changing anything
+ */
+@Composable
+private fun <T> SingleChoiceDialog(
+    title: String,
+    options: List<Pair<T, String>>,
+    selected: T,
+    onSelect: (T) -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                options.forEach { (value, label) ->
+                    ChoiceRow(
+                        label = label,
+                        selected = value == selected,
+                        onSelect = { onSelect(value) }
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.settings_language_picker_cancel))
+            }
+        }
+    )
+}
+
+@Composable
+private fun ChoiceRow(label: String, selected: Boolean, onSelect: () -> Unit) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onSelect)
+            .padding(vertical = 8.dp)
+    ) {
+        RadioButton(selected = selected, onClick = onSelect)
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(text = label)
+    }
+}
+
+private fun themeLabelRes(darkTheme: Boolean?): Int = when (darkTheme) {
+    null -> R.string.settings_theme_system
+    true -> R.string.settings_theme_dark
+    false -> R.string.settings_theme_light
+}
+
+/** One-line summary of co-parent sync, for the row's supporting text. */
+@Composable
+private fun SyncStatus.summary(): String = when (this) {
+    is SyncStatus.Idle -> stringResource(R.string.settings_sync_idle)
+    is SyncStatus.Syncing -> stringResource(R.string.settings_syncing)
+    is SyncStatus.Success ->
+        stringResource(R.string.settings_sync_last, lastSyncTime.format(syncTimeFormatter))
+    is SyncStatus.Error -> message
+}
+
+/** Colour for [summary]; errors are the only state that shouts. */
+@Composable
+private fun SyncStatus.summaryColor(): Color = when (this) {
+    is SyncStatus.Error -> MaterialTheme.colorScheme.error
+    is SyncStatus.Success -> MaterialTheme.colorScheme.tertiary
+    else -> MaterialTheme.colorScheme.onSurfaceVariant
+}
+
+/** Status dot colour for [summary], or null while idle. */
+@Composable
+private fun SyncStatus.summaryDot(): Color? = when (this) {
+    is SyncStatus.Idle -> null
+    is SyncStatus.Syncing -> MaterialTheme.colorScheme.onSurfaceVariant
+    is SyncStatus.Success -> MaterialTheme.colorScheme.tertiary
+    is SyncStatus.Error -> MaterialTheme.colorScheme.error
 }

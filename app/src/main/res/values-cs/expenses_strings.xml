@@ -21,7 +21,6 @@
     <string name="budgets_empty_description">Nastavte měsíční limit pro každou kategorii, ať máte společné výdaje pod kontrolou.</string>
     <string name="expenses_empty_title">Zatím žádné výdaje</string>
     <string name="expenses_empty_description">Zaznamenejte společný náklad — školku, oblečení, návštěvu lékaře — a rozdělte ho s druhým rodičem.</string>
-    <string name="expenses_month_shared_spend">%1$s · společné výdaje</string>
     <string name="expenses_mom_paid">Máma zaplatila %1$s</string>
     <string name="expenses_dad_paid">Táta zaplatil %1$s</string>
     <string name="expenses_balance_owed_to_you">Druhý rodič vám dluží %1$s</string>
@@ -34,6 +33,9 @@
     <plurals name="expenses_count">
         <item quantity="one">%1$d výdaj</item>
         <item quantity="few">%1$d výdaje</item>
+        <!-- Czech uses "many" for decimal counts ("1,5 výdaje"), which takes the genitive
+             singular, not the genitive plural that "other" carries. -->
+        <item quantity="many">%1$d výdaje</item>
         <item quantity="other">%1$d výdajů</item>
     </plurals>
     <string name="expenses_row_subtitle">%1$s · zaplatil(a) %2$s · %3$s</string>
@@ -71,4 +73,12 @@
     <string name="budget_alert_percent_spent">Utratili jste %1$d%% svého limitu.</string>
     <string name="budget_spent_of_limit">%1$s / %2$s</string>
     <string name="budget_percent_used">využito %1$d%%</string>
+
+    <!-- Summary card: month switcher, total, and the budget chip strip. -->
+    <string name="expenses_shared_spend">sdílené výdaje</string>
+    <string name="expenses_month_and_count">%1$s · %2$s</string>
+    <string name="expenses_row_meta">%1$s · %2$s</string>
+    <string name="expenses_row_meta_with_receipt">%1$s · %2$s · účtenka</string>
+    <string name="expenses_budget_chip">%1$s %2$s / %3$s</string>
+    <string name="expenses_budget_add">+ Rozpočet</string>
 </resources>

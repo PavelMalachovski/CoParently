@@ -7,7 +7,6 @@
     <string name="chat_messages_empty_title">Поки немає повідомлень</string>
     <string name="chat_messages_empty_description">Почніть розмову, надіславши повідомлення іншому з батьків.</string>
     <string name="chat_type_message">Введіть повідомлення…</string>
-    <string name="chat_attach">Прикріпити</string>
     <string name="chat_send">Надіслати</string>
     <string name="chat_status_sending">Надсилання</string>
     <string name="chat_status_error">Помилка</string>
@@ -40,4 +39,12 @@
     </plurals>
     <!-- Visible badge text once the unread count passes the display cap, e.g. "99+". -->
     <string name="chat_unread_count_overflow">%1$d+</string>
+
+    <!-- Composer action chips and day separators (Aug 2026 design refresh). -->
+    <string name="chat_templates">Шаблони</string>
+    <string name="chat_day_today">Сьогодні</string>
+    <string name="chat_day_yesterday">Учора</string>
+
+    <!-- Thread header: whether your own messages actually left the device. -->
+    <string name="chat_header_synced">Усе надіслано</string>
 </resources>

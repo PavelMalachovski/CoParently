@@ -23,4 +23,14 @@
     <string name="settings_about_tagline">Gemeinsamer Kalender für getrennt erziehende Eltern</string>
     <string name="settings_version">Version %1$s</string>
     <string name="settings_navigate">Öffnen</string>
+
+    <!-- Group headers for the four settings sections. -->
+    <string name="settings_group_family">FAMILIE</string>
+    <string name="settings_group_sync">SYNC</string>
+    <string name="settings_group_app">APP</string>
+    <string name="settings_group_account">KONTO</string>
+
+    <!-- Co-parent sync status line. %1$s = time of the last successful sync. -->
+    <string name="settings_sync_idle">Aktuell</string>
+    <string name="settings_sync_last">Synchronisiert um %1$s</string>
 </resources>

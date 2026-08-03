@@ -4,7 +4,7 @@
      must also exist in values-cs, values-de, values-ru and values-uk. -->
 <resources>
     <!-- PairingScreen -->
-    <string name="pairing_screen_title">Co-Parent Pairing</string>
+    <string name="pairing_screen_title">Pair with your co-parent</string>
     <string name="pairing_back">Back</string>
     <string name="pairing_unpair_button">Unpair</string>
     <string name="pairing_partner_email_label">Partner email</string>
@@ -12,10 +12,7 @@
     <string name="pairing_unknown_sender">Unknown</string>
     <string name="pairing_accept_button">Accept</string>
     <string name="pairing_reject_button">Reject</string>
-    <string name="pairing_qr_dialog_title">Co-Parent Invitation QR Code</string>
-    <string name="pairing_qr_dialog_message">Share this QR code with your co-parent. They can scan it to accept your invitation.</string>
     <string name="pairing_qr_code_content_description">Pairing QR Code</string>
-    <string name="pairing_close">Close</string>
     <string name="pairing_cancel">Cancel</string>
 
     <!-- QrScannerScreen -->
@@ -40,10 +37,8 @@
 
     <!-- Invite code hero card -->
     <string name="pairing_your_code_title">Your invite code</string>
-    <string name="pairing_your_code_hint">Give this code to your co-parent. It is valid for 24 hours.</string>
     <string name="pairing_code_copied">Code copied</string>
     <string name="pairing_share_invite">Share</string>
-    <string name="pairing_show_qr">Show QR</string>
     <string name="pairing_new_code">New code</string>
     <string name="pairing_expires_in_hours">Valid for %1$d h %2$d min</string>
     <string name="pairing_expires_in_minutes">Valid for %1$d min</string>
@@ -53,7 +48,6 @@
     <string name="pairing_have_a_code">I have a code</string>
     <string name="pairing_code_field_label">Invite code</string>
     <string name="pairing_link_accounts">Link accounts</string>
-    <string name="pairing_or">or</string>
     <!-- Email invite -->
     <string name="pairing_invite_by_email">Invite by email</string>
     <!-- Paired state -->
@@ -67,4 +61,14 @@
     <string name="pairing_deep_link_confirm_message">%1$s — the person who sent you this code will see your shared calendar, chat and expenses.</string>
     <!-- Fallback conversation title when the co-parent has no display name yet -->
     <string name="pairing_default_partner_name">Co-parent</string>
+
+    <!-- Two explicit pairing modes, the tap-to-copy code, and the trust panel. -->
+    <string name="pairing_mode_share">Share my code</string>
+    <string name="pairing_mode_enter">Enter a code</string>
+    <string name="pairing_copy_code">Copy code</string>
+    <string name="pairing_tap_to_copy_and_expiry">Tap to copy · %1$s</string>
+    <string name="pairing_share_link">Share link</string>
+    <string name="pairing_email_invite">Email invite</string>
+    <string name="pairing_trust_title">What pairing shares</string>
+    <string name="pairing_trust_body">Shared calendar and custody schedule, shared expenses and balances, and chat. Private events never leave your device. You can unlink at any time.</string>
 </resources>

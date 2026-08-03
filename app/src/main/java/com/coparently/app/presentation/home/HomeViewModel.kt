@@ -8,8 +8,12 @@ import com.coparently.app.domain.chat.ChatReadState
 import com.coparently.app.domain.chat.ConversationKey
 import com.coparently.app.domain.custody.HandoverCalculator
 import com.coparently.app.domain.custody.HandoverInfo
+import com.coparently.app.domain.expenses.CurrencyBalance
+import com.coparently.app.domain.expenses.calculateExpenseBalancesByCurrency
 import com.coparently.app.domain.model.Event
+import com.coparently.app.domain.model.Expense
 import com.coparently.app.domain.model.PairingState
+import com.coparently.app.domain.model.PartnerSummary
 import com.coparently.app.domain.money.SupportedCurrency
 import com.coparently.app.domain.repository.ChangeRequestRepository
 import com.coparently.app.domain.repository.EventRepository
@@ -132,6 +136,20 @@ class HomeViewModel @Inject constructor(
     }
 
     /**
+     * Realtime pairing state, shared by [paired] and [partner] so one Firestore listener
+     * feeds both instead of two.
+     */
+    private val pairingState = homeIdentityDependencies.pairingRepository.observePairingState()
+
+    /**
+     * The linked co-parent, or null while unpaired. Names the activity feed ("Alex changed")
+     * and the chat tile, so the dashboard talks about a person rather than "the co-parent".
+     */
+    val partner: StateFlow<PartnerSummary?> = pairingState
+        .map { (it as? PairingState.Paired)?.partner }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), null)
+
+    /**
      * Whether a co-parent is linked. Driven by the pairing repository's realtime state, so
      * the CTA disappears the moment the other parent accepts — without the user reopening
      * the screen.
@@ -149,7 +167,7 @@ class HomeViewModel @Inject constructor(
      * card and a silently missing primary CTA, the former is the smaller cost, so "not
      * paired" is what this flow defaults to while the real answer is unknown.
      */
-    val paired: StateFlow<Boolean> = homeIdentityDependencies.pairingRepository.observePairingState()
+    val paired: StateFlow<Boolean> = pairingState
         .map { it is PairingState.Paired }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), false)
 
@@ -158,7 +176,12 @@ class HomeViewModel @Inject constructor(
         .map { model -> model?.let { HandoverCalculator.nextHandoverFrom(it, LocalDate.now()) } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), null)
 
-    /** The next [MAX_UPCOMING] events starting from now (private events included). */
+    /**
+     * The next [MAX_UPCOMING] events starting from now, within [LOOKAHEAD_DAYS] (private
+     * events included). The dashboard renders these as the "this week" timeline, so the
+     * window is a week rather than the two months the old flat "Upcoming" list looked over —
+     * a dentist appointment seven weeks out is not what "this week" promises.
+     */
     val upcomingEvents: StateFlow<List<Event>> = eventRepository
         .getEventsByDateRange(LocalDateTime.now(), LocalDateTime.now().plusDays(LOOKAHEAD_DAYS))
         .map { events ->
@@ -169,16 +192,27 @@ class HomeViewModel @Inject constructor(
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), emptyList())
 
+    /**
+     * Expenses dated in the current calendar month. Shared by [monthSpend] and
+     * [monthBalances] so the tile's total and the "who owes whom" line under it are always
+     * computed from the same set of rows.
+     */
+    private val monthExpenses = monthSpendDependencies.expenseRepository.getAllExpenses()
+        .map { expenses ->
+            val month = LocalDate.now()
+            expenses.filter { it.date.year == month.year && it.date.month == month.month }
+        }
+
+    /** uid -> "mom"/"dad", needed to attribute who paid what. Empty until users sync. */
+    private val roleByUid = homeIdentityDependencies.userRepository.getAllUsers()
+        .map { users -> users.associate { it.id to it.role } }
+
     /** This calendar month's spend, one subtotal per currency (no cross-currency summing). */
     val monthSpend: StateFlow<MonthSpend> = combine(
-        monthSpendDependencies.expenseRepository.getAllExpenses(),
+        monthExpenses,
         defaultCurrency
     ) { expenses, fallbackCurrency ->
-        val month = LocalDate.now()
-        val inMonth = expenses.filter {
-            it.date.year == month.year && it.date.month == month.month
-        }
-        val byCurrency = inMonth.groupBy { it.currency }
+        val byCurrency = expenses.groupBy { it.currency }
             .map { (currency, group) -> CurrencyAmount(currency, group.sumOf { it.amount }) }
             .sortedByDescending { it.amount }
         // Keep a zero in the app's default currency when the month is empty, so the tile still
@@ -189,6 +223,22 @@ class HomeViewModel @Inject constructor(
         SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS),
         MonthSpend(listOf(CurrencyAmount(SupportedCurrency.DEFAULT.code, 0.0)))
     )
+
+    /**
+     * This month's settle-up position, one entry per currency — the same figures the Expenses
+     * screen shows, surfaced on the spend tile so the dashboard answers "are we square?"
+     * without a tab switch.
+     *
+     * Reuses the pure [calculateExpenseBalancesByCurrency] rather than recomputing, so the two
+     * screens cannot disagree about the same month.
+     */
+    val monthBalances: StateFlow<List<CurrencyBalance>> = combine(
+        monthExpenses,
+        _userId,
+        roleByUid
+    ) { expenses: List<Expense>, userId: String, roles: Map<String, String> ->
+        calculateExpenseBalancesByCurrency(expenses, userId, roles)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), emptyList())
 
     /**
      * Number of unread **messages** from the co-parent, matching the tile's label.
@@ -291,7 +341,7 @@ class HomeViewModel @Inject constructor(
     private companion object {
         const val MAX_ITEMS = 5
         const val MAX_UPCOMING = 3
-        const val LOOKAHEAD_DAYS = 60L
+        const val LOOKAHEAD_DAYS = 7L
         const val STOP_TIMEOUT_MS = 5000L
         const val TAG = "HomeViewModel"
         val NEAR_THRESHOLD: Duration = Duration.ofSeconds(2)

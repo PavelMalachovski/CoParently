@@ -50,9 +50,9 @@
     <string name="settings_sign_out">Выйти</string>
     <string name="settings_syncing">Синхронизация…</string>
     <string name="settings_theme">Тема</string>
-    <string name="settings_theme_system">системная</string>
-    <string name="settings_theme_light">светлая</string>
-    <string name="settings_theme_dark">тёмная</string>
+    <string name="settings_theme_system">Системная</string>
+    <string name="settings_theme_light">Светлая</string>
+    <string name="settings_theme_dark">Тёмная</string>
     <string name="settings_theme_description">Выберите предпочитаемую тему</string>
     <string name="settings_notifications">Уведомления</string>
     <string name="settings_push_notifications">Push-уведомления</string>

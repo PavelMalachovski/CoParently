@@ -98,14 +98,7 @@ fun NavGraph(
             ) {
                 CoPlanlyBottomBar(
                     currentRoute = currentRoute,
-                    onNavigate = { destination ->
-                        navController.navigate(destination.navRoute) {
-                            // Keep one instance per tab, preserve each tab's state
-                            popUpTo(Screen.Home.route) { saveState = true }
-                            launchSingleTop = true
-                            restoreState = true
-                        }
-                    },
+                    onNavigate = navController::navigateToTab,
                     chatUnreadCount = chatUnreadCount
                 )
             }
@@ -171,6 +164,15 @@ fun NavGraph(
                     },
                     onNavigateToPairing = {
                         navController.navigate(Screen.Pairing.routeWithCode(null))
+                    },
+                    // The dashboard's stat tiles deep-link into the tabs that own those
+                    // numbers, so they behave exactly like tapping the tab itself — same
+                    // back stack, same restored state, bottom bar highlights correctly.
+                    onOpenExpenses = {
+                        navController.navigateToTab(BottomNavDestination.EXPENSES)
+                    },
+                    onOpenChat = {
+                        navController.navigateToTab(BottomNavDestination.CHAT)
                     }
                 )
             }
@@ -194,9 +196,6 @@ fun NavGraph(
                     },
                     onChangeRequestsClick = {
                         navController.navigate(Screen.ChangeRequests.route)
-                    },
-                    onWeeklySummaryClick = {
-                        navController.navigate(Screen.WeeklySummary.route)
                     }
                 )
             }
@@ -488,6 +487,15 @@ fun NavGraph(
                     },
                     onOpenSettings = {
                         navController.navigate(Screen.Settings.route)
+                    },
+                    // With one co-parent there is one conversation, and the tab renders that
+                    // thread in place — so the draft and the change-request route have to
+                    // reach it here too, not only via the Chat detail route below.
+                    draft = draft,
+                    onRequestChangeForEvent = { eventId, threadId ->
+                        navController.navigate(
+                            Screen.RequestChange.createRoute(eventId, threadId)
+                        )
                     }
                 )
             }
@@ -626,6 +634,25 @@ private fun rememberChatUnreadCount(): Int {
     val chatViewModel: ChatViewModel = hiltViewModel()
     val unreadCount by chatViewModel.unreadCount.collectAsState()
     return unreadCount
+}
+
+/**
+ * Switches to a top-level tab.
+ *
+ * Extracted from the bottom bar's own handler because the home dashboard's stat tiles are
+ * deep links into Expenses and Chat and must land the user in exactly the state tapping the
+ * tab would have: one instance per tab, each tab's own scroll position restored, and a back
+ * stack that unwinds to Home rather than accumulating tab entries.
+ *
+ * @param destination Tab to show
+ */
+private fun NavHostController.navigateToTab(destination: BottomNavDestination) {
+    navigate(destination.navRoute) {
+        // Keep one instance per tab, preserve each tab's state
+        popUpTo(Screen.Home.route) { saveState = true }
+        launchSingleTop = true
+        restoreState = true
+    }
 }
 
 /**

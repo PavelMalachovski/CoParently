@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- PairingScreen -->
-    <string name="pairing_screen_title">Kopplung mit Co-Elternteil</string>
+    <string name="pairing_screen_title">Mit dem anderen Elternteil verbinden</string>
     <string name="pairing_back">Zurück</string>
     <string name="pairing_unpair_button">Kopplung aufheben</string>
     <string name="pairing_partner_email_label">E-Mail des Partners</string>
@@ -9,10 +9,7 @@
     <string name="pairing_unknown_sender">Unbekannt</string>
     <string name="pairing_accept_button">Annehmen</string>
     <string name="pairing_reject_button">Ablehnen</string>
-    <string name="pairing_qr_dialog_title">QR-Code für Co-Eltern-Einladung</string>
-    <string name="pairing_qr_dialog_message">Teilen Sie diesen QR-Code mit dem anderen Elternteil. Durch Scannen kann er Ihre Einladung annehmen.</string>
     <string name="pairing_qr_code_content_description">QR-Code zur Kopplung</string>
-    <string name="pairing_close">Schließen</string>
     <string name="pairing_cancel">Abbrechen</string>
 
     <!-- QrScannerScreen -->
@@ -37,10 +34,8 @@
 
     <!-- Invite code hero card -->
     <string name="pairing_your_code_title">Ihr Einladungscode</string>
-    <string name="pairing_your_code_hint">Geben Sie diesen Code an den anderen Elternteil weiter. Er ist 24 Stunden gültig.</string>
     <string name="pairing_code_copied">Code kopiert</string>
     <string name="pairing_share_invite">Teilen</string>
-    <string name="pairing_show_qr">QR anzeigen</string>
     <string name="pairing_new_code">Neuer Code</string>
     <string name="pairing_expires_in_hours">Gültig noch %1$d Std. %2$d Min.</string>
     <string name="pairing_expires_in_minutes">Gültig noch %1$d Min.</string>
@@ -50,7 +45,6 @@
     <string name="pairing_have_a_code">Ich habe einen Code</string>
     <string name="pairing_code_field_label">Einladungscode</string>
     <string name="pairing_link_accounts">Konten verknüpfen</string>
-    <string name="pairing_or">oder</string>
     <!-- Email invite -->
     <string name="pairing_invite_by_email">Per E-Mail einladen</string>
     <!-- Paired state -->
@@ -64,4 +58,14 @@
     <string name="pairing_deep_link_confirm_message">%1$s — die Person, die Ihnen diesen Code geschickt hat, sieht dann Ihren gemeinsamen Kalender, Chat und Ausgaben.</string>
     <!-- Fallback conversation title when the co-parent has no display name yet -->
     <string name="pairing_default_partner_name">Mitelternteil</string>
+
+    <!-- Two explicit pairing modes, the tap-to-copy code, and the trust panel. -->
+    <string name="pairing_mode_share">Meinen Code teilen</string>
+    <string name="pairing_mode_enter">Code eingeben</string>
+    <string name="pairing_copy_code">Code kopieren</string>
+    <string name="pairing_tap_to_copy_and_expiry">Zum Kopieren tippen · %1$s</string>
+    <string name="pairing_share_link">Link teilen</string>
+    <string name="pairing_email_invite">Per E-Mail</string>
+    <string name="pairing_trust_title">Was beim Verbinden geteilt wird</string>
+    <string name="pairing_trust_body">Gemeinsamer Kalender und Betreuungsplan, gemeinsame Ausgaben und Salden sowie der Chat. Private Termine verlassen Ihr Gerät nie. Sie können die Verbindung jederzeit trennen.</string>
 </resources>

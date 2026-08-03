@@ -27,12 +27,8 @@
     <string name="calendar_filters_button">Filters</string>
     <string name="calendar_today_button">Today</string>
     <!-- Header subtitle when the selected day is today, e.g. "Sat 25 · today" -->
-    <string name="calendar_subtitle_today">%1$s · today</string>
 
     <!-- Legend under the month grid -->
-    <string name="calendar_legend_mom">Mom</string>
-    <string name="calendar_legend_dad">Dad</string>
-    <string name="calendar_legend_vacation">Vacation</string>
 
     <!-- Parent filter, now shown inside the Filters sheet -->
     <string name="calendar_filter_show">Show</string>
@@ -50,7 +46,6 @@
     <string name="calendar_dialog_cancel">Cancel</string>
 
     <!-- Top bar action icons -->
-    <string name="calendar_weekly_summary">Weekly summary</string>
     <string name="calendar_change_requests">Change requests</string>
 
     <!-- Filters sheet: event types, custom type creation, holiday switch -->
@@ -75,7 +70,6 @@
     </plurals>
     <!-- %1$s = formatted date, e.g. "July 30" -->
     <string name="calendar_day_click_label">View events for %1$s</string>
-    <string name="calendar_legend_description">Legend: pink is Mom, blue is Dad, a teal strip marks school vacation</string>
 
     <!-- Day/week grid accessibility -->
     <!-- %1$s = time like 08:00, %2$s = formatted date -->
@@ -93,4 +87,15 @@
     <string name="calendar_event_pickup_confirmed">Pickup confirmed by %1$s</string>
     <string name="calendar_resize_start_handle">Resize start time. Drag up or down (15-minute steps).</string>
     <string name="calendar_resize_end_handle">Resize end time. Drag up or down (15-minute steps).</string>
+
+    <!-- Inline change-request banner, view-mode menu and the day agenda card. -->
+    <plurals name="calendar_change_requests_banner">
+        <item quantity="one">%1$d change request from your co-parent</item>
+        <item quantity="other">%1$d change requests from your co-parent</item>
+    </plurals>
+    <string name="calendar_change_requests_review">Review</string>
+    <string name="calendar_change_view_mode">Change view</string>
+    <string name="calendar_agenda_header_with_custody">%1$s · %2$s\'s day</string>
+    <string name="calendar_agenda_empty">Nothing scheduled.</string>
+    <string name="calendar_agenda_time_range">%1$s–%2$s</string>
 </resources>

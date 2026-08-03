@@ -1,29 +1,42 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Home / Overview dashboard strings. -->
+<!-- Home dashboard strings. -->
 <resources>
-    <string name="home_title">Overview</string>
+    <!-- Matches the bottom-nav label; the screen used to be titled "Overview" while the tab
+         said "Home", which is the naming drift the August 2026 design review flagged. -->
+    <string name="home_title">Home</string>
 
     <!-- Pairing call-to-action, shown while the account is not yet paired. -->
     <string name="home_pairing_prompt">Pair with your co-parent to share the calendar, expenses and messages.</string>
     <string name="home_pairing_cta">Pair with your co-parent</string>
 
-    <!-- Custody handover countdown card. -->
-    <string name="home_handover_today">Handover today</string>
-    <string name="home_handover_tomorrow">Handover tomorrow</string>
-    <plurals name="home_handover_in_days">
-        <item quantity="one">Handover in %1$d day</item>
-        <item quantity="other">Handover in %1$d days</item>
+    <!-- Custody handover hero. %1$s = parent taking over, %2$d = whole days until then. -->
+    <string name="home_handover_current">Today with %1$s</string>
+    <string name="home_handover_hero_today">Handover to %1$s today</string>
+    <string name="home_handover_hero_tomorrow">Handover to %1$s tomorrow</string>
+    <plurals name="home_handover_hero_in_days">
+        <item quantity="one">Handover to %1$s in %2$d day</item>
+        <item quantity="other">Handover to %1$s in %2$d days</item>
     </plurals>
-    <!-- %1$s = from parent, %2$s = to parent, %3$s = formatted date -->
-    <string name="home_handover_route">%1$s → %2$s · %3$s</string>
+    <string name="home_handover_review">Review</string>
 
-    <!-- Stat tiles. -->
-    <string name="home_stat_this_month">This month</string>
-    <string name="home_stat_unread">Unread</string>
+    <!-- Stat tiles. Both are deep links, so each carries an action caption. -->
+    <plurals name="home_stat_unread_count">
+        <item quantity="one">%1$d unread</item>
+        <item quantity="other">%1$d unread</item>
+    </plurals>
+    <string name="home_stat_open_chat">Open chat →</string>
+    <!-- %1$s = amount, already formatted with its currency symbol. -->
+    <string name="home_stat_owed_to_you">You are owed %1$s →</string>
+    <string name="home_stat_you_owe">You owe %1$s →</string>
+    <string name="home_stat_settled">All settled →</string>
 
-    <!-- Section headers. -->
-    <string name="home_section_upcoming">Upcoming</string>
+    <!-- Section headers. %1$s = the co-parent's name. -->
+    <string name="home_section_this_week">This week</string>
     <string name="home_section_recent_changes">Recent changes</string>
+    <string name="home_section_partner_changed">%1$s changed</string>
+
+    <!-- Timeline row. %1$s = day and time, %2$s = the parent whose day it is. -->
+    <string name="home_timeline_meta">%1$s · %2$s\'s day</string>
 
     <!-- Recent-changes empty states. -->
     <string name="home_recent_empty_paired">Nothing new from your co-parent yet. Changes they make will show up here.</string>
@@ -31,11 +44,13 @@
 
     <string name="home_weekly_summary">View weekly summary</string>
 
-    <!-- Activity feed labels. -->
-    <string name="home_activity_event_created">Co-parent added this event</string>
-    <string name="home_activity_event_updated">Co-parent updated this event</string>
-    <string name="home_activity_pickup_confirmed">Co-parent confirmed pickup</string>
-    <string name="home_activity_change_requested">Co-parent requested a change</string>
+    <!-- Activity feed. %1$s = event title; the section header already names who made the
+         change, so the row states the action rather than repeating "Co-parent". -->
+    <string name="home_activity_event_created">Added %1$s</string>
+    <string name="home_activity_event_updated">Updated %1$s</string>
+    <string name="home_activity_pickup_confirmed">Confirmed pickup for %1$s</string>
+    <string name="home_activity_change_requested">Asked to change %1$s</string>
+    <string name="home_activity_review">Review</string>
 
     <!-- Parent identity labels. -->
     <string name="home_parent_mom">Mom</string>

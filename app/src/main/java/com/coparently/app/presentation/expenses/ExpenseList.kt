@@ -16,7 +16,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -44,12 +43,23 @@ import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
 import com.coparently.app.R
 import com.coparently.app.domain.model.Expense
-import com.coparently.app.presentation.theme.CoPlanlyColors
+import com.coparently.app.presentation.theme.ParentColors
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 /** Alpha of the payer-tinted circle behind a row's leading icon. */
 private const val PAYER_TINT_ALPHA = 0.18f
+
+/** Leading tile / receipt thumbnail size — at or above the 44–48dp touch-target floor. */
+private val TILE_SIZE = 40.dp
+
+/**
+ * Corner radius of an expense row **and** of the delete surface behind it.
+ *
+ * The two must be the same value: the swipe backdrop sits directly under the row at rest, so a
+ * backdrop with tighter corners shows as a red outline around every row in the list.
+ */
+private val ROW_CORNER = 12.dp
 
 /**
  * List of expenses for the period. Each row swipes left to delete, matching [EventListScreen].
@@ -127,10 +137,10 @@ fun ExpenseItem(
     val dateFormatter = remember { DateTimeFormatter.ofPattern("MMM d", Locale.getDefault()) }
     val format = remember(expense.currency) { currencyFormat(expense.currency) }
 
-    val payerColor = when (payerRole) {
-        "mom" -> CoPlanlyColors.MomPink
-        "dad" -> CoPlanlyColors.DadBlue
-        else -> MaterialTheme.colorScheme.onSurfaceVariant
+    val payerColor = if (payerRole != null) {
+        ParentColors.fill(payerRole)
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant
     }
     val payerName = when (payerRole) {
         "mom" -> stringResource(R.string.calendar_parent_mom)
@@ -160,22 +170,32 @@ fun ExpenseItem(
             stringResource(R.string.expenses_split_n_ways, expense.splitBetween.size)
         else -> stringResource(R.string.expenses_split_none)
     }
+    // The split moved from its own right-hand column into the subtitle: it is a property of
+    // the expense, not a second figure competing with the amount.
+    val meta = if (expense.receiptUrl != null) {
+        stringResource(R.string.expenses_row_meta_with_receipt, subtitle, splitLabel)
+    } else {
+        stringResource(R.string.expenses_row_meta, subtitle, splitLabel)
+    }
 
     Surface(
-        shape = RoundedCornerShape(10.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        shape = RoundedCornerShape(ROW_CORNER),
+        // Was surfaceContainerLow, a 1.2:1 separation from the background in dark — the rows
+        // barely read as cards at all.
+        color = MaterialTheme.colorScheme.surfaceContainer,
         modifier = Modifier
             .fillMaxWidth()
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 11.dp, vertical = 10.dp),
+            modifier = Modifier.padding(12.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             // A receipt photo, when present, keeps its own tappable thumbnail here: the viewer
             // is a working feature and losing its entry point to match a mockup would be a
             // regression. Without a photo the slot shows a payer-tinted category mark instead.
+            // 40dp, up from 30dp — the thumbnail was below the 44–48dp touch-target floor.
             val receiptUrl = expense.receiptUrl
             if (receiptUrl != null) {
                 AsyncImage(
@@ -183,23 +203,24 @@ fun ExpenseItem(
                     contentDescription = stringResource(R.string.expenses_receipt_photo),
                     contentScale = ContentScale.Crop,
                     modifier = Modifier
-                        .size(30.dp)
-                        .clip(RoundedCornerShape(9.dp))
+                        .size(TILE_SIZE)
+                        .clip(RoundedCornerShape(12.dp))
                         .clickable { onReceiptClick(receiptUrl) }
                 )
             } else {
                 Box(
                     modifier = Modifier
-                        .size(30.dp)
-                        .clip(RoundedCornerShape(9.dp))
+                        .size(TILE_SIZE)
+                        .clip(RoundedCornerShape(12.dp))
                         .background(payerTint(payerColor)),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = Icons.Default.ReceiptLong,
+                        // Per-category, so a list of ten expenses says what the money went on.
+                        imageVector = expense.category.iconVector,
                         contentDescription = null,
                         tint = payerColor,
-                        modifier = Modifier.size(16.dp)
+                        modifier = Modifier.size(20.dp)
                     )
                 }
             }
@@ -213,7 +234,7 @@ fun ExpenseItem(
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = subtitle,
+                    text = meta,
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
@@ -221,18 +242,11 @@ fun ExpenseItem(
                 )
             }
 
-            Column(horizontalAlignment = Alignment.End) {
-                Text(
-                    text = format.format(expense.amount),
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Text(
-                    text = splitLabel,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
+            Text(
+                text = format.format(expense.amount),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold
+            )
         }
     }
 }
@@ -275,7 +289,7 @@ private fun SwipeToDeleteRow(
                     .fillMaxSize()
                     .background(
                         color = MaterialTheme.colorScheme.error,
-                        shape = RoundedCornerShape(10.dp)
+                        shape = RoundedCornerShape(ROW_CORNER)
                     )
                     .padding(horizontal = 20.dp),
                 contentAlignment = Alignment.CenterEnd

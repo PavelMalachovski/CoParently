@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- PairingScreen -->
-    <string name="pairing_screen_title">Связывание родителей</string>
+    <string name="pairing_screen_title">Связаться со вторым родителем</string>
     <string name="pairing_back">Назад</string>
     <string name="pairing_unpair_button">Разорвать пару</string>
     <string name="pairing_partner_email_label">Эл. почта партнёра</string>
@@ -9,10 +9,7 @@
     <string name="pairing_unknown_sender">Неизвестно</string>
     <string name="pairing_accept_button">Принять</string>
     <string name="pairing_reject_button">Отклонить</string>
-    <string name="pairing_qr_dialog_title">QR-код приглашения для второго родителя</string>
-    <string name="pairing_qr_dialog_message">Поделитесь этим QR-кодом со вторым родителем. Отсканировав его, он сможет принять ваше приглашение.</string>
     <string name="pairing_qr_code_content_description">QR-код для создания пары</string>
-    <string name="pairing_close">Закрыть</string>
     <string name="pairing_cancel">Отмена</string>
 
     <!-- QrScannerScreen -->
@@ -37,10 +34,8 @@
 
     <!-- Invite code hero card -->
     <string name="pairing_your_code_title">Ваш код приглашения</string>
-    <string name="pairing_your_code_hint">Передайте код второму родителю. Действителен 24 часа.</string>
     <string name="pairing_code_copied">Код скопирован</string>
     <string name="pairing_share_invite">Поделиться</string>
-    <string name="pairing_show_qr">Показать QR</string>
     <string name="pairing_new_code">Новый код</string>
     <string name="pairing_expires_in_hours">Действителен ещё %1$d ч %2$d мин</string>
     <string name="pairing_expires_in_minutes">Действителен ещё %1$d мин</string>
@@ -50,7 +45,6 @@
     <string name="pairing_have_a_code">У меня есть код</string>
     <string name="pairing_code_field_label">Код приглашения</string>
     <string name="pairing_link_accounts">Связать аккаунты</string>
-    <string name="pairing_or">или</string>
     <!-- Email invite -->
     <string name="pairing_invite_by_email">Пригласить по email</string>
     <!-- Paired state -->
@@ -64,4 +58,14 @@
     <string name="pairing_deep_link_confirm_message">%1$s — человек, приславший вам этот код, увидит ваш общий календарь, чат и расходы.</string>
     <!-- Fallback conversation title when the co-parent has no display name yet -->
     <string name="pairing_default_partner_name">Второй родитель</string>
+
+    <!-- Two explicit pairing modes, the tap-to-copy code, and the trust panel. -->
+    <string name="pairing_mode_share">Мой код</string>
+    <string name="pairing_mode_enter">Ввести код</string>
+    <string name="pairing_copy_code">Скопировать код</string>
+    <string name="pairing_tap_to_copy_and_expiry">Нажмите, чтобы скопировать · %1$s</string>
+    <string name="pairing_share_link">Отправить ссылку</string>
+    <string name="pairing_email_invite">По эл. почте</string>
+    <string name="pairing_trust_title">Что становится общим</string>
+    <string name="pairing_trust_body">Общий календарь и график опеки, общие расходы и балансы, а также чат. Личные события никогда не покидают ваше устройство. Связь можно разорвать в любой момент.</string>
 </resources>

@@ -17,11 +17,7 @@
     <string name="calendar_viewmode_day">Tag</string>
     <string name="calendar_filters_button">Filter</string>
     <string name="calendar_today_button">Heute</string>
-    <string name="calendar_subtitle_today">%1$s · heute</string>
 
-    <string name="calendar_legend_mom">Mama</string>
-    <string name="calendar_legend_dad">Papa</string>
-    <string name="calendar_legend_vacation">Ferien</string>
 
     <string name="calendar_filter_show">Anzeigen</string>
     <string name="calendar_filter_both">Beide</string>
@@ -34,7 +30,6 @@
     <string name="calendar_dialog_ok">OK</string>
     <string name="calendar_dialog_cancel">Abbrechen</string>
 
-    <string name="calendar_weekly_summary">Wochenübersicht</string>
     <string name="calendar_change_requests">Änderungsanfragen</string>
 
     <string name="calendar_filter_event_types">Terminarten</string>
@@ -55,7 +50,6 @@
         <item quantity="other">%1$d Termine</item>
     </plurals>
     <string name="calendar_day_click_label">Termine für %1$s anzeigen</string>
-    <string name="calendar_legend_description">Legende: Rosa ist Mama, Blau ist Papa, ein türkiser Streifen markiert Schulferien</string>
 
     <string name="calendar_time_slot_description">Zeitfenster um %1$s am %2$s. Tippen, um einen Termin hinzuzufügen.</string>
     <string name="calendar_event_chip_description">Termin %1$s. %2$s</string>
@@ -68,4 +62,15 @@
     <string name="calendar_event_pickup_confirmed">Abholung von %1$s bestätigt</string>
     <string name="calendar_resize_start_handle">Startzeit anpassen. Nach oben oder unten ziehen (15-Minuten-Schritte).</string>
     <string name="calendar_resize_end_handle">Endzeit anpassen. Nach oben oder unten ziehen (15-Minuten-Schritte).</string>
+
+    <!-- Inline change-request banner, view-mode menu and the day agenda card. -->
+    <plurals name="calendar_change_requests_banner">
+        <item quantity="one">%1$d Änderungsanfrage vom anderen Elternteil</item>
+        <item quantity="other">%1$d Änderungsanfragen vom anderen Elternteil</item>
+    </plurals>
+    <string name="calendar_change_requests_review">Prüfen</string>
+    <string name="calendar_change_view_mode">Ansicht wechseln</string>
+    <string name="calendar_agenda_header_with_custody">%1$s · Tag von %2$s</string>
+    <string name="calendar_agenda_empty">Nichts geplant.</string>
+    <string name="calendar_agenda_time_range">%1$s–%2$s</string>
 </resources>
