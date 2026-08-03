@@ -32,6 +32,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -39,6 +40,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.coparently.app.R
+import com.coparently.app.domain.chat.ChatScrollPolicy
 import com.coparently.app.domain.model.Message
 import com.coparently.app.domain.model.MessageSendStatus
 import com.coparently.app.presentation.common.animations.AnimatedEmptyState
@@ -151,20 +153,28 @@ fun MessagesList(
     var isRefreshing by remember { mutableStateOf(false) }
     val entries = remember(messages) { buildThread(messages) }
 
-    // Auto-scroll only if user is already at the bottom (within last 2 items)
+    // Survives a configuration change: the jump is about *opening* the thread, and a rotation
+    // is not a re-open. The scroll position itself is restored by rememberLazyListState.
+    var initialJumpDone by rememberSaveable { mutableStateOf(false) }
+
     LaunchedEffect(entries.size) {
-        if (entries.isNotEmpty()) {
-            val firstVisibleIndex = listState.firstVisibleItemIndex
-            val lastVisibleIndex = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
-            val totalItems = entries.size
-
-            // Check if user is already near the bottom (within last 2 items or at the end)
-            val isNearBottom = lastVisibleIndex >= totalItems - 2 ||
-                firstVisibleIndex >= totalItems - 3
-
-            if (isNearBottom) {
-                listState.animateScrollToItem(entries.size - 1)
+        val target = ChatScrollPolicy.targetIndex(
+            entryCount = entries.size,
+            firstVisibleIndex = listState.firstVisibleItemIndex,
+            lastVisibleIndex = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0,
+            initialJumpDone = initialJumpDone
+        )
+        if (target != null) {
+            // Instant on open — animating a flight past forty bubbles is its own defect —
+            // and animated afterwards, when it is one new message sliding into view.
+            if (initialJumpDone) {
+                listState.animateScrollToItem(target)
+            } else {
+                listState.scrollToItem(target)
+                initialJumpDone = true
             }
+        } else if (entries.isNotEmpty()) {
+            initialJumpDone = true
         }
     }
 
