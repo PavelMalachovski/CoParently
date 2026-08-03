@@ -1,3 +1,6 @@
+// The file is named for the chips it renders; BudgetProgress is their view model, not the subject.
+@file:Suppress("MatchingDeclarationName")
+
 package com.coparently.app.presentation.expenses
 
 import androidx.compose.foundation.horizontalScroll

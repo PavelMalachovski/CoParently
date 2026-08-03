@@ -62,7 +62,9 @@ import java.time.format.DateTimeFormatter
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-@Suppress("LongParameterList") // one callback per navigation target this screen offers
+// One callback per navigation target this screen offers; the body is the thread scaffold, which
+// only reads as one screen when it is written as one.
+@Suppress("LongParameterList", "LongMethod")
 fun ChatScreen(
     conversationId: String,
     onBack: (() -> Unit)? = null,

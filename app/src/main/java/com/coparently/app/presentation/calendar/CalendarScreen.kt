@@ -167,6 +167,9 @@ private fun rememberVacationLabel(
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
+// Three view modes, filters, holidays and custody all key off the same date state; splitting the
+// body would hand each half the other's state rather than removing any of the branching.
+@Suppress("LongParameterList", "LongMethod", "CyclomaticComplexMethod")
 fun CalendarScreen(
     onEventClick: (String) -> Unit = {},
     onAddEventClick: (LocalDate?, Int?) -> Unit,

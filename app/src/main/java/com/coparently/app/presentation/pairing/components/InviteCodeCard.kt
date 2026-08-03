@@ -70,7 +70,8 @@ private val QR_SIZE = 180.dp
  * @param onRegenerate Issues a fresh code
  */
 @Composable
-@Suppress("LongParameterList") // one card, one parameter per thing it shows or does
+// One card, one parameter per thing it shows or does; code, QR and actions are one visual unit.
+@Suppress("LongParameterList", "LongMethod")
 fun InviteCodeCard(
     invite: PairingInvite,
     qrBitmap: Bitmap?,

@@ -103,7 +103,9 @@ private const val SETTLED_EPSILON = 0.01
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-@Suppress("LongParameterList") // one callback per navigation target this dashboard links to
+// One callback per navigation target this dashboard links to; the body is one linear column of
+// sections, so splitting it would only move the length into a second file.
+@Suppress("LongParameterList", "LongMethod")
 fun HomeScreen(
     onOpenEvent: (String) -> Unit,
     onOpenChangeRequests: () -> Unit,
@@ -279,6 +281,7 @@ private fun PairingCta(onNavigateToPairing: () -> Unit) {
  * @param onConfirm Opens the change-request inbox, where a handover is actually acted on
  */
 @Composable
+@Suppress("LongMethod") // one card: gradient, headline, chips and action read as a single block
 private fun HandoverHero(info: HandoverInfo, onConfirm: () -> Unit) {
     val fromColor = ParentColors.fill(info.fromParent)
     val toColor = ParentColors.fill(info.toParent)
@@ -431,6 +434,7 @@ private fun balanceCaption(balances: List<CurrencyBalance>): String {
 }
 
 @Composable
+@Suppress("LongParameterList") // one tile anatomy, expressed as one parameter list
 private fun StatTile(
     modifier: Modifier = Modifier,
     icon: ImageVector,

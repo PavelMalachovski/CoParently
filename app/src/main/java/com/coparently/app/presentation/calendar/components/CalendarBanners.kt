@@ -144,6 +144,7 @@ fun VacationBanner(label: String, modifier: Modifier = Modifier) {
  * @param modifier Modifier for the card
  */
 @Composable
+@Suppress("LongMethod") // header, custody line and event rows are one card, not three
 fun DayAgendaCard(
     date: LocalDate,
     events: List<Event>,

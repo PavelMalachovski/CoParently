@@ -735,7 +735,7 @@
     <ID>UnusedParameter:QRScannerActivity.kt$onQRCodeScanned: (String) -&gt; Unit</ID>
     <ID>UnusedParameter:SmartSchedulingUseCase.kt$ConflictDetector$requestedDuration: java.time.Duration</ID>
     <ID>UnusedPrivateMember:CalendarHeader.kt$@LightDarkPreviews @Composable private fun CalendarHeaderTodayPreview()</ID>
-    <ID>UnusedPrivateMember:CalendarHeader.kt$@Preview(name = "Other day selected, week mode", showBackground = true) @Composable private fun CalendarHeaderWeekPreview()</ID>
+    <ID>UnusedPrivateMember:CalendarHeader.kt$@Preview(name = "Week mode, filters active", showBackground = true) @Composable private fun CalendarHeaderWeekPreview()</ID>
     <ID>UnusedPrivateMember:CalendarLegend.kt$@LightDarkPreviews @Composable private fun CalendarLegendPreview()</ID>
     <ID>UnusedPrivateMember:CustodyRibbon.kt$@LightDarkPreviews @Composable private fun CustodyRibbonMomPreview()</ID>
     <ID>UnusedPrivateMember:CustodyRibbon.kt$@Preview(name = "Dad, handover tomorrow", showBackground = true) @Composable private fun CustodyRibbonDadTomorrowPreview()</ID>

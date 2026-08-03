@@ -72,7 +72,9 @@ import java.time.format.DateTimeFormatter
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-@Suppress("LongParameterList") // one callback per navigation target this tab offers
+// One callback per navigation target this tab offers; the body picks between the inline thread
+// and the list, and both branches need the same collected state.
+@Suppress("LongParameterList", "LongMethod")
 fun ConversationsScreen(
     onConversationClick: (String) -> Unit,
     onNavigateToPairing: () -> Unit,

@@ -65,6 +65,9 @@ class HomeViewModelTest {
         val userRepository = mockk<UserRepository> {
             coEvery { getCurrentUser() } returns null
             coEvery { getCurrentUserId() } returns null
+            // The refreshed dashboard attributes spend per parent, so construction now reads
+            // the user list to build its uid -> "mom"/"dad" map.
+            every { getAllUsers() } returns flowOf(emptyList())
         }
         pairingState = MutableStateFlow(PairingState.Loading)
         val pairingRepository = mockk<PairingRepository> {

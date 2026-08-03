@@ -106,7 +106,9 @@ private val syncTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
  * @param settingsViewModel Settings state
  * @param authStateViewModel Firebase auth state, used to sign out
  */
-@Suppress("LongParameterList", "LongMethod")
+// The complexity is the optional-callback fan-out: each group is only rendered when the route
+// behind it was wired, and every one of those checks is a separate branch.
+@Suppress("LongParameterList", "LongMethod", "CyclomaticComplexMethod")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
