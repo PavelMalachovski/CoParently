@@ -36,11 +36,16 @@ the implementation is not free to revisit them:
 - **Item 8 may not land.** It is an investigation with an unknown answer (see below). If the cause
   turns out to be structural, it leaves this batch with a written diagnosis. That is an acceptable
   outcome; a plausible-looking tweak that moves the numbers without an explanation is not.
-- **`ChangeRequestsScreen` is hardcoded English** — "Change Requests", "No change requests yet",
-  "Back". Item 5 sends users there, which makes it more visible, but translating that screen is
-  its own change and is not part of this batch. Same for the templates sheet's own chrome
-  ("Message Templates", "Pickup & Drop-off", "Illness & Medical"). Both are recorded here so the
-  next person finds them.
+- **The templates sheet's own chrome is hardcoded English** — "Message Templates",
+  "Pickup & Drop-off", "Illness & Medical". Recorded here so the next person finds it; not part of
+  this batch.
+- **`ChangeRequestsScreen` was listed here too, and that was a mistake — it is now in scope.**
+  The screen is hardcoded English, but `change_requests_strings.xml` already carries every key it
+  needs **in all five locales** and no code referenced any of them: nothing needs translating, the
+  screen just never used what is there. Since item 5 makes it the destination of the new link,
+  wiring those keys is folded into the same task (plan Task 4, Step 7). `ChangeRequestStatus.displayName`
+  stays English on the domain enum — the domain layer gets no `Context`; the screen maps the enum
+  to a resource instead.
 - No change to what a change request *is* (still one event, `PENDING/ACCEPTED/DECLINED/CANCELLED`).
 - No change to the Firestore message schema. The card keeps `messageType = EVENT_LINK` and
   `attachments = [eventId]`, so an older build on the co-parent's phone renders it exactly as it
