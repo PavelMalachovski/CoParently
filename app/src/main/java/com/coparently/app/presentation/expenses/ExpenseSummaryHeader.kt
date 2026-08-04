@@ -1,6 +1,7 @@
 package com.coparently.app.presentation.expenses
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,6 +27,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -223,6 +226,40 @@ internal fun MonthSwitcherBar(navigation: MonthNavigation, modifier: Modifier = 
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
+    }
+}
+
+/** Travel required before a drag over the month header commits to a month change. */
+private val MONTH_SWIPE_THRESHOLD = 56.dp
+
+/**
+ * Horizontal swipe over the month header, resolved on release.
+ *
+ * Deliberately not a pager: the month's content is a summary card plus a list that owns its own
+ * horizontal gesture, so this reads the drag and calls the same two callbacks the chevrons do.
+ *
+ * @param navigation The same [MonthNavigation] the chevrons use, so the two can never disagree
+ */
+@Composable
+internal fun Modifier.monthSwipe(navigation: MonthNavigation): Modifier {
+    val thresholdPx = with(LocalDensity.current) { MONTH_SWIPE_THRESHOLD.toPx() }
+    return this.pointerInput(navigation.label) {
+        var drag = 0f
+        detectHorizontalDragGestures(
+            onDragStart = { drag = 0f },
+            onDragEnd = {
+                when (MonthSwipe.resolve(drag, thresholdPx)) {
+                    MonthStep.PREVIOUS -> navigation.onPrevious()
+                    MonthStep.NEXT -> navigation.onNext()
+                    MonthStep.NONE -> Unit
+                }
+            },
+            onDragCancel = { drag = 0f },
+            onHorizontalDrag = { change, amount ->
+                drag += amount
+                change.consume()
+            }
+        )
     }
 }
 

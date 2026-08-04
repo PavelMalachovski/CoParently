@@ -156,7 +156,9 @@ fun ExpenseScreen(
                     // global empty state handled above.
                     MonthSwitcherBar(
                         navigation = monthNavigation,
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
+                        modifier = Modifier
+                            .monthSwipe(monthNavigation)
+                            .padding(horizontal = 14.dp, vertical = 8.dp)
                     )
                     Box(
                         modifier = Modifier
@@ -186,7 +188,11 @@ fun ExpenseScreen(
                             currency = currencyBalance.currency,
                             onSettleUp = onSettleUp,
                             monthLabel = monthLabel,
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp),
+                            modifier = Modifier
+                                .then(
+                                    if (index == 0) Modifier.monthSwipe(monthNavigation) else Modifier
+                                )
+                                .padding(horizontal = 14.dp, vertical = 4.dp),
                             monthNavigation = monthNavigation.takeIf { index == 0 }
                         )
                     }
