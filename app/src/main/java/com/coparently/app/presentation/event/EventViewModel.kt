@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.onStart
@@ -77,9 +78,24 @@ class EventViewModel @Inject constructor(
     // values, and EventQuery.Range is a data class, so setting it again emits nothing at all.
     private val query = MutableStateFlow<EventQuery>(EventQuery.All)
 
+    // A separate tick, not a field on EventQuery.Range: folding it into Range would make every
+    // instance of the same range compare unequal, and the conflation above (the whole reason
+    // ordinary paging is free) would stop working. combine() re-emits whenever either source
+    // does, so bumping this alone is what forces flatMapLatest to re-subscribe to the current
+    // query without changing what that query is.
+    private val refreshTicks = MutableStateFlow(0)
+
     @OptIn(ExperimentalCoroutinesApi::class)
-    val events: StateFlow<List<Event>> = query
+    val events: StateFlow<List<Event>> = combine(query, refreshTicks) { current, _ -> current }
         .flatMapLatest { current ->
+            // This when() sits upstream of the .catch below, inside the flatMapLatest lambda.
+            // It happens not to throw today (GetEventsUseCase only delegates, and
+            // EventRepositoryImpl.getEventsByDateRange returns a combine() whose body runs
+            // inside the flow, not here) but nothing enforces that: if a future repository
+            // change makes either branch throw synchronously, that throw escapes onto the
+            // outer chain, uncaught, and permanently kills the pipeline - the exact failure
+            // this whole design exists to prevent. Keep the source selection lazy (a flow, not
+            // a value) so any failure surfaces inside the flow below, where .catch can see it.
             val source = when (current) {
                 is EventQuery.All -> eventUseCases.getEvents()
                 is EventQuery.Range -> eventUseCases.getEvents.getByDateRange(current.start, current.end)
@@ -94,7 +110,8 @@ class EventViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     /**
-     * Shows every event. The initial query, and what the event list screen stays on.
+     * Shows every event. `query`'s initial value, so this is what the view model shows before
+     * anything else is requested - no screen currently calls it.
      */
     fun loadEvents() {
         query.value = EventQuery.All
@@ -106,6 +123,16 @@ class EventViewModel @Inject constructor(
      */
     fun loadEventsForDateRange(start: LocalDateTime, end: LocalDateTime) {
         query.value = EventQuery.Range(start, end)
+    }
+
+    /**
+     * Re-collects the current query from scratch. `catch` completes the inner flow on error, so
+     * a failed query stays failed - the equal-value conflation on [query] means re-requesting
+     * the same range is a no-op and cannot restart it. This is the only way back: pull-to-refresh
+     * calls it instead of re-requesting the range it already has.
+     */
+    fun refresh() {
+        refreshTicks.value += 1
     }
 
     /**

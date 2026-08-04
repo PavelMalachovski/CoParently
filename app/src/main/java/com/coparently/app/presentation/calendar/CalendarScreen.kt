@@ -416,8 +416,10 @@ fun CalendarScreen(
             onRefresh = {
                 isRefreshing = true
                 scope.launch {
-                    val (start, end) = queryRangeFor(viewMode, queryAnchorDate)
-                    eventViewModel.loadEventsForDateRange(start, end)
+                    // Re-requesting the range already loaded is a no-op (query state conflates
+                    // equal values), so a stuck/failed query would never recover that way.
+                    // refresh() re-collects the current query from scratch instead.
+                    eventViewModel.refresh()
                     calendarViewModel.loadCustodySchedules()
                     kotlinx.coroutines.delay(500)
                     isRefreshing = false

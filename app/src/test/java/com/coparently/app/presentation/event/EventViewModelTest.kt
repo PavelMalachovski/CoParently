@@ -1,6 +1,7 @@
 package com.coparently.app.presentation.event
 
 import com.coparently.app.data.local.preferences.EncryptedPreferences
+import com.coparently.app.domain.error.AppError
 import com.coparently.app.domain.error.ErrorHandler
 import com.coparently.app.domain.model.Event
 import com.coparently.app.domain.model.User
@@ -20,6 +21,7 @@ import io.mockk.slot
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -187,5 +189,65 @@ class EventViewModelTest {
         advanceUntilIdle()
 
         assertEquals(1, range.subscriptionCount.value)
+    }
+
+    @Test
+    fun `a failed range does not block a later different range`() = runTest {
+        val start = LocalDateTime.of(2026, 8, 1, 0, 0)
+        val end = LocalDateTime.of(2026, 8, 31, 23, 59, 59)
+        val secondStart = LocalDateTime.of(2026, 11, 1, 0, 0)
+        val secondEnd = LocalDateTime.of(2026, 11, 30, 23, 59, 59)
+        val laterEvent = sampleEvent.copy(id = "e2", title = "Dentist")
+        val failure = RuntimeException("boom")
+
+        every { getEvents.getByDateRange(start, end) } returns flow { throw failure }
+        every { errorHandler.handleError(failure) } returns AppError.UnknownError(originalException = failure)
+        every { getEvents.getByDateRange(secondStart, secondEnd) } returns flowOf(listOf(laterEvent))
+
+        viewModel.loadEventsForDateRange(start, end)
+        advanceUntilIdle()
+
+        assertEquals(
+            EventUiState.Error("Something went wrong. Please try again."),
+            viewModel.uiState.value
+        )
+
+        // The failed range's .catch completed only the inner flow; a different query must still
+        // be servable through the same flatMapLatest chain.
+        viewModel.loadEventsForDateRange(secondStart, secondEnd)
+        advanceUntilIdle()
+
+        assertEquals(listOf(laterEvent), viewModel.events.value)
+    }
+
+    @Test
+    fun `refresh restarts a failed range once it stops failing`() = runTest {
+        val start = LocalDateTime.of(2026, 8, 1, 0, 0)
+        val end = LocalDateTime.of(2026, 8, 31, 23, 59, 59)
+        val failure = RuntimeException("boom")
+        var shouldFail = true
+        val recovered = MutableSharedFlow<List<Event>>()
+        every { getEvents.getByDateRange(start, end) } answers {
+            if (shouldFail) flow { throw failure } else recovered
+        }
+        every { errorHandler.handleError(failure) } returns AppError.UnknownError(originalException = failure)
+
+        viewModel.loadEventsForDateRange(start, end)
+        advanceUntilIdle()
+        assertEquals(
+            EventUiState.Error("Something went wrong. Please try again."),
+            viewModel.uiState.value
+        )
+
+        // Re-requesting the identical range is conflated away and could never restart it -
+        // refresh() is the only lever, and it works because the underlying source now succeeds.
+        shouldFail = false
+        viewModel.refresh()
+        advanceUntilIdle()
+
+        assertEquals(1, recovered.subscriptionCount.value)
+        recovered.emit(listOf(sampleEvent))
+        advanceUntilIdle()
+        assertEquals(listOf(sampleEvent), viewModel.events.value)
     }
 }

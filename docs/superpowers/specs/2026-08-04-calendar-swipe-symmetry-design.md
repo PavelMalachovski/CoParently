@@ -159,10 +159,15 @@ This is the assertion the test suite exists to defend: change either constant an
   unestablished and this spec does not guess. If the after-numbers match in both directions the
   question is moot; if the asymmetry survives on levelled numbers, it is a fresh investigation and
   the PR says so.
-- **Pull-to-refresh becomes a genuine no-op for events.** It re-requests the same range, which the
-  query state flow now conflates away. It already achieved nothing: the Room flow is live, so
-  re-collecting the same query returns the same rows. The custody reload it also triggers is
-  unaffected. No visible change, recorded so it is not mistaken later for a regression.
+- **Pull-to-refresh stops re-requesting a range and instead re-collects the current query.**
+  Re-requesting the same range is conflated away by the query state flow, and on the happy path
+  that cost nothing: the Room flow is live, so re-collecting the same query would have returned
+  the same rows anyway. But `.catch` completes the *inner* flow on error, so a failed query stays
+  failed - re-requesting it can never restart it. Pull-to-refresh is the only gesture positioned
+  to recover from that, so `EventViewModel.refresh()` bumps a separate tick combined with the
+  query (not a field on `EventQuery.Range`, which would break the range-equality conflation that
+  makes ordinary paging free) to force a fresh subscription without changing what is being
+  queried. The custody reload it also triggers is unaffected.
 - No Room schema change, no `firestore.rules` change, no new dependency, no new user-facing string.
 
 ## Testing strategy
