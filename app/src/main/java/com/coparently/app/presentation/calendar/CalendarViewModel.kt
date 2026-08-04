@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.LocalDate
+import java.time.YearMonth
 import javax.inject.Inject
 
 /** Keeps the handover flow warm across brief unsubscriptions (config changes). */
@@ -53,8 +54,19 @@ class CalendarViewModel @Inject constructor(
     private val _viewMode = MutableStateFlow(CalendarViewMode.MONTH)
     val viewMode: StateFlow<CalendarViewMode> = _viewMode.asStateFlow()
 
-    private val _selectedDate = MutableStateFlow<LocalDate>(LocalDate.now())
-    val selectedDate: StateFlow<LocalDate> = _selectedDate.asStateFlow()
+    private val _displayedMonth = MutableStateFlow(YearMonth.now())
+
+    /** Month the grid is showing. Independent of [selectedDate], which may be absent. */
+    val displayedMonth: StateFlow<YearMonth> = _displayedMonth.asStateFlow()
+
+    private val _selectedDate = MutableStateFlow<LocalDate?>(LocalDate.now())
+
+    /**
+     * The day the user has chosen, or null when none is — paging to another month clears it.
+     * The agenda card under the grid renders only when this is non-null: a card describing a
+     * day nobody picked is what the August 2026 baseline found it doing.
+     */
+    val selectedDate: StateFlow<LocalDate?> = _selectedDate.asStateFlow()
 
     private val _parentFilter = MutableStateFlow(ParentFilter.BOTH)
     val parentFilter: StateFlow<ParentFilter> = _parentFilter.asStateFlow()
@@ -138,10 +150,22 @@ class CalendarViewModel @Inject constructor(
     }
 
     /**
-     * Sets the selected date.
+     * Selects a day the user actually tapped, and brings the grid to its month — the month grid
+     * renders leading and trailing days of the neighbouring months, so a tap can land outside
+     * the month on screen.
      */
     fun setSelectedDate(date: LocalDate) {
         _selectedDate.value = date
+        _displayedMonth.value = YearMonth.from(date)
+    }
+
+    /**
+     * Shows [month], selecting today when it is today's month and clearing the selection
+     * otherwise.
+     */
+    fun showMonth(month: YearMonth) {
+        _displayedMonth.value = month
+        _selectedDate.value = CalendarSelection.forMonth(month, LocalDate.now())
     }
 
     /**

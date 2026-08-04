@@ -186,6 +186,9 @@ fun CalendarScreen(
     val custodyModel by calendarViewModel.custodyModel.collectAsState()
     val viewMode by calendarViewModel.viewMode.collectAsState()
     val selectedDate by calendarViewModel.selectedDate.collectAsState()
+    val displayedMonth by calendarViewModel.displayedMonth.collectAsState()
+    val today = remember { LocalDate.now() }
+    val anchorDate = CalendarSelection.anchorDate(viewMode, displayedMonth, selectedDate, today)
     val parentFilter by calendarViewModel.parentFilter.collectAsState()
     val hiddenEventTypes by calendarViewModel.hiddenEventTypes.collectAsState()
     val customEventTypes by calendarViewModel.customEventTypes.collectAsState()
@@ -200,9 +203,8 @@ fun CalendarScreen(
     val now = remember { YearMonth.now() }
 
     var showDatePicker by remember { mutableStateOf(false) }
-    val currentYearMonth = YearMonth.from(selectedDate)
     val datePickerState = rememberDatePickerState(
-        initialSelectedDateMillis = currentYearMonth.atDay(1).atStartOfDay(ZoneId.systemDefault())
+        initialSelectedDateMillis = displayedMonth.atDay(1).atStartOfDay(ZoneId.systemDefault())
             .toInstant().toEpochMilli(),
         yearRange = IntRange(now.year - 5, now.year + 5)
     )
@@ -253,18 +255,18 @@ fun CalendarScreen(
     }
 
     // Czech public holidays and school vacations for the visible range
-    val holidays: Map<LocalDate, Holiday> = remember(viewMode, selectedDate, showHolidays) {
+    val holidays: Map<LocalDate, Holiday> = remember(viewMode, anchorDate, showHolidays) {
         if (!showHolidays) {
             emptyMap()
         } else {
-            val (start, end) = queryRangeFor(viewMode, selectedDate)
+            val (start, end) = queryRangeFor(viewMode, anchorDate)
             CzechHolidays.holidaysInRange(start.toLocalDate(), end.toLocalDate())
         }
     }
 
     // Load events based on view mode
-    LaunchedEffect(viewMode, selectedDate) {
-        val (start, end) = queryRangeFor(viewMode, selectedDate)
+    LaunchedEffect(viewMode, anchorDate) {
+        val (start, end) = queryRangeFor(viewMode, anchorDate)
         eventViewModel.loadEventsForDateRange(start, end)
     }
 
@@ -320,10 +322,10 @@ fun CalendarScreen(
     Scaffold(
         topBar = {
             CalendarHeader(
-                selectedDate = selectedDate,
+                selectedDate = anchorDate,
                 viewMode = viewMode,
                 onViewModeChange = { mode -> calendarViewModel.setViewMode(mode) },
-                onNavigateToToday = { calendarViewModel.setSelectedDate(LocalDate.now()) },
+                onNavigateToToday = { calendarViewModel.showMonth(YearMonth.now()) },
                 onFiltersClick = { showTypeFilters = true },
                 filtersActive = parentFilter != ParentFilter.BOTH ||
                     hiddenEventTypes.isNotEmpty() ||
@@ -393,7 +395,7 @@ fun CalendarScreen(
             onRefresh = {
                 isRefreshing = true
                 scope.launch {
-                    val (start, end) = queryRangeFor(viewMode, selectedDate)
+                    val (start, end) = queryRangeFor(viewMode, anchorDate)
                     eventViewModel.loadEventsForDateRange(start, end)
                     calendarViewModel.loadCustodySchedules()
                     kotlinx.coroutines.delay(500)
@@ -411,7 +413,7 @@ fun CalendarScreen(
                 // School vacation, stated once for the month instead of a teal strip under
                 // every single cell — in July and August that was all 31 of them.
                 if (viewMode == CalendarViewMode.MONTH) {
-                    val vacationLabel = rememberVacationLabel(holidays, YearMonth.from(selectedDate))
+                    val vacationLabel = rememberVacationLabel(holidays, displayedMonth)
                     if (vacationLabel != null) {
                         VacationBanner(
                             label = vacationLabel,
@@ -477,7 +479,7 @@ fun CalendarScreen(
                         when (mode) {
                             CalendarViewMode.DAY, CalendarViewMode.WEEK -> {
                                 DayWeekView(
-                                    selectedDate = selectedDate,
+                                    selectedDate = anchorDate,
                                     daysCount = if (mode == CalendarViewMode.DAY) 1 else 7,
                                     events = filteredEvents,
                                     getCustody = getCustody,
@@ -511,7 +513,7 @@ fun CalendarScreen(
                             }
                             CalendarViewMode.MONTH -> {
                                 MonthView(
-                                    selectedMonth = YearMonth.from(selectedDate),
+                                    selectedMonth = displayedMonth,
                                     selectedDate = selectedDate,
                                     events = filteredEvents,
                                     getCustody = getCustody,
@@ -523,8 +525,10 @@ fun CalendarScreen(
                                     onDayClick = { clickedDate ->
                                         calendarViewModel.setSelectedDate(clickedDate)
                                     },
+                                    // Paging is not choosing: the new month gets today if it
+                                    // holds today, and no selection at all otherwise.
                                     onMonthChange = { newMonth ->
-                                        calendarViewModel.setSelectedDate(newMonth.atDay(1))
+                                        calendarViewModel.showMonth(newMonth)
                                     },
                                     holidays = holidays
                                 )
@@ -538,21 +542,23 @@ fun CalendarScreen(
                 // gives the titles — and it replaces the legend, whose Mom/Dad/vacation
                 // keys are now spelled out in words by this card and the vacation banner.
                 if (viewMode == CalendarViewMode.MONTH) {
-                    val agendaEvents = remember(filteredEvents, selectedDate) {
-                        eventsOn(filteredEvents, selectedDate)
-                    }
-                    DayAgendaCard(
-                        date = selectedDate,
-                        events = agendaEvents,
-                        custody = getCustody(selectedDate),
-                        onEventClick = { eventId -> previewEventId = eventId },
-                        modifier = Modifier.padding(
-                            start = dims.paddingMedium,
-                            // Clears the FAB, which floats over the end side.
-                            end = 72.dp,
-                            bottom = dims.paddingMedium
+                    selectedDate?.let { chosenDay ->
+                        val agendaEvents = remember(filteredEvents, chosenDay) {
+                            eventsOn(filteredEvents, chosenDay)
+                        }
+                        DayAgendaCard(
+                            date = chosenDay,
+                            events = agendaEvents,
+                            custody = getCustody(chosenDay),
+                            onEventClick = { eventId -> previewEventId = eventId },
+                            modifier = Modifier.padding(
+                                start = dims.paddingMedium,
+                                // Clears the FAB, which floats over the end side.
+                                end = 72.dp,
+                                bottom = dims.paddingMedium
+                            )
                         )
-                    )
+                    }
                 }
             }
         }
