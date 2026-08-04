@@ -126,8 +126,10 @@ internal fun queryRangeFor(
 /**
  * Events covering [date], including multi-day and overnight spans, in start order.
  *
- * Mirrors the month grid's own per-cell filter so the agenda card under the grid can never
- * disagree with the dots above it about which day an event belongs to.
+ * The reference definition of "which day does this event belong to". The UI does not call this
+ * per day any more — [eventsByDay] is the indexed form it uses — but this stays as the spec the
+ * index is held to: `EventsByDayTest` asserts the two agree on every day they touch, so the
+ * agenda card under the grid can never disagree with the dots above it.
  *
  * @param events Events already filtered by parent and type
  * @param date The day to collect
@@ -141,6 +143,41 @@ internal fun eventsOn(events: List<Event>, date: LocalDate): List<Event> {
             event.startDateTime < dayEnd && end >= dayStart
         }
         .sortedBy { it.startDateTime }
+}
+
+/**
+ * [events] bucketed by every day each one covers, each bucket in start order.
+ *
+ * Built once per event list so the month grid can index it instead of scanning: `dayContent`
+ * runs for all 42 cells on every recomposition — a day tap, a filter change, any repository
+ * emission — and a per-cell filter+sort made that O(42·N) over a list the ±3-month query window
+ * grew by roughly 1.7×.
+ *
+ * A multi-day or overnight event is bucketed under each day of its span, not only its start day:
+ * matching by start date alone is a bug this project has already shipped once (see the
+ * range/day-query note in CLAUDE.md). Equivalent to calling [eventsOn] per day, which is what
+ * `EventsByDayTest` checks.
+ *
+ * @param events Events already filtered by parent and type
+ */
+internal fun eventsByDay(events: List<Event>): Map<LocalDate, List<Event>> {
+    val buckets = mutableMapOf<LocalDate, MutableList<Event>>()
+    for (event in events) {
+        val firstDay = event.startDateTime.toLocalDate()
+        // `eventsOn` keeps an event whose end lands exactly on a day's 00:00 (`end >= dayStart`),
+        // so the last covered day is the end's own date, not the day before it.
+        val lastDay = (event.endDateTime ?: event.startDateTime).toLocalDate()
+        var day = firstDay
+        // An end before the start covers nothing, and this loop yields nothing for it — same
+        // answer `eventsOn` gives such an event on every date.
+        while (!day.isAfter(lastDay)) {
+            buckets.getOrPut(day) { mutableListOf() }.add(event)
+            day = day.plusDays(1)
+        }
+    }
+    // sortedBy is stable, so events sharing a start time keep the incoming order, exactly as the
+    // filter-then-sort in eventsOn did.
+    return buckets.mapValues { (_, dayEvents) -> dayEvents.sortedBy { it.startDateTime } }
 }
 
 /**
@@ -274,6 +311,11 @@ fun CalendarScreen(
             }
             .filterNot { it.eventType in hiddenEventTypes }
     }
+
+    // One pass over the filtered list, reused by all 42 month cells and by the agenda card
+    // underneath. Built here rather than inside MonthView so the grid and the card read the
+    // same buckets by construction.
+    val eventsByDay = remember(filteredEvents) { eventsByDay(filteredEvents) }
 
     // Czech public holidays and school vacations for the visible range
     val holidays: Map<LocalDate, Holiday> = remember(viewMode, queryAnchorDate, showHolidays) {
@@ -419,8 +461,12 @@ fun CalendarScreen(
                     // Re-requesting the range already loaded is a no-op (query state conflates
                     // equal values), so a stuck/failed query would never recover that way.
                     // refresh() re-collects the current query from scratch instead.
+                    //
+                    // Custody is deliberately not refreshed here: CalendarViewModel derives it
+                    // straight from the Room flow, which pushes every write on its own. The old
+                    // loadCustodySchedules() call left a permanent extra collector behind on
+                    // each pull.
                     eventViewModel.refresh()
-                    calendarViewModel.loadCustodySchedules()
                     kotlinx.coroutines.delay(500)
                     isRefreshing = false
                 }
@@ -538,7 +584,7 @@ fun CalendarScreen(
                                 MonthView(
                                     selectedMonth = displayedMonth,
                                     selectedDate = selectedDate,
-                                    events = filteredEvents,
+                                    eventsByDay = eventsByDay,
                                     getCustody = getCustody,
                                     // Selects the day so the agenda card below fills in.
                                     // Tapping used to jump straight into Day view, which was
@@ -566,9 +612,9 @@ fun CalendarScreen(
                 // keys are now spelled out in words by this card and the vacation banner.
                 if (viewMode == CalendarViewMode.MONTH) {
                     selectedDate?.let { chosenDay ->
-                        val agendaEvents = remember(filteredEvents, chosenDay) {
-                            eventsOn(filteredEvents, chosenDay)
-                        }
+                        // The same buckets the grid's dots come from: one index, so a title in
+                        // the card and a dot in the cell can never describe different days.
+                        val agendaEvents = eventsByDay[chosenDay].orEmpty()
                         DayAgendaCard(
                             date = chosenDay,
                             events = agendaEvents,

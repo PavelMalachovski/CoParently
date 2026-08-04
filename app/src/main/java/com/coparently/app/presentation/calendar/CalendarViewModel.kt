@@ -36,8 +36,18 @@ class CalendarViewModel @Inject constructor(
     private val encryptedPreferences: EncryptedPreferences
 ) : ViewModel() {
 
-    private val _custodySchedules = MutableStateFlow<List<CustodyScheduleEntity>>(emptyList())
-    val custodySchedules: StateFlow<List<CustodyScheduleEntity>> = _custodySchedules.asStateFlow()
+    /**
+     * Active legacy custody schedules, the fallback half of the unified custody lookup.
+     *
+     * Derived from the DAO flow rather than pushed into a [MutableStateFlow] by a `load…()`
+     * method: the Room flow already re-emits on every write, so re-collecting it buys nothing
+     * and the old method — called from `init` *and* from pull-to-refresh — left one permanent,
+     * uncancelled collector behind per call, each of them recomposing the whole Calendar tab.
+     * `Eagerly` because [getCustodyForDate] reads `.value` outside any collection.
+     */
+    val custodySchedules: StateFlow<List<CustodyScheduleEntity>> =
+        custodyScheduleDao.getAllActiveSchedules()
+            .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     private val _custodyModel = MutableStateFlow<CustodyModel?>(null)
     val custodyModel: StateFlow<CustodyModel?> = _custodyModel.asStateFlow()
@@ -92,26 +102,17 @@ class CalendarViewModel @Inject constructor(
     val showHolidays: StateFlow<Boolean> = _showHolidays.asStateFlow()
 
     init {
-        loadCustodySchedules()
         loadCustodyModel()
         loadFilterPreferences()
     }
 
     /**
-     * Loads all active custody schedules.
-     * Legacy method - used when no CustodyModel is available.
-     */
-    fun loadCustodySchedules() {
-        viewModelScope.launch {
-            custodyScheduleDao.getAllActiveSchedules().collect { schedules ->
-                _custodySchedules.value = schedules
-            }
-        }
-    }
-
-    /**
      * Loads the active custody model.
      * This is the preferred method for determining custody.
+     *
+     * Private and called only from `init`, so its collector is created exactly once and lives
+     * for the ViewModel's lifetime — the leak [custodySchedules] used to have needs a second
+     * caller, and this has none.
      */
     private fun loadCustodyModel() {
         viewModelScope.launch {
@@ -149,7 +150,7 @@ class CalendarViewModel @Inject constructor(
             return model.getCustodyFor(date)
         }
 
-        val schedules = _custodySchedules.value
+        val schedules = custodySchedules.value
         return CustodyHelper.getCustodyForDate(date, schedules)
     }
 
