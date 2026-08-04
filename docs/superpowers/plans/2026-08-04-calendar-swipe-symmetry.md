@@ -271,7 +271,9 @@ Then replace the MONTH branch of `queryRangeFor` (currently lines 93–109) with
         }
 ```
 
-Update the KDoc above `queryRangeFor` so it stops promising a range built from the selected date:
+Rename the function's parameter from `selectedDate` to `anchorDate` throughout its body (the DAY
+and WEEK branches use it too) and replace its KDoc, so it stops promising a range built from the
+selection:
 
 ```kotlin
 /**
@@ -282,6 +284,8 @@ Update the KDoc above `queryRangeFor` so it stops promising a range built from t
  * screen; DAY and WEEK anchor on a concrete day.
  */
 ```
+
+Every call site passes the argument positionally, so no call site changes in this step.
 
 - [ ] **Step 8: Run both test classes to verify they pass**
 
@@ -333,9 +337,9 @@ Wires Task 1's rule into the ViewModel and the screen. After this task the round
 **Files:**
 - Modify: `app/src/main/java/com/coparently/app/presentation/calendar/CalendarViewModel.kt`
 - Modify: `app/src/main/java/com/coparently/app/presentation/calendar/CalendarSelection.kt` (`anchorDate` KDoc + parameter name)
-- Modify: `app/src/main/java/com/coparently/app/presentation/calendar/CalendarScreen.kt:189-191`
+- Modify: `app/src/main/java/com/coparently/app/presentation/calendar/CalendarScreen.kt` — lines 189–191, plus the four range sites at 258, 262, 268–269 and 398
 - Modify: `app/src/test/java/com/coparently/app/presentation/calendar/CalendarViewModelTest.kt`
-- Modify: `app/src/test/java/com/coparently/app/presentation/calendar/CalendarSelectionTest.kt` (one test name)
+- Modify: `app/src/test/java/com/coparently/app/presentation/calendar/CalendarSelectionTest.kt` (named arguments only)
 
 **Interfaces:**
 - Consumes: `CalendarSelection.reanchor(current, displayed)` and `CalendarSelection.QUERY_ANCHOR_TOLERANCE_MONTHS` from Task 1.
@@ -443,7 +447,13 @@ $env:JAVA_HOME = "C:\Program Files\Android\Android Studio1\jbr"; ./gradlew testD
 
 Expected: PASS.
 
-- [ ] **Step 5: Point the screen's range at the anchor**
+- [ ] **Step 5: Give the screen a second anchor, for the range only**
+
+**Do not repurpose `anchorDate`.** It feeds `CalendarHeader` (line 325), whose title *is* the
+Month/Week/Day picker and which derives its `YearMonth` from that value
+(`CalendarHeader.kt:110`). Point it at the sticky anchor and the header stops following the swipe:
+you page to September and the title still says August until the next re-anchor. The range and the
+title need two different values.
 
 In `CalendarScreen.kt`, replace lines 189–191:
 
@@ -459,26 +469,51 @@ with:
     val displayedMonth by calendarViewModel.displayedMonth.collectAsState()
     val queryAnchorMonth by calendarViewModel.queryAnchorMonth.collectAsState()
     val today = remember { LocalDate.now() }
-    val anchorDate = CalendarSelection.anchorDate(viewMode, queryAnchorMonth, selectedDate, today)
+
+    // What the screen says it is showing: the header title, and the day DAY/WEEK render.
+    val anchorDate = CalendarSelection.anchorDate(viewMode, displayedMonth, selectedDate, today)
+
+    // What is loaded. In MONTH mode this lags the displayed month by up to
+    // CalendarSelection.QUERY_ANCHOR_TOLERANCE_MONTHS, which is the entire point; in DAY and WEEK
+    // the two are the same value.
+    val queryAnchorDate = CalendarSelection.anchorDate(viewMode, queryAnchorMonth, selectedDate, today)
 ```
 
-Every other use of `displayedMonth` stays as it is — the date picker's initial value (line 207), the vacation banner label (line 416) and `MonthView`'s `selectedMonth` (line 516) all describe what is on screen, not what is loaded.
+Then switch the three range computations — and only those three — from `anchorDate` to
+`queryAnchorDate`:
+
+| Line | Site | Change |
+|---|---|---|
+| 258 | `remember(viewMode, anchorDate, showHolidays)` — the holiday map's key | `remember(viewMode, queryAnchorDate, showHolidays)` |
+| 262 | `queryRangeFor(viewMode, anchorDate)` inside that `remember` | `queryRangeFor(viewMode, queryAnchorDate)` |
+| 268–269 | `LaunchedEffect(viewMode, anchorDate)` and the `queryRangeFor` call inside it | `LaunchedEffect(viewMode, queryAnchorDate)`, `queryRangeFor(viewMode, queryAnchorDate)` |
+| 398 | `queryRangeFor(viewMode, anchorDate)` in `onRefresh` | `queryRangeFor(viewMode, queryAnchorDate)` |
+
+Leave `anchorDate` at line 325 (`CalendarHeader`) and line 482 (`DayWeekView`) exactly as they are.
+
+Every other use of `displayedMonth` stays as it is — the date picker's initial value (line 207), the
+vacation banner label (line 416) and `MonthView`'s `selectedMonth` (line 516) all describe what is on
+screen, not what is loaded.
 
 - [ ] **Step 6: Rename `anchorDate`'s month parameter and update its KDoc**
 
-In `CalendarSelection.kt`, change the `anchorDate` signature's `displayedMonth: YearMonth` to `queryAnchorMonth: YearMonth`, update the MONTH branch to `queryAnchorMonth.atDay(1)`, and replace its KDoc with:
+`CalendarSelection.anchorDate` is now called twice with two different months, so its parameter can no
+longer be named after either one. In `CalendarSelection.kt`, rename `displayedMonth: YearMonth` to
+`month: YearMonth`, update the MONTH branch to `month.atDay(1)`, and replace its KDoc with:
 
 ```kotlin
     /**
-     * The date the event query range is computed from.
+     * The date [month] resolves to for a view mode.
      *
-     * In MONTH mode the unit of work is the loaded window, so the range follows the sticky
-     * [queryAnchorMonth] rather than the month on screen or the selection, which may be absent.
-     * Day and Week need a concrete day and fall back to today when nothing is selected.
+     * Called twice by the calendar with two different months: the displayed month, for the header
+     * title and the DAY/WEEK grid, and the sticky query anchor, for the event range. In MONTH mode
+     * the month is the whole answer; DAY and WEEK need a concrete day and fall back to today when
+     * nothing is selected, which makes the two calls identical in those modes.
      */
 ```
 
-In `CalendarSelectionTest.kt`, rename the test `month view anchors on the displayed month regardless of selection` to `month view anchors on the query anchor regardless of selection` and rename its named argument `displayedMonth =` to `queryAnchorMonth =`. Its assertion does not change.
+In `CalendarSelectionTest.kt`, rename the named argument `displayedMonth =` to `month =` in the three
+tests that use it. No test name and no assertion changes — the function's behaviour is unchanged.
 
 - [ ] **Step 7: Run the whole calendar test package and build**
 

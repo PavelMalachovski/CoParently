@@ -115,16 +115,22 @@ property at a smaller radius.
   month. `showMonth` and `setSelectedDate` pass the new displayed month through a pure re-anchor
   rule: keep the anchor while `abs(ChronoUnit.MONTHS.between(anchor, displayed)) <= 2`, otherwise
   adopt the displayed month.
-- `CalendarSelection.anchorDate` in MONTH mode returns `queryAnchorMonth.atDay(1)` instead of
-  `displayedMonth.atDay(1)`. WEEK and DAY are untouched — they still need a concrete day.
+- `CalendarSelection.anchorDate` is called **twice** by the screen, with two different months: once
+  with `displayedMonth`, once with `queryAnchorMonth`. The function itself does not change. This
+  matters more than it looks: `anchorDate` also feeds `CalendarHeader`, whose title *is* the
+  Month/Week/Day picker and which derives its `YearMonth` from that value. Repurposing the single
+  value would freeze the header title for up to two months of paging — you page to September and the
+  title still reads August. What is displayed and what is loaded need two values, which is the same
+  separation item 9 made between the displayed month and the chosen day.
 - The MONTH branch of `queryRangeFor` widens from ±6 weeks to ±3 months, still week-aligned
   (back to Monday, forward to Sunday). Per the project rule, the arithmetic is extended in
   `queryRangeFor` and not inlined at the call sites.
 
-`anchorDate` feeds the holiday map (`CalendarScreen.kt:258`), the event query
-(`CalendarScreen.kt:268`) and pull-to-refresh (`CalendarScreen.kt:398`) — all three follow the
-anchor automatically. `displayedMonth` keeps its other jobs: the date picker's initial value, the
-vacation banner label and `MonthView`'s `selectedMonth`.
+The query-anchored value feeds the holiday map (`CalendarScreen.kt:258`), the event query
+(`CalendarScreen.kt:268`) and pull-to-refresh (`CalendarScreen.kt:398`), and nothing else. The
+display-anchored value keeps the header (line 325) and the DAY/WEEK grid (line 482). `displayedMonth`
+keeps its other jobs: the date picker's initial value, the vacation banner label and `MonthView`'s
+`selectedMonth`.
 
 Effect: four consecutive swipes issue no query at all. The fifth re-anchors and issues one.
 
