@@ -101,6 +101,11 @@ fun ChatScreen(
     var composerText by rememberSaveable(draft) { mutableStateOf(draft) }
     val composerFocus = remember { FocusRequester() }
 
+    // Bumped only when something *seeds* the composer, so the refocus below fires on that and on
+    // nothing else. Keying the effect on the text itself refocused on every keystroke and, after a
+    // rotation, reopened a keyboard the user had deliberately dismissed.
+    var composerSeeds by rememberSaveable { mutableStateOf(0) }
+
     // DisposableEffect, not LaunchedEffect: the "thread is open" signal that gates the
     // read/delivered marks must clear when this composable leaves — see
     // ChatViewModel.onThreadClosed. A configuration change disposes and recomposes this
@@ -199,6 +204,7 @@ fun ChatScreen(
                 // identical placeholders-and-all messages into a real thread during the August
                 // 2026 baseline run, because the send was invisible and read as a missed tap.
                 composerText = template.content
+                composerSeeds++
                 showTemplates = false
             },
             onDismiss = { showTemplates = false }
@@ -216,10 +222,10 @@ fun ChatScreen(
         )
     }
 
-    // Runs when the sheet closes after a pick: the field is seeded, so put the cursor in it and
-    // raise the keyboard — otherwise the text appears somewhere the user is not looking.
-    LaunchedEffect(composerText) {
-        if (composerText.isNotEmpty() && !showTemplates) {
+    // Fires only after the composer was seeded: put the cursor in the field and raise the
+    // keyboard, so the text does not appear somewhere the user is not looking.
+    LaunchedEffect(composerSeeds) {
+        if (composerSeeds > 0) {
             composerFocus.requestFocus()
         }
     }
