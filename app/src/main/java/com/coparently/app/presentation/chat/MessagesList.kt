@@ -41,8 +41,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.role
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.coparently.app.R
 import com.coparently.app.domain.chat.ChatScrollPolicy
@@ -319,9 +317,10 @@ fun MessageItem(
                 )
                 .then(
                     if (linkedEventId != null) {
-                        Modifier
-                            .clickable(onClickLabel = openLabel) { onEventLinkClick?.invoke(linkedEventId) }
-                            .semantics { role = Role.Button }
+                        Modifier.clickable(
+                            onClickLabel = openLabel,
+                            role = Role.Button
+                        ) { onEventLinkClick?.invoke(linkedEventId) }
                     } else {
                         Modifier
                     }

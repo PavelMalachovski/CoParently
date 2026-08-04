@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.LocalDateTime
@@ -39,8 +40,19 @@ class ChangeRequestViewModel @Inject constructor(
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
 
+    // `changeRequests` starts at `initialValue = emptyList()` before Room's flow has emitted
+    // even once, and that placeholder is structurally identical to a real, confirmed-empty
+    // result — a genuinely empty inbox also settles on `emptyList()`. A reader that needs to
+    // know "has the real data arrived yet" (the chat-card deep link's highlight/"already
+    // closed" decision in ChangeRequestsScreen) cannot tell the two apart from the list value
+    // alone, so this flips once the underlying flow has produced its first real emission,
+    // whatever that emission is.
+    private val _hasLoaded = MutableStateFlow(false)
+    val hasLoaded: StateFlow<Boolean> = _hasLoaded.asStateFlow()
+
     val changeRequests: StateFlow<List<ChangeRequest>> =
         changeRequestRepository.getAllChangeRequests()
+            .onEach { _hasLoaded.value = true }
             .stateIn(
                 scope = viewModelScope,
                 started = SharingStarted.WhileSubscribed(5000),

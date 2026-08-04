@@ -58,7 +58,8 @@ private val requestDateFormatter = DateTimeFormatter.ofPattern("EEE, MMM d · HH
  * @param onOpenEvent Opens the event a card refers to
  * @param linkedEventId Event id carried by a tapped chat card, or null for the plain inbox.
  *   When set, the newest request for that event ([ChangeRequestHighlight.forEvent]) is
- *   highlighted and scrolled into view; if the event has no request at all, a snackbar says so.
+ *   highlighted and scrolled into view; if the event has no request at all, a snackbar says so
+ *   once the inbox has actually finished loading.
  * @param viewModel Change-request state
  */
 @Suppress("LongMethod") // Compose screen: empty state + two list sections
@@ -71,6 +72,7 @@ fun ChangeRequestsScreen(
     viewModel: ChangeRequestViewModel = hiltViewModel()
 ) {
     val requests by viewModel.changeRequests.collectAsState()
+    val hasLoaded by viewModel.hasLoaded.collectAsState()
     val currentUserId by viewModel.currentUserId.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()
     val context = LocalContext.current
@@ -92,9 +94,19 @@ fun ChangeRequestsScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val missingMessage = stringResource(R.string.change_request_link_missing)
 
-    // Arriving from a chat card: scroll the request into view, or say why there is nothing to see.
-    LaunchedEffect(linkedEventId, requests) {
-        if (linkedEventId == null) return@LaunchedEffect
+    // Arriving from a chat card: scroll the request into view, or say why there is nothing to
+    // see. Gated on `hasLoaded`, not on `requests` being non-empty: `changeRequests` is seeded
+    // with `initialValue = emptyList()` before Room's flow has emitted for real, and that
+    // placeholder is indistinguishable from a genuinely empty result by list contents alone —
+    // gating on emptiness fired the "already closed" snackbar on every cold arrival, before the
+    // real data had a chance to load. `hasLoaded` (ChangeRequestViewModel) flips true on the
+    // first real emission, whatever it is, so the check below only runs once that has happened;
+    // a linked event that truly has no request still gets the snackbar, just not prematurely.
+    // Keyed on `hasLoaded` rather than `requests`, this effect also runs exactly once per
+    // arrival: accepting or declining the highlighted card afterwards changes `requests` but
+    // must not scroll the list again out from under the user.
+    LaunchedEffect(linkedEventId, hasLoaded) {
+        if (linkedEventId == null || !hasLoaded) return@LaunchedEffect
         val target = highlighted
         if (target == null) {
             snackbarHostState.showSnackbar(missingMessage)
