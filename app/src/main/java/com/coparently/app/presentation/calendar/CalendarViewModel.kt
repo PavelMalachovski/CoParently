@@ -36,8 +36,18 @@ class CalendarViewModel @Inject constructor(
     private val encryptedPreferences: EncryptedPreferences
 ) : ViewModel() {
 
-    private val _custodySchedules = MutableStateFlow<List<CustodyScheduleEntity>>(emptyList())
-    val custodySchedules: StateFlow<List<CustodyScheduleEntity>> = _custodySchedules.asStateFlow()
+    /**
+     * Active legacy custody schedules, the fallback half of the unified custody lookup.
+     *
+     * Derived from the DAO flow rather than pushed into a [MutableStateFlow] by a `load…()`
+     * method: the Room flow already re-emits on every write, so re-collecting it buys nothing
+     * and the old method — called from `init` *and* from pull-to-refresh — left one permanent,
+     * uncancelled collector behind per call, each of them recomposing the whole Calendar tab.
+     * `Eagerly` because [getCustodyForDate] reads `.value` outside any collection.
+     */
+    val custodySchedules: StateFlow<List<CustodyScheduleEntity>> =
+        custodyScheduleDao.getAllActiveSchedules()
+            .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     private val _custodyModel = MutableStateFlow<CustodyModel?>(null)
     val custodyModel: StateFlow<CustodyModel?> = _custodyModel.asStateFlow()
@@ -58,6 +68,16 @@ class CalendarViewModel @Inject constructor(
 
     /** Month the grid is showing. Independent of [selectedDate], which may be absent. */
     val displayedMonth: StateFlow<YearMonth> = _displayedMonth.asStateFlow()
+
+    private val _queryAnchorMonth = MutableStateFlow(YearMonth.now())
+
+    /**
+     * Month the event query window is centred on. Distinct from [displayedMonth]: it stays put
+     * while the user pages within [CalendarSelection.QUERY_ANCHOR_TOLERANCE_MONTHS] of it, so a
+     * settle no longer triggers a fresh query. Chasing the displayed month is what made backward
+     * paging drop frames — see the item 8 diagnosis.
+     */
+    val queryAnchorMonth: StateFlow<YearMonth> = _queryAnchorMonth.asStateFlow()
 
     private val _selectedDate = MutableStateFlow<LocalDate?>(LocalDate.now())
 
@@ -82,26 +102,17 @@ class CalendarViewModel @Inject constructor(
     val showHolidays: StateFlow<Boolean> = _showHolidays.asStateFlow()
 
     init {
-        loadCustodySchedules()
         loadCustodyModel()
         loadFilterPreferences()
     }
 
     /**
-     * Loads all active custody schedules.
-     * Legacy method - used when no CustodyModel is available.
-     */
-    fun loadCustodySchedules() {
-        viewModelScope.launch {
-            custodyScheduleDao.getAllActiveSchedules().collect { schedules ->
-                _custodySchedules.value = schedules
-            }
-        }
-    }
-
-    /**
      * Loads the active custody model.
      * This is the preferred method for determining custody.
+     *
+     * Private and called only from `init`, so its collector is created exactly once and lives
+     * for the ViewModel's lifetime — the leak [custodySchedules] used to have needs a second
+     * caller, and this has none.
      */
     private fun loadCustodyModel() {
         viewModelScope.launch {
@@ -139,7 +150,7 @@ class CalendarViewModel @Inject constructor(
             return model.getCustodyFor(date)
         }
 
-        val schedules = _custodySchedules.value
+        val schedules = custodySchedules.value
         return CustodyHelper.getCustodyForDate(date, schedules)
     }
 
@@ -157,7 +168,7 @@ class CalendarViewModel @Inject constructor(
      */
     fun setSelectedDate(date: LocalDate) {
         _selectedDate.value = date
-        _displayedMonth.value = YearMonth.from(date)
+        moveTo(YearMonth.from(date))
     }
 
     /**
@@ -165,8 +176,14 @@ class CalendarViewModel @Inject constructor(
      * otherwise.
      */
     fun showMonth(month: YearMonth) {
-        _displayedMonth.value = month
+        moveTo(month)
         _selectedDate.value = CalendarSelection.forMonth(month, LocalDate.now())
+    }
+
+    /** Shows [month] and re-centres the query window only if it has drifted too far. */
+    private fun moveTo(month: YearMonth) {
+        _displayedMonth.value = month
+        _queryAnchorMonth.value = CalendarSelection.reanchor(_queryAnchorMonth.value, month)
     }
 
     /**

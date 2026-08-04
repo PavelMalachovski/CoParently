@@ -254,6 +254,19 @@ Data flow: UI → ViewModel → UseCase → Repository → Room (source of truth
   badge clears on open, and the ticks reach READ — was **deferred, not run**. Backlog item for
   the next review round. Everything else in that acceptance run passed on real devices.
 
+- **The calendar never renders `EventUiState.Error`.** `EventViewModel` sets it when a range query
+  fails, but the only `LaunchedEffect(uiState)` branch in `CalendarScreen` handles
+  `OperationSuccess` — so a failed range leaves the last-loaded grid on screen, or an empty one on
+  a cold start, with nothing saying anything went wrong. Milder than the chat-listener entry above,
+  which is why it is listed and not fixed: a recovery lever exists (pull-to-refresh calls
+  `EventViewModel.refresh()`, which re-collects the query from scratch — re-requesting the same
+  range is conflated away and could not restart it), and leaving and re-entering the Calendar tab
+  recreates the ViewModel anyway. What is missing is that the user has to guess at the lever. The
+  fix is an `is EventUiState.Error` branch in that same `LaunchedEffect` raising a snackbar with a
+  Retry action wired to `refresh()`; it needs a new string in all five locales, which is why it was
+  not folded into the query-window work. Don't "fix" it by rendering `Loading` in the calendar —
+  the query flips to `Loading` on every re-anchor and the grid would flicker.
+
 - `firestore.rules` (strict) was realigned with the real document schema (ISO **string**
   dates, presence-based key validation, `change_requests`/`expenses` collections added,
   over-strict `lastModifiedBy`/`canModify` gates dropped) so it no longer rejects the app's
