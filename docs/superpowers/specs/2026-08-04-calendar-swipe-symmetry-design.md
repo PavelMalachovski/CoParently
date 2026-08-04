@@ -277,6 +277,45 @@ predicted.
    subsection recording the same result and re-opening the item as a fresh investigation rather than
    moving it into "fixed".
 
+## What the negative result narrows it to
+
+The measurement is worth more than its verdict, because three experiments now bracket the cause:
+
+| Experiment | What it removed | Backward frames |
+|---|---|---|
+| Diagnosis row 3 | every per-cell lookup (events, custody, holidays) | 26 — no change |
+| Diagnosis row 4 | `onMonthChange` made a **complete** no-op | 124 — fixed |
+| This branch | only the **event query** that `onMonthChange` triggered | 26–31 — no change |
+
+Row 4 is the only experiment that helped, and it removed three things at once: the event query, the
+ViewModel state write, and the whole-screen recomposition that state write causes. The diagnosis
+attributed the entire gain to the query — "`onMonthChange` → … → a fresh event query through
+`queryRangeFor`" — because its single experiment could not separate the three. This branch removed
+the query and nothing else, and the number did not move. **That attribution is now falsified.**
+
+What row 4 removed and this branch did not: `showMonth` still writes `_displayedMonth` and
+`_selectedDate`, and `CalendarScreen` collects both near the top of its composable body
+(`CalendarScreen.kt:188-191`). Every settle therefore still recomposes the entire screen — header,
+banners, filters, the grid and the agenda card — even though no query is issued any more. That, not
+the query, is what is left of row 4's delta.
+
+**The next experiment is the mirror image of this one:** keep the query wiring exactly as it now is
+and cut only the ViewModel state write on settle, then re-run the protocol. If backward paging
+recovers, the fix is scoping the recomposition — hoisting the parts of `CalendarScreen` that do not
+depend on the displayed month out of the recomposing scope, or deriving them so the month change
+touches only the grid. If it does not recover either, then row 4's result came from something
+outside the ViewModel round-trip altogether and the diagnosis needs restarting, not refining.
+
+Why any of this lands on one direction only is still unestablished. It was unestablished in the
+diagnosis, this round did not touch it, and it should not be guessed at now.
+
+**What stays on the branch regardless.** Tasks 1–3 are not reverted, and their value does not depend
+on this measurement: the collector leak was real and unbounded (one permanent collector per month
+swipe, for the life of the Calendar tab, each re-expanding recurrences on every write to the events
+table), and querying a fresh range on every settle was real waste. Both are fixed and unit-tested.
+They are correctness and efficiency work that happens not to be the frame-rate fix — which is
+precisely what the numbers say, and all they say.
+
 ## Files
 
 - `app/src/main/java/com/coparently/app/presentation/event/EventViewModel.kt`

@@ -529,6 +529,21 @@ experiment, not a partial win. `[H]` (whether the "first swipe back is sticky" f
 correctly not run given these numbers — it remains outstanding regardless, per the spec's own rule
 that the item cannot be marked closed without it.
 
+**But the negative result narrows the cause, and that is the round's real output.** Three
+experiments now bracket it: stripping every per-cell lookup changed nothing (26 frames); making
+`onMonthChange` a *complete* no-op fixed it (124 frames); removing only the *event query* that
+`onMonthChange` triggered — this branch — changed nothing (26–31 frames). Row 4 removed three things
+at once, and the diagnosis attributed the whole gain to the query. That attribution is now falsified.
+What is left of row 4's delta is the ViewModel state write and the whole-screen recomposition it
+causes: `showMonth` still writes `_displayedMonth` and `_selectedDate`, and `CalendarScreen` collects
+both near the top of its composable body, so every settle still recomposes the entire screen even
+though no query is issued. The next experiment is the mirror image of this one — keep the query
+wiring, cut only the state write, re-run the protocol. Full reasoning in the spec's "What the
+negative result narrows it to".
+
+Tasks 1–3 stay on the branch: the collector leak and the per-settle re-query were real defects with
+their own unit tests, and they are fixed. They are simply not the frame-rate fix.
+
 ---
 
 ## §12 Known issues — confirm or clear
