@@ -59,6 +59,16 @@ class CalendarViewModel @Inject constructor(
     /** Month the grid is showing. Independent of [selectedDate], which may be absent. */
     val displayedMonth: StateFlow<YearMonth> = _displayedMonth.asStateFlow()
 
+    private val _queryAnchorMonth = MutableStateFlow(YearMonth.now())
+
+    /**
+     * Month the event query window is centred on. Distinct from [displayedMonth]: it stays put
+     * while the user pages within [CalendarSelection.QUERY_ANCHOR_TOLERANCE_MONTHS] of it, so a
+     * settle no longer triggers a fresh query. Chasing the displayed month is what made backward
+     * paging drop frames — see the item 8 diagnosis.
+     */
+    val queryAnchorMonth: StateFlow<YearMonth> = _queryAnchorMonth.asStateFlow()
+
     private val _selectedDate = MutableStateFlow<LocalDate?>(LocalDate.now())
 
     /**
@@ -157,7 +167,7 @@ class CalendarViewModel @Inject constructor(
      */
     fun setSelectedDate(date: LocalDate) {
         _selectedDate.value = date
-        _displayedMonth.value = YearMonth.from(date)
+        moveTo(YearMonth.from(date))
     }
 
     /**
@@ -165,8 +175,14 @@ class CalendarViewModel @Inject constructor(
      * otherwise.
      */
     fun showMonth(month: YearMonth) {
-        _displayedMonth.value = month
+        moveTo(month)
         _selectedDate.value = CalendarSelection.forMonth(month, LocalDate.now())
+    }
+
+    /** Shows [month] and re-centres the query window only if it has drifted too far. */
+    private fun moveTo(month: YearMonth) {
+        _displayedMonth.value = month
+        _queryAnchorMonth.value = CalendarSelection.reanchor(_queryAnchorMonth.value, month)
     }
 
     /**

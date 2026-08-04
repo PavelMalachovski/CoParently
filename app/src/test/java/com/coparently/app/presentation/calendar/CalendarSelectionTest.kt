@@ -37,7 +37,7 @@ class CalendarSelectionTest {
             LocalDate.of(2026, 12, 1),
             CalendarSelection.anchorDate(
                 viewMode = CalendarViewMode.MONTH,
-                displayedMonth = YearMonth.of(2026, 12),
+                month = YearMonth.of(2026, 12),
                 selectedDate = null,
                 today = today
             )
@@ -50,7 +50,7 @@ class CalendarSelectionTest {
             LocalDate.of(2026, 9, 14),
             CalendarSelection.anchorDate(
                 viewMode = CalendarViewMode.DAY,
-                displayedMonth = YearMonth.of(2026, 9),
+                month = YearMonth.of(2026, 9),
                 selectedDate = LocalDate.of(2026, 9, 14),
                 today = today
             )
@@ -63,7 +63,7 @@ class CalendarSelectionTest {
             today,
             CalendarSelection.anchorDate(
                 viewMode = CalendarViewMode.WEEK,
-                displayedMonth = YearMonth.of(2026, 8),
+                month = YearMonth.of(2026, 8),
                 selectedDate = null,
                 today = today
             )

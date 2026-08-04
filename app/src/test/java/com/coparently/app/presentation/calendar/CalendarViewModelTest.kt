@@ -151,4 +151,40 @@ class CalendarViewModelTest {
         viewModel.setShowHolidays(false)
         assertFalse(viewModel.showHolidays.value)
     }
+
+    @Test
+    fun `the query anchor starts on the current month`() = runTest {
+        assertEquals(YearMonth.now(), viewModel.queryAnchorMonth.value)
+    }
+
+    @Test
+    fun `paging within tolerance leaves the query anchor alone`() = runTest {
+        val start = YearMonth.now()
+        viewModel.showMonth(start.plusMonths(1))
+        viewModel.showMonth(start.plusMonths(2))
+        assertEquals(start, viewModel.queryAnchorMonth.value)
+        assertEquals(start.plusMonths(2), viewModel.displayedMonth.value)
+    }
+
+    @Test
+    fun `paging past tolerance re-anchors the query`() = runTest {
+        val start = YearMonth.now()
+        viewModel.showMonth(start.plusMonths(3))
+        assertEquals(start.plusMonths(3), viewModel.queryAnchorMonth.value)
+    }
+
+    @Test
+    fun `paging backwards past tolerance re-anchors the query`() = runTest {
+        val start = YearMonth.now()
+        viewModel.showMonth(start.minusMonths(3))
+        assertEquals(start.minusMonths(3), viewModel.queryAnchorMonth.value)
+    }
+
+    @Test
+    fun `tapping a day in a distant month re-anchors the query`() = runTest {
+        val start = YearMonth.now()
+        val distant = start.plusMonths(7).atDay(14)
+        viewModel.setSelectedDate(distant)
+        assertEquals(YearMonth.from(distant), viewModel.queryAnchorMonth.value)
+    }
 }

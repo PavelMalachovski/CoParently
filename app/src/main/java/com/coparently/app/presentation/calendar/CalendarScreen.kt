@@ -200,8 +200,16 @@ fun CalendarScreen(
     val viewMode by calendarViewModel.viewMode.collectAsState()
     val selectedDate by calendarViewModel.selectedDate.collectAsState()
     val displayedMonth by calendarViewModel.displayedMonth.collectAsState()
+    val queryAnchorMonth by calendarViewModel.queryAnchorMonth.collectAsState()
     val today = remember { LocalDate.now() }
+
+    // What the screen says it is showing: the header title, and the day DAY/WEEK render.
     val anchorDate = CalendarSelection.anchorDate(viewMode, displayedMonth, selectedDate, today)
+
+    // What is loaded. In MONTH mode this lags the displayed month by up to
+    // CalendarSelection.QUERY_ANCHOR_TOLERANCE_MONTHS, which is the entire point; in DAY and WEEK
+    // the two are the same value.
+    val queryAnchorDate = CalendarSelection.anchorDate(viewMode, queryAnchorMonth, selectedDate, today)
     val parentFilter by calendarViewModel.parentFilter.collectAsState()
     val hiddenEventTypes by calendarViewModel.hiddenEventTypes.collectAsState()
     val customEventTypes by calendarViewModel.customEventTypes.collectAsState()
@@ -268,18 +276,18 @@ fun CalendarScreen(
     }
 
     // Czech public holidays and school vacations for the visible range
-    val holidays: Map<LocalDate, Holiday> = remember(viewMode, anchorDate, showHolidays) {
+    val holidays: Map<LocalDate, Holiday> = remember(viewMode, queryAnchorDate, showHolidays) {
         if (!showHolidays) {
             emptyMap()
         } else {
-            val (start, end) = queryRangeFor(viewMode, anchorDate)
+            val (start, end) = queryRangeFor(viewMode, queryAnchorDate)
             CzechHolidays.holidaysInRange(start.toLocalDate(), end.toLocalDate())
         }
     }
 
     // Load events based on view mode
-    LaunchedEffect(viewMode, anchorDate) {
-        val (start, end) = queryRangeFor(viewMode, anchorDate)
+    LaunchedEffect(viewMode, queryAnchorDate) {
+        val (start, end) = queryRangeFor(viewMode, queryAnchorDate)
         eventViewModel.loadEventsForDateRange(start, end)
     }
 
@@ -408,7 +416,7 @@ fun CalendarScreen(
             onRefresh = {
                 isRefreshing = true
                 scope.launch {
-                    val (start, end) = queryRangeFor(viewMode, anchorDate)
+                    val (start, end) = queryRangeFor(viewMode, queryAnchorDate)
                     eventViewModel.loadEventsForDateRange(start, end)
                     calendarViewModel.loadCustodySchedules()
                     kotlinx.coroutines.delay(500)

@@ -24,19 +24,20 @@ object CalendarSelection {
         today.takeIf { YearMonth.from(it) == month }
 
     /**
-     * The date the event query range is computed from.
+     * The date [month] resolves to for a view mode.
      *
-     * In MONTH mode the grid is the unit of work, so the range follows the displayed month and
-     * not the selection, which may be absent. Day and Week need a concrete day and fall back to
-     * today when nothing is selected.
+     * Called twice by the calendar with two different months: the displayed month, for the header
+     * title and the DAY/WEEK grid, and the sticky query anchor, for the event range. In MONTH mode
+     * the month is the whole answer; DAY and WEEK need a concrete day and fall back to today when
+     * nothing is selected, which makes the two calls identical in those modes.
      */
     fun anchorDate(
         viewMode: CalendarViewMode,
-        displayedMonth: YearMonth,
+        month: YearMonth,
         selectedDate: LocalDate?,
         today: LocalDate
     ): LocalDate = when (viewMode) {
-        CalendarViewMode.MONTH -> displayedMonth.atDay(1)
+        CalendarViewMode.MONTH -> month.atDay(1)
         CalendarViewMode.WEEK, CalendarViewMode.DAY -> selectedDate ?: today
     }
 
