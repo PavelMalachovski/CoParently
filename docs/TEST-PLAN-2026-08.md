@@ -494,6 +494,41 @@ unrun.
 **Items 1a, 1b, 2 and 3 are untouched.** Each needs a data-model change, Firestore rules and product
 decisions this batch did not make.
 
+### Item 8 — measured after the attempted fix — 4 August 2026 (Task 4)
+
+`docs/superpowers/specs/2026-08-04-calendar-swipe-symmetry-design.md` (Tasks 1–3, branch
+`fix/calendar-swipe-symmetry`) shipped a sticky query-anchor window (±3 months, re-anchoring only
+past a 2-month threshold) and collapsed `EventViewModel` to a single `flatMapLatest` collector, aimed
+at reproducing the diagnosis's row-4 result — backward paging matching forward at roughly 124 frames,
+~16% janky. This is the device measurement of that fix, same Samsung, same protocol
+(`dumpsys gfxinfo … reset`, five `input swipe` gestures 250 ms long, 1.5 s apart, cold start per run,
+Calendar tab confirmed open before each reset). Two runs per direction, both reported:
+
+| Run | Frames | Janky | p50 | p90 |
+|---|---|---|---|---|
+| Forward, run 1 | 121 | 27.3% | 17 ms | 200 ms |
+| Forward, run 2 | 144 | 20.8% | 15 ms | 121 ms |
+| Backward, run 1 | 26 | 69.2% | 200 ms | 300 ms |
+| Backward, run 2 | 31 | 64.5% | 125 ms | 200 ms |
+
+Forward — the control — is consistent with the July baseline (142 frames, 20.4% janky, p50 14 ms)
+once run-to-run variance is accounted for: run 2 lands within a couple of points of it, run 1 is a
+noisier outlier but the same order of magnitude. Nothing suggests the forward path regressed, so the
+backward comparison is clean.
+
+**Backward, after the fix, still lands at 26–31 frames and 64–69% janky with p50 125–200 ms** —
+indistinguishable from the pre-fix baseline (30 frames, 70%, p50 121 ms) and closer to the
+diagnosis's dead-end "per-cell work stripped" experiment (26 frames, 69.2%, p50 200 ms) than to the
+"month propagation cut" experiment (124 frames, 16.1%, p50 16 ms) the fix was built to reproduce.
+
+**The fix did not close the gap.** Event dots on Aug 3 and Aug 21 were confirmed intact after five
+swipes each direction, so the wider query window is not silently dropping data — it simply is not
+delivering the frame-rate improvement the diagnosis's isolated experiment predicted. Item 8 stays
+open: this is a fresh investigation into what the shipped code is still doing differently from that
+experiment, not a partial win. `[H]` (whether the "first swipe back is sticky" feeling is gone) was
+correctly not run given these numbers — it remains outstanding regardless, per the spec's own rule
+that the item cannot be marked closed without it.
+
 ---
 
 ## §12 Known issues — confirm or clear

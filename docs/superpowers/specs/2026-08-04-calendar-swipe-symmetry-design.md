@@ -219,6 +219,64 @@ from the first range's flow must not reach `events`.
   catches the write sites, and `SharingStarted.Eagerly` keeps `events.value` meaningful for the
   existing `EventViewModelTest` assertions.
 
+## Measured result — 4 August 2026 (Task 4)
+
+Two cold-start runs per direction, Samsung SM-A176B, same protocol as the diagnosis
+(`dumpsys gfxinfo … reset`, five `input swipe` gestures 250 ms long, 1.5 s apart, cold start per
+run), with the Calendar tab's month grid confirmed on screen *before* each reset so app startup and
+tab navigation are excluded from the counters:
+
+| Run | Frames | Janky | p50 | p90 |
+|---|---|---|---|---|
+| Forward, run 1 | 121 | 27.3% | 17 ms | 200 ms |
+| Forward, run 2 | 144 | 20.8% | 15 ms | 121 ms |
+| Backward, run 1 | 26 | 69.2% | 200 ms | 300 ms |
+| Backward, run 2 | 31 | 64.5% | 125 ms | 200 ms |
+
+For comparison, the diagnosis's numbers reproduced from "What is already established" above:
+
+| Run | Frames | Janky | p50 | p90 |
+|---|---|---|---|---|
+| Forward (baseline) | 142 | 20.4% | 14 ms | 113 ms |
+| Backward (baseline, before any fix) | 30 | 70.0% | 121 ms | 250 ms |
+| Backward, all per-cell work stripped | 26 | 69.2% | 200 ms | 250 ms |
+| Backward, month propagation cut (the target this spec aimed at) | 124 | 16.1% | 16 ms | 73 ms |
+
+**Forward control.** Run 2 (144 frames, 20.8% janky, p50 15 ms) matches the baseline closely; run 1
+(121 frames, 27.3%, p50 17 ms) is worse but the same order of magnitude — read as run-to-run
+variance on a shared device, not a regression in the forward path. The comparison below is clean.
+
+**Backward, after the fix.** Both runs land at 26 and 31 frames, 64–69% janky, p50 125–200 ms —
+statistically indistinguishable from the pre-fix baseline (30 frames, 70%, p50 121 ms), and much
+closer to the diagnosis's "per-cell work stripped" dead end (26 frames, 69.2%, p50 200 ms) than to
+the "month propagation cut" experiment (124 frames, 16.1%, p50 16 ms) this spec's fix was built to
+reproduce.
+
+**Conclusion: Tasks 1–3 (the sticky query anchor and the single `EventViewModel` collector) did not
+close the gap on device.** Whatever produced the 124-frame result in the diagnosis's isolated
+experiment is not fully present in what shipped, or something else on this branch still triggers the
+same per-settle cost that experiment removed. Per this spec's own non-goal — "if the asymmetry
+survives on levelled numbers, it is a fresh investigation and the PR says so" — that is exactly what
+this is: a fresh investigation, not a partial win rounded up to a full one.
+
+Event dots on Aug 3 and Aug 21 were confirmed intact on the month grid after five swipes forward and
+five back, so the wider ±3-month query window is not silently dropping data — the coverage invariant
+holds in practice as well as on paper. The window just is not delivering the frame-rate improvement
+predicted.
+
+**Acceptance status:**
+
+1. `./gradlew assembleDebug testDebugUnitTest lint detekt` — done in Tasks 1–3; not re-run here, out
+   of this task's scope.
+2. `gfxinfo` before/after table — done, above. The target (backward ~124 frames, ~16% janky, p50
+   ~16 ms, matching forward) was **not met**.
+3. `[H]` — still outstanding, not run in this task (that is the owner's, by design). Given the
+   numbers above it would not have changed the verdict, but the item is not closed without it
+   regardless.
+4. `docs/TEST-PLAN-2026-08.md` §11 — updated with an "Item 8 — measured after the attempted fix"
+   subsection recording the same result and re-opening the item as a fresh investigation rather than
+   moving it into "fixed".
+
 ## Files
 
 - `app/src/main/java/com/coparently/app/presentation/event/EventViewModel.kt`
