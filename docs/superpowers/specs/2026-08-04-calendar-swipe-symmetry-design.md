@@ -83,7 +83,6 @@ internal sealed interface EventQuery {
 private val query = MutableStateFlow<EventQuery>(EventQuery.All)
 
 val events: StateFlow<List<Event>> = query
-    .distinctUntilChanged()
     .flatMapLatest { … }
     .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 ```
@@ -97,8 +96,10 @@ caller anywhere, production or test; carrying it forward would mean a third `Eve
 a third leak path that nothing exercises.
 
 Two properties follow from the shape rather than from discipline: `flatMapLatest` cancels the
-previous collection before starting the next, so the leak cannot recur; `distinctUntilChanged`
-makes re-requesting an identical range free.
+previous collection before starting the next, so the leak cannot recur; and `MutableStateFlow`
+conflates equal values, so re-requesting the range already loaded emits nothing and costs nothing.
+No `distinctUntilChanged` is needed for that — `EventQuery.Range` is a data class and the state
+flow does the deduplication itself.
 
 `EventListScreen` and `AddEditEventScreen` obtain their own instances and never set a range, so they
 stay on `All` and behave exactly as today. `EventUiState` keeps its current meaning, including the
@@ -152,8 +153,8 @@ This is the assertion the test suite exists to defend: change either constant an
   unestablished and this spec does not guess. If the after-numbers match in both directions the
   question is moot; if the asymmetry survives on levelled numbers, it is a fresh investigation and
   the PR says so.
-- **Pull-to-refresh becomes a genuine no-op for events.** It re-requests the same range, which
-  `distinctUntilChanged` now swallows. It already achieved nothing: the Room flow is live, so
+- **Pull-to-refresh becomes a genuine no-op for events.** It re-requests the same range, which the
+  query state flow now conflates away. It already achieved nothing: the Room flow is live, so
   re-collecting the same query returns the same rows. The custody reload it also triggers is
   unaffected. No visible change, recorded so it is not mistaken later for a regression.
 - No Room schema change, no `firestore.rules` change, no new dependency, no new user-facing string.
