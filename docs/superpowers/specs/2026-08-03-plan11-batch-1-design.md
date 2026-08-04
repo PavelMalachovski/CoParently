@@ -317,3 +317,54 @@ would waste the only objective instrument this item has.
 - **Item 8 may not land** (see its exit conditions). If it does not, the PR is still five fixes.
 - **Item 5 links into an untranslated screen.** Recorded as a non-goal above, not silently accepted:
   it should be the next small change after this batch.
+
+---
+
+## Diagnosis — item 8, the calendar swipe asymmetry (4 August 2026)
+
+**Outcome: cause found, fix carved out of this batch.** This is the spec's second exit condition,
+not a failure to investigate.
+
+Measured on the Samsung SM-A176B against the branch at `4eb57955`, five scripted swipes per run
+(`input swipe`, 250 ms, 1.5 s apart), `dumpsys gfxinfo … reset` before each run, cold start each
+time:
+
+| Run | Frames | Janky | p50 | p90 |
+|---|---|---|---|---|
+| Forward (next month) | 142 | 20.4% | 14 ms | 113 ms |
+| Backward (previous month) | 30 | 70.0% | 121 ms | 250 ms |
+| Backward, **all per-cell work stripped** | 26 | 69.2% | 200 ms | 250 ms |
+| Backward, **month propagation cut** | 124 | 16.1% | 16 ms | 73 ms |
+
+Row 1 reproduces the July baseline, so the branch did not change the symptom. Rows 3 and 4 are the
+two experiments:
+
+**Hypotheses 2 and 3 are dead.** Row 3 replaced `dayContent` with a `DayCell` receiving
+`events = emptyList()`, `getCustody = { null }` and `holiday = null` — every per-cell lookup gone,
+42 cells of pure layout. Backward paging did not improve at all (26 frames, still 69% janky). The
+per-cell event scan, the custody lookup and the holiday map are **not** what makes backward paging
+slow. Any future optimisation there is worth doing on its own merits, but it will not touch this.
+
+**Hypothesis 1 is confirmed, in a broader form than it was written.** Row 4 changed exactly one
+thing: `onMonthChange` became a no-op, so a settle no longer wrote anything to the ViewModel.
+Backward paging immediately matched forward paging — 124 frames, 16% janky, p50 16 ms. The cost is
+not in the pager and not in the cells; it is the **state round-trip a settle triggers**:
+`onMonthChange` → `setSelectedDate(newMonth.atDay(1))` → `selectedDate` changes → the whole
+`CalendarScreen` recomposes and `LaunchedEffect(viewMode, selectedDate)` fires a fresh event query
+through `queryRangeFor`. The three fixes already in `MonthView` addressed the *pager's* behaviour;
+none of them touches this round-trip, which is why they left the symptom in place.
+
+Why it lands on one direction only is not yet established, and this diagnosis deliberately does not
+guess. The round-trip runs in both directions; something about the backward settle makes it land
+where it costs frames. That is the next thing to measure, not to theorise about.
+
+**Why it is carved out rather than fixed here.** What the evidence supports is a cause, not a
+validated fix, and the plausible fixes are not small: not re-querying when the new range is already
+covered (consecutive months overlap heavily — `queryRangeFor` already loads ±6 weeks around the
+month), or moving the range off `selectedDate` entirely. Both rework the same selection-and-range
+plumbing that item 9 rewrites in this batch, and stacking an unvalidated performance change on top
+of that rework — in the same PR, with no test that can catch a regression — is how you end up
+unable to tell which change did what. Item 8 gets its own round, starting from this table.
+
+**Still open regardless:** the `[H]` half of the test plan's 4.2.3 — what the asymmetry feels like
+under a thumb. Frame counters do not express inertia, and both passes here were scripted.
