@@ -19,6 +19,7 @@ import io.mockk.mockk
 import io.mockk.slot
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -141,5 +142,50 @@ class EventViewModelTest {
 
         assertNull(saved.captured.pickupConfirmedBy)
         assertNull(saved.captured.pickupConfirmedAt)
+    }
+
+    @Test
+    fun `setting a new range cancels the previous collection`() = runTest {
+        val firstStart = LocalDateTime.of(2026, 8, 1, 0, 0)
+        val firstEnd = LocalDateTime.of(2026, 8, 31, 23, 59, 59)
+        val secondStart = LocalDateTime.of(2026, 11, 1, 0, 0)
+        val secondEnd = LocalDateTime.of(2026, 11, 30, 23, 59, 59)
+
+        val firstRange = MutableSharedFlow<List<Event>>()
+        val laterEvent = sampleEvent.copy(id = "e2", title = "Dentist")
+        every { getEvents.getByDateRange(firstStart, firstEnd) } returns firstRange
+        every { getEvents.getByDateRange(secondStart, secondEnd) } returns flowOf(listOf(laterEvent))
+
+        viewModel.loadEventsForDateRange(firstStart, firstEnd)
+        advanceUntilIdle()
+        firstRange.emit(listOf(sampleEvent))
+        advanceUntilIdle()
+        assertEquals(listOf(sampleEvent), viewModel.events.value)
+
+        viewModel.loadEventsForDateRange(secondStart, secondEnd)
+        advanceUntilIdle()
+
+        assertEquals(0, firstRange.subscriptionCount.value)
+        assertEquals(listOf(laterEvent), viewModel.events.value)
+
+        // A late emission from the abandoned range must not reach the UI.
+        firstRange.emit(listOf(sampleEvent))
+        advanceUntilIdle()
+        assertEquals(listOf(laterEvent), viewModel.events.value)
+    }
+
+    @Test
+    fun `re-requesting the same range does not restart the collection`() = runTest {
+        val start = LocalDateTime.of(2026, 8, 1, 0, 0)
+        val end = LocalDateTime.of(2026, 8, 31, 23, 59, 59)
+        val range = MutableSharedFlow<List<Event>>()
+        every { getEvents.getByDateRange(start, end) } returns range
+
+        viewModel.loadEventsForDateRange(start, end)
+        advanceUntilIdle()
+        viewModel.loadEventsForDateRange(start, end)
+        advanceUntilIdle()
+
+        assertEquals(1, range.subscriptionCount.value)
     }
 }
