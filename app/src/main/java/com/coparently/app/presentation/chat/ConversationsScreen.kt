@@ -68,6 +68,8 @@ import java.time.format.DateTimeFormatter
  * @param draft Composer text carried in from elsewhere (e.g. a settle-up message)
  * @param onRequestChangeForEvent Starts a change request from the inlined thread, given the event
  *   and the conversation the resulting message should be posted back to
+ * @param onOpenChangeRequest Opens the change-request inbox with the request for the given
+ *   event id highlighted; forwarded to the inlined [ChatScreen]
  * @param viewModel Chat state
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -81,6 +83,7 @@ fun ConversationsScreen(
     onOpenSettings: () -> Unit,
     draft: String = "",
     onRequestChangeForEvent: (eventId: String, conversationId: String) -> Unit = { _, _ -> },
+    onOpenChangeRequest: ((String) -> Unit)? = null,
     viewModel: ChatViewModel = hiltViewModel()
 ) {
     val conversations by viewModel.conversations.collectAsState()
@@ -124,7 +127,8 @@ fun ConversationsScreen(
             onRequestChangeForEvent = { eventId ->
                 onRequestChangeForEvent(eventId, onlyConversation.id)
             },
-            onOpenSettings = onOpenSettings
+            onOpenSettings = onOpenSettings,
+            onOpenChangeRequest = onOpenChangeRequest
         )
         return
     }

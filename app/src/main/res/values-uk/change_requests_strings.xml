@@ -26,4 +26,5 @@
     <string name="change_request_send">Надіслати запит</string>
     <string name="change_request_ok">OK</string>
     <string name="change_request_cancel">Скасувати</string>
+    <string name="change_request_link_missing">Цей запит уже закрито.</string>
 </resources>

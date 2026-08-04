@@ -71,6 +71,8 @@ import java.time.format.DateTimeFormatter
  * @param onRequestChangeForEvent Starts a change request for the chosen event
  * @param onOpenSettings Opens settings; shown only when this thread *is* the tab, since the
  *   tab's own gear action would otherwise be lost
+ * @param onOpenChangeRequest Opens the change-request inbox with the request for the given
+ *   event id highlighted; tapping a change-request card in the thread calls this
  * @param viewModel Chat state
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -84,6 +86,7 @@ fun ChatScreen(
     draft: String = "",
     onRequestChangeForEvent: (String) -> Unit = {},
     onOpenSettings: (() -> Unit)? = null,
+    onOpenChangeRequest: ((String) -> Unit)? = null,
     viewModel: ChatViewModel = hiltViewModel()
 ) {
     val messages by viewModel.messages.collectAsState()
@@ -160,6 +163,7 @@ fun ChatScreen(
                 onRefresh = {
                     viewModel.refreshThread()
                 },
+                onEventLinkClick = onOpenChangeRequest,
                 modifier = Modifier.weight(1f)
             )
 
