@@ -75,35 +75,48 @@ import java.time.ZoneId
 import java.util.Locale
 
 /**
- * Computes the event query range for a view mode and selected date.
- * Single source of truth used by both the initial load and pull-to-refresh.
+ * Months loaded either side of the query anchor in MONTH mode.
+ *
+ * Deliberately larger than [CalendarSelection.QUERY_ANCHOR_TOLERANCE_MONTHS]: the anchor is
+ * sticky, so the window has to cover every grid the user can reach before it re-centres.
+ * Widening this makes each re-anchor more expensive (`RecurrenceExpander` expands over the whole
+ * window); narrowing it makes re-anchors more frequent.
+ */
+internal const val MONTH_WINDOW_RADIUS = 3L
+
+/**
+ * Computes the event query range for a view mode and anchor date.
+ *
+ * Single source of truth used by the initial load, the holiday map and pull-to-refresh. In MONTH
+ * mode the anchor is the sticky query anchor (see [CalendarSelection.reanchor]), not the month on
+ * screen; DAY and WEEK anchor on a concrete day.
  */
 internal fun queryRangeFor(
     viewMode: CalendarViewMode,
-    selectedDate: LocalDate
+    anchorDate: LocalDate
 ): Pair<LocalDateTime, LocalDateTime> {
     return when (viewMode) {
         CalendarViewMode.DAY -> {
-            selectedDate.atStartOfDay() to selectedDate.atTime(23, 59, 59)
+            anchorDate.atStartOfDay() to anchorDate.atTime(23, 59, 59)
         }
         CalendarViewMode.WEEK -> {
-            val firstDay = selectedDate.minusDays((selectedDate.dayOfWeek.value - 1).toLong())
+            val firstDay = anchorDate.minusDays((anchorDate.dayOfWeek.value - 1).toLong())
             firstDay.atStartOfDay() to firstDay.plusDays(6).atTime(23, 59, 59)
         }
         CalendarViewMode.MONTH -> {
-            // Extended range to cover the MonthView week buffer (6 weeks before/after)
-            val visibleMonth = YearMonth.from(selectedDate)
-            var startDate = visibleMonth.atDay(1)
+            // The range follows the sticky query anchor, not the displayed month, so ordinary
+            // month paging stays inside an already-loaded window. Week-aligned because the grid
+            // renders whole weeks either side of the month.
+            val anchor = YearMonth.from(anchorDate)
+            var startDate = anchor.minusMonths(MONTH_WINDOW_RADIUS).atDay(1)
             while (startDate.dayOfWeek != java.time.DayOfWeek.MONDAY) {
                 startDate = startDate.minusDays(1)
             }
-            startDate = startDate.minusWeeks(6)
 
-            var endDate = visibleMonth.atEndOfMonth()
+            var endDate = anchor.plusMonths(MONTH_WINDOW_RADIUS).atEndOfMonth()
             while (endDate.dayOfWeek != java.time.DayOfWeek.SUNDAY) {
                 endDate = endDate.plusDays(1)
             }
-            endDate = endDate.plusWeeks(6)
 
             startDate.atStartOfDay() to endDate.atTime(23, 59, 59)
         }

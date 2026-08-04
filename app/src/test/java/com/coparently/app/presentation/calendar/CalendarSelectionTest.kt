@@ -69,4 +69,39 @@ class CalendarSelectionTest {
             )
         )
     }
+
+    @Test
+    fun `the anchor holds while the displayed month stays within tolerance`() {
+        val anchor = YearMonth.of(2026, 8)
+        assertEquals(anchor, CalendarSelection.reanchor(anchor, YearMonth.of(2026, 8)))
+        assertEquals(anchor, CalendarSelection.reanchor(anchor, YearMonth.of(2026, 9)))
+        assertEquals(anchor, CalendarSelection.reanchor(anchor, YearMonth.of(2026, 10)))
+        assertEquals(anchor, CalendarSelection.reanchor(anchor, YearMonth.of(2026, 7)))
+        assertEquals(anchor, CalendarSelection.reanchor(anchor, YearMonth.of(2026, 6)))
+    }
+
+    @Test
+    fun `the anchor moves to the displayed month once tolerance is exceeded`() {
+        val anchor = YearMonth.of(2026, 8)
+        assertEquals(YearMonth.of(2026, 11), CalendarSelection.reanchor(anchor, YearMonth.of(2026, 11)))
+        assertEquals(YearMonth.of(2026, 5), CalendarSelection.reanchor(anchor, YearMonth.of(2026, 5)))
+    }
+
+    @Test
+    fun `distance is measured in months and not in month numbers`() {
+        // December 2026 -> January 2027 is one month apart. Subtracting month numbers
+        // makes it eleven, which would re-anchor on every year boundary.
+        val anchor = YearMonth.of(2026, 12)
+        assertEquals(anchor, CalendarSelection.reanchor(anchor, YearMonth.of(2027, 1)))
+        assertEquals(anchor, CalendarSelection.reanchor(anchor, YearMonth.of(2027, 2)))
+        assertEquals(YearMonth.of(2027, 3), CalendarSelection.reanchor(anchor, YearMonth.of(2027, 3)))
+    }
+
+    @Test
+    fun `a far jump such as the Today pill re-anchors`() {
+        assertEquals(
+            YearMonth.of(2026, 8),
+            CalendarSelection.reanchor(YearMonth.of(2019, 4), YearMonth.of(2026, 8))
+        )
+    }
 }
