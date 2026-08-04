@@ -226,7 +226,7 @@ class CalendarViewModelTest {
             "tap a day next month" to { viewModel.setSelectedDate(start.plusMonths(1).atDay(9)) },
             "tap a day far ahead" to { viewModel.setSelectedDate(start.plusMonths(9).atDay(28)) },
             "tap a day far behind" to { viewModel.setSelectedDate(start.minusMonths(11).atDay(1)) },
-            "tap a day one month back" to { viewModel.setSelectedDate(start.minusMonths(12).atDay(15)) }
+            "tap a day a year back" to { viewModel.setSelectedDate(start.minusMonths(12).atDay(15)) }
         )
 
         for ((label, step) in steps) {

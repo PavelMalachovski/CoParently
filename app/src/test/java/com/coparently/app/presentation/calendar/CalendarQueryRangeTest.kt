@@ -34,11 +34,11 @@ class CalendarQueryRangeTest {
     fun `the window covers every grid reachable without a re-anchor`() {
         val anchors = listOf(
             YearMonth.of(2026, 1),
-            YearMonth.of(2026, 2),   // short month
+            YearMonth.of(2026, 2), // short month
             YearMonth.of(2026, 8),
-            YearMonth.of(2026, 11),  // window crosses the year boundary
+            YearMonth.of(2026, 11), // window crosses the year boundary
             YearMonth.of(2027, 1),
-            YearMonth.of(2028, 2)    // leap February
+            YearMonth.of(2028, 2) // leap February
         )
         val tolerance = CalendarSelection.QUERY_ANCHOR_TOLERANCE_MONTHS
 

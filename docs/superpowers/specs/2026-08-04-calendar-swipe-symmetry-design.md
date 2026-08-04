@@ -129,7 +129,7 @@ property at a smaller radius.
 The query-anchored value feeds the holiday map and the event query, and nothing else. (Pull-to-refresh
 was a third call site while this was written; the Non-goals below took it out — it re-collects the
 loaded range through `EventViewModel.refresh()` and never recomputes a range.) The
-display-anchored value keeps the header (line 325) and the DAY/WEEK grid (line 482). `displayedMonth`
+display-anchored value keeps `CalendarHeader` and the DAY/WEEK grid. `displayedMonth`
 keeps its other jobs: the date picker's initial value, the vacation banner label and `MonthView`'s
 `selectedMonth`.
 
