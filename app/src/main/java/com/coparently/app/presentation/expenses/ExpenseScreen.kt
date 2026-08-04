@@ -163,7 +163,11 @@ fun ExpenseScreen(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .weight(1f),
+                            .weight(1f)
+                            // Swipe-to-delete is why the populated list below is never a swipe
+                            // surface — there are no rows here to conflict with the gesture, so
+                            // this empty-month placeholder can safely carry month navigation too.
+                            .monthSwipe(monthNavigation),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(

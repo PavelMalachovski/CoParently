@@ -102,11 +102,17 @@ fun ChangeRequestsScreen(
     // real data had a chance to load. `hasLoaded` (ChangeRequestViewModel) flips true on the
     // first real emission, whatever it is, so the check below only runs once that has happened;
     // a linked event that truly has no request still gets the snackbar, just not prematurely.
-    // Keyed on `hasLoaded` rather than `requests`, this effect also runs exactly once per
-    // arrival: accepting or declining the highlighted card afterwards changes `requests` but
-    // must not scroll the list again out from under the user.
-    LaunchedEffect(linkedEventId, hasLoaded) {
-        if (linkedEventId == null || !hasLoaded) return@LaunchedEffect
+    // Also gated on `currentUserId`, which is populated by a separate, unordered coroutine
+    // (`ChangeRequestViewModel.getCurrentUser()`) and is not sequenced against the requests flow
+    // that drives `hasLoaded`. `incoming`/`outgoing` above are filtered on `currentUserId`, so if
+    // the requests flow emits first, both sections would still be empty and the scroll index
+    // would silently resolve to -1. Keyed on `currentUserId` too, this effect re-runs once that
+    // settles — but `currentUserId` is set once and never changes again for the lifetime of the
+    // screen, so the effect still runs exactly once per arrival: accepting or declining the
+    // highlighted card afterwards changes `requests` but must not scroll the list again out from
+    // under the user.
+    LaunchedEffect(linkedEventId, hasLoaded, currentUserId) {
+        if (linkedEventId == null || !hasLoaded || currentUserId.isEmpty()) return@LaunchedEffect
         val target = highlighted
         if (target == null) {
             snackbarHostState.showSnackbar(missingMessage)

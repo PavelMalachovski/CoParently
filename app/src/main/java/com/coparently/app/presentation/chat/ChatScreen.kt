@@ -105,9 +105,12 @@ fun ChatScreen(
     val composerFocus = remember { FocusRequester() }
 
     // Bumped only when something *seeds* the composer, so the refocus below fires on that and on
-    // nothing else. Keying the effect on the text itself refocused on every keystroke and, after a
-    // rotation, reopened a keyboard the user had deliberately dismissed.
-    var composerSeeds by rememberSaveable { mutableStateOf(0) }
+    // nothing else — keying the effect on the text itself refocused on every keystroke. Plain
+    // `remember`, not `rememberSaveable`: a rotation (or process-death restore) is not a new seed,
+    // and saving this counter would replay the last seed's focus request and reopen a keyboard the
+    // user had deliberately dismissed. The composer *text* still survives rotation — it is saved
+    // separately via `composerText` above.
+    var composerSeeds by remember { mutableStateOf(0) }
 
     // DisposableEffect, not LaunchedEffect: the "thread is open" signal that gates the
     // read/delivered marks must clear when this composable leaves — see

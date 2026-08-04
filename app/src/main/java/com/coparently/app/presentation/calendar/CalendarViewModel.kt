@@ -62,9 +62,10 @@ class CalendarViewModel @Inject constructor(
     private val _selectedDate = MutableStateFlow<LocalDate?>(LocalDate.now())
 
     /**
-     * The day the user has chosen, or null when none is — paging to another month clears it.
-     * The agenda card under the grid renders only when this is non-null: a card describing a
-     * day nobody picked is what the August 2026 baseline found it doing.
+     * The day the user has chosen, or null when none is. Paging to another month clears it,
+     * except paging back to today's month, which re-selects today — see [showMonth]. The agenda
+     * card under the grid renders only when this is non-null: a card describing a day nobody
+     * picked is what the August 2026 baseline found it doing.
      */
     val selectedDate: StateFlow<LocalDate?> = _selectedDate.asStateFlow()
 

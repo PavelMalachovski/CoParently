@@ -3,11 +3,11 @@ package com.coparently.app.presentation.calendar
 import com.coparently.app.data.local.dao.CustodyScheduleDao
 import com.coparently.app.data.local.preferences.EncryptedPreferences
 import com.coparently.app.data.repository.CustodyModelRepository
+import io.mockk.Runs
 import io.mockk.clearAllMocks
 import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
-import io.mockk.Runs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.flowOf
@@ -19,8 +19,10 @@ import org.junit.After
 import org.junit.Before
 import org.junit.Test
 import java.time.LocalDate
+import java.time.YearMonth
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -81,6 +83,28 @@ class CalendarViewModelTest {
         val date = LocalDate.of(2026, 7, 20)
         viewModel.setSelectedDate(date)
         assertEquals(date, viewModel.selectedDate.value)
+    }
+
+    @Test
+    fun `setSelectedDate moves the displayed month to the picked day`() = runTest {
+        val otherMonthDay = YearMonth.now().plusMonths(2).atDay(5)
+        viewModel.setSelectedDate(otherMonthDay)
+        assertEquals(YearMonth.from(otherMonthDay), viewModel.displayedMonth.value)
+    }
+
+    @Test
+    fun `showMonth clears the selection for a month that is not today's`() = runTest {
+        val nextMonth = YearMonth.now().plusMonths(1)
+        viewModel.showMonth(nextMonth)
+        assertEquals(nextMonth, viewModel.displayedMonth.value)
+        assertNull(viewModel.selectedDate.value)
+    }
+
+    @Test
+    fun `showMonth re-selects today when paging back to today's month`() = runTest {
+        viewModel.showMonth(YearMonth.now().plusMonths(1))
+        viewModel.showMonth(YearMonth.now())
+        assertEquals(LocalDate.now(), viewModel.selectedDate.value)
     }
 
     @Test
