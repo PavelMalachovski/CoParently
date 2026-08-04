@@ -469,6 +469,31 @@ both directions: August has two days with events (the 3rd and the 21st) and neit
 September and March have none at all. The strip is showing an empty day nobody chose, on every
 screen except the one you started on.
 
+### Fixed in batch 1 — 4 August 2026
+
+Five of the ten now behave differently; each was re-checked on the Samsung against the branch
+build, not just against its unit tests. The baseline above is deliberately left as written — it is
+the before-picture and only stays useful if it keeps saying what the app did on 3 August.
+
+| # | Now |
+|---|---|
+| 4 | The thread opens on the **newest** message. The near-bottom rule still decides whether an *arriving* message pulls the view down, so reading history is not interrupted. |
+| 5 | The card carries a chevron and opens the change-request inbox with that request highlighted and scrolled to; a request that is genuinely gone gets a snackbar instead, and never on the initial empty load. The inbox itself now renders in the device's language — its translations existed in all five locales and no code had ever referenced them. |
+| 6 | A template **fills the composer**; nothing is sent until the user presses Send. Placeholders arrive intact for editing, which is the point. |
+| 7 | The month header — the summary card and the switcher bar — pages on a horizontal swipe. The list keeps swipe-to-delete as its only horizontal gesture. |
+| 9 | Paging a month no longer selects anything: the agenda card appears only for a day the user tapped, and the grid takes the freed height. The current month still opens on today, and the Today pill still returns to it from any distance. |
+
+**Item 8 is not fixed, and now has a diagnosis instead** — see the spec
+(`docs/superpowers/specs/2026-08-03-plan11-batch-1-design.md`). Two device experiments showed the
+cost is neither the pager nor per-cell composition but the state round-trip a settle triggers;
+stripping every per-cell lookup changed nothing (26 frames vs 30), while cutting the month
+propagation made backward paging match forward exactly (124 frames vs 30). It was carved out rather
+than fixed on an unvalidated hunch. The `[H]` half of 4.2.3 — how it feels under a thumb — is still
+unrun.
+
+**Items 1a, 1b, 2 and 3 are untouched.** Each needs a data-model change, Firestore rules and product
+decisions this batch did not make.
+
 ---
 
 ## §12 Known issues — confirm or clear
