@@ -105,7 +105,21 @@ class EventViewModel @Inject constructor(
                 .onEach { _uiState.value = EventUiState.Success(it) }
                 // Caught per query, not on the outer chain: a failure of one range must not
                 // end the flatMapLatest and leave every later query silently unserved.
-                .catch { e -> _uiState.value = EventUiState.Error(errorHandler.handleError(e).userMessage) }
+                //
+                // The handler itself is wrapped: handleError reaches CrashlyticsManager and
+                // NetworkMonitor, and a throw from either would escape the .catch onto the outer
+                // chain, fail the stateIn coroutine and take the process with it - the same
+                // unguarded-suspend-work failure the comment above guards the when() against.
+                // Losing the wording of one error message is the cheaper outcome by far.
+                .catch { e ->
+                    // Falls back to the raw exception rather than a new literal: no string is
+                    // added that the five locales would then owe a translation for.
+                    val message = runCatching { errorHandler.handleError(e).userMessage }
+                        .getOrNull()
+                        ?: e.message
+                        ?: e.toString()
+                    _uiState.value = EventUiState.Error(message)
+                }
         }
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 

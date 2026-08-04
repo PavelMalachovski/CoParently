@@ -87,9 +87,12 @@ internal const val MONTH_WINDOW_RADIUS = 3L
 /**
  * Computes the event query range for a view mode and anchor date.
  *
- * Single source of truth used by the initial load, the holiday map and pull-to-refresh. In MONTH
- * mode the anchor is the sticky query anchor (see [CalendarSelection.reanchor]), not the month on
- * screen; DAY and WEEK anchor on a concrete day.
+ * Single source of truth, with exactly two callers: the event query and the holiday map.
+ * Pull-to-refresh used to be a third; it now calls `EventViewModel.refresh()`, which re-collects
+ * the range already loaded rather than recomputing one.
+ *
+ * In MONTH mode the anchor is the sticky query anchor (see [CalendarSelection.reanchor]), not the
+ * month on screen; DAY and WEEK anchor on a concrete day.
  */
 internal fun queryRangeFor(
     viewMode: CalendarViewMode,

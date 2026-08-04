@@ -126,8 +126,9 @@ property at a smaller radius.
   (back to Monday, forward to Sunday). Per the project rule, the arithmetic is extended in
   `queryRangeFor` and not inlined at the call sites.
 
-The query-anchored value feeds the holiday map (`CalendarScreen.kt:258`), the event query
-(`CalendarScreen.kt:268`) and pull-to-refresh (`CalendarScreen.kt:398`), and nothing else. The
+The query-anchored value feeds the holiday map and the event query, and nothing else. (Pull-to-refresh
+was a third call site while this was written; the Non-goals below took it out — it re-collects the
+loaded range through `EventViewModel.refresh()` and never recomputes a range.) The
 display-anchored value keeps the header (line 325) and the DAY/WEEK grid (line 482). `displayedMonth`
 keeps its other jobs: the date picker's initial value, the vacation banner label and `MonthView`'s
 `selectedMonth`.

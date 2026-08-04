@@ -187,4 +187,61 @@ class CalendarViewModelTest {
         viewModel.setSelectedDate(distant)
         assertEquals(YearMonth.from(distant), viewModel.queryAnchorMonth.value)
     }
+
+    /**
+     * The general property the sticky window rests on, asserted after every step rather than at
+     * four specific call sites: whatever moved the grid, the anchor may never be further than
+     * [CalendarSelection.QUERY_ANCHOR_TOLERANCE_MONTHS] from it. `CalendarQueryRangeTest` proves
+     * the window covers the grid *given* that bound; without this, a future method writing
+     * `_displayedMonth` past `moveTo` would un-load months with every other test still green,
+     * and the symptom is a silently empty grid.
+     */
+    @Test
+    fun `the query anchor never drifts past tolerance however the grid is moved`() = runTest {
+        val start = YearMonth.now()
+        val steps: List<Pair<String, () -> Unit>> = listOf(
+            // small steps forward
+            "page +1" to { viewModel.showMonth(start.plusMonths(1)) },
+            "page +2" to { viewModel.showMonth(start.plusMonths(2)) },
+            "page +3" to { viewModel.showMonth(start.plusMonths(3)) },
+            "page +4" to { viewModel.showMonth(start.plusMonths(4)) },
+            // small steps backward, back through the origin
+            "page +3 again" to { viewModel.showMonth(start.plusMonths(3)) },
+            "page +2 again" to { viewModel.showMonth(start.plusMonths(2)) },
+            "page +1 again" to { viewModel.showMonth(start.plusMonths(1)) },
+            "page 0" to { viewModel.showMonth(start) },
+            "page -1" to { viewModel.showMonth(start.minusMonths(1)) },
+            "page -2" to { viewModel.showMonth(start.minusMonths(2)) },
+            "page -3" to { viewModel.showMonth(start.minusMonths(3)) },
+            // far jumps in both directions
+            "jump +14" to { viewModel.showMonth(start.plusMonths(14)) },
+            "jump -20" to { viewModel.showMonth(start.minusMonths(20)) },
+            "back to today" to { viewModel.showMonth(start) },
+            // across a year boundary, one month at a time
+            "to December" to { viewModel.showMonth(YearMonth.of(start.year, 12)) },
+            "to January" to { viewModel.showMonth(YearMonth.of(start.year + 1, 1)) },
+            "to February" to { viewModel.showMonth(YearMonth.of(start.year + 1, 2)) },
+            "back to December" to { viewModel.showMonth(YearMonth.of(start.year, 12)) },
+            // day taps, which move the grid too
+            "tap a day next month" to { viewModel.setSelectedDate(start.plusMonths(1).atDay(9)) },
+            "tap a day far ahead" to { viewModel.setSelectedDate(start.plusMonths(9).atDay(28)) },
+            "tap a day far behind" to { viewModel.setSelectedDate(start.minusMonths(11).atDay(1)) },
+            "tap a day one month back" to { viewModel.setSelectedDate(start.minusMonths(12).atDay(15)) }
+        )
+
+        for ((label, step) in steps) {
+            step()
+            val drift = kotlin.math.abs(
+                java.time.temporal.ChronoUnit.MONTHS.between(
+                    viewModel.queryAnchorMonth.value,
+                    viewModel.displayedMonth.value
+                )
+            )
+            assertTrue(
+                drift <= CalendarSelection.QUERY_ANCHOR_TOLERANCE_MONTHS,
+                "after '$label' the anchor ${viewModel.queryAnchorMonth.value} drifted $drift " +
+                    "months from the displayed ${viewModel.displayedMonth.value}"
+            )
+        }
+    }
 }
