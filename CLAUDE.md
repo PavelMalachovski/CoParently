@@ -316,10 +316,12 @@ Data flow: UI → ViewModel → UseCase → Repository → Room (source of truth
     with the same shape as the `CoParentPairingService` Task 11 deleted. Decide (delete,
     or wire up + add rules) before anyone binds them; don't add rules for unreachable
     collections speculatively.
-  - `custody_schedules` has a rule block but no Firestore data source anywhere touches
-    it — `CustodyScheduleEntity`/`CustodyScheduleDao` are Room-only (the table name just
-    happens to match the rule's collection name). The rule is dead, not dangerous;
-    left in place rather than removed mid-pairing-feature-work.
+  - `custody_schedules` (Room's `CustodyScheduleEntity`/`CustodyScheduleDao`, the legacy
+    per-parent custody table) has no Firestore data source and never will — it stays
+    Room-only. Its rule block, which matched no client code, has been deleted from
+    `firestore.rules`; the live custody rule now guards the real synced collection,
+    `custody_models` (one document per pair, gated on `participants`). Do not resurrect
+    the `custody_schedules` block just because the Room table name is still there.
 - `strings.xml` is **no longer gitignored** (older docs/audit §2.1 claim otherwise —
   stale). No secrets live in resources: the OAuth client secret is injected via
   BuildConfig (`GOOGLE_CLIENT_SECRET` gradle property / env var), `GEMINI_API_KEY`

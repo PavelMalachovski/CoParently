@@ -310,17 +310,24 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
-    // ---- Custody schedules --------------------------------------------
-    match /custody_schedules/{scheduleId} {
-      allow read, update, delete: if isAuthenticated() && (
-        resource.data.momUserId == request.auth.uid ||
-        resource.data.dadUserId == request.auth.uid
-      );
-
-      allow create: if isAuthenticated() && (
-        request.resource.data.momUserId == request.auth.uid ||
-        request.resource.data.dadUserId == request.auth.uid
-      );
+    // ---- Custody -------------------------------------------------------
+    // One document per pair, id derived from the two UIDs (CustodyKey). Read by id only:
+    // there is no list query here, so no `where` filter has to mirror this rule.
+    match /custody_models/{modelId} {
+      allow read: if isAuthenticated()
+        && request.auth.uid in resource.data.participants;
+      allow create: if isAuthenticated()
+        && request.auth.uid in request.resource.data.participants
+        && request.resource.data.participants.size() == 2;
+      // participants is immutable. Without this an existing participant could swap the other
+      // one out for a third account: they would still be in the array and it would still hold
+      // two uids, but the document id - derived from the original pair - would no longer name
+      // who it is shared with, and the co-parent would lose the schedule with no trace.
+      allow update: if isAuthenticated()
+        && request.auth.uid in resource.data.participants
+        && request.resource.data.participants == resource.data.participants;
+      allow delete: if isAuthenticated()
+        && request.auth.uid in resource.data.participants;
     }
 
     // ---- Conversations & messages --------------------------------------
