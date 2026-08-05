@@ -30,4 +30,33 @@ describe('acceptPairingInvitation', () => {
         (err) => err.code === 'invalid-argument',
     );
   });
+
+  it('puts the two parents in different slots', () => {
+    const {assignSlots} = require('../index');
+    assert.deepStrictEqual(
+        assignSlots('mom', 'mom'),
+        {inviterRole: 'mom', accepterRole: 'dad'},
+        'a pair where both defaulted to mom must be separated');
+  });
+
+  it('keeps the inviter slot and gives the accepter the other one', () => {
+    const {assignSlots} = require('../index');
+    assert.deepStrictEqual(
+        assignSlots('dad', 'dad'),
+        {inviterRole: 'dad', accepterRole: 'mom'});
+  });
+
+  it('is idempotent for a pair that is already separated', () => {
+    const {assignSlots} = require('../index');
+    assert.deepStrictEqual(
+        assignSlots('mom', 'dad'),
+        {inviterRole: 'mom', accepterRole: 'dad'});
+  });
+
+  it('falls back to mom for the inviter when no slot is stored', () => {
+    const {assignSlots} = require('../index');
+    assert.deepStrictEqual(
+        assignSlots(undefined, undefined),
+        {inviterRole: 'mom', accepterRole: 'dad'});
+  });
 });

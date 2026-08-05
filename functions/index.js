@@ -462,8 +462,14 @@ exports.acceptPairingInvitation = functions.https.onCall(async (data, context) =
           'failed-precondition', 'One of the accounts is already paired',
           {reason: 'already-paired'});
     }
-    tx.update(inviterRef, {partnerId: acceptingUserId, pairedAt});
-    tx.update(accepterRef, {partnerId: invite.fromUserId, pairedAt});
+    const slots = assignSlots(
+        inviterSnap.data().role, accepterSnap.data().role);
+    tx.update(inviterRef, {
+      partnerId: acceptingUserId, pairedAt, role: slots.inviterRole,
+    });
+    tx.update(accepterRef, {
+      partnerId: invite.fromUserId, pairedAt, role: slots.accepterRole,
+    });
     tx.update(inviteRef, {
       status: 'accepted',
       acceptedBy: acceptingUserId,
@@ -784,6 +790,26 @@ function hasPartner(snap) {
   const partnerId = snap.data().partnerId;
   return typeof partnerId === 'string' && partnerId.length > 0;
 }
+
+/**
+ * The two parent slots after pairing.
+ *
+ * "mom" and "dad" are slot identifiers, not roles: no user picks them and no screen shows
+ * them. What matters is only that the two parents end up in different slots, so custody,
+ * event ownership and parent colours can tell them apart. The inviter keeps whatever slot
+ * they already had — their existing events are stamped with it — and the accepter takes the
+ * other one, which is why the accepter's device has re-stamping to do (ParentSlotMigrator).
+ *
+ * @param {string|undefined} inviterRole Slot stored on the inviter, if any.
+ * @param {string|undefined} accepterRole Slot stored on the accepter; ignored, present so the
+ *   caller reads as a function of both parents rather than of one.
+ * @return {{inviterRole: string, accepterRole: string}} The slots to write.
+ */
+function assignSlots(inviterRole, accepterRole) {
+  const inviter = inviterRole === 'dad' ? 'dad' : 'mom';
+  return {inviterRole: inviter, accepterRole: inviter === 'mom' ? 'dad' : 'mom'};
+}
+exports.assignSlots = assignSlots;
 
 /**
  * How many characters of a chat message body are carried into the push notification preview.
