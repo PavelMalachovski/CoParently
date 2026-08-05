@@ -308,7 +308,8 @@ Data flow: UI → ViewModel → UseCase → Repository → Room (source of truth
   as part of this fix.
 - A full audit (grep every `.collection(...)` call in `app/src/main/java` and
   `functions/index.js`, diff against `firestore.rules`' match blocks) found two more
-  mismatches, both left as-is because neither is reachable in production:
+  mismatches. One is now fixed; the other is left as-is because it is not reachable in
+  production:
   - `FirestoreMedicalDataSource` (`medicalRecords`, `allergies`) and
     `FirestoreEducationDataSource` (`grades`, `schoolEvents`) have no rule coverage, but
     `MedicalRepositoryImpl`/`EducationRepositoryImpl` are never bound in

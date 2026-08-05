@@ -60,19 +60,23 @@ service cloud.firestore {
       return data.get(key, {}).keys().hasOnly([request.auth.uid]);
     }
 
-    // The canonical conversation id for a 2-element participants list — the same sorted-join
-    // formula as Kotlin's `ConversationKey.of(uidA, uidB)`
-    // (`listOf(uidA, uidB).sorted().joinToString("__")`). Pinned against the two copies
-    // drifting apart by a matching pair of tests: `ConversationKeyTest` (Kotlin) asserts
-    // `ConversationKey.of("alice-uid", "bob-uid") == "alice-uid__bob-uid"`, and
-    // `conversations-messages.test.js`'s "computes the same canonical id..." case re-points a
-    // message to that literal string and asserts it is allowed. If either formula ever changes,
-    // one side of that pin breaks before the other silently disagrees with it.
+    // The canonical pair id for a 2-element participants list — the same sorted-join formula
+    // as Kotlin's `ConversationKey.of(uidA, uidB)` and `CustodyKey.of(uidA, uidB)`
+    // (`listOf(uidA, uidB).sorted().joinToString("__")`). Shared by two collections:
+    // `conversations` (used only inside `canRepointMessage` below — its own `create` rule does
+    // not bind the id) and `custody_models` (bound directly into its `create` rule, so a
+    // document whose id does not match its own participants can never be created). Pinned
+    // against the Kotlin side drifting apart by matching tests on each side: `ConversationKeyTest`
+    // and `CustodyKeyTest` (Kotlin) assert their respective `of(...)` calls against the literal
+    // this formula also produces, and `conversations-messages.test.js`'s "computes the same
+    // canonical id..." case re-points a message to that literal string and asserts it is
+    // allowed. If any formula ever changes, one side of a pin breaks before the others silently
+    // disagree with it.
     //
-    // Every conversation document that can exist has exactly two participants (the `create`
-    // rule below requires `participants.size() == 2`), so indexing `[0]`/`[1]` is safe for any
-    // document this function is ever handed.
-    function canonicalConversationId(participants) {
+    // Every document this function is ever handed has exactly two participants (both
+    // collections' `create` rules require `participants.size() == 2`), so indexing `[0]`/`[1]`
+    // is safe.
+    function canonicalPairId(participants) {
       return participants[0] < participants[1]
         ? participants[0] + '__' + participants[1]
         : participants[1] + '__' + participants[0];
@@ -95,7 +99,7 @@ service cloud.firestore {
     // `allow update` condition below before this function is even called; re-checking it here
     // would be a second `get()` on the same document for the same fact.
     function canRepointMessage(before, after) {
-      return after.conversationId == canonicalConversationId(
+      return after.conversationId == canonicalPairId(
         get(/databases/$(database)/documents/conversations/$(before.conversationId)).data.participants
       );
     }
@@ -311,23 +315,54 @@ service cloud.firestore {
     }
 
     // ---- Custody -------------------------------------------------------
-    // One document per pair, id derived from the two UIDs (CustodyKey). Read by id only:
-    // there is no list query here, so no `where` filter has to mirror this rule.
+    // One document per pair, id derived from the two UIDs (CustodyKey / canonicalPairId).
+    // `allow get`, deliberately not `allow read`: this collection is read by document id
+    // alone, so no `where` filter has to mirror this rule, and spelling it as `get` (which
+    // excludes `list`) keeps that structurally true instead of merely conventional — a later
+    // `whereArrayContains('participants', uid)` query is rejected outright rather than
+    // silently accepted.
+    //
+    // `participants` is fixed at creation (see `create`) and immutable after (see `update`),
+    // so a stale document can't be narrowed the way `events`/`child_info` are swept on unpair.
+    // Instead `get`/`update` additionally require the pairing to still be live (`isPartnerOf`)
+    // on top of stored membership, so an ex-partner loses access the moment either side's
+    // `partnerId` clears. `delete` intentionally stays on stored `participants` alone: a
+    // document must remain deletable by either named participant even once the pairing behind
+    // it is gone, or a stale/orphaned document becomes permanent by a different route.
     match /custody_models/{modelId} {
-      allow read: if isAuthenticated()
-        && request.auth.uid in resource.data.participants;
-      allow create: if isAuthenticated()
-        && request.auth.uid in request.resource.data.participants
-        && request.resource.data.participants.size() == 2;
+      allow get: if isAuthenticated() &&
+                   request.auth.uid in resource.data.participants &&
+                   (isPartnerOf(resource.data.participants[0]) ||
+                    isPartnerOf(resource.data.participants[1]));
+
+      // The id must be the canonical id of the document's own participants. Without this, any
+      // authenticated account could create custody_models/{momUid}__{dadUid} with unrelated
+      // participants, permanently squatting a pair's document: neither Mom nor Dad could ever
+      // pass read/update/delete afterward (all three key on `participants`), and their own
+      // genuine `.set()` would be evaluated as an update against someone else's data and
+      // denied the same way. Binding the id here, combined with requiring the caller be one
+      // of exactly the two named uids, makes that impossible — nobody outside the real pair
+      // can ever satisfy this rule at this id. `isPartnerOf` additionally requires the pairing
+      // itself to already be live, the same shape `conversations` uses below.
+      allow create: if isAuthenticated() &&
+                      request.resource.data.participants.size() == 2 &&
+                      request.auth.uid in request.resource.data.participants &&
+                      modelId == canonicalPairId(request.resource.data.participants) &&
+                      (isPartnerOf(request.resource.data.participants[0]) ||
+                       isPartnerOf(request.resource.data.participants[1]));
+
       // participants is immutable. Without this an existing participant could swap the other
       // one out for a third account: they would still be in the array and it would still hold
       // two uids, but the document id - derived from the original pair - would no longer name
       // who it is shared with, and the co-parent would lose the schedule with no trace.
-      allow update: if isAuthenticated()
-        && request.auth.uid in resource.data.participants
-        && request.resource.data.participants == resource.data.participants;
-      allow delete: if isAuthenticated()
-        && request.auth.uid in resource.data.participants;
+      allow update: if isAuthenticated() &&
+                      request.auth.uid in resource.data.participants &&
+                      request.resource.data.participants == resource.data.participants &&
+                      (isPartnerOf(resource.data.participants[0]) ||
+                       isPartnerOf(resource.data.participants[1]));
+
+      allow delete: if isAuthenticated() &&
+                      request.auth.uid in resource.data.participants;
     }
 
     // ---- Conversations & messages --------------------------------------
