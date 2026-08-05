@@ -597,7 +597,9 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 **Interfaces:**
 - Consumes: nothing.
-- Produces: the string keys Task 5 wires up. Old keys are deleted in this task; Task 5 fixes the resulting compile errors.
+- Produces: the string keys Task 5 wires up.
+
+**This task only adds keys. It deletes none.** The old role-specific keys stay in place and stay referenced until Task 5 has rewired their call sites, so this commit — like every other commit on the branch — builds. Task 5 deletes them once nothing points at them.
 
 - [ ] **Step 1: Inventory the call sites before touching a single file**
 
@@ -615,11 +617,11 @@ So every affected string becomes a label-and-value or a bare substitution:
 
 | Old key(s) | New key | English base value |
 |---|---|---|
-| `calendar_parent_mom`, `calendar_parent_dad` | *(deleted)* | resolved by `parentLabel`, no resource |
-| `event_parent_mom`, `event_parent_dad` | *(deleted)* | same |
-| `event_preview_mom`, `event_preview_dad` | *(deleted)* | same |
-| `home_parent_mom`, `home_parent_dad` | *(deleted)* | same |
-| `custody_mom`, `custody_dad` | *(deleted)* | same |
+| `calendar_parent_mom`, `calendar_parent_dad` | *(none — Task 5 deletes them)* | resolved by `parentLabel`, no resource |
+| `event_parent_mom`, `event_parent_dad` | *(none — Task 5 deletes them)* | same |
+| `event_preview_mom`, `event_preview_dad` | *(none — Task 5 deletes them)* | same |
+| `home_parent_mom`, `home_parent_dad` | *(none — Task 5 deletes them)* | same |
+| `custody_mom`, `custody_dad` | *(none — Task 5 deletes them)* | same |
 | `expenses_mom_paid`, `expenses_dad_paid` | `expenses_paid_by` | `Paid by %1$s` |
 | `custody_mom_starts_first`, `custody_dad_starts_first` | `custody_starts_first` | `Starts first: %1$s` |
 | `custody_week1_to_mom`, `custody_week2_to_mom` | `custody_week_to` | `Week %1$d: %2$s` |
@@ -669,11 +671,13 @@ take, and 'заплатил(а)' reads as the software apologising. The same hol
 Czech and Ukrainian.
 
 So the phrasings change shape rather than being translated: a noun label and a
-value, never a sentence the name is the subject of. Ten role-specific keys are
-deleted outright - the label is now the person's name, which is not a resource.
+value, never a sentence the name is the subject of. Ten role-specific keys become
+unnecessary entirely - the label is now the person's name, which is not a
+resource - and the next commit deletes them once nothing points at them.
 
-The build will not compile until the next commit rewires the call sites; the two
-are split so the copy can be reviewed as copy.
+Nothing is removed here, so this commit builds like every other one on the
+branch. The split exists so the copy can be reviewed as copy rather than hunted
+for inside a diff across eleven screens.
 
 Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 ```
@@ -759,7 +763,25 @@ with
 >   older build must keep reading it. Slot 1 is pink, slot 2 is blue; pairing assigns the slots
 >   (`functions/index.js`, `assignSlots`), nobody chooses one.
 
-- [ ] **Step 5: Build and run the full suite**
+- [ ] **Step 5: Delete the role keys nothing points at any more**
+
+Task 4 deliberately left them in place so its own commit would build. Now that every call site
+resolves through `parentLabel`, remove these from `values` and all four locale variants:
+`calendar_parent_mom`, `calendar_parent_dad`, `event_parent_mom`, `event_parent_dad`,
+`event_preview_mom`, `event_preview_dad`, `home_parent_mom`, `home_parent_dad`, `custody_mom`,
+`custody_dad`, and the old gendered pairs `expenses_mom_paid`, `expenses_dad_paid`,
+`custody_mom_starts_first`, `custody_dad_starts_first`, `custody_week1_to_mom`,
+`custody_week2_to_mom`, `custody_with_mom`, `custody_with_dad`.
+
+Verify each is unreferenced before deleting it:
+
+```bash
+git grep -n "R.string.calendar_parent_mom\|R.string.custody_with_dad" -- app/src/main/java
+```
+
+Expected: no output. Repeat for every key in the list; a hit means Step 2 missed a call site.
+
+- [ ] **Step 6: Build and run the full suite**
 
 ```bash
 $env:JAVA_HOME = "C:\Program Files\Android\Android Studio1\jbr"; ./gradlew assembleDebug testDebugUnitTest lint detekt
@@ -767,7 +789,7 @@ $env:JAVA_HOME = "C:\Program Files\Android\Android Studio1\jbr"; ./gradlew assem
 
 Expected: BUILD SUCCESSFUL. detekt is red on `main`; compare in a worktree and own only this branch's delta.
 
-- [ ] **Step 6: Confirm no user-facing role words survive**
+- [ ] **Step 7: Confirm no user-facing role words survive**
 
 ```bash
 git grep -n "Мама\|Папа\|Máma\|Táta" -- app/src/main/res
@@ -775,7 +797,7 @@ git grep -n "Мама\|Папа\|Máma\|Táta" -- app/src/main/res
 
 Expected: no output. Any hit is a string Task 4 missed.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
 git add app/src/main/java app/src/main/res CLAUDE.md
