@@ -162,7 +162,10 @@ class ParentsSource @Inject constructor(
     fun observe(): Flow<Parents> = shared
 
     /**
-     * This device's own slot, or null when the profile has not loaded.
+     * This device's own slot, or null when nobody is signed in, or when this account has no
+     * Room profile row — which, like [Parents.me], can be forever, not just until the next
+     * call: [UserRepositoryImpl][com.coparently.app.data.repository.UserRepositoryImpl] never
+     * writes one for an account it cannot name.
      *
      * The cheap question, deliberately kept separate from [observe]: it needs the signed-in uid
      * and one Room row, and touches neither the pairing listener nor the co-parent's document.
