@@ -146,6 +146,9 @@ fun ExpenseSummaryHeader(
                         .padding(top = 6.dp),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
+                    // Each half gets an equal share of the row and ellipsises inside it. The
+                    // name is arbitrary length now, and without this a long one on the start
+                    // side would push the other parent's figure off the end entirely.
                     Text(
                         text = stringResource(
                             R.string.expenses_paid_by,
@@ -153,7 +156,10 @@ fun ExpenseSummaryHeader(
                             format.format(balance.momPaid)
                         ),
                         style = MaterialTheme.typography.labelMedium,
-                        color = ParentColors.text("mom")
+                        color = ParentColors.text("mom"),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
                     )
                     Text(
                         text = stringResource(
@@ -162,7 +168,11 @@ fun ExpenseSummaryHeader(
                             format.format(balance.dadPaid)
                         ),
                         style = MaterialTheme.typography.labelMedium,
-                        color = ParentColors.text("dad")
+                        color = ParentColors.text("dad"),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = TextAlign.End,
+                        modifier = Modifier.weight(1f)
                     )
                 }
 
@@ -305,7 +315,13 @@ private fun SplitBar(momShare: Float, modifier: Modifier = Modifier) {
 }
 
 /**
- * "Dad owes you $29.85" plus the Settle up action, on its own tinted strip.
+ * "Your co-parent owes you $29.85" plus the Settle up action, on its own tinted strip.
+ *
+ * This doc said "Dad owes you" until parent labels stopped being role words. The line
+ * itself never named anyone: `expenses_balance_owed_to_you` says "your co-parent", which
+ * is already agreement-free in all five locales. Naming the person here would need the
+ * co-parent's *slot*, and this row is derived from a net figure that has no slot on it —
+ * so it is deliberately left as the generic phrase rather than resolved to a name.
  *
  * The strip and the filled chip are the August 2026 refresh: this line answers the question the
  * screen exists for, and it used to sit below a divider as plain text next to an outlined

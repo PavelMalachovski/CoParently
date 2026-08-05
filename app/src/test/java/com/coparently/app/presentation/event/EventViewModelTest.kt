@@ -5,7 +5,6 @@ import com.coparently.app.domain.error.AppError
 import com.coparently.app.domain.error.ErrorHandler
 import com.coparently.app.domain.model.Event
 import com.coparently.app.domain.model.User
-import com.coparently.app.domain.repository.UserRepository
 import com.coparently.app.domain.usecase.CreateEventUseCase
 import com.coparently.app.domain.usecase.DeleteEventUseCase
 import com.coparently.app.domain.usecase.EventUseCases

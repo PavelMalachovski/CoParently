@@ -23,10 +23,6 @@
     <string name="custody_week_to">Тиждень %1$d: %2$s</string>
     <string name="custody_preview">Попередній перегляд</string>
     <string name="custody_next_14_days">Наступні 14 днів:</string>
-    <!-- Replaces custody_with_mom/custody_with_dad (strings.xml). "З ким" (with whom) is a
-         fixed question phrase, so the name that follows never has to decline. %1$s is that
-         parent's name. -->
-    <string name="custody_with">З ким: %1$s</string>
     <string name="custody_ok">OK</string>
     <string name="custody_cancel">Скасувати</string>
     <string name="custody_model_week_on_week_off">Тиждень через тиждень</string>
@@ -37,4 +33,14 @@
     <string name="custody_model_two_two_three_desc">Схема 2 дні, 2 дні, 3 дні. Частіші переходи.</string>
     <string name="custody_model_three_four_four_three_desc">Чергування 3 і 4 днів. Збалансований час у будні та вихідні.</string>
     <string name="custody_model_custom_desc">Створіть власний шаблон графіка.</string>
+    <!-- Preview sentences for the custody Preview card. These replace a hardcoded
+         English string built in CustodySetupViewModel that named Mom and Dad outright.
+         Each name follows a colon or a dash and is never the subject of a verb or the
+         head of an adjective, so nothing has to agree with it. %1$s/%2$s are the two
+         parents in pattern order; custody_preview_custom takes the two day counts
+         first and the slot-1 parent last. -->
+    <string name="custody_preview_week_on_week_off">Перший тиждень: %1$s, далі чергування щотижня.</string>
+    <string name="custody_preview_two_two_three">Пн–Вт: %1$s. Ср–Чт: %2$s. Пт–Нд чергуються.</string>
+    <string name="custody_preview_three_four_four_three">Пн–Ср (3 дні): %1$s. Чт–Нд (4 дні): %2$s. Потім навпаки.</string>
+    <string name="custody_preview_custom">Власний графік: %1$d з %2$d днів — %3$s.</string>
 </resources>

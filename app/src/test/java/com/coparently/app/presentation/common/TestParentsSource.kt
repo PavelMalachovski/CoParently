@@ -5,6 +5,7 @@ import com.coparently.app.domain.model.PartnerSummary
 import com.coparently.app.domain.model.User
 import com.coparently.app.domain.repository.PairingRepository
 import com.coparently.app.domain.repository.UserRepository
+import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.flow.flowOf
@@ -24,6 +25,9 @@ fun testParentsSource(me: User? = null, partner: PartnerSummary? = null): Parent
     val userRepository = mockk<UserRepository> {
         every { observeCurrentUserId() } returns flowOf(me?.id)
         every { getAllUsers() } returns flowOf(listOfNotNull(me))
+        // The cheap path ParentsSource.signedInSlot() takes; it must not need the pairing side.
+        coEvery { getCurrentUserId() } returns me?.id
+        coEvery { getUserById(any()) } returns me
     }
     val pairingRepository = mockk<PairingRepository> {
         every { observePairingState() } returns flowOf(

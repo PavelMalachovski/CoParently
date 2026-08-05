@@ -202,6 +202,18 @@ fun HomeScreen(
             }
 
             item {
+                // Deliberately `partner?.name` and not `parentNames`, which is what the hero and
+                // the timeline above use. The two answer different questions. This header names
+                // a *person* - the account this one is paired with - and that identity is known
+                // as soon as pairing resolves. The hero names whoever holds a *slot*, and on a
+                // pair whose two parents still share slot 1 nobody holds the other one, so it
+                // says "Parent" until the backfill separates them.
+                //
+                // So a legacy pair reads "Olya changed" here and "Today with Parent" above, and
+                // that is correct rather than an inconsistency to iron out: degrading this to
+                // "Parent" would throw away a fact we hold, and resolving the hero from the
+                // partner's name would assert a slot nobody has stored - the guess this whole
+                // branch exists to remove.
                 SectionHeader(
                     partner?.name?.takeIf { it.isNotBlank() }
                         ?.let { stringResource(R.string.home_section_partner_changed, it) }

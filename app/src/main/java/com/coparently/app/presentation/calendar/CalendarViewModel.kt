@@ -65,7 +65,7 @@ class CalendarViewModel @Inject constructor(
 
     /**
      * Next custody handover, or null when no model is configured or custody never switches.
-     * Feeds the trailing half of the custody ribbon ("→ Mom in 2 days"). Shares
+     * Feeds the trailing half of the custody ribbon ("→ Pavel in 2 days"). Shares
      * [HandoverCalculator] with the home dashboard so the two cannot disagree on the date.
      */
     val nextHandover: StateFlow<HandoverInfo?> = _custodyModel

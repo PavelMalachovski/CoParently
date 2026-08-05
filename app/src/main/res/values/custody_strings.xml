@@ -26,9 +26,6 @@
     <string name="custody_week_to">Week %1$d: %2$s</string>
     <string name="custody_preview">Preview</string>
     <string name="custody_next_14_days">Next 14 days:</string>
-    <!-- Replaces custody_with_mom/custody_with_dad (strings.xml): a label the parent's name
-         can sit next to. %1$s is that parent's name. -->
-    <string name="custody_with">With %1$s</string>
     <string name="custody_ok">OK</string>
     <string name="custody_cancel">Cancel</string>
     <!-- Custody pattern names (UI labels for CustodyModelType). -->
@@ -40,4 +37,14 @@
     <string name="custody_model_two_two_three_desc">2 days, 2 days, 3 days pattern. More frequent transitions.</string>
     <string name="custody_model_three_four_four_three_desc">3 days, 4 days alternating. Balanced mid-week and weekend time.</string>
     <string name="custody_model_custom_desc">Create your own schedule pattern.</string>
+    <!-- Preview sentences for the custody Preview card. These replace a hardcoded
+         English string built in CustodySetupViewModel that named Mom and Dad outright.
+         Each name follows a colon or a dash and is never the subject of a verb or the
+         head of an adjective, so nothing has to agree with it. %1$s/%2$s are the two
+         parents in pattern order; custody_preview_custom takes the two day counts
+         first and the slot-1 parent last. -->
+    <string name="custody_preview_week_on_week_off">First week: %1$s, then it alternates every week.</string>
+    <string name="custody_preview_two_two_three">Mon–Tue: %1$s. Wed–Thu: %2$s. Fri–Sun alternates.</string>
+    <string name="custody_preview_three_four_four_three">Mon–Wed (3 days): %1$s. Thu–Sun (4 days): %2$s. Then it reverses.</string>
+    <string name="custody_preview_custom">Custom pattern: %1$d of %2$d days — %3$s.</string>
 </resources>

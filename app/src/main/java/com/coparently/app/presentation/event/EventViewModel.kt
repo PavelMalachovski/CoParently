@@ -19,7 +19,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.onStart
@@ -399,10 +398,12 @@ class EventViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val event = eventUseCases.getEvents.getById(eventId) ?: return@launch
-                // Read fresh rather than off `parents`, whose WhileSubscribed value is only
-                // warm while a screen is collecting it. Falls back to the event's own slot when
-                // the profile cannot be resolved, exactly as the previous getCurrentUser() did.
-                val role = parentsSource.observe().first().me?.slot ?: event.parentOwner
+                // Only this device's own slot is needed, so ask for exactly that: signedInSlot
+                // reads the uid and one Room row. Collecting `parents` here would stand up a
+                // pairing subscription and a partner-document fetch to answer a local question.
+                // Falls back to the event's own slot when the profile cannot be resolved,
+                // exactly as the previous getCurrentUser() did.
+                val role = parentsSource.signedInSlot() ?: event.parentOwner
                 val updated = event.copy(
                     pickupConfirmedBy = role,
                     pickupConfirmedAt = LocalDateTime.now()

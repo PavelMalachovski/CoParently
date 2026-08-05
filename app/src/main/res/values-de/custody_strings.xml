@@ -23,10 +23,6 @@
     <string name="custody_week_to">Woche %1$d: %2$s</string>
     <string name="custody_preview">Vorschau</string>
     <string name="custody_next_14_days">Nächste 14 Tage:</string>
-    <!-- Replaces custody_with_mom/custody_with_dad (strings.xml). "Bei:" as a bare label
-         needs no article, so it never has to agree with the name that follows. %1$s is that
-         parent's name. -->
-    <string name="custody_with">Bei: %1$s</string>
     <string name="custody_ok">OK</string>
     <string name="custody_cancel">Abbrechen</string>
     <string name="custody_model_week_on_week_off">Wochenweise im Wechsel</string>
@@ -37,4 +33,14 @@
     <string name="custody_model_two_two_three_desc">Muster aus 2 Tagen, 2 Tagen, 3 Tagen. Häufigere Wechsel.</string>
     <string name="custody_model_three_four_four_three_desc">Abwechselnd 3 und 4 Tage. Ausgewogene Zeit unter der Woche und am Wochenende.</string>
     <string name="custody_model_custom_desc">Erstelle dein eigenes Planmuster.</string>
+    <!-- Preview sentences for the custody Preview card. These replace a hardcoded
+         English string built in CustodySetupViewModel that named Mom and Dad outright.
+         Each name follows a colon or a dash and is never the subject of a verb or the
+         head of an adjective, so nothing has to agree with it. %1$s/%2$s are the two
+         parents in pattern order; custody_preview_custom takes the two day counts
+         first and the slot-1 parent last. -->
+    <string name="custody_preview_week_on_week_off">Erste Woche: %1$s, danach wird wöchentlich gewechselt.</string>
+    <string name="custody_preview_two_two_three">Mo–Di: %1$s. Mi–Do: %2$s. Fr–So wechseln sich ab.</string>
+    <string name="custody_preview_three_four_four_three">Mo–Mi (3 Tage): %1$s. Do–So (4 Tage): %2$s. Danach umgekehrt.</string>
+    <string name="custody_preview_custom">Eigenes Muster: %1$d von %2$d Tagen — %3$s.</string>
 </resources>

@@ -128,7 +128,8 @@ fun ExpenseList(
  * have, so the row states the payer and the split explicitly.
  *
  * @param expense Expense to render
- * @param payerRole "mom"/"dad", or null when the payer is not a known parent
+ * @param parentNames Resolves a slot to that parent's name
+ * @param payerRole The payer's slot, or null when the payer is not a known parent
  * @param onClick Opens the expense editor; null leaves the row inert
  * @param onReceiptClick Opens the full-screen receipt viewer
  */

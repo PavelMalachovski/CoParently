@@ -40,8 +40,10 @@ data class CurrencyBalance(
 /**
  * Works out the split bar and settle-up figure for a month of expenses.
  *
- * The money screen of a two-household app never said who paid; this is what makes "Mom paid
- * $154.10 / Dad paid $94.40 / Dad owes you $29.85" possible without adding any storage.
+ * The money screen of a two-household app never said who paid; this is what makes
+ * "Olya: $154.10 / Pavel: $94.40 / Pavel owes you $29.85" possible without adding any storage.
+ * The figures are per *slot* — `momPaid` is slot 1, `dadPaid` slot 2 — and the screen turns a
+ * slot into a person's name; see `presentation/common/ParentLabels.kt`.
  *
  * Each expense leaves its payer out of pocket by the full amount, and every uid in
  * `splitBetween` owes an equal share of it. An expense with an empty `splitBetween` is treated

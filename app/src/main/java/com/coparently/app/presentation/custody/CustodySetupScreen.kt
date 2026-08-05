@@ -68,11 +68,13 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.coparently.app.R
 import com.coparently.app.domain.model.CustodyModelType
+import com.coparently.app.presentation.common.ParentNames
 import com.coparently.app.presentation.common.rememberParentNames
 import com.coparently.app.presentation.theme.CoPlanlyColors
 import com.coparently.app.presentation.theme.dimensions
@@ -419,7 +421,7 @@ fun CustodySetupScreen(
                     )
                     Spacer(modifier = Modifier.height(dims.paddingSmall))
                     Text(
-                        text = uiState.previewText,
+                        text = custodyPreviewText(uiState, parentNames),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -481,7 +483,14 @@ fun CustodySetupScreen(
                                 .background(CoPlanlyColors.MomPink, CircleShape)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text(parentNames.labelFor("mom"), style = MaterialTheme.typography.labelSmall)
+                        Text(
+                            text = parentNames.labelFor("mom"),
+                            style = MaterialTheme.typography.labelSmall,
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false)
+                        )
                         Spacer(modifier = Modifier.width(16.dp))
                         Box(
                             modifier = Modifier
@@ -489,7 +498,14 @@ fun CustodySetupScreen(
                                 .background(CoPlanlyColors.DadBlue, CircleShape)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text(parentNames.labelFor("dad"), style = MaterialTheme.typography.labelSmall)
+                        Text(
+                            text = parentNames.labelFor("dad"),
+                            style = MaterialTheme.typography.labelSmall,
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false)
+                        )
                     }
                 }
             }
@@ -645,5 +661,35 @@ private fun createTempModel(state: CustodySetupUiState): com.coparently.app.doma
                     momDayIndices = state.customMomDays
                 )
             } else null
+    }
+}
+
+/**
+ * The Preview card's one-sentence description of the selected pattern, with both parents named.
+ *
+ * Formatted here rather than in the ViewModel for the usual reason: a ViewModel has no `Context`
+ * and must not acquire one to resolve a string. [CustodySetupUiState] supplies the two slots and
+ * this turns them into names, the same shape the "starts first" row two cards up already uses.
+ *
+ * @param uiState The selected model and its parameters
+ * @param parentNames Resolves a slot to that parent's name
+ */
+@Composable
+private fun custodyPreviewText(uiState: CustodySetupUiState, parentNames: ParentNames): String {
+    val first = parentNames.labelFor(uiState.firstSlot)
+    val second = parentNames.labelFor(uiState.secondSlot)
+    return when (uiState.selectedModelType) {
+        CustodyModelType.WEEK_ON_WEEK_OFF ->
+            stringResource(R.string.custody_preview_week_on_week_off, first)
+        CustodyModelType.TWO_TWO_THREE ->
+            stringResource(R.string.custody_preview_two_two_three, first, second)
+        CustodyModelType.THREE_FOUR_FOUR_THREE ->
+            stringResource(R.string.custody_preview_three_four_four_three, first, second)
+        CustodyModelType.CUSTOM -> stringResource(
+            R.string.custody_preview_custom,
+            uiState.customMomDays.size,
+            uiState.customPatternDays,
+            parentNames.labelFor("mom")
+        )
     }
 }

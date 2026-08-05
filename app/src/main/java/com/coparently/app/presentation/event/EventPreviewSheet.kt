@@ -47,6 +47,7 @@ import java.time.format.DateTimeFormatter
  * the calendar opens this sheet; the full editor is one tap further (Edit).
  *
  * @param event Event (or expanded occurrence) to preview
+ * @param parentNames Resolves a slot to that parent's name
  * @param onEdit Open the full editor for this event
  * @param onDelete Delete the event
  * @param onDismiss Close the sheet without action

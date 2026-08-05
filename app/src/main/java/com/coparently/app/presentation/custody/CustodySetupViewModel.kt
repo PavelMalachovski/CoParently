@@ -208,20 +208,14 @@ data class CustodySetupUiState(
         }
 
     /**
-     * Gets the preview text for the selected model.
+     * The slot that starts the pattern, and the slot that follows it.
+     *
+     * Slots, not names and not text: this is a ViewModel, it has no `Context`, and the preview
+     * sentence is a localized resource the screen formats with the parents' actual names. It
+     * used to be a hardcoded English string here that said "Mom" and "Dad" outright, on the one
+     * screen this branch rewrote to show names — which is exactly the sentence a reader would
+     * have trusted least, sitting two rows under "Starts first: Olya".
      */
-    val previewText: String
-        get() {
-            val whoFirst = if (momFirst) "Mom" else "Dad"
-            return when (selectedModelType) {
-                CustodyModelType.WEEK_ON_WEEK_OFF ->
-                    "$whoFirst has the first week, then parents alternate each week."
-                CustodyModelType.TWO_TWO_THREE ->
-                    "$whoFirst gets Mon-Tue, ${if (momFirst) "Dad" else "Mom"} gets Wed-Thu, then alternates for Fri-Sun."
-                CustodyModelType.THREE_FOUR_FOUR_THREE ->
-                    "$whoFirst gets Mon-Wed (3 days), ${if (momFirst) "Dad" else "Mom"} gets Thu-Sun (4 days), then reverses."
-                CustodyModelType.CUSTOM ->
-                    "Custom pattern: ${customMomDays.size} days with Mom out of $customPatternDays day cycle."
-            }
-        }
+    val firstSlot: String get() = if (momFirst) "mom" else "dad"
+    val secondSlot: String get() = if (momFirst) "dad" else "mom"
 }

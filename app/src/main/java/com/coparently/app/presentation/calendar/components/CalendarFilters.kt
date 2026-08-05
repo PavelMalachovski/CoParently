@@ -33,6 +33,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.coparently.app.R
 import com.coparently.app.presentation.calendar.ParentFilter
@@ -223,10 +224,17 @@ private fun ParentFilterSegments(
                 ),
                 icon = {}
             ) {
+                // A segment is about a third of the sheet's width and SegmentedButton has a
+                // fixed height, so a long label clips rather than wrapping. Names are now
+                // arbitrary length, and the fallbacks are the worst case, not the best:
+                // "Второй родитель" is 15 characters, "Другий з батьків" 16.
                 Text(
                     text = label,
                     style = MaterialTheme.typography.labelMedium,
-                    fontWeight = if (selected == filter) FontWeight.Bold else FontWeight.Medium
+                    fontWeight = if (selected == filter) FontWeight.Bold else FontWeight.Medium,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         }

@@ -34,7 +34,6 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Description
-import androidx.compose.material.icons.filled.Face
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Schedule
@@ -728,12 +727,14 @@ fun AddEditEventScreen(
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.Center
                         ) {
+                            // One glyph for both slots. It used to be Face for slot 1 and
+                            // Person for slot 2 - not a matched pair, and slot 2 was already
+                            // indistinguishable from "unknown" because Person was the fallback
+                            // too. A per-parent glyph is a third channel asserting exactly the
+                            // distinction this app stopped asserting; the name and the colour
+                            // carry the identity.
                             Icon(
-                                imageVector = when (value) {
-                                    "mom" -> Icons.Default.Face
-                                    "dad" -> Icons.Default.Person
-                                    else -> Icons.Default.Person
-                                },
+                                imageVector = Icons.Default.Person,
                                 contentDescription = stringResource(R.string.event_form_cd_label_icon, label),
                                 tint = when (value) {
                                     "mom" -> CoPlanlyColors.MomPink
