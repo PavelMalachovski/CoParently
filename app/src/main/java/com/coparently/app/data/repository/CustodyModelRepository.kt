@@ -1,7 +1,6 @@
 package com.coparently.app.data.repository
 
 import android.util.Log
-import androidx.annotation.VisibleForTesting
 import com.coparently.app.data.local.dao.CustodyModelDao
 import com.coparently.app.data.local.entity.CustodyModelEntity
 import com.coparently.app.data.remote.firebase.FirestoreCustodyDataSource
@@ -11,6 +10,7 @@ import com.coparently.app.domain.model.CustodyModel
 import com.coparently.app.domain.model.CustodyModelType
 import com.coparently.app.domain.repository.UserRepository
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -50,18 +50,29 @@ import javax.inject.Singleton
  */
 @Singleton
 @Suppress("TooManyFunctions")
-class CustodyModelRepository @Inject constructor(
+class CustodyModelRepository(
     private val custodyModelDao: CustodyModelDao,
     private val userRepository: UserRepository,
-    private val firestoreCustodyDataSource: FirestoreCustodyDataSource
+    private val firestoreCustodyDataSource: FirestoreCustodyDataSource,
+    private val scope: CoroutineScope
 ) {
     /**
-     * Scope the shared upstream runs in. Owned here rather than injected, the same way
-     * `ParentsSource` owns its own: the object is a process-lifetime singleton and nothing
-     * outside it has any reason to cancel the sharing. `SupervisorJob` so a failure in one
-     * collector cannot cancel it.
+     * The constructor Hilt uses. [scope] is not part of the graph — it is a process-lifetime
+     * detail of this singleton, the same way `ParentsSource` owns its own — so it is supplied
+     * here rather than bound in a module.
+     *
+     * The four-argument constructor above exists so tests can hand in a scope backed by the test
+     * scheduler and drive [observeShared] itself, backoff delays and all, on virtual time.
+     * Without it the only testable seam was the unshared upstream, exposed as `internal` — a
+     * production-visible way to attach a second, unshared snapshot listener, which is precisely
+     * what the sharing exists to prevent.
      */
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    @Inject
+    constructor(
+        custodyModelDao: CustodyModelDao,
+        userRepository: UserRepository,
+        firestoreCustodyDataSource: FirestoreCustodyDataSource
+    ) : this(custodyModelDao, userRepository, firestoreCustodyDataSource, defaultScope())
 
     /**
      * The shared remote stream. **Every subscriber gets this one flow**, because each raw
@@ -226,42 +237,46 @@ class CustodyModelRepository @Inject constructor(
     // ---- the shared document ----------------------------------------------
 
     /**
-     * The unshared upstream behind [observeShared]: the pair's document, retried with backoff,
-     * mirrored into Room on the way past.
+     * The unshared upstream behind [observeShared]: the pair's document, mirrored into Room on
+     * the way past, the whole chain retried with backoff.
      *
      * The mirror sits here rather than on a separate collector so it runs exactly once no matter
      * how many screens observe the stream, and it is the same mirror-and-merge shape
      * `MessageRepositoryImpl` uses — minus the terminal `catch` that shape gets wrong.
      *
-     * Internal rather than private so the retry and the mirror can be driven as a cold flow in
-     * tests, on the test scheduler's virtual clock. Collecting [observeShared] instead would put
-     * the backoff delay on the sharing scope's real dispatcher, where a test could only wait it
-     * out in wall-clock time.
+     * **[retryWhen] wraps the whole chain, not just the snapshot listener.** Applied inside
+     * [flatMapLatest] it covered only the listener, leaving two uncovered sources of failure on
+     * the same coroutine: [observePair], which collects a Room flow, and the mirror below, which
+     * performs two DAO writes. An exception from either escaped into the sharing coroutine,
+     * where it would kill the process — while every [getActiveModel] collector saw nothing at
+     * all, because a shared flow never delivers an upstream failure to its subscribers. Both
+     * failure shapes this class exists to prevent, on the one path neither guard covered.
+     * Retrying from the top re-derives the pair and re-attaches the listener, which is the only
+     * safe reset when the failure could have come from any stage.
      */
-    @VisibleForTesting
     @OptIn(ExperimentalCoroutinesApi::class)
-    internal fun sharedUpstream(): Flow<SharedCustody?> =
+    private fun sharedUpstream(): Flow<SharedCustody?> =
         observePair()
             .flatMapLatest { pair ->
                 if (pair == null) {
                     flowOf(null)
                 } else {
                     firestoreCustodyDataSource.observeCustody(pair.documentId)
-                        .retryWhen { cause, attempt ->
-                            Log.w(
-                                TAG,
-                                "Custody listener failed for custody_models/${pair.documentId} " +
-                                    "(attempt $attempt), retrying. A PERMISSION_DENIED here can " +
-                                    "simply mean the pairing write has not landed yet — the " +
-                                    "rules require a live pairing to read the document.",
-                                cause
-                            )
-                            delay(RETRY_BASE_MS shl attempt.coerceAtMost(MAX_BACKOFF_SHIFT).toInt())
-                            true
-                        }
                 }
             }
             .onEach { remote -> mirrorIntoRoom(remote) }
+            .retryWhen { cause, attempt ->
+                Log.w(
+                    TAG,
+                    "Shared custody stream failed (attempt $attempt), retrying — this covers " +
+                        "the pair lookup, the custody_models listener and the Room mirror. A " +
+                        "PERMISSION_DENIED here can simply mean the pairing write has not " +
+                        "landed yet: the rules require a live pairing to read the document.",
+                    cause
+                )
+                delay(RETRY_BASE_MS shl attempt.coerceAtMost(MAX_BACKOFF_SHIFT).toInt())
+                true
+            }
 
     /**
      * Folds the shared document into Room, under the id it arrived with.
@@ -273,6 +288,17 @@ class CustodyModelRepository @Inject constructor(
      * The equality guard is not an optimisation: Firestore echoes every write this device makes
      * straight back, and re-inserting an identical row would tick Room's invalidation tracker,
      * re-emit to every observer, and do it again on the next echo.
+     *
+     * **The staleness guard is what stops this function from undoing the user's own save.**
+     * [saveAndActivate] deactivates every model before inserting the new one, so a previously
+     * mirrored row is left `isActive = false`; if the remote write behind it was then swallowed
+     * by [guarded], the document still holds the old pattern. The equality guard alone does not
+     * fire on the replay — the stored row differs from the computed one precisely in `isActive`
+     * — so the mirror used to deactivate the model the user had just chosen and re-activate the
+     * stale one, silently, with no error anywhere: `CustodySetupViewModel` only catches what
+     * [saveAndActivate] rethrows, and it rethrows nothing. Comparing `lastModifiedAt` is the
+     * same last-write-wins rule the shared document already runs on, applied in the one
+     * direction it was missing.
      */
     private suspend fun mirrorIntoRoom(remote: SharedCustody?) {
         if (remote == null) return
@@ -283,9 +309,54 @@ class CustodyModelRepository @Inject constructor(
         ).copy(isActive = true, repeatYearly = remote.repeatYearly)
         if (entity == existing) return
 
+        val localActive = custodyModelDao.getActiveModelSync()
+        if (localActive != null && isNewer(localActive.lastModifiedAt, entity.lastModifiedAt)) {
+            republish(localActive)
+            return
+        }
+
         custodyModelDao.deactivateAllModels()
         custodyModelDao.insertModel(entity)
     }
+
+    /**
+     * Re-sends a local model that the document is older than.
+     *
+     * Not strictly required to stop the revert — refusing to mirror would do that on its own —
+     * but refusing alone leaves the pair permanently disagreeing, with the co-parent's phone
+     * (and Task 10's banner) reading a document that is this device's *own* lost write. Since
+     * the mirror has just proved the listener is alive, the write that failed is worth one more
+     * attempt: it turns a swallowed write into a recovered one at the cost of a guarded call
+     * that is already written.
+     *
+     * This cannot loop. The re-push echoes back carrying the same `lastModifiedAt` the local row
+     * holds, so the next pass finds neither side newer and mirrors normally.
+     */
+    private suspend fun republish(local: CustodyModelEntity) {
+        pushToFirestore(local.toDomainModel(), local)
+    }
+
+    /**
+     * Whether the ISO date-time [candidate] is strictly later than [reference].
+     *
+     * Parsed rather than compared as strings, and an unparseable value on either side answers
+     * `false` — "not newer" — so a malformed timestamp degrades to the mirror behaving as it did
+     * before this guard existed rather than to a local row that can never be updated again.
+     *
+     * Caveat worth naming: `CustodyModelEntity.lastModifiedAt` is a *naive local* date-time, so
+     * two parents in different time zones do not order their writes by real time. That is a
+     * property of the stored schema, not of this comparison — changing it is a Room schema
+     * change, and `CLAUDE.md` records the same open question for `Event`/`Expense`/`Budget`
+     * dates. Within one device, which is the case this guard exists for, it is exact.
+     */
+    private fun isNewer(candidate: String, reference: String): Boolean {
+        val left = candidate.toLocalDateTimeOrNull() ?: return false
+        val right = reference.toLocalDateTimeOrNull() ?: return false
+        return left.isAfter(right)
+    }
+
+    private fun String.toLocalDateTimeOrNull(): LocalDateTime? =
+        runCatching { LocalDateTime.parse(this) }.getOrNull()
 
     /**
      * Pushes the just-saved model to the pair's document, guarded.
@@ -383,8 +454,9 @@ class CustodyModelRepository @Inject constructor(
     ) {
         Log.w(
             TAG,
-            "Custody $operation failed for custody_models/$documentId. " +
-                "Room keeps the local copy and the next save retries.",
+            "Custody $operation failed for custody_models/$documentId. Room keeps the local " +
+                "copy, which the mirror will not overwrite with the older document, and " +
+                "re-sends on the next snapshot.",
             e
         )
         null
@@ -465,6 +537,30 @@ class CustodyModelRepository @Inject constructor(
 
     private companion object {
         const val TAG = "CustodyModelRepo"
+
+        /**
+         * The scope the production sharing runs in: process-lifetime, `SupervisorJob` so a
+         * failure in one collector cannot cancel it.
+         *
+         * The [CoroutineExceptionHandler] is the backstop the sharing coroutine had none of.
+         * `shareIn` launches a root coroutine here; a root coroutine's uncaught exception goes to
+         * the handler if there is one and to Android's default uncaught handler if there is not —
+         * which kills the app. [sharedUpstream]'s `retryWhen` now covers every stage and should
+         * leave nothing to escape, but "should" is what the chat listener's author had too. If
+         * one ever does, it must fail the sync, not the process.
+         */
+        fun defaultScope(): CoroutineScope = CoroutineScope(
+            SupervisorJob() + Dispatchers.Default + CoroutineExceptionHandler { _, throwable ->
+                Log.e(
+                    TAG,
+                    "The shared custody stream died with an uncaught exception. Custody no " +
+                        "longer syncs for the rest of this process; Room keeps serving the " +
+                        "local pattern. This should be unreachable — retryWhen covers the " +
+                        "whole upstream — so treat it as a bug report, not as weather.",
+                    throwable
+                )
+            }
+        )
 
         /** Keeps the shared listener warm across a tab switch or a config change. */
         const val STOP_TIMEOUT_MS = 5_000L
