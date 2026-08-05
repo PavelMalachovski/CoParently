@@ -7,25 +7,22 @@
     <string name="custody_pattern_start_date">Datum začátku vzoru</string>
     <string name="custody_start_date_hint">Toto je výchozí datum – vzor se bude opakovat od tohoto dne</string>
     <string name="custody_who_starts_first">Kdo začíná první?</string>
-    <string name="custody_mom_starts_first">Máma začíná první</string>
-    <string name="custody_dad_starts_first">Táta začíná první</string>
     <!-- Replaces custody_mom_starts_first/custody_dad_starts_first. Present tense "začíná" and
          the soft adjective "první" have one form for every gender in Czech nominative
          singular, so the label stays safe next to any name. %1$s is that parent's name. -->
     <string name="custody_starts_first">Začíná první: %1$s</string>
     <string name="custody_custom_pattern">Vlastní vzor</string>
-    <string name="custody_custom_pattern_hint">Klepnutím přiřaďte dny mámě (růžová). Zbývající dny připadnou tátovi (modrá).</string>
+    <!-- The two names are colour labels, not grammatical objects: "Pink: <name>" so
+         nothing has to agree with the name. The old value named Mom and Dad outright
+         and, in ru/uk/cs, put them in a governed case. %1$s is slot 1, %2$s is slot 2. -->
+    <string name="custody_custom_pattern_hint">Klepnutím na den změníte, čí je. Růžová: %1$s. Modrá: %2$s.</string>
     <string name="custody_week_abbrev">T%1$d</string>
     <string name="custody_day_abbrev">D%1$d</string>
-    <string name="custody_week1_to_mom">1. týden → Máma</string>
-    <string name="custody_week2_to_mom">2. týden → Máma</string>
     <!-- Replaces custody_week1_to_mom/custody_week2_to_mom: "týden" (week) does not inflect
          for the referent's gender. %1$d is the week number, %2$s is the parent's name. -->
     <string name="custody_week_to">Týden %1$d: %2$s</string>
     <string name="custody_preview">Náhled</string>
     <string name="custody_next_14_days">Dalších 14 dní:</string>
-    <string name="custody_mom">Máma</string>
-    <string name="custody_dad">Táta</string>
     <!-- Replaces custody_with_mom/custody_with_dad (strings.xml). "S kým" (with whom) is a
          fixed question phrase, so the name that follows never has to decline. %1$s is that
          parent's name. -->

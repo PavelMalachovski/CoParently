@@ -9,11 +9,20 @@ import androidx.compose.ui.graphics.luminance
 /**
  * Parent identity colours, resolved for the theme that is actually being painted.
  *
+ * A colour identifies a *parent*, not a role: the app no longer shows the words Mom and Dad,
+ * and `"mom"`/`"dad"` survive only as slot identifiers assigned by pairing. Slot 1 is pink and
+ * slot 2 is blue. Which person holds which slot is decided in `functions/index.js`
+ * (`assignSlots`) and shown by name everywhere else — see `presentation/common/ParentLabels.kt`.
+ *
  * `CoPlanlyColors.MomPink`/`DadBlue` are **fill-only** — neither clears 4.5:1 as a foreground
- * in either theme — so any screen that wants to write "Mom paid …" in pink has to reach for the
- * theme-aware `*Light`/`*Dark` partner instead. Three screens (home dashboard, calendar ribbon,
- * expenses split) now need that choice, and the luminance test behind it was already copy-pasted
- * into `MonthView` and `DayWeekView`. These helpers are the one place that decision lives.
+ * in either theme — so any screen that wants to write a parent's name in pink has to reach for
+ * the theme-aware `*Light`/`*Dark` partner instead. Three screens (home dashboard, calendar
+ * ribbon, expenses split) need that choice, and the luminance test behind it was already
+ * copy-pasted into `MonthView` and `DayWeekView`. These helpers are the one place that decision
+ * lives.
+ *
+ * The saturation rule is unchanged: a custody day background is the hue at ~14% alpha, a chip
+ * or dot is the same hue at full strength.
  *
  * The test is on `MaterialTheme.colorScheme.surface.luminance()`, never `isSystemInDarkTheme()`:
  * the in-app theme setting can force light while the system is dark, and the colour has to

@@ -21,8 +21,6 @@
     <string name="budgets_empty_description">Задайте месячный лимит по категориям, чтобы держать общие расходы под контролем.</string>
     <string name="expenses_empty_title">Пока нет расходов</string>
     <string name="expenses_empty_description">Запишите общий расход — сад, одежду, визит к врачу — и разделите его со вторым родителем.</string>
-    <string name="expenses_mom_paid">Мама заплатила %1$s</string>
-    <string name="expenses_dad_paid">Папа заплатил %1$s</string>
     <!-- Replaces expenses_mom_paid/expenses_dad_paid. The call site (ExpenseSummaryHeader's
          who-paid row) needs both the payer's name and the amount in one Text; the name serves
          as its own label, so nothing has to agree with it. %1$s is the payer's name, %2$s is

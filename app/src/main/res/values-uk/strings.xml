@@ -22,8 +22,6 @@
     <string name="event_cancel">Скасувати</string>
     <string name="event_date">Дата: %1$s</string>
     <string name="event_parent">Хто з батьків: %1$s</string>
-    <string name="event_parent_mom">Мама</string>
-    <string name="event_parent_dad">Тато</string>
 
     <!-- Auth Screen -->
     <string name="auth_sign_in">Увійти</string>
@@ -72,8 +70,6 @@
     <string name="pairing_unknown">Невідомо</string>
 
     <!-- Custody -->
-    <string name="custody_with_mom">У мами</string>
-    <string name="custody_with_dad">У тата</string>
     <string name="custody_today">Сьогодні: %1$s</string>
 
     <!-- Common -->

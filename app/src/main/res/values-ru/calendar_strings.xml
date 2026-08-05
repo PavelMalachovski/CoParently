@@ -1,7 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="calendar_parent_mom">Мама</string>
-    <string name="calendar_parent_dad">Папа</string>
 
     <string name="calendar_custody_today_with">Сегодня с %1$s</string>
     <string name="calendar_custody_handover_tomorrow">→ %1$s завтра</string>

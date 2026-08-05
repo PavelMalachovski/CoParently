@@ -7,25 +7,22 @@
     <string name="custody_pattern_start_date">Дата початку циклу</string>
     <string name="custody_start_date_hint">Це опорна дата — цикл повторюватиметься починаючи з цього дня</string>
     <string name="custody_who_starts_first">Хто починає першим?</string>
-    <string name="custody_mom_starts_first">Мама починає першою</string>
-    <string name="custody_dad_starts_first">Тато починає першим</string>
     <!-- Replaces custody_mom_starts_first/custody_dad_starts_first: dropping "першим/першою"
          removes the adjective that would otherwise have to agree with the name. %1$s is that
          parent's name. -->
     <string name="custody_starts_first">Починає: %1$s</string>
     <string name="custody_custom_pattern">Власний шаблон</string>
-    <string name="custody_custom_pattern_hint">Натискайте на дні, щоб призначити їх мамі (рожевий). Решта днів дістанеться татові (синій).</string>
+    <!-- The two names are colour labels, not grammatical objects: "Pink: <name>" so
+         nothing has to agree with the name. The old value named Mom and Dad outright
+         and, in ru/uk/cs, put them in a governed case. %1$s is slot 1, %2$s is slot 2. -->
+    <string name="custody_custom_pattern_hint">Натисніть на день, щоб змінити, чий він. Рожевий: %1$s. Синій: %2$s.</string>
     <string name="custody_week_abbrev">Т%1$d</string>
     <string name="custody_day_abbrev">Д%1$d</string>
-    <string name="custody_week1_to_mom">Тиждень 1 → Мама</string>
-    <string name="custody_week2_to_mom">Тиждень 2 → Мама</string>
     <!-- Replaces custody_week1_to_mom/custody_week2_to_mom: "тиждень" (week) does not inflect
          for the referent's gender. %1$d is the week number, %2$s is the parent's name. -->
     <string name="custody_week_to">Тиждень %1$d: %2$s</string>
     <string name="custody_preview">Попередній перегляд</string>
     <string name="custody_next_14_days">Наступні 14 днів:</string>
-    <string name="custody_mom">Мама</string>
-    <string name="custody_dad">Тато</string>
     <!-- Replaces custody_with_mom/custody_with_dad (strings.xml). "З ким" (with whom) is a
          fixed question phrase, so the name that follows never has to decline. %1$s is that
          parent's name. -->

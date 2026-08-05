@@ -7,25 +7,22 @@
     <string name="custody_pattern_start_date">Startdatum des Musters</string>
     <string name="custody_start_date_hint">Dies ist das Ankerdatum – das Muster wiederholt sich ab diesem Tag</string>
     <string name="custody_who_starts_first">Wer beginnt zuerst?</string>
-    <string name="custody_mom_starts_first">Mama beginnt zuerst</string>
-    <string name="custody_dad_starts_first">Papa beginnt zuerst</string>
     <!-- Replaces custody_mom_starts_first/custody_dad_starts_first. "Beginnt" (3rd person
          singular) and the adverb "zuerst" never inflect for gender, so the label stays safe
          next to any name. %1$s is that parent's name. -->
     <string name="custody_starts_first">Beginnt zuerst: %1$s</string>
     <string name="custody_custom_pattern">Eigenes Muster</string>
-    <string name="custody_custom_pattern_hint">Tippe auf Tage, um sie Mama zuzuweisen (rosa). Die übrigen Tage gehen an Papa (blau).</string>
+    <!-- The two names are colour labels, not grammatical objects: "Pink: <name>" so
+         nothing has to agree with the name. The old value named Mom and Dad outright
+         and, in ru/uk/cs, put them in a governed case. %1$s is slot 1, %2$s is slot 2. -->
+    <string name="custody_custom_pattern_hint">Tippe auf einen Tag, um zu wechseln, wem er gehört. Rosa: %1$s. Blau: %2$s.</string>
     <string name="custody_week_abbrev">W%1$d</string>
     <string name="custody_day_abbrev">T%1$d</string>
-    <string name="custody_week1_to_mom">Woche 1 → Mama</string>
-    <string name="custody_week2_to_mom">Woche 2 → Mama</string>
     <!-- Replaces custody_week1_to_mom/custody_week2_to_mom: "Woche" (week) does not inflect
          for the referent's gender. %1$d is the week number, %2$s is the parent's name. -->
     <string name="custody_week_to">Woche %1$d: %2$s</string>
     <string name="custody_preview">Vorschau</string>
     <string name="custody_next_14_days">Nächste 14 Tage:</string>
-    <string name="custody_mom">Mama</string>
-    <string name="custody_dad">Papa</string>
     <!-- Replaces custody_with_mom/custody_with_dad (strings.xml). "Bei:" as a bare label
          needs no article, so it never has to agree with the name that follows. %1$s is that
          parent's name. -->

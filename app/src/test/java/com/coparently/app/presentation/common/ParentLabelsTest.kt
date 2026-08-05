@@ -8,8 +8,16 @@ import kotlin.test.assertNull
 
 class ParentLabelsTest {
 
-    private val me = NamedParent(uid = "u1", slot = "mom", name = "Olya")
-    private val coParent = NamedParent(uid = "u2", slot = "dad", name = "Pavel")
+    private val me = NamedParent(
+        uid = "u1",
+        slot = "mom",
+        name = "Olya"
+    )
+    private val coParent = NamedParent(
+        uid = "u2",
+        slot = "dad",
+        name = "Pavel"
+    )
 
     @Test
     fun `my own slot is my name`() {
@@ -104,17 +112,25 @@ class ParentLabelsTest {
     @Test
     fun `a user projects to their stored slot and name`() {
         val user = User(
-            id = "u1", email = "a@b.c", name = "Olya", role = "mom", colorCode = "#FF4081"
+            id = "u1",
+            email = "a@b.c",
+            name = "Olya",
+            role = "mom",
+            colorCode = "#FF4081"
         )
-        assertEquals(NamedParent(uid = "u1", slot = "mom", name = "Olya"), user.asNamedParent())
+        assertEquals(me, user.asNamedParent())
     }
 
     @Test
     fun `a partner with a stored slot projects to it`() {
         val partner = PartnerSummary(
-            id = "u2", name = "Pavel", email = "d@e.f", pairedSinceMillis = 1L, role = "dad"
+            id = "u2",
+            name = "Pavel",
+            email = "d@e.f",
+            pairedSinceMillis = 1L,
+            role = "dad"
         )
-        assertEquals(NamedParent(uid = "u2", slot = "dad", name = "Pavel"), partner.asNamedParent())
+        assertEquals(coParent, partner.asNamedParent())
     }
 
     @Test
@@ -122,7 +138,11 @@ class ParentLabelsTest {
         // Their users document carries no slot yet. Projecting them onto the free slot is the
         // guess this branch exists to remove, so there is nothing to project.
         val partner = PartnerSummary(
-            id = "u2", name = "Pavel", email = "d@e.f", pairedSinceMillis = 1L, role = null
+            id = "u2",
+            name = "Pavel",
+            email = "d@e.f",
+            pairedSinceMillis = 1L,
+            role = null
         )
         assertNull(partner.asNamedParent())
     }

@@ -12,8 +12,16 @@ import kotlin.test.assertTrue
  */
 class ParentsTest {
 
-    private val me = NamedParent(uid = "u1", slot = "mom", name = "Olya")
-    private val coParent = NamedParent(uid = "u2", slot = "dad", name = "Pavel")
+    private val me = NamedParent(
+        uid = "u1",
+        slot = "mom",
+        name = "Olya"
+    )
+    private val coParent = NamedParent(
+        uid = "u2",
+        slot = "dad",
+        name = "Pavel"
+    )
 
     @Test
     fun `two properly slotted parents map both uids`() {

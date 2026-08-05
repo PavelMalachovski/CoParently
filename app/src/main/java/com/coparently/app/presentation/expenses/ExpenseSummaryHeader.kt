@@ -37,6 +37,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.coparently.app.R
 import com.coparently.app.domain.expenses.ExpenseBalance
+import com.coparently.app.presentation.common.NamedParent
+import com.coparently.app.presentation.common.ParentNames
+import com.coparently.app.presentation.common.Parents
 import com.coparently.app.presentation.common.PillChip
 import com.coparently.app.presentation.theme.CoPlanlyColors
 import com.coparently.app.presentation.theme.ParentColors
@@ -62,8 +65,8 @@ private const val BALANCE_STRIP_ALPHA = 0.12f
  * Month header for the Expenses screen: which month, total spend, who paid what, and who owes
  * whom — in one card.
  *
- * Replaces a horizontal row of category cards that carried no Mom/Dad semantics at all — in a
- * two-household product the money screen never answered the question co-parents actually have,
+ * Replaces a horizontal row of category cards that carried no per-parent semantics at all — in
+ * a two-household product the money screen never answered the question co-parents actually have,
  * which is "are we square?". The pink/blue split bar reuses the calendar's colour language
  * rather than inventing a second one.
  *
@@ -73,11 +76,18 @@ private const val BALANCE_STRIP_ALPHA = 0.12f
  * switcher; pass null on the second and subsequent cards of a mixed-currency month, so one
  * switcher governs them all.
  *
- * While unpaired the split bar and balance row are hidden: with one parent on record a
- * 100%-pink bar and a zero balance would be decoration pretending to be data.
+ * While the two parents cannot be told apart the split bar and balance row are hidden: with one
+ * parent on record a 100%-pink bar and a zero balance would be decoration pretending to be data.
+ * That covers being unpaired *and* a pair whose two parents still hold the same slot.
+ *
+ * The two amounts under the bar are labelled by name — "Olya: $154.10" — rather than by a role
+ * word. The name is the label: the row's two halves are already positioned and coloured per
+ * parent, so a repeated "Paid by" on both sides would distinguish nothing. Its meaning rests on
+ * sitting directly under the [SplitBar]; keep it there.
  *
  * @param balance The selected month's paid/owed figures for one currency
  * @param currency ISO currency code for formatting
+ * @param parentNames Resolves a slot to that parent's name
  * @param onSettleUp Invoked with a ready-to-send message when the user taps Settle up
  * @param monthLabel Name of the month being shown, used in the header and settle-up draft
  * @param modifier Modifier for the card
@@ -88,6 +98,7 @@ private const val BALANCE_STRIP_ALPHA = 0.12f
 fun ExpenseSummaryHeader(
     balance: ExpenseBalance,
     currency: String,
+    parentNames: ParentNames,
     onSettleUp: (String) -> Unit,
     monthLabel: String = defaultMonthLabel(),
     modifier: Modifier = Modifier,
@@ -137,7 +148,8 @@ fun ExpenseSummaryHeader(
                 ) {
                     Text(
                         text = stringResource(
-                            R.string.expenses_mom_paid,
+                            R.string.expenses_paid_by,
+                            parentNames.labelFor("mom"),
                             format.format(balance.momPaid)
                         ),
                         style = MaterialTheme.typography.labelMedium,
@@ -145,7 +157,8 @@ fun ExpenseSummaryHeader(
                     )
                     Text(
                         text = stringResource(
-                            R.string.expenses_dad_paid,
+                            R.string.expenses_paid_by,
+                            parentNames.labelFor("dad"),
                             format.format(balance.dadPaid)
                         ),
                         style = MaterialTheme.typography.labelMedium,
@@ -377,6 +390,17 @@ internal fun currencyFormat(currency: String): NumberFormat =
         runCatching { this.currency = Currency.getInstance(currency) }
     }
 
+/** Two named parents, so the previews render the same shape a paired device does. */
+private val previewParentNames = ParentNames(
+    parents = Parents(
+        me = NamedParent(uid = "u1", slot = "mom", name = "Olya"),
+        coParent = NamedParent(uid = "u2", slot = "dad", name = "Pavel")
+    ),
+    youFallback = "You",
+    coParentFallback = "Co-parent",
+    unknownFallback = "Parent"
+)
+
 @LightDarkPreviews
 @Composable
 private fun ExpenseSummaryHeaderPairedPreview() {
@@ -390,6 +414,7 @@ private fun ExpenseSummaryHeaderPairedPreview() {
                 splitKnown = true
             ),
             currency = "USD",
+            parentNames = previewParentNames,
             onSettleUp = {}
         )
     }
@@ -408,6 +433,7 @@ private fun ExpenseSummaryHeaderUnpairedPreview() {
                 splitKnown = false
             ),
             currency = "USD",
+            parentNames = previewParentNames,
             onSettleUp = {}
         )
     }

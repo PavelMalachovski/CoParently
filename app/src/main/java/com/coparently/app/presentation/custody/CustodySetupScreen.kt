@@ -73,6 +73,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.coparently.app.R
 import com.coparently.app.domain.model.CustodyModelType
+import com.coparently.app.presentation.common.rememberParentNames
 import com.coparently.app.presentation.theme.CoPlanlyColors
 import com.coparently.app.presentation.theme.dimensions
 import java.time.Instant
@@ -92,6 +93,7 @@ fun CustodySetupScreen(
 ) {
     val dims = dimensions()
     val uiState by viewModel.uiState.collectAsState()
+    val parentNames = rememberParentNames(viewModel.parents.collectAsState().value)
     val snackbarHostState = remember { SnackbarHostState() }
     var showDatePicker by remember { mutableStateOf(false) }
 
@@ -264,11 +266,10 @@ fun CustodySetupScreen(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = if (uiState.momFirst) {
-                                stringResource(R.string.custody_mom_starts_first)
-                            } else {
-                                stringResource(R.string.custody_dad_starts_first)
-                            },
+                            text = stringResource(
+                                R.string.custody_starts_first,
+                                parentNames.labelFor(if (uiState.momFirst) "mom" else "dad")
+                            ),
                             style = MaterialTheme.typography.bodyLarge
                         )
                     }
@@ -295,7 +296,11 @@ fun CustodySetupScreen(
                         modifier = Modifier.padding(vertical = dims.paddingSmall)
                     )
                     Text(
-                        text = stringResource(R.string.custody_custom_pattern_hint),
+                        text = stringResource(
+                            R.string.custody_custom_pattern_hint,
+                            parentNames.labelFor("mom"),
+                            parentNames.labelFor("dad")
+                        ),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -363,7 +368,13 @@ fun CustodySetupScreen(
                             },
                             modifier = Modifier.weight(1f)
                         ) {
-                            Text(stringResource(R.string.custody_week1_to_mom))
+                            Text(
+                                stringResource(
+                                    R.string.custody_week_to,
+                                    1,
+                                    parentNames.labelFor("mom")
+                                )
+                            )
                         }
                         TextButton(
                             onClick = {
@@ -376,7 +387,13 @@ fun CustodySetupScreen(
                             },
                             modifier = Modifier.weight(1f)
                         ) {
-                            Text(stringResource(R.string.custody_week2_to_mom))
+                            Text(
+                                stringResource(
+                                    R.string.custody_week_to,
+                                    2,
+                                    parentNames.labelFor("mom")
+                                )
+                            )
                         }
                     }
                 }
@@ -464,7 +481,7 @@ fun CustodySetupScreen(
                                 .background(CoPlanlyColors.MomPink, CircleShape)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text(stringResource(R.string.custody_mom), style = MaterialTheme.typography.labelSmall)
+                        Text(parentNames.labelFor("mom"), style = MaterialTheme.typography.labelSmall)
                         Spacer(modifier = Modifier.width(16.dp))
                         Box(
                             modifier = Modifier
@@ -472,7 +489,7 @@ fun CustodySetupScreen(
                                 .background(CoPlanlyColors.DadBlue, CircleShape)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text(stringResource(R.string.custody_dad), style = MaterialTheme.typography.labelSmall)
+                        Text(parentNames.labelFor("dad"), style = MaterialTheme.typography.labelSmall)
                     }
                 }
             }

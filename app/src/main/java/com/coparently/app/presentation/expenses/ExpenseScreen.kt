@@ -34,6 +34,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.coparently.app.R
 import com.coparently.app.domain.model.Expense
 import com.coparently.app.presentation.common.animations.AnimatedEmptyState
+import com.coparently.app.presentation.common.rememberParentNames
 import kotlinx.coroutines.launch
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
@@ -74,6 +75,7 @@ fun ExpenseScreen(
     val selectedMonth by viewModel.selectedMonth.collectAsState()
     val balancesByCurrency by viewModel.balancesByCurrency.collectAsState()
     val roleByUid by viewModel.roleByUid.collectAsState()
+    val parentNames = rememberParentNames(viewModel.parents.collectAsState().value)
     val budgets by budgetViewModel.budgets.collectAsState()
 
     val snackbarHostState = remember { SnackbarHostState() }
@@ -190,6 +192,7 @@ fun ExpenseScreen(
                         ExpenseSummaryHeader(
                             balance = currencyBalance.balance,
                             currency = currencyBalance.currency,
+                            parentNames = parentNames,
                             onSettleUp = onSettleUp,
                             monthLabel = monthLabel,
                             modifier = Modifier
@@ -211,6 +214,7 @@ fun ExpenseScreen(
                     ExpenseList(
                         expenses = monthExpenses,
                         roleByUid = roleByUid,
+                        parentNames = parentNames,
                         onDelete = deleteWithUndo,
                         onExpenseClick = { onEditExpense(it.id) },
                         modifier = Modifier.weight(1f)

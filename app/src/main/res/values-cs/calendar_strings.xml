@@ -2,8 +2,6 @@
 <!-- Czech translations for calendar strings. Keep keys in sync with values/calendar_strings.xml. -->
 <resources>
     <!-- Parent names, used to compose custody and handover copy -->
-    <string name="calendar_parent_mom">Máma</string>
-    <string name="calendar_parent_dad">Táta</string>
 
     <!-- Custody ribbon -->
     <string name="calendar_custody_today_with">Dnes má %1$s</string>

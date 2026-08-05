@@ -45,6 +45,4 @@
     <string name="home_activity_change_requested">Запит на зміну: %1$s</string>
     <string name="home_activity_review">Переглянути</string>
 
-    <string name="home_parent_mom">Мама</string>
-    <string name="home_parent_dad">Тато</string>
 </resources>

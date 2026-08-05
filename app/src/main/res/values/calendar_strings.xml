@@ -7,8 +7,6 @@
 -->
 <resources>
     <!-- Parent names, used to compose custody and handover copy -->
-    <string name="calendar_parent_mom">Mom</string>
-    <string name="calendar_parent_dad">Dad</string>
 
     <!-- Custody ribbon -->
     <string name="calendar_custody_today_with">Today with %1$s</string>

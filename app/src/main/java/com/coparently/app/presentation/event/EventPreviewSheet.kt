@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.coparently.app.R
 import com.coparently.app.domain.model.Event
+import com.coparently.app.presentation.common.ParentNames
 import com.coparently.app.presentation.theme.CoPlanlyColors
 import java.time.format.DateTimeFormatter
 
@@ -55,6 +56,7 @@ import java.time.format.DateTimeFormatter
 @Composable
 fun EventPreviewSheet(
     event: Event,
+    parentNames: ParentNames,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
     onDismiss: () -> Unit
@@ -64,11 +66,7 @@ fun EventPreviewSheet(
         "dad" -> CoPlanlyColors.DadBlue
         else -> MaterialTheme.colorScheme.tertiary
     }
-    val parentLabel = when (event.parentOwner) {
-        "mom" -> stringResource(R.string.event_preview_mom)
-        "dad" -> stringResource(R.string.event_preview_dad)
-        else -> event.parentOwner
-    }
+    val parentLabel = parentNames.labelFor(event.parentOwner)
 
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(

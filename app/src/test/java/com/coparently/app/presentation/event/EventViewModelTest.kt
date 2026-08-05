@@ -52,8 +52,16 @@ class EventViewModelTest {
     private lateinit var getEvents: GetEventsUseCase
     private lateinit var errorHandler: ErrorHandler
     private lateinit var encryptedPreferences: EncryptedPreferences
-    private lateinit var userRepository: UserRepository
     private lateinit var viewModel: EventViewModel
+
+    /** The signed-in parent, in slot 2. `confirmPickup` stamps their slot on the event. */
+    private val signedInParent = User(
+        id = "u1",
+        email = "pavel@example.com",
+        name = "Pavel",
+        role = "dad",
+        colorCode = "#2196F3"
+    )
 
     private val sampleEvent = Event(
         id = "e1",
@@ -77,23 +85,13 @@ class EventViewModelTest {
         }
         errorHandler = mockk(relaxed = true)
         encryptedPreferences = mockk(relaxed = true)
-        userRepository = mockk {
-            coEvery { getCurrentUser() } returns User(
-                id = "u1",
-                email = "dad@example.com",
-                name = "Dad",
-                role = "dad",
-                colorCode = "#2196F3"
-            )
-        }
         viewModel = EventViewModel(
             EventUseCases(createEvent, updateEvent, deleteEvent, getEvents),
             errorHandler,
             encryptedPreferences,
             Gson(),
-            userRepository,
             eventImageStorage = mockk(relaxed = true),
-            parentsSource = testParentsSource()
+            parentsSource = testParentsSource(me = signedInParent)
         )
     }
 
@@ -120,7 +118,7 @@ class EventViewModelTest {
     }
 
     @Test
-    fun `confirmPickup stamps current user role`() = runTest {
+    fun `confirmPickup stamps the signed-in parent's slot`() = runTest {
         coEvery { getEvents.getById("e1") } returns sampleEvent
         val saved = slot<Event>()
         coEvery { updateEvent.invoke(capture(saved)) } answers { Result.success(saved.captured) }

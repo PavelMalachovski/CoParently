@@ -9,26 +9,23 @@
     <string name="custody_pattern_start_date">Pattern Start Date</string>
     <string name="custody_start_date_hint">This is the anchor date - the pattern will repeat from this day</string>
     <string name="custody_who_starts_first">Who Starts First?</string>
-    <string name="custody_mom_starts_first">Mom starts first</string>
-    <string name="custody_dad_starts_first">Dad starts first</string>
     <!-- Replaces custody_mom_starts_first/custody_dad_starts_first: a label the parent's
          name can sit next to without a verb agreeing with it. %1$s is that parent's name. -->
     <string name="custody_starts_first">Starts first: %1$s</string>
     <string name="custody_custom_pattern">Custom Pattern</string>
-    <string name="custody_custom_pattern_hint">Tap days to assign to Mom (pink). Remaining days go to Dad (blue).</string>
+    <!-- The two names are colour labels, not grammatical objects: "Pink: <name>" so
+         nothing has to agree with the name. The old value named Mom and Dad outright
+         and, in ru/uk/cs, put them in a governed case. %1$s is slot 1, %2$s is slot 2. -->
+    <string name="custody_custom_pattern_hint">Tap a day to switch whose it is. Pink: %1$s. Blue: %2$s.</string>
     <!-- Abbreviated week label in the custom-pattern day grid, e.g. "W1". -->
     <string name="custody_week_abbrev">W%1$d</string>
     <!-- Abbreviated day label in the custom-pattern day grid, e.g. "D3". -->
     <string name="custody_day_abbrev">D%1$d</string>
-    <string name="custody_week1_to_mom">Week 1 → Mom</string>
-    <string name="custody_week2_to_mom">Week 2 → Mom</string>
     <!-- Replaces custody_week1_to_mom/custody_week2_to_mom: a plain "Week N: name" pair, never
          a sentence. %1$d is the week number, %2$s is the parent's name. -->
     <string name="custody_week_to">Week %1$d: %2$s</string>
     <string name="custody_preview">Preview</string>
     <string name="custody_next_14_days">Next 14 days:</string>
-    <string name="custody_mom">Mom</string>
-    <string name="custody_dad">Dad</string>
     <!-- Replaces custody_with_mom/custody_with_dad (strings.xml): a label the parent's name
          can sit next to. %1$s is that parent's name. -->
     <string name="custody_with">With %1$s</string>

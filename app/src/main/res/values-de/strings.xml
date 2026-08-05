@@ -22,8 +22,6 @@
     <string name="event_cancel">Abbrechen</string>
     <string name="event_date">Datum: %1$s</string>
     <string name="event_parent">Elternteil: %1$s</string>
-    <string name="event_parent_mom">Mama</string>
-    <string name="event_parent_dad">Papa</string>
 
     <!-- Auth Screen -->
     <string name="auth_sign_in">Anmelden</string>
@@ -72,8 +70,6 @@
     <string name="pairing_unknown">Unbekannt</string>
 
     <!-- Custody -->
-    <string name="custody_with_mom">Bei Mama</string>
-    <string name="custody_with_dad">Bei Papa</string>
     <string name="custody_today">Heute: %1$s</string>
 
     <!-- Common -->

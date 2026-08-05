@@ -143,7 +143,21 @@ cd firestore-tests && npm test              # firestore.rules against the local 
 - **KDoc** on public classes/functions; code and comments in **English**.
 - Material 3 components; theme tokens from `presentation/theme/`
   (`CoPlanlyColors`, `Typography`, `CoPlanlyShapes`, `dimensions()`).
-- Parent color semantics are product-level: **Mom = pink, Dad = blue** — do not repurpose.
+- **Parent colours identify a person, not a role.** The app never shows the words "Mom" or
+  "Dad": every parent label goes through `presentation/common/ParentLabels.kt` and renders
+  that person's name. `"mom"`/`"dad"` survive as the two *slot identifiers* in Room, in the
+  Firestore document schema and in `firestore.rules`, and are never renamed — `Event.parentOwner`
+  is part of the schema `EventRepositoryImpl.toFirestoreMap()` defines, and a co-parent on an
+  older build must keep reading it. Slot 1 is pink, slot 2 is blue; pairing assigns the slots
+  (`functions/index.js`, `assignSlots`), nobody chooses one.
+- **Only the signed-in user has a Room `users` row.** Nothing writes one for the co-parent, so
+  `userRepository.getAllUsers()` can never answer "who is the other parent" — it returns one
+  row, and on a device where two accounts have signed in over time it returns rows for accounts
+  that are not paired with anyone. The co-parent's name *and slot* come from their own
+  `users/{uid}` document via `PartnerSummary`, and `presentation/common/ParentsSource.kt` is the
+  single place that joins the two halves. A ViewModel that needs the two parents exposes
+  `parents: StateFlow<Parents>` from there; a composable resolves the fallback strings with
+  `rememberParentNames` and passes one `ParentNames` down its tree.
 - Conventional Commits (`feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`).
 
 ## Architecture map
@@ -337,7 +351,11 @@ Ukrainian** (`values-cs/`, `values-de/`, `values-ru/`, `values-uk/`). Rules:
   enum, and the `values-*` folders must list the same locale set.
 - **Adding a string** = add the key to the feature's base `values/<feature>_strings.xml`
   AND to all four locale variants of that file. Missing translations fall back to English
-  at runtime (the `MissingTranslation` lint check is a warning, not an error).
+  at runtime. **Lint will not catch a missing one**: `MissingTranslation` is switched off
+  outright in `app/build.gradle.kts` (`disable += "MissingTranslation"`), not demoted to a
+  warning — a disabled check does not run, so it reports nothing under any severity. Verify
+  locale completeness by grep instead, e.g. `git grep -c 'name="your_key"' -- app/src/main/res/values*/*.xml`,
+  which should return five files and also catches a duplicate the lint check never would.
 - In composables use `stringResource(...)`; for text consumed inside non-composable
   lambdas (snackbars, coroutines) capture the string in composable scope first. Language
   endonyms in the picker ("Čeština", "Русский", …) are `translatable="false"`.

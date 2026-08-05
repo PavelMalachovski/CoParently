@@ -3,8 +3,6 @@
     <string name="event_preview_edit">Змінити</string>
     <string name="event_preview_delete">Видалити</string>
     <string name="event_preview_private">Приватна подія — бачите лише ви</string>
-    <string name="event_preview_mom">Мама</string>
-    <string name="event_preview_dad">Тато</string>
     <string name="event_form_save">Зберегти подію</string>
     <string name="event_deleted_message">Подію видалено</string>
     <string name="event_deleted_undo">Скасувати</string>

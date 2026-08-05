@@ -43,6 +43,7 @@ import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
 import com.coparently.app.R
 import com.coparently.app.domain.model.Expense
+import com.coparently.app.presentation.common.ParentNames
 import com.coparently.app.presentation.theme.ParentColors
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -65,16 +66,19 @@ private val ROW_CORNER = 12.dp
  * List of expenses for the period. Each row swipes left to delete, matching [EventListScreen].
  *
  * @param expenses Expenses to show, already ordered
- * @param roleByUid Map of payer uid to "mom"/"dad"; a missing entry just omits the payer
+ * @param roleByUid Map of payer uid to slot; a missing entry just omits the payer
+ * @param parentNames Resolves a slot to that parent's name
  * @param onDelete Invoked with the swiped expense; null hides the affordance
  * @param onExpenseClick Invoked when a row is tapped (opens the editor); null makes rows inert
  * @param modifier Modifier for the list
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
+@Suppress("LongParameterList") // list-level composable: its callbacks are its API surface
 fun ExpenseList(
     expenses: List<Expense>,
     roleByUid: Map<String, String>,
+    parentNames: ParentNames,
     onDelete: ((Expense) -> Unit)? = null,
     onExpenseClick: ((Expense) -> Unit)? = null,
     modifier: Modifier = Modifier
@@ -92,6 +96,7 @@ fun ExpenseList(
                 ExpenseItem(
                     expense = expense,
                     payerRole = roleByUid[expense.paidBy],
+                    parentNames = parentNames,
                     onClick = onExpenseClick?.let { { it(expense) } },
                     onReceiptClick = { url -> viewedReceiptUrl = url }
                 )
@@ -130,6 +135,7 @@ fun ExpenseList(
 @Composable
 fun ExpenseItem(
     expense: Expense,
+    parentNames: ParentNames,
     payerRole: String? = null,
     onClick: (() -> Unit)? = null,
     onReceiptClick: (String) -> Unit = {}
@@ -142,11 +148,7 @@ fun ExpenseItem(
     } else {
         MaterialTheme.colorScheme.onSurfaceVariant
     }
-    val payerName = when (payerRole) {
-        "mom" -> stringResource(R.string.calendar_parent_mom)
-        "dad" -> stringResource(R.string.calendar_parent_dad)
-        else -> null
-    }
+    val payerName = payerRole?.let { parentNames.labelFor(it) }
 
     val subtitle = if (payerName != null) {
         stringResource(

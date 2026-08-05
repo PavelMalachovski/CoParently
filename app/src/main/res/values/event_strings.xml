@@ -1,10 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Event list and add/edit form strings. Kept out of strings.xml because
-     strings.xml is gitignored in this project (it holds local OAuth values).
-     Note: the local (untracked) strings.xml already defines event_add, event_edit,
-     event_title, event_description, event_save, event_update, event_cancel,
-     event_date, event_parent, event_parent_mom, event_parent_dad and events_* —
-     do NOT reuse those names here or local builds break with duplicate resources. -->
+<!-- Event list and add/edit form strings, kept in their own feature file (the note this
+     comment used to carry — that strings.xml is gitignored and untracked — has been wrong
+     since the OAuth values moved to BuildConfig; strings.xml is tracked).
+     strings.xml still defines event_add, event_edit, event_title, event_description,
+     event_save, event_update, event_cancel, event_date, event_parent and events_* —
+     do NOT reuse those names here or the build breaks with duplicate resources.
+     event_parent_mom/event_parent_dad were on that list until parent labels started
+     resolving to names; they no longer exist anywhere. -->
 <resources>
     <!-- Event list screen -->
     <string name="event_list_title">Events</string>

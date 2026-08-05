@@ -29,6 +29,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.coparently.app.R
 import com.coparently.app.domain.model.Event
+import com.coparently.app.presentation.common.ParentNames
 import com.coparently.app.presentation.theme.CoPlanlyColors
 import com.coparently.app.presentation.theme.ParentColors
 import java.time.LocalDate
@@ -139,16 +140,20 @@ fun VacationBanner(label: String, modifier: Modifier = Modifier) {
  *
  * @param date The selected day
  * @param events That day's events, in start order
- * @param custody `"mom"`/`"dad"` for the day, or null when no custody model applies
+ * @param custody The day's custody slot, or null when no custody model applies
+ * @param parentNames Resolves a slot to that parent's name
  * @param onEventClick Opens an event
  * @param modifier Modifier for the card
  */
 @Composable
-@Suppress("LongMethod") // header, custody line and event rows are one card, not three
+// header, custody line and event rows are one card, not three; the parameters are the
+// card's API surface, one per thing it displays
+@Suppress("LongMethod", "LongParameterList")
 fun DayAgendaCard(
     date: LocalDate,
     events: List<Event>,
     custody: String?,
+    parentNames: ParentNames,
     onEventClick: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -171,7 +176,7 @@ fun DayAgendaCard(
                     stringResource(
                         R.string.calendar_agenda_header_with_custody,
                         date.format(dateFormatter),
-                        stringResource(parentLabelRes(it))
+                        parentNames.labelFor(it)
                     )
                 }
                 ?: date.format(dateFormatter),
@@ -234,9 +239,4 @@ private fun agendaTime(event: Event, formatter: DateTimeFormatter): String {
     } else {
         start
     }
-}
-
-private fun parentLabelRes(parent: String): Int = when (parent) {
-    "dad" -> R.string.calendar_parent_dad
-    else -> R.string.calendar_parent_mom
 }

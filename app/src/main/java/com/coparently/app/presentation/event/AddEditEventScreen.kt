@@ -69,6 +69,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -98,6 +99,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.coparently.app.R
 import com.coparently.app.domain.model.Event
+import com.coparently.app.presentation.common.rememberParentNames
 import com.coparently.app.presentation.components.TimePickerDialog
 import com.coparently.app.presentation.theme.CoPlanlyColors
 import com.coparently.app.presentation.theme.dimensions
@@ -145,6 +147,7 @@ fun AddEditEventScreen(
     viewModel: EventViewModel = hiltViewModel()
 ) {
     val haptic = LocalHapticFeedback.current
+    val parentNames = rememberParentNames(viewModel.parents.collectAsState().value)
 
     var title by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
@@ -652,8 +655,8 @@ fun AddEditEventScreen(
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 listOf(
-                    "mom" to stringResource(R.string.calendar_parent_mom),
-                    "dad" to stringResource(R.string.calendar_parent_dad)
+                    "mom" to parentNames.labelFor("mom"),
+                    "dad" to parentNames.labelFor("dad")
                 ).forEach { (value, label) ->
                     val isSelected = parentOwner == value
                     val scale by animateFloatAsState(
@@ -1204,11 +1207,7 @@ fun AddEditEventScreen(
                                 )
                                 Text(
                                     text = if (confirmedBy != null) {
-                                        val confirmerName = when (confirmedBy) {
-                                            "mom" -> stringResource(R.string.calendar_parent_mom)
-                                            "dad" -> stringResource(R.string.calendar_parent_dad)
-                                            else -> confirmedBy.replaceFirstChar { it.uppercase() }
-                                        }
+                                        val confirmerName = parentNames.labelFor(confirmedBy)
                                         stringResource(R.string.event_form_pickup_confirmed_by, confirmerName)
                                     } else {
                                         stringResource(R.string.event_form_pickup_not_confirmed)

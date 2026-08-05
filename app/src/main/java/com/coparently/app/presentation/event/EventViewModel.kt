@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.onStart
@@ -72,9 +73,8 @@ class EventViewModel @Inject constructor(
     private val errorHandler: com.coparently.app.domain.error.ErrorHandler,
     private val encryptedPreferences: EncryptedPreferences,
     private val gson: Gson,
-    private val userRepository: com.coparently.app.domain.repository.UserRepository,
     private val eventImageStorage: EventImageStorage,
-    parentsSource: ParentsSource
+    private val parentsSource: ParentsSource
 ) : ViewModel() {
 
     /**
@@ -399,7 +399,10 @@ class EventViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val event = eventUseCases.getEvents.getById(eventId) ?: return@launch
-                val role = userRepository.getCurrentUser()?.role ?: event.parentOwner
+                // Read fresh rather than off `parents`, whose WhileSubscribed value is only
+                // warm while a screen is collecting it. Falls back to the event's own slot when
+                // the profile cannot be resolved, exactly as the previous getCurrentUser() did.
+                val role = parentsSource.observe().first().me?.slot ?: event.parentOwner
                 val updated = event.copy(
                     pickupConfirmedBy = role,
                     pickupConfirmedAt = LocalDateTime.now()
