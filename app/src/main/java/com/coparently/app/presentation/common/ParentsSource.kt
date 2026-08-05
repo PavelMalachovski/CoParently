@@ -90,7 +90,14 @@ class ParentsSource @Inject constructor(
      *
      * `WhileSubscribed` rather than `Eagerly`: when every screen has gone away there is no
      * reason to keep Firestore listeners attached. `replay = 1` so a screen opening later gets
-     * the last real answer instead of a synthetic "nobody is known yet".
+     * the last real answer instead of a synthetic "nobody is known yet" - but only while the
+     * upstream is still the *same account's* upstream. `replayExpirationMillis = 0` drops that
+     * replay cache the instant the last subscriber leaves and [STOP_TIMEOUT_MS] elapses,
+     * instead of the default `Long.MAX_VALUE`, which never drops it. Without this, the first
+     * collector on the next signed-in account - right after a sign-out, before this singleton's
+     * upstream has re-emitted anything for the new account - would be served the *previous*
+     * account's [Parents] for a frame: their names, and their `roleByUid`, which feeds the
+     * expense balance. Room is not cleared on sign-out either, so nothing else would catch it.
      *
      * `by lazy` so that merely *constructing* this singleton does not reach for the pairing
      * repository. Nothing subscribes at construction either way — the underlying flows are cold
@@ -111,7 +118,11 @@ class ParentsSource @Inject constructor(
             // The pairing state re-emits whenever an invite list changes and Room re-emits the
             // whole row when an unrelated column moves; neither renames anybody.
             .distinctUntilChanged()
-            .shareIn(scope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), replay = 1)
+            .shareIn(
+                scope,
+                SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS, replayExpirationMillis = 0),
+                replay = 1
+            )
     }
 
     /**

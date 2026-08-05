@@ -147,10 +147,19 @@ fun AddEditEventScreen(
 ) {
     val haptic = LocalHapticFeedback.current
     val parentNames = rememberParentNames(viewModel.parents.collectAsState().value)
+    // The signed-in parent and the paired co-parent, if any - the one source of truth for
+    // "who am I" already threaded into this screen (see ParentsSource). Nothing here learns
+    // the signed-in slot any other way.
+    val currentUser = parentNames.parents.me
+    val coParent = parentNames.parents.coParent
 
     var title by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
-    var parentOwner by remember { mutableStateOf("mom") }
+    // Yours unless you say otherwise. Hardcoding "mom" here meant every event either parent
+    // created was attributed to the same person. Seeded from the signed-in user's slot, which
+    // is unknown (null) until ParentsSource resolves it - Save stays disabled until then
+    // (see isFormValid) rather than silently falling back to "mom".
+    var parentOwner by remember { mutableStateOf(currentUser?.slot) }
     var eventType by remember { mutableStateOf("general") }
     // Snapshot of the loaded event so saving preserves sync/sharing fields
     var existingEvent by remember { mutableStateOf<Event?>(null) }
@@ -249,11 +258,26 @@ fun AddEditEventScreen(
 
     // Validation
     val isTitleValid = title.isNotBlank() && titleError == null
-    val isFormValid = isTitleValid && descriptionError == null && !showTimeValidationError
+    // parentOwner != null: nothing may quietly fall back to a hardcoded slot again. Through
+    // pairing this is unreachable in practice - every account has one - but Save must stay
+    // disabled rather than assume "mom" if it somehow is not.
+    val isFormValid = isTitleValid && descriptionError == null && !showTimeValidationError && parentOwner != null
 
     // Load user-defined event types asynchronously (encrypted-prefs read off Main)
     LaunchedEffect(Unit) {
         customEventTypes = withContext(Dispatchers.IO) { viewModel.customEventTypes() }
+    }
+
+    // Seed the owner from the signed-in user's slot once ParentsSource resolves it - only for
+    // a brand new event, and only while nothing else has claimed the field yet. Editing an
+    // existing event (eventId != null) must never be touched here: the loaded event's own
+    // owner, set below, has to win regardless of when this resolves relative to that load.
+    // Guarding on `parentOwner == null` also means this never overwrites a draft restore or a
+    // manual selection the user already made.
+    LaunchedEffect(currentUser) {
+        if (eventId == null && parentOwner == null) {
+            parentOwner = currentUser?.slot
+        }
     }
 
     // Load event if editing, or load draft if creating new event
@@ -313,7 +337,7 @@ fun AddEditEventScreen(
             if (result == SnackbarResult.ActionPerformed) {
                 title = ""
                 description = ""
-                parentOwner = "mom"
+                parentOwner = currentUser?.slot
                 eventType = "general"
                 startDate = initialDate ?: LocalDate.now()
                 startTime = LocalTime.now()
@@ -331,12 +355,16 @@ fun AddEditEventScreen(
     // Auto-save draft when fields change (debounced)
     // Issue 1.3: Draft saving functionality
     LaunchedEffect(title, description, parentOwner, eventType, startDate, startTime, endTime) {
-        if (eventId == null) { // Only save draft for new events
+        // parentOwner can still be null for a beat while ParentsSource resolves the signed-in
+        // slot; a draft needs an owner to be worth anything, so skip the save rather than
+        // stamp a placeholder.
+        val ownerForDraft = parentOwner
+        if (eventId == null && ownerForDraft != null) { // Only save draft for new events
             kotlinx.coroutines.delay(1000) // Debounce 1 second
             viewModel.saveEventDraft(
                 title = title,
                 description = description,
-                parentOwner = parentOwner,
+                parentOwner = ownerForDraft,
                 eventType = eventType,
                 startDate = startDate,
                 startTime = startTime,
@@ -354,6 +382,10 @@ fun AddEditEventScreen(
         if (!isFormValid || !isValidated || isSaving) {
             return@performSave
         }
+        // isFormValid already guarantees parentOwner != null, but it is a mutable Compose state
+        // var and cannot be smart-cast from that boolean, so pin it to a local val here for the
+        // Event construction below. The elvis branch is unreachable given the guard above.
+        val ownerSlot = parentOwner ?: return@performSave
         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
         isSaving = true
         scope.launch {
@@ -393,7 +425,7 @@ fun AddEditEventScreen(
                         title = "",
                         startDateTime = LocalDateTime.now(),
                         eventType = "general",
-                        parentOwner = "mom",
+                        parentOwner = ownerSlot,
                         createdAt = LocalDateTime.now(),
                         updatedAt = LocalDateTime.now()
                     )
@@ -403,7 +435,7 @@ fun AddEditEventScreen(
                     startDateTime = LocalDateTime.of(startDate, startTime),
                     endDateTime = LocalDateTime.of(startDate, endTime),
                     eventType = eventType,
-                    parentOwner = parentOwner,
+                    parentOwner = ownerSlot,
                     isRecurring = recurrencePattern != null,
                     recurrencePattern = recurrencePattern,
                     recurrenceEndDate = recurrenceEndDate,
@@ -642,113 +674,117 @@ fun AddEditEventScreen(
                 )
             )
 
-            // Parent Owner Selection with animated cards
-            Text(
-                text = stringResource(R.string.event_form_assigned_to),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
-            )
+            // Parent Owner Selection with animated cards. Only meaningful with a co-parent to
+            // choose between - a family of one has nobody else an event could belong to, so a
+            // two-option control here would offer a choice that does not exist.
+            if (coParent != null) {
+                Text(
+                    text = stringResource(R.string.event_form_assigned_to),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                listOf(
-                    "mom" to parentNames.labelFor("mom"),
-                    "dad" to parentNames.labelFor("dad")
-                ).forEach { (value, label) ->
-                    val isSelected = parentOwner == value
-                    val scale by animateFloatAsState(
-                        targetValue = if (isSelected) 1.05f else 1f,
-                        animationSpec = spring(
-                            dampingRatio = Spring.DampingRatioMediumBouncy
-                        ),
-                        label = "parentOwnerScale"
-                    )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    listOf(
+                        "mom" to parentNames.labelFor("mom"),
+                        "dad" to parentNames.labelFor("dad")
+                    ).forEach { (value, label) ->
+                        val isSelected = parentOwner == value
+                        val scale by animateFloatAsState(
+                            targetValue = if (isSelected) 1.05f else 1f,
+                            animationSpec = spring(
+                                dampingRatio = Spring.DampingRatioMediumBouncy
+                            ),
+                            label = "parentOwnerScale"
+                        )
 
-                    Card(
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(dims.buttonHeight * 1.43f) // ~80dp for compact
-                            .semantics {
-                                role = Role.RadioButton
-                                selected = isSelected
-                                contentDescription = context.getString(
-                                    R.string.event_form_cd_assign_to,
-                                    label,
-                                    context.getString(
-                                        if (isSelected) R.string.event_form_cd_selected
-                                        else R.string.event_form_cd_not_selected
+                        Card(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(dims.buttonHeight * 1.43f) // ~80dp for compact
+                                .semantics {
+                                    role = Role.RadioButton
+                                    selected = isSelected
+                                    contentDescription = context.getString(
+                                        R.string.event_form_cd_assign_to,
+                                        label,
+                                        context.getString(
+                                            if (isSelected) R.string.event_form_cd_selected
+                                            else R.string.event_form_cd_not_selected
+                                        )
                                     )
+                                }
+                                .graphicsLayer {
+                                    scaleX = scale
+                                    scaleY = scale
+                                },
+                            onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                parentOwner = value
+                            },
+                            colors = CardDefaults.cardColors(
+                                containerColor = if (isSelected) {
+                                    when (value) {
+                                        "mom" -> CoPlanlyColors.MomPink.copy(alpha = 0.2f)
+                                        "dad" -> CoPlanlyColors.DadBlue.copy(alpha = 0.2f)
+                                        else -> MaterialTheme.colorScheme.surfaceVariant
+                                    }
+                                } else {
+                                    MaterialTheme.colorScheme.surfaceVariant
+                                }
+                            ),
+                            // Unified selected state for both parents: a thin 1.5dp accent
+                            // outline over a tonal fill, no drop shadow. Previously the
+                            // selected chip used a 2dp border + 4dp elevation, which — with
+                            // the more saturated DadBlue — read as a heavy, un-Material box
+                            // that didn't match the MomPink chip.
+                            border = if (isSelected) {
+                                BorderStroke(
+                                    1.5.dp,
+                                    when (value) {
+                                        "mom" -> CoPlanlyColors.MomPink
+                                        "dad" -> CoPlanlyColors.DadBlue
+                                        else -> MaterialTheme.colorScheme.primary
+                                    }
+                                )
+                            } else {
+                                null
+                            },
+                            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(12.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                // One glyph for both slots. It used to be Face for slot 1 and
+                                // Person for slot 2 - not a matched pair, and slot 2 was already
+                                // indistinguishable from "unknown" because Person was the fallback
+                                // too. A per-parent glyph is a third channel asserting exactly the
+                                // distinction this app stopped asserting; the name and the colour
+                                // carry the identity.
+                                Icon(
+                                    imageVector = Icons.Default.Person,
+                                    contentDescription = stringResource(R.string.event_form_cd_label_icon, label),
+                                    tint = when (value) {
+                                        "mom" -> CoPlanlyColors.MomPink
+                                        "dad" -> CoPlanlyColors.DadBlue
+                                        else -> MaterialTheme.colorScheme.primary
+                                    },
+                                    modifier = Modifier.size(dims.iconSize * 1.17f) // ~28dp for compact
+                                )
+                                Spacer(modifier = Modifier.height(dims.paddingSmall / 2))
+                                Text(
+                                    text = label,
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                                 )
                             }
-                            .graphicsLayer {
-                                scaleX = scale
-                                scaleY = scale
-                            },
-                        onClick = {
-                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            parentOwner = value
-                        },
-                        colors = CardDefaults.cardColors(
-                            containerColor = if (isSelected) {
-                                when (value) {
-                                    "mom" -> CoPlanlyColors.MomPink.copy(alpha = 0.2f)
-                                    "dad" -> CoPlanlyColors.DadBlue.copy(alpha = 0.2f)
-                                    else -> MaterialTheme.colorScheme.surfaceVariant
-                                }
-                            } else {
-                                MaterialTheme.colorScheme.surfaceVariant
-                            }
-                        ),
-                        // Unified selected state for both parents: a thin 1.5dp accent
-                        // outline over a tonal fill, no drop shadow. Previously the
-                        // selected chip used a 2dp border + 4dp elevation, which — with
-                        // the more saturated DadBlue — read as a heavy, un-Material box
-                        // that didn't match the MomPink chip.
-                        border = if (isSelected) {
-                            BorderStroke(
-                                1.5.dp,
-                                when (value) {
-                                    "mom" -> CoPlanlyColors.MomPink
-                                    "dad" -> CoPlanlyColors.DadBlue
-                                    else -> MaterialTheme.colorScheme.primary
-                                }
-                            )
-                        } else {
-                            null
-                        },
-                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(12.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center
-                        ) {
-                            // One glyph for both slots. It used to be Face for slot 1 and
-                            // Person for slot 2 - not a matched pair, and slot 2 was already
-                            // indistinguishable from "unknown" because Person was the fallback
-                            // too. A per-parent glyph is a third channel asserting exactly the
-                            // distinction this app stopped asserting; the name and the colour
-                            // carry the identity.
-                            Icon(
-                                imageVector = Icons.Default.Person,
-                                contentDescription = stringResource(R.string.event_form_cd_label_icon, label),
-                                tint = when (value) {
-                                    "mom" -> CoPlanlyColors.MomPink
-                                    "dad" -> CoPlanlyColors.DadBlue
-                                    else -> MaterialTheme.colorScheme.primary
-                                },
-                                modifier = Modifier.size(dims.iconSize * 1.17f) // ~28dp for compact
-                            )
-                            Spacer(modifier = Modifier.height(dims.paddingSmall / 2))
-                            Text(
-                                text = label,
-                                style = MaterialTheme.typography.labelLarge,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                            )
                         }
                     }
                 }
