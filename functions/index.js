@@ -392,36 +392,21 @@ exports.sendEmailInvitation = functions.firestore
     });
 
 /**
- * Accepts a pairing invitation identified either by its short code or by its
- * document id, and links the two parents.
+ * Body of the `acceptPairingInvitation` callable. Takes `db` as a parameter for the same
+ * reason `unpairCoParentImpl` does: it is the only way to exercise the transaction and the
+ * returned slot without a live Firestore.
  *
- * Runs server-side because linking writes BOTH user documents, and no Firestore
- * rule can grant a client write access to another user's profile without
- * granting it for every user.
- *
- * @param {{code?: string, invitationId?: string}} data Exactly one identifier.
- * @return {Promise<{partnerId: string}>} The UID the caller is now paired with.
+ * @param {FirebaseFirestore.Firestore} db Firestore instance.
+ * @param {string} acceptingUserId The signed-in caller's UID.
+ * @param {string} acceptingEmail The signed-in caller's email, or ''.
+ * @param {{code: ?string, invitationId: ?string}} ref Exactly one identifier.
+ * @return {Promise<{partnerId: string, role: string}>} The UID the caller is now paired
+ *   with, and the parent slot (`assignSlots`) this device was just assigned — the client
+ *   compares it to its own last-known slot to decide whether records created before pairing
+ *   need re-stamping (see `ParentSlotMigrator` on the Android side).
  */
-exports.acceptPairingInvitation = functions.https.onCall(async (data, context) => {
-  if (!context.auth) {
-    throw new functions.https.HttpsError('unauthenticated', 'Sign in first');
-  }
-
-  const code = data && data.code ? String(data.code).trim().toUpperCase() : null;
-  const invitationId = data && data.invitationId ? String(data.invitationId) : null;
-
-  if ((!code && !invitationId) || (code && invitationId)) {
-    throw new functions.https.HttpsError(
-        'invalid-argument',
-        'Provide exactly one of code or invitationId',
-    );
-  }
-
-  const db = admin.firestore();
-  const acceptingUserId = context.auth.uid;
-  const acceptingEmail = context.auth.token.email || '';
-
-  const inviteRef = await findInvitation(db, {code, invitationId});
+async function acceptPairingInvitationImpl(db, acceptingUserId, acceptingEmail, ref) {
+  const inviteRef = await findInvitation(db, ref);
   const invite = (await inviteRef.get()).data();
 
   if (invite.status !== 'pending') {
@@ -449,6 +434,11 @@ exports.acceptPairingInvitation = functions.https.onCall(async (data, context) =
   const accepterRef = db.collection('users').doc(acceptingUserId);
   const pairedAt = Date.now();
 
+  // Hoisted out of the transaction closure so it is still in scope for the return
+  // statement below — the client needs the accepter's new slot to know whether its own
+  // records need re-stamping.
+  let slots;
+
   await db.runTransaction(async (tx) => {
     const [inviterSnap, accepterSnap] = await Promise.all([
       tx.get(inviterRef), tx.get(accepterRef),
@@ -462,7 +452,7 @@ exports.acceptPairingInvitation = functions.https.onCall(async (data, context) =
           'failed-precondition', 'One of the accounts is already paired',
           {reason: 'already-paired'});
     }
-    const slots = assignSlots(inviterSnap.data().role);
+    slots = assignSlots(inviterSnap.data().role);
     tx.update(inviterRef, {
       partnerId: acceptingUserId, pairedAt, role: slots.inviterRole,
     });
@@ -488,7 +478,39 @@ exports.acceptPairingInvitation = functions.https.onCall(async (data, context) =
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
   });
 
-  return {partnerId: invite.fromUserId};
+  return {partnerId: invite.fromUserId, role: slots.accepterRole};
+}
+
+exports.acceptPairingInvitationImpl = acceptPairingInvitationImpl;
+
+/**
+ * Accepts a pairing invitation identified either by its short code or by its
+ * document id, and links the two parents.
+ *
+ * Runs server-side because linking writes BOTH user documents, and no Firestore
+ * rule can grant a client write access to another user's profile without
+ * granting it for every user.
+ *
+ * @param {{code?: string, invitationId?: string}} data Exactly one identifier.
+ * @return {Promise<{partnerId: string, role: string}>} See [acceptPairingInvitationImpl].
+ */
+exports.acceptPairingInvitation = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'Sign in first');
+  }
+
+  const code = data && data.code ? String(data.code).trim().toUpperCase() : null;
+  const invitationId = data && data.invitationId ? String(data.invitationId) : null;
+
+  if ((!code && !invitationId) || (code && invitationId)) {
+    throw new functions.https.HttpsError(
+        'invalid-argument',
+        'Provide exactly one of code or invitationId',
+    );
+  }
+
+  return acceptPairingInvitationImpl(
+      admin.firestore(), context.auth.uid, context.auth.token.email || '', {code, invitationId});
 });
 
 /**

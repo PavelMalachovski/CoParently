@@ -164,5 +164,23 @@ interface EventDao {
         start: LocalDateTime,
         end: LocalDateTime
     ): Int
+
+    /**
+     * Re-stamps the parent slot on events this user created. Used when pairing moves this
+     * device from one slot to the other; without it, every event the accepter created before
+     * pairing reads as the co-parent's.
+     */
+    @Query(
+        "UPDATE events SET parentOwner = :to " +
+            "WHERE parentOwner = :from AND createdByFirebaseUid = :myUid"
+    )
+    suspend fun reslotOwner(from: String, to: String, myUid: String): Int
+
+    /** Re-stamps a recorded pickup confirmation for the same reason as [reslotOwner]. */
+    @Query(
+        "UPDATE events SET pickupConfirmedBy = :to " +
+            "WHERE pickupConfirmedBy = :from AND createdByFirebaseUid = :myUid"
+    )
+    suspend fun reslotPickup(from: String, to: String, myUid: String): Int
 }
 

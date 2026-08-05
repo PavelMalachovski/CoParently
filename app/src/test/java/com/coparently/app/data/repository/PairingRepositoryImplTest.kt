@@ -4,6 +4,7 @@ import android.content.Context
 import app.cash.turbine.test
 import com.coparently.app.data.local.dao.UserDao
 import com.coparently.app.data.local.entity.UserEntity
+import com.coparently.app.data.remote.firebase.AcceptInvitationResult
 import com.coparently.app.data.remote.firebase.FirebaseAuthService
 import com.coparently.app.data.remote.firebase.PairingException
 import com.coparently.app.data.remote.firebase.PairingFunctions
@@ -243,12 +244,37 @@ class PairingRepositoryImplTest {
     @Test
     fun `redeem normalizes the code before calling the backend`() = runTest {
         coEvery { pairingFunctions.acceptInvitation(code = "4F7K2M") } returns
-            Result.success("user-b")
+            Result.success(AcceptInvitationResult(partnerId = "user-b", role = "dad"))
 
         val result = repository.redeem("  4f7k2m ")
 
         assertTrue(result.isSuccess)
         coVerify { pairingFunctions.acceptInvitation(code = "4F7K2M", invitationId = null) }
+    }
+
+    // ---- acceptIncoming ----------------------------------------------------
+
+    @Test
+    fun `acceptIncoming surfaces the newly assigned slot from the callable`() = runTest {
+        coEvery { pairingFunctions.acceptInvitation(invitationId = "invite-1") } returns
+            Result.success(AcceptInvitationResult(partnerId = "user-b", role = "dad"))
+
+        val result = repository.acceptIncoming("invite-1")
+
+        assertEquals("dad", result.getOrNull())
+    }
+
+    @Test
+    fun `acceptIncoming surfaces the backend error unchanged`() = runTest {
+        coEvery { pairingFunctions.acceptInvitation(invitationId = "invite-1") } returns
+            Result.failure(PairingException(PairingError.NotFound))
+
+        val result = repository.acceptIncoming("invite-1")
+
+        assertEquals(
+            PairingError.NotFound,
+            (result.exceptionOrNull() as PairingException).error
+        )
     }
 
     @Test

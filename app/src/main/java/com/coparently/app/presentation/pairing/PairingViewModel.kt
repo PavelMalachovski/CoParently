@@ -8,6 +8,7 @@ import com.coparently.app.R
 import com.coparently.app.data.analytics.AnalyticsManager
 import com.coparently.app.data.remote.firebase.PairingException
 import com.coparently.app.data.remote.firebase.QRCodeService
+import com.coparently.app.data.repository.ParentSlotMigrator
 import com.coparently.app.data.session.SignedInAccountSource
 import com.coparently.app.domain.model.AccountSummary
 import com.coparently.app.domain.model.PairingError
@@ -15,6 +16,7 @@ import com.coparently.app.domain.model.PairingState
 import com.coparently.app.domain.pairing.InviteCodeGenerator
 import com.coparently.app.domain.pairing.PairingUri
 import com.coparently.app.domain.repository.PairingRepository
+import com.coparently.app.domain.repository.UserRepository
 import com.coparently.app.utils.ValidationResult
 import com.coparently.app.utils.ValidationUtils
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -61,6 +63,8 @@ class PairingViewModel @Inject constructor(
     private val pairingRepository: PairingRepository,
     private val qrCodeService: QRCodeService,
     private val analyticsManager: AnalyticsManager,
+    private val userRepository: UserRepository,
+    private val parentSlotMigrator: ParentSlotMigrator,
     signedInAccountSource: SignedInAccountSource
 ) : ViewModel() {
 
@@ -151,10 +155,38 @@ class PairingViewModel @Inject constructor(
         ) { pairingRepository.sendEmailInvitation(email) }
     }
 
-    /** Accepts an invitation addressed to this user. */
+    /**
+     * Accepts an invitation addressed to this user.
+     *
+     * Pairing may move this device from one parent slot to the other (the inviter keeps its
+     * slot, the accepter gets the other one — see `assignSlots` in `functions/index.js`).
+     * Everything this user created while unpaired is stamped with the old slot, so a
+     * successful accept re-stamps it: the before-slot is read from Room, this device's own
+     * state, before the network call; the after-slot comes straight from the callable's
+     * response, because [UserRepository.getCurrentUser] reads Room only and a second local
+     * read after the call would still show the stale cached value.
+     */
     fun acceptIncoming(invitationId: String) = launchAction(
         onSuccess = { analyticsManager.logInvitationAccepted() }
-    ) { pairingRepository.acceptIncoming(invitationId) }
+    ) {
+        val user = userRepository.getCurrentUser()
+        val before = user?.role
+        val result = pairingRepository.acceptIncoming(invitationId)
+        val after = result.getOrNull()
+        if (user != null && before != null && after != null) {
+            reslotIfChanged(myUid = user.id, from = before, to = after)
+        }
+        result.map { }
+    }
+
+    /**
+     * Runs [ParentSlotMigrator.reslot] only when pairing actually moved this device from
+     * [from] to [to]. Split out of [acceptIncoming] so that method's null-checks and this
+     * change-check are two separate conditions rather than one four-term expression.
+     */
+    private suspend fun reslotIfChanged(myUid: String, from: String, to: String) {
+        if (from != to) parentSlotMigrator.reslot(from = from, to = to, myUid = myUid)
+    }
 
     /**
      * Declines an invitation addressed to this user. Has no field of its own,

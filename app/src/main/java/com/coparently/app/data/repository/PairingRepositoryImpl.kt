@@ -162,8 +162,8 @@ class PairingRepositoryImpl @Inject constructor(
         return pairingFunctions.acceptInvitation(code = normalized).map { }
     }
 
-    override suspend fun acceptIncoming(invitationId: String): Result<Unit> =
-        pairingFunctions.acceptInvitation(invitationId = invitationId).map { }
+    override suspend fun acceptIncoming(invitationId: String): Result<String> =
+        pairingFunctions.acceptInvitation(invitationId = invitationId).map { it.role }
 
     override suspend fun rejectIncoming(invitationId: String): Result<Unit> = runPairing {
         firestore.collection(INVITATIONS).document(invitationId)

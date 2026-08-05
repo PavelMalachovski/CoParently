@@ -22,9 +22,11 @@ class PairingFunctions @Inject constructor(
     /**
      * Redeems an invitation by [code] or by [invitationId] — exactly one.
      *
-     * @return the co-parent's Firebase UID on success, or a [PairingException]-wrapped
-     *   [PairingError] on failure (a missing/blank `partnerId` in an otherwise successful
-     *   response is treated as [PairingError.Unknown], not silently coerced to an empty UID).
+     * @return the co-parent's Firebase UID and this device's newly assigned parent slot (see
+     *   `assignSlots` in `functions/index.js`) on success, or a [PairingException]-wrapped
+     *   [PairingError] on failure (a missing/blank `partnerId` or `role` in an otherwise
+     *   successful response is treated as [PairingError.Unknown], not silently coerced to a
+     *   default — a response missing either field is a contract violation with the callable).
      * @throws IllegalArgumentException if both or neither of [code] and [invitationId] are
      *   given — this is a caller programming error, not a backend failure, so it is not
      *   folded into the returned [Result].
@@ -32,7 +34,7 @@ class PairingFunctions @Inject constructor(
     suspend fun acceptInvitation(
         code: String? = null,
         invitationId: String? = null
-    ): Result<String> {
+    ): Result<AcceptInvitationResult> {
         require((code == null) != (invitationId == null)) {
             "acceptInvitation requires exactly one of code or invitationId, got " +
                 "code=$code, invitationId=$invitationId"
@@ -43,9 +45,15 @@ class PairingFunctions @Inject constructor(
         }
         return call("acceptPairingInvitation", payload) { data ->
             val partnerId = data["partnerId"] as? String
-            checkNotNull(partnerId?.takeIf { it.isNotBlank() }) {
-                "acceptPairingInvitation succeeded but returned no partnerId"
-            }
+            val role = data["role"] as? String
+            AcceptInvitationResult(
+                partnerId = checkNotNull(partnerId?.takeIf { it.isNotBlank() }) {
+                    "acceptPairingInvitation succeeded but returned no partnerId"
+                },
+                role = checkNotNull(role?.takeIf { it.isNotBlank() }) {
+                    "acceptPairingInvitation succeeded but returned no role"
+                }
+            )
         }
     }
 
@@ -104,3 +112,14 @@ class PairingFunctions @Inject constructor(
 /** Carries a [PairingError] through `Result.failure`, keeping the original [cause] for logging. */
 class PairingException(val error: PairingError, cause: Throwable? = null) :
     Exception(error.toString(), cause)
+
+/**
+ * What [PairingFunctions.acceptInvitation] returns on success.
+ *
+ * @property partnerId The co-parent's Firebase UID.
+ * @property role The parent slot ("mom" or "dad") this device was just assigned. The inviter
+ *   keeps whatever slot it already had; the accepter always gets the other one — see
+ *   `assignSlots` in `functions/index.js`. Callers compare this to the slot they held before
+ *   accepting to detect a change and re-stamp accordingly.
+ */
+data class AcceptInvitationResult(val partnerId: String, val role: String)

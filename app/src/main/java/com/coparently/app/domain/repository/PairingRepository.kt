@@ -50,8 +50,15 @@ interface PairingRepository {
     /** Redeems an invitation by its short [code]. */
     suspend fun redeem(code: String): Result<Unit>
 
-    /** Accepts an invitation addressed to this user by document id. */
-    suspend fun acceptIncoming(invitationId: String): Result<Unit>
+    /**
+     * Accepts an invitation addressed to this user by document id.
+     *
+     * @return the parent slot ("mom"/"dad") this device was just assigned. Accepting may move
+     *   this device from the slot it held while unpaired to the other one — the caller compares
+     *   this against the slot it read locally beforehand to decide whether records created
+     *   before pairing need to be re-stamped (see `ParentSlotMigrator`).
+     */
+    suspend fun acceptIncoming(invitationId: String): Result<String>
 
     /** Declines an invitation addressed to this user. */
     suspend fun rejectIncoming(invitationId: String): Result<Unit>
