@@ -729,10 +729,22 @@ fun AddEditEventScreen(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
+                    // Slots have an order, so when a card resolves to nobody a caption of
+                    // "first"/"second" (never "You"/"Co-parent" positionally - an unpaired
+                    // account's slot may be either one) tells the two cards apart. parentLabel
+                    // itself is untouched: it still answers "who is this" and "we do not know"
+                    // is the right answer to that question.
+                    val slotFirst = stringResource(R.string.parent_label_slot_first)
+                    val slotSecond = stringResource(R.string.parent_label_slot_second)
                     listOf(
-                        "mom" to parentNames.labelFor("mom"),
-                        "dad" to parentNames.labelFor("dad")
-                    ).forEach { (value, label) ->
+                        "mom" to slotFirst,
+                        "dad" to slotSecond
+                    ).forEach { (value, ordinalLabel) ->
+                        val label = if (parentNames.isKnown(value)) {
+                            parentNames.labelFor(value)
+                        } else {
+                            ordinalLabel
+                        }
                         val isSelected = parentOwner == value
                         val scale by animateFloatAsState(
                             targetValue = if (isSelected) 1.05f else 1f,

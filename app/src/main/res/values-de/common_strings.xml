@@ -32,4 +32,10 @@
     <string name="parent_label_you">Du</string>
     <string name="parent_label_coparent">Mitelternteil</string>
     <string name="parent_label_unknown">Elternteil</string>
+
+    <!-- Slot-picker captions (AddEditEventScreen's parent-owner cards, via
+         ParentNames.isKnown()): used instead of parent_label_unknown when NEITHER card
+         resolves to a named person, so the two cards are not captioned identically. -->
+    <string name="parent_label_slot_first">Erster Elternteil</string>
+    <string name="parent_label_slot_second">Zweiter Elternteil</string>
 </resources>
