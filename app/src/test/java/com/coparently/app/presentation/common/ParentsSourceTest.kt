@@ -146,4 +146,24 @@ class ParentsSourceTest {
         }
         assertNull(ParentsSource(users, mockk()).signedInSlot())
     }
+
+    @Test
+    fun `Parents() the synthetic starting value every stateIn seeds with is not loaded`() {
+        // Every ViewModel's `parents` StateFlow starts from this value before the upstream has
+        // emitted. It must be indistinguishable from nothing only in what it names, never in
+        // whether it is a real answer - otherwise a gate like AddEditEventScreen's selector
+        // cannot tell "nobody to choose between" from "we don't know yet".
+        assertEquals(false, Parents().loaded)
+    }
+
+    @Test
+    fun `observe emits loaded = true on its first real emission`() = runTest {
+        val source = ParentsSource(userRepository(), pairingRepository())
+
+        source.observe().test {
+            val parents = awaitItem()
+            assertEquals(true, parents.loaded)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
 }

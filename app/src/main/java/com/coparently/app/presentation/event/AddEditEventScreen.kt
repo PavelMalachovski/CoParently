@@ -156,6 +156,12 @@ fun AddEditEventScreen(
     // yet - gating the selector on that nullness would hide it from exactly the pairs this
     // app's slot migration exists to serve.
     val isPaired = parentNames.parents.isPaired
+    // Whether Parents() is a real answer yet. Parents() itself - the synthetic value every
+    // stateIn seeds with - is indistinguishable from "an unpaired, unresolved account" without
+    // this: both have isPaired = false and me = null. Gating the selector on it too is what
+    // stops the two-card block from rendering for one frame and then disappearing on every
+    // first composition.
+    val parentsLoaded = parentNames.parents.loaded
 
     var title by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
@@ -708,7 +714,11 @@ fun AddEditEventScreen(
             // unpaired account whose own slot has not resolved would else have no escape from a
             // permanently disabled Save. A family of one with a resolved slot has neither
             // condition and correctly sees no control - nobody else an event could belong to.
-            if (isPaired || parentOwner == null) {
+            // Gated on parentsLoaded first: before ParentsSource's upstream has emitted,
+            // Parents() reads exactly like an unpaired, unresolved account, so without this the
+            // block rendered on every first composition and vanished the instant the real
+            // answer arrived.
+            if (parentsLoaded && (isPaired || parentOwner == null)) {
                 Text(
                     text = stringResource(R.string.event_form_assigned_to),
                     style = MaterialTheme.typography.titleMedium,
