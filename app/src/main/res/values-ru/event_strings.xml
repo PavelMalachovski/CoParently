@@ -84,4 +84,5 @@
     <string name="event_form_delete_failed">Не удалось удалить событие: %1$s</string>
     <string name="event_form_save_failed">Не удалось сохранить событие: %1$s</string>
     <string name="event_form_photo_upload_failed">Не удалось загрузить фото — событие сохранено без нового фото</string>
+    <string name="event_form_owner_unknown">Пока не понятно, чьё это событие — выберите выше, чтобы сохранить</string>
 </resources>

@@ -147,11 +147,15 @@ fun AddEditEventScreen(
 ) {
     val haptic = LocalHapticFeedback.current
     val parentNames = rememberParentNames(viewModel.parents.collectAsState().value)
-    // The signed-in parent and the paired co-parent, if any - the one source of truth for
-    // "who am I" already threaded into this screen (see ParentsSource). Nothing here learns
-    // the signed-in slot any other way.
+    // The signed-in parent - the one source of truth for "who am I" already threaded into this
+    // screen (see ParentsSource). Nothing here learns the signed-in slot any other way.
     val currentUser = parentNames.parents.me
-    val coParent = parentNames.parents.coParent
+    // Whether there is someone to choose between at all. Deliberately not
+    // "parentNames.parents.coParent != null": a legacy pair (paired before slot assignment
+    // shipped) has a real co-parent but a null Parents.coParent, because their slot isn't known
+    // yet - gating the selector on that nullness would hide it from exactly the pairs this
+    // app's slot migration exists to serve.
+    val isPaired = parentNames.parents.isPaired
 
     var title by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
@@ -258,9 +262,11 @@ fun AddEditEventScreen(
 
     // Validation
     val isTitleValid = title.isNotBlank() && titleError == null
-    // parentOwner != null: nothing may quietly fall back to a hardcoded slot again. Through
-    // pairing this is unreachable in practice - every account has one - but Save must stay
-    // disabled rather than assume "mom" if it somehow is not.
+    // parentOwner != null: nothing may quietly fall back to a hardcoded slot again. Not
+    // unreachable in practice: UserRepositoryImpl deliberately creates no Room row for a user
+    // it cannot name, so `me` (and therefore parentOwner) can stay null indefinitely, not just
+    // for the usual first-frame beat. See the selector below and the message next to Save for
+    // what the user sees while that's true.
     val isFormValid = isTitleValid && descriptionError == null && !showTimeValidationError && parentOwner != null
 
     // Load user-defined event types asynchronously (encrypted-prefs read off Main)
@@ -268,14 +274,17 @@ fun AddEditEventScreen(
         customEventTypes = withContext(Dispatchers.IO) { viewModel.customEventTypes() }
     }
 
-    // Seed the owner from the signed-in user's slot once ParentsSource resolves it - only for
-    // a brand new event, and only while nothing else has claimed the field yet. Editing an
-    // existing event (eventId != null) must never be touched here: the loaded event's own
-    // owner, set below, has to win regardless of when this resolves relative to that load.
-    // Guarding on `parentOwner == null` also means this never overwrites a draft restore or a
-    // manual selection the user already made.
+    // Seed the owner from the signed-in user's slot once ParentsSource resolves it, as long as
+    // nothing has claimed the field yet. Not restricted to a brand new event: an existing event
+    // whose load already set parentOwner (see the eventId effect below, which assigns
+    // unconditionally) makes this a no-op forever after, since the field is then never null
+    // again - so it cannot overwrite a loaded owner, a draft restore, or a manual pick,
+    // regardless of the order these effects resolve in. Leaving it unrestricted is what lets an
+    // existing event whose load *fails* (getEventById returns null, parentOwner never gets set)
+    // still end up with an owner once the signed-in user's own slot resolves, instead of being
+    // stuck at null forever.
     LaunchedEffect(currentUser) {
-        if (eventId == null && parentOwner == null) {
+        if (parentOwner == null) {
             parentOwner = currentUser?.slot
         }
     }
@@ -563,22 +572,40 @@ fun AddEditEventScreen(
             // Sticky Save: the primary action stays reachable without scrolling
             // back to the top-bar check icon on this long form
             Surface(shadowElevation = 8.dp) {
-                Button(
-                    onClick = performSave,
-                    enabled = isFormValid && !isSaving && !isDeleting,
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = dims.paddingMedium, vertical = dims.paddingSmall)
-                        .height(52.dp)
                 ) {
-                    if (isSaving) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(24.dp),
-                            color = MaterialTheme.colorScheme.onPrimary,
-                            strokeWidth = 2.dp
+                    // parentOwner == null is not just a first-frame beat: an account whose
+                    // profile UserRepositoryImpl declined to name (see isFormValid) can sit here
+                    // indefinitely. Save being merely disabled would leave no clue why - this
+                    // says what's missing, next to the selector that (per isPaired || parentOwner
+                    // == null above) is showing precisely so there's something to do about it.
+                    if (parentOwner == null) {
+                        Text(
+                            text = stringResource(R.string.event_form_owner_unknown),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.padding(bottom = dims.paddingSmall)
                         )
-                    } else {
-                        Text(stringResource(R.string.event_form_save))
+                    }
+                    Button(
+                        onClick = performSave,
+                        enabled = isFormValid && !isSaving && !isDeleting,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(52.dp)
+                    ) {
+                        if (isSaving) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                color = MaterialTheme.colorScheme.onPrimary,
+                                strokeWidth = 2.dp
+                            )
+                        } else {
+                            Text(stringResource(R.string.event_form_save))
+                        }
                     }
                 }
             }
@@ -674,10 +701,14 @@ fun AddEditEventScreen(
                 )
             )
 
-            // Parent Owner Selection with animated cards. Only meaningful with a co-parent to
-            // choose between - a family of one has nobody else an event could belong to, so a
-            // two-option control here would offer a choice that does not exist.
-            if (coParent != null) {
+            // Parent Owner Selection with animated cards. Shown whenever there is a real choice
+            // to make (isPaired - a co-parent exists even if their slot isn't known yet, in
+            // which case their card falls through to the "unknown" label via parentLabel) or
+            // whenever parentOwner is null and there is otherwise no way to fill it in: an
+            // unpaired account whose own slot has not resolved would else have no escape from a
+            // permanently disabled Save. A family of one with a resolved slot has neither
+            // condition and correctly sees no control - nobody else an event could belong to.
+            if (isPaired || parentOwner == null) {
                 Text(
                     text = stringResource(R.string.event_form_assigned_to),
                     style = MaterialTheme.typography.titleMedium,

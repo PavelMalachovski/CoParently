@@ -21,12 +21,23 @@ import javax.inject.Singleton
  * that has not loaded yet, a null [coParent] is nobody paired *or* a co-parent whose slot is
  * not known. Neither is ever filled in by inference — see [parentLabel].
  *
+ * [isPaired] exists because [coParent] alone cannot answer "is there someone to choose between":
+ * a legacy pair (paired before slot assignment shipped) has a real co-parent and a null
+ * [coParent], since [PartnerSummary.role][com.coparently.app.domain.model.PartnerSummary.role]
+ * is null until their document carries one. A screen that gates a two-person control on
+ * `coParent != null` hides it from exactly that population — the pairs this app's slot
+ * migration exists to serve — rather than from the family of one it was meant for.
+ *
  * @property me The signed-in parent.
  * @property coParent The paired co-parent.
+ * @property isPaired Whether this account is linked to a co-parent at all, independent of
+ *   whether that co-parent's slot is known yet. Read the pairing state directly for this —
+ *   never infer it from `coParent != null`.
  */
 data class Parents(
     val me: NamedParent? = null,
-    val coParent: NamedParent? = null
+    val coParent: NamedParent? = null,
+    val isPaired: Boolean = false
 ) {
     /**
      * uid to slot, for whichever parents are known.
@@ -90,14 +101,21 @@ class ParentsSource @Inject constructor(
      *
      * `WhileSubscribed` rather than `Eagerly`: when every screen has gone away there is no
      * reason to keep Firestore listeners attached. `replay = 1` so a screen opening later gets
-     * the last real answer instead of a synthetic "nobody is known yet" - but only while the
+     * the last real answer instead of a synthetic "nobody is known yet" — but only while the
      * upstream is still the *same account's* upstream. `replayExpirationMillis = 0` drops that
      * replay cache the instant the last subscriber leaves and [STOP_TIMEOUT_MS] elapses,
      * instead of the default `Long.MAX_VALUE`, which never drops it. Without this, the first
-     * collector on the next signed-in account - right after a sign-out, before this singleton's
-     * upstream has re-emitted anything for the new account - would be served the *previous*
+     * collector on the next signed-in account — right after a sign-out, before this singleton's
+     * upstream has re-emitted anything for the new account — would be served the *previous*
      * account's [Parents] for a frame: their names, and their `roleByUid`, which feeds the
      * expense balance. Room is not cleared on sign-out either, so nothing else would catch it.
+     *
+     * The cost of that fix: a screen that re-subscribes more than [STOP_TIMEOUT_MS] after the
+     * last one left (a cold re-entry into the Calendar tab, say) now starts from a synthetic
+     * "nobody is known yet" every time, not only right after install. Callers that show UI while
+     * [Parents.me] is null already have to handle it — a fresh process starts from exactly that
+     * state — so this only widens how often that path is taken, not the set of states a caller
+     * must handle.
      *
      * `by lazy` so that merely *constructing* this singleton does not reach for the pairing
      * repository. Nothing subscribes at construction either way — the underlying flows are cold
@@ -112,7 +130,8 @@ class ParentsSource @Inject constructor(
         ) { uid, users, pairing ->
             Parents(
                 me = uid?.let { id -> users.firstOrNull { it.id == id } }?.asNamedParent(),
-                coParent = (pairing as? PairingState.Paired)?.partner?.asNamedParent()
+                coParent = (pairing as? PairingState.Paired)?.partner?.asNamedParent(),
+                isPaired = pairing is PairingState.Paired
             )
         }
             // The pairing state re-emits whenever an invite list changes and Room re-emits the

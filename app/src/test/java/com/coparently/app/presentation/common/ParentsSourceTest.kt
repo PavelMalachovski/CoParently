@@ -63,6 +63,42 @@ class ParentsSourceTest {
             val parents = awaitItem()
             assertEquals(NamedParent("u1", "mom", "Olya"), parents.me)
             assertEquals(NamedParent("u2", "dad", "Pavel"), parents.coParent)
+            assertEquals(true, parents.isPaired)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `isPaired is true for a legacy pair even though coParent is null`() = runTest {
+        // The partner document exists and is Paired, it just predates slot assignment - the
+        // case a screen must still recognise "there is a co-parent to choose between" for
+        // (AddEditEventScreen's selector), even though coParent itself is null because their
+        // slot cannot be resolved.
+        val legacyPartner = partner.copy(role = null)
+        val pairing: PairingRepository = mockk {
+            every { observePairingState() } returns MutableStateFlow(PairingState.Paired(legacyPartner))
+        }
+        val source = ParentsSource(userRepository(), pairing)
+
+        source.observe().test {
+            val parents = awaitItem()
+            assertNull(parents.coParent)
+            assertEquals(true, parents.isPaired)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `isPaired is false when there is no co-parent at all`() = runTest {
+        val pairing: PairingRepository = mockk {
+            every { observePairingState() } returns MutableStateFlow(PairingState.NotPaired())
+        }
+        val source = ParentsSource(userRepository(), pairing)
+
+        source.observe().test {
+            val parents = awaitItem()
+            assertNull(parents.coParent)
+            assertEquals(false, parents.isPaired)
             cancelAndIgnoreRemainingEvents()
         }
     }

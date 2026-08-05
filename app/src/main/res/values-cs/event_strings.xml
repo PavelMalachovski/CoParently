@@ -84,4 +84,5 @@
     <string name="event_form_delete_failed">Nepodařilo se smazat událost: %1$s</string>
     <string name="event_form_save_failed">Nepodařilo se uložit událost: %1$s</string>
     <string name="event_form_photo_upload_failed">Nahrání fotky selhalo — událost uložena bez nové fotky</string>
+    <string name="event_form_owner_unknown">Zatím nevíme, čí je tato událost — vyberte výše, abyste mohli uložit</string>
 </resources>
