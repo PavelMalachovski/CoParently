@@ -275,7 +275,9 @@ class ParentSlotMigratorTest {
         // targets, not about Room's transaction machinery.
         mockkStatic("androidx.room.RoomDatabaseKt")
         coEvery { database.withTransaction(any<suspend () -> Int>()) } coAnswers {
-            firstArg<suspend () -> Int>().invoke()
+            // secondArg, not firstArg: `withTransaction` is an extension on RoomDatabase, so
+            // under static mocking the receiver occupies argument 0 and the block is argument 1.
+            secondArg<suspend () -> Int>().invoke()
         }
     }
 
