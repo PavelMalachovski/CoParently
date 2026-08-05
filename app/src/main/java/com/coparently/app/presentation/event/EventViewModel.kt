@@ -10,14 +10,22 @@ import com.coparently.app.domain.repository.EventImageStorage
 import com.coparently.app.domain.repository.EventRepository
 import com.google.gson.Gson
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.onStart
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import java.time.LocalDateTime
-import java.time.LocalDate
-import java.time.LocalTime
 import java.time.Duration
+import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.util.UUID
 import javax.inject.Inject
@@ -40,6 +48,19 @@ data class EventDraft(
     val endTime: String // ISO format
 )
 
+/**
+ * What the events list is currently showing.
+ *
+ * Modelling this as state rather than as a call is what guarantees a single live collection:
+ * `flatMapLatest` cancels the previous one. Before August 2026 each load launched its own
+ * coroutine and cancelled nothing, so the Calendar tab accumulated one permanent collector per
+ * month swipe for the life of the process.
+ */
+internal sealed interface EventQuery {
+    data object All : EventQuery
+    data class Range(val start: LocalDateTime, val end: LocalDateTime) : EventQuery
+}
+
 @HiltViewModel
 class EventViewModel @Inject constructor(
     private val eventUseCases: com.coparently.app.domain.usecase.EventUseCases,
@@ -53,65 +74,79 @@ class EventViewModel @Inject constructor(
     private val _uiState = MutableStateFlow<EventUiState>(EventUiState.Loading)
     val uiState: StateFlow<EventUiState> = _uiState.asStateFlow()
 
-    private val _events = MutableStateFlow<List<Event>>(emptyList())
-    val events: StateFlow<List<Event>> = _events.asStateFlow()
+    // Re-requesting the range already loaded costs nothing: MutableStateFlow conflates equal
+    // values, and EventQuery.Range is a data class, so setting it again emits nothing at all.
+    private val query = MutableStateFlow<EventQuery>(EventQuery.All)
 
-    init {
-        loadEvents()
-    }
+    // A separate tick, not a field on EventQuery.Range: folding it into Range would make every
+    // instance of the same range compare unequal, and the conflation above (the whole reason
+    // ordinary paging is free) would stop working. combine() re-emits whenever either source
+    // does, so bumping this alone is what forces flatMapLatest to re-subscribe to the current
+    // query without changing what that query is.
+    private val refreshTicks = MutableStateFlow(0)
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val events: StateFlow<List<Event>> = combine(query, refreshTicks) { current, _ -> current }
+        .flatMapLatest { current ->
+            // This when() sits upstream of the .catch below, inside the flatMapLatest lambda.
+            // It happens not to throw today (GetEventsUseCase only delegates, and
+            // EventRepositoryImpl.getEventsByDateRange returns a combine() whose body runs
+            // inside the flow, not here) but nothing enforces that: if a future repository
+            // change makes either branch throw synchronously, that throw escapes onto the
+            // outer chain, uncaught, and permanently kills the pipeline - the exact failure
+            // this whole design exists to prevent. Keep the source selection lazy (a flow, not
+            // a value) so any failure surfaces inside the flow below, where .catch can see it.
+            val source = when (current) {
+                is EventQuery.All -> eventUseCases.getEvents()
+                is EventQuery.Range -> eventUseCases.getEvents.getByDateRange(current.start, current.end)
+            }
+            source
+                .onStart { _uiState.value = EventUiState.Loading }
+                .onEach { _uiState.value = EventUiState.Success(it) }
+                // Caught per query, not on the outer chain: a failure of one range must not
+                // end the flatMapLatest and leave every later query silently unserved.
+                //
+                // The handler itself is wrapped: handleError reaches CrashlyticsManager and
+                // NetworkMonitor, and a throw from either would escape the .catch onto the outer
+                // chain, fail the stateIn coroutine and take the process with it - the same
+                // unguarded-suspend-work failure the comment above guards the when() against.
+                // Losing the wording of one error message is the cheaper outcome by far.
+                .catch { e ->
+                    // Falls back to the raw exception rather than a new literal: no string is
+                    // added that the five locales would then owe a translation for.
+                    val message = runCatching { errorHandler.handleError(e).userMessage }
+                        .getOrNull()
+                        ?: e.message
+                        ?: e.toString()
+                    _uiState.value = EventUiState.Error(message)
+                }
+        }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     /**
-     * Loads all events.
+     * Shows every event. `query`'s initial value, so this is what the view model shows before
+     * anything else is requested - no screen currently calls it.
      */
     fun loadEvents() {
-        viewModelScope.launch {
-            _uiState.value = EventUiState.Loading
-            try {
-                eventUseCases.getEvents().collect { eventList ->
-                    _events.value = eventList
-                    _uiState.value = EventUiState.Success(eventList)
-                }
-            } catch (e: Exception) {
-                val appError = errorHandler.handleError(e)
-                _uiState.value = EventUiState.Error(appError.userMessage)
-            }
-        }
+        query.value = EventQuery.All
     }
 
     /**
-     * Loads events for a specific date.
-     */
-    fun loadEventsForDate(date: LocalDateTime) {
-        viewModelScope.launch {
-            _uiState.value = EventUiState.Loading
-            try {
-                eventUseCases.getEvents.getByDate(date).collect { eventList ->
-                    _events.value = eventList
-                    _uiState.value = EventUiState.Success(eventList)
-                }
-            } catch (e: Exception) {
-                val appError = errorHandler.handleError(e)
-                _uiState.value = EventUiState.Error(appError.userMessage)
-            }
-        }
-    }
-
-    /**
-     * Loads events for a date range.
+     * Shows the events between [start] and [end]. Re-requesting the range currently loaded is a
+     * no-op, which is why the calendar can call this freely as the user pages.
      */
     fun loadEventsForDateRange(start: LocalDateTime, end: LocalDateTime) {
-        viewModelScope.launch {
-            _uiState.value = EventUiState.Loading
-            try {
-                eventUseCases.getEvents.getByDateRange(start, end).collect { eventList ->
-                    _events.value = eventList
-                    _uiState.value = EventUiState.Success(eventList)
-                }
-            } catch (e: Exception) {
-                val appError = errorHandler.handleError(e)
-                _uiState.value = EventUiState.Error(appError.userMessage)
-            }
-        }
+        query.value = EventQuery.Range(start, end)
+    }
+
+    /**
+     * Re-collects the current query from scratch. `catch` completes the inner flow on error, so
+     * a failed query stays failed - the equal-value conflation on [query] means re-requesting
+     * the same range is a no-op and cannot restart it. This is the only way back: pull-to-refresh
+     * calls it instead of re-requesting the range it already has.
+     */
+    fun refresh() {
+        refreshTicks.value += 1
     }
 
     /**
@@ -139,7 +174,7 @@ class EventViewModel @Inject constructor(
             result.onSuccess {
                 _uiState.value = EventUiState.OperationSuccess("Event created successfully")
                 kotlinx.coroutines.delay(2000)
-                _uiState.value = EventUiState.Success(_events.value)
+                _uiState.value = EventUiState.Success(events.value)
             }.onFailure { error ->
                 val appError = errorHandler.handleError(error)
                 _uiState.value = EventUiState.Error(appError.userMessage)
@@ -156,7 +191,7 @@ class EventViewModel @Inject constructor(
             result.onSuccess {
                 _uiState.value = EventUiState.OperationSuccess("Event updated successfully")
                 kotlinx.coroutines.delay(2000)
-                _uiState.value = EventUiState.Success(_events.value)
+                _uiState.value = EventUiState.Success(events.value)
             }.onFailure { error ->
                 val appError = errorHandler.handleError(error)
                 _uiState.value = EventUiState.Error(appError.userMessage)
@@ -174,7 +209,7 @@ class EventViewModel @Inject constructor(
                 if (event.imageUrl != null) deleteEventImage(event.id)
                 _uiState.value = EventUiState.OperationSuccess("Event deleted successfully")
                 kotlinx.coroutines.delay(2000)
-                _uiState.value = EventUiState.Success(_events.value)
+                _uiState.value = EventUiState.Success(events.value)
             }.onFailure { error ->
                 val appError = errorHandler.handleError(error)
                 _uiState.value = EventUiState.Error(appError.userMessage)
@@ -191,7 +226,7 @@ class EventViewModel @Inject constructor(
             result.onSuccess {
                 _uiState.value = EventUiState.OperationSuccess("Event deleted successfully")
                 kotlinx.coroutines.delay(2000)
-                _uiState.value = EventUiState.Success(_events.value)
+                _uiState.value = EventUiState.Success(events.value)
             }.onFailure { error ->
                 val appError = errorHandler.handleError(error)
                 _uiState.value = EventUiState.Error(appError.userMessage)
@@ -242,7 +277,7 @@ class EventViewModel @Inject constructor(
                 result.onSuccess {
                     _uiState.value = EventUiState.OperationSuccess("Event rescheduled")
                     kotlinx.coroutines.delay(1500)
-                    _uiState.value = EventUiState.Success(_events.value)
+                    _uiState.value = EventUiState.Success(events.value)
                 }.onFailure { error ->
                     val appError = errorHandler.handleError(error)
                     _uiState.value = EventUiState.Error(appError.userMessage)
@@ -279,7 +314,7 @@ class EventViewModel @Inject constructor(
                     lastMoveUndoInfo = null // Clear undo info after successful undo
                     _uiState.value = EventUiState.OperationSuccess("Move undone")
                     kotlinx.coroutines.delay(1500)
-                    _uiState.value = EventUiState.Success(_events.value)
+                    _uiState.value = EventUiState.Success(events.value)
                 }.onFailure { error ->
                     val appError = errorHandler.handleError(error)
                     _uiState.value = EventUiState.Error(appError.userMessage)
@@ -324,7 +359,7 @@ class EventViewModel @Inject constructor(
                 result.onSuccess {
                     _uiState.value = EventUiState.OperationSuccess("Event resized")
                     kotlinx.coroutines.delay(1500)
-                    _uiState.value = EventUiState.Success(_events.value)
+                    _uiState.value = EventUiState.Success(events.value)
                 }.onFailure { error ->
                     val appError = errorHandler.handleError(error)
                     _uiState.value = EventUiState.Error(appError.userMessage)
@@ -360,7 +395,7 @@ class EventViewModel @Inject constructor(
                 result.onSuccess {
                     _uiState.value = EventUiState.OperationSuccess("Pickup confirmed")
                     kotlinx.coroutines.delay(1500)
-                    _uiState.value = EventUiState.Success(_events.value)
+                    _uiState.value = EventUiState.Success(events.value)
                 }.onFailure { error ->
                     val appError = errorHandler.handleError(error)
                     _uiState.value = EventUiState.Error(appError.userMessage)

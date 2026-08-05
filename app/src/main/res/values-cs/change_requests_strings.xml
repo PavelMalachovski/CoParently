@@ -26,4 +26,5 @@
     <string name="change_request_send">Odeslat žádost</string>
     <string name="change_request_ok">OK</string>
     <string name="change_request_cancel">Zrušit</string>
+    <string name="change_request_link_missing">Tato žádost už není otevřená.</string>
 </resources>

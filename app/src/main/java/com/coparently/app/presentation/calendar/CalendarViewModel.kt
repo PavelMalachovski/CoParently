@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.LocalDate
+import java.time.YearMonth
 import javax.inject.Inject
 
 /** Keeps the handover flow warm across brief unsubscriptions (config changes). */
@@ -35,8 +36,18 @@ class CalendarViewModel @Inject constructor(
     private val encryptedPreferences: EncryptedPreferences
 ) : ViewModel() {
 
-    private val _custodySchedules = MutableStateFlow<List<CustodyScheduleEntity>>(emptyList())
-    val custodySchedules: StateFlow<List<CustodyScheduleEntity>> = _custodySchedules.asStateFlow()
+    /**
+     * Active legacy custody schedules, the fallback half of the unified custody lookup.
+     *
+     * Derived from the DAO flow rather than pushed into a [MutableStateFlow] by a `load…()`
+     * method: the Room flow already re-emits on every write, so re-collecting it buys nothing
+     * and the old method — called from `init` *and* from pull-to-refresh — left one permanent,
+     * uncancelled collector behind per call, each of them recomposing the whole Calendar tab.
+     * `Eagerly` because [getCustodyForDate] reads `.value` outside any collection.
+     */
+    val custodySchedules: StateFlow<List<CustodyScheduleEntity>> =
+        custodyScheduleDao.getAllActiveSchedules()
+            .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     private val _custodyModel = MutableStateFlow<CustodyModel?>(null)
     val custodyModel: StateFlow<CustodyModel?> = _custodyModel.asStateFlow()
@@ -53,8 +64,30 @@ class CalendarViewModel @Inject constructor(
     private val _viewMode = MutableStateFlow(CalendarViewMode.MONTH)
     val viewMode: StateFlow<CalendarViewMode> = _viewMode.asStateFlow()
 
-    private val _selectedDate = MutableStateFlow<LocalDate>(LocalDate.now())
-    val selectedDate: StateFlow<LocalDate> = _selectedDate.asStateFlow()
+    private val _displayedMonth = MutableStateFlow(YearMonth.now())
+
+    /** Month the grid is showing. Independent of [selectedDate], which may be absent. */
+    val displayedMonth: StateFlow<YearMonth> = _displayedMonth.asStateFlow()
+
+    private val _queryAnchorMonth = MutableStateFlow(YearMonth.now())
+
+    /**
+     * Month the event query window is centred on. Distinct from [displayedMonth]: it stays put
+     * while the user pages within [CalendarSelection.QUERY_ANCHOR_TOLERANCE_MONTHS] of it, so a
+     * settle no longer triggers a fresh query. Chasing the displayed month is what made backward
+     * paging drop frames — see the item 8 diagnosis.
+     */
+    val queryAnchorMonth: StateFlow<YearMonth> = _queryAnchorMonth.asStateFlow()
+
+    private val _selectedDate = MutableStateFlow<LocalDate?>(LocalDate.now())
+
+    /**
+     * The day the user has chosen, or null when none is. Paging to another month clears it,
+     * except paging back to today's month, which re-selects today — see [showMonth]. The agenda
+     * card under the grid renders only when this is non-null: a card describing a day nobody
+     * picked is what the August 2026 baseline found it doing.
+     */
+    val selectedDate: StateFlow<LocalDate?> = _selectedDate.asStateFlow()
 
     private val _parentFilter = MutableStateFlow(ParentFilter.BOTH)
     val parentFilter: StateFlow<ParentFilter> = _parentFilter.asStateFlow()
@@ -69,26 +102,17 @@ class CalendarViewModel @Inject constructor(
     val showHolidays: StateFlow<Boolean> = _showHolidays.asStateFlow()
 
     init {
-        loadCustodySchedules()
         loadCustodyModel()
         loadFilterPreferences()
     }
 
     /**
-     * Loads all active custody schedules.
-     * Legacy method - used when no CustodyModel is available.
-     */
-    fun loadCustodySchedules() {
-        viewModelScope.launch {
-            custodyScheduleDao.getAllActiveSchedules().collect { schedules ->
-                _custodySchedules.value = schedules
-            }
-        }
-    }
-
-    /**
      * Loads the active custody model.
      * This is the preferred method for determining custody.
+     *
+     * Private and called only from `init`, so its collector is created exactly once and lives
+     * for the ViewModel's lifetime — the leak [custodySchedules] used to have needs a second
+     * caller, and this has none.
      */
     private fun loadCustodyModel() {
         viewModelScope.launch {
@@ -126,7 +150,7 @@ class CalendarViewModel @Inject constructor(
             return model.getCustodyFor(date)
         }
 
-        val schedules = _custodySchedules.value
+        val schedules = custodySchedules.value
         return CustodyHelper.getCustodyForDate(date, schedules)
     }
 
@@ -138,10 +162,28 @@ class CalendarViewModel @Inject constructor(
     }
 
     /**
-     * Sets the selected date.
+     * Selects a day the user actually tapped, and brings the grid to its month — the month grid
+     * renders leading and trailing days of the neighbouring months, so a tap can land outside
+     * the month on screen.
      */
     fun setSelectedDate(date: LocalDate) {
         _selectedDate.value = date
+        moveTo(YearMonth.from(date))
+    }
+
+    /**
+     * Shows [month], selecting today when it is today's month and clearing the selection
+     * otherwise.
+     */
+    fun showMonth(month: YearMonth) {
+        moveTo(month)
+        _selectedDate.value = CalendarSelection.forMonth(month, LocalDate.now())
+    }
+
+    /** Shows [month] and re-centres the query window only if it has drifted too far. */
+    private fun moveTo(month: YearMonth) {
+        _displayedMonth.value = month
+        _queryAnchorMonth.value = CalendarSelection.reanchor(_queryAnchorMonth.value, month)
     }
 
     /**

@@ -32,14 +32,17 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -68,6 +71,8 @@ import java.time.format.DateTimeFormatter
  * @param onRequestChangeForEvent Starts a change request for the chosen event
  * @param onOpenSettings Opens settings; shown only when this thread *is* the tab, since the
  *   tab's own gear action would otherwise be lost
+ * @param onOpenChangeRequest Opens the change-request inbox with the request for the given
+ *   event id highlighted; tapping a change-request card in the thread calls this
  * @param viewModel Chat state
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -81,6 +86,7 @@ fun ChatScreen(
     draft: String = "",
     onRequestChangeForEvent: (String) -> Unit = {},
     onOpenSettings: (() -> Unit)? = null,
+    onOpenChangeRequest: ((String) -> Unit)? = null,
     viewModel: ChatViewModel = hiltViewModel()
 ) {
     val messages by viewModel.messages.collectAsState()
@@ -92,6 +98,19 @@ fun ChatScreen(
 
     var showTemplates by remember { mutableStateOf(false) }
     var showEventPicker by remember { mutableStateOf(false) }
+
+    // Seeded by the incoming draft (Expenses settle-up) and by message templates. rememberSaveable
+    // so a rotation does not throw away a message the user is halfway through writing.
+    var composerText by rememberSaveable(draft) { mutableStateOf(draft) }
+    val composerFocus = remember { FocusRequester() }
+
+    // Bumped only when something *seeds* the composer, so the refocus below fires on that and on
+    // nothing else — keying the effect on the text itself refocused on every keystroke. Plain
+    // `remember`, not `rememberSaveable`: a rotation (or process-death restore) is not a new seed,
+    // and saving this counter would replay the last seed's focus request and reopen a keyboard the
+    // user had deliberately dismissed. The composer *text* still survives rotation — it is saved
+    // separately via `composerText` above.
+    var composerSeeds by remember { mutableStateOf(0) }
 
     // DisposableEffect, not LaunchedEffect: the "thread is open" signal that gates the
     // read/delivered marks must clear when this composable leaves — see
@@ -147,6 +166,7 @@ fun ChatScreen(
                 onRefresh = {
                     viewModel.refreshThread()
                 },
+                onEventLinkClick = onOpenChangeRequest,
                 modifier = Modifier.weight(1f)
             )
 
@@ -172,11 +192,14 @@ fun ChatScreen(
             }
 
             MessageInput(
-                initialText = draft,
+                value = composerText,
+                onValueChange = { composerText = it },
                 onSendMessage = { content ->
                     viewModel.sendMessage(content)
+                    composerText = ""
                 },
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                focusRequester = composerFocus
             )
         }
     }
@@ -184,9 +207,11 @@ fun ChatScreen(
     if (showTemplates) {
         MessageTemplatesBottomSheet(
             onTemplateSelected = { template ->
-                // For now, just send the template content directly
-                // In a real app, we might want to show a dialog to fill placeholders
-                viewModel.sendTemplateMessage(template, template.content)
+                // A template prepares the message; it does not send it. Sending on tap put three
+                // identical placeholders-and-all messages into a real thread during the August
+                // 2026 baseline run, because the send was invisible and read as a missed tap.
+                composerText = template.content
+                composerSeeds++
                 showTemplates = false
             },
             onDismiss = { showTemplates = false }
@@ -202,6 +227,14 @@ fun ChatScreen(
             },
             onDismiss = { showEventPicker = false }
         )
+    }
+
+    // Fires only after the composer was seeded: put the cursor in the field and raise the
+    // keyboard, so the text does not appear somewhere the user is not looking.
+    LaunchedEffect(composerSeeds) {
+        if (composerSeeds > 0) {
+            composerFocus.requestFocus()
+        }
     }
 }
 

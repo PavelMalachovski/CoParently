@@ -47,4 +47,7 @@
 
     <!-- Thread header: whether your own messages actually left the device. -->
     <string name="chat_header_synced">Усе надіслано</string>
+
+    <!-- Accessibility label for the change-request card's clickable bubble. -->
+    <string name="chat_open_change_request">Відкрити запит на зміну</string>
 </resources>

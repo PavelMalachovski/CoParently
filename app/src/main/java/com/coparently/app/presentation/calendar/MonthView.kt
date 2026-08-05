@@ -73,13 +73,18 @@ private val CUSTODY_EDGE_WIDTH = 2.dp
  * Day cells show custody coloring (Mom pink / Dad blue), public holidays and
  * parent-coloured event dots. School vacation is a month-level banner above the grid,
  * not a per-day marker.
+ *
+ * @param eventsByDay Events pre-bucketed per day by `eventsByDay` in `CalendarScreen`. Taking the
+ *   index rather than the flat list is deliberate: `dayContent` runs for all 42 cells on every
+ *   recomposition, so filtering the whole list per cell cost O(42·N) each time. The agenda card
+ *   under the grid reads the same map, so the two cannot disagree.
  */
 @Suppress("LongParameterList") // screen-level composable: callbacks are its API surface
 @Composable
 fun MonthView(
     selectedMonth: YearMonth,
     selectedDate: LocalDate? = null,
-    events: List<Event>,
+    eventsByDay: Map<LocalDate, List<Event>>,
     getCustody: (LocalDate) -> String?,
     onDayClick: (LocalDate) -> Unit,
     onMonthChange: (YearMonth) -> Unit,
@@ -162,7 +167,7 @@ fun MonthView(
                         day = day,
                         cellHeight = cellHeight,
                         isSelected = selectedDate == day.date,
-                        events = eventsOn(events, day.date),
+                        events = eventsByDay[day.date].orEmpty(),
                         getCustody = getCustody,
                         onDayClick = onDayClick,
                         holiday = holidays[day.date]

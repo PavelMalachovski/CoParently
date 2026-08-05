@@ -1,6 +1,7 @@
 package com.coparently.app.presentation.chat
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,6 +16,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.Error
@@ -32,15 +34,19 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import com.coparently.app.R
+import com.coparently.app.domain.chat.ChatScrollPolicy
 import com.coparently.app.domain.model.Message
 import com.coparently.app.domain.model.MessageSendStatus
+import com.coparently.app.domain.model.MessageType
 import com.coparently.app.presentation.common.animations.AnimatedEmptyState
 import kotlinx.coroutines.launch
 import java.time.Instant
@@ -135,14 +141,21 @@ private fun buildThread(messages: List<Message>): List<ThreadEntry> {
  *   DELIVERED/READ by `ChatViewModel` via `ChatReadState.statusFor`
  * @param currentUserId Firebase uid of the signed-in parent, to side the bubbles
  * @param onRefresh Pull-to-refresh handler, or null to disable the gesture
+ * @param onEventLinkClick Handler for tapping a change-request card, given the linked event id,
+ *   or null to render such cards inert (e.g. while the destination is not wired up yet)
  * @param modifier Modifier for the list
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
+// Already over detekt's LongMethod threshold before the Aug 2026 grouping/scroll work landed
+// (the codebase's own baseline records that); explicit like the other screen composables that
+// carry the same suppression rather than relying on a baseline entry keyed to an exact signature.
+@Suppress("LongMethod")
 fun MessagesList(
     messages: List<Message>,
     currentUserId: String,
     onRefresh: (() -> Unit)? = null,
+    onEventLinkClick: ((String) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val listState = rememberLazyListState()
@@ -151,20 +164,28 @@ fun MessagesList(
     var isRefreshing by remember { mutableStateOf(false) }
     val entries = remember(messages) { buildThread(messages) }
 
-    // Auto-scroll only if user is already at the bottom (within last 2 items)
+    // Survives a configuration change: the jump is about *opening* the thread, and a rotation
+    // is not a re-open. The scroll position itself is restored by rememberLazyListState.
+    var initialJumpDone by rememberSaveable { mutableStateOf(false) }
+
     LaunchedEffect(entries.size) {
-        if (entries.isNotEmpty()) {
-            val firstVisibleIndex = listState.firstVisibleItemIndex
-            val lastVisibleIndex = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
-            val totalItems = entries.size
-
-            // Check if user is already near the bottom (within last 2 items or at the end)
-            val isNearBottom = lastVisibleIndex >= totalItems - 2 ||
-                firstVisibleIndex >= totalItems - 3
-
-            if (isNearBottom) {
-                listState.animateScrollToItem(entries.size - 1)
+        val target = ChatScrollPolicy.targetIndex(
+            entryCount = entries.size,
+            firstVisibleIndex = listState.firstVisibleItemIndex,
+            lastVisibleIndex = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0,
+            initialJumpDone = initialJumpDone
+        )
+        if (target != null) {
+            // Instant on open — animating a flight past forty bubbles is its own defect —
+            // and animated afterwards, when it is one new message sliding into view.
+            if (initialJumpDone) {
+                listState.animateScrollToItem(target)
+            } else {
+                listState.scrollToItem(target)
+                initialJumpDone = true
             }
+        } else if (entries.isNotEmpty()) {
+            initialJumpDone = true
         }
     }
 
@@ -213,7 +234,8 @@ fun MessagesList(
                             message = entry.message,
                             isCurrentUser = entry.message.senderId == currentUserId,
                             startsGroup = entry.startsGroup,
-                            endsGroup = entry.endsGroup
+                            endsGroup = entry.endsGroup,
+                            onEventLinkClick = onEventLinkClick
                         )
                     }
                 }
@@ -255,21 +277,34 @@ private fun DaySeparator(date: LocalDate) {
  * @param isCurrentUser Whether this parent sent it, which sides and colours the bubble
  * @param startsGroup First of a run by the same sender — takes the larger top gap
  * @param endsGroup Last of a run — the only one showing a timestamp and receipt
+ * @param onEventLinkClick Handler for tapping a change-request card, given the linked event id,
+ *   or null to render such cards inert
  */
 @Composable
+// Already over detekt's LongMethod threshold before this task added the clickable chevron (the
+// codebase's own baseline records that); explicit like the other screen composables that carry
+// the same suppression rather than relying on a baseline entry keyed to an exact signature.
+@Suppress("LongMethod")
 fun MessageItem(
     message: Message,
     isCurrentUser: Boolean,
     startsGroup: Boolean = true,
-    endsGroup: Boolean = true
+    endsGroup: Boolean = true,
+    onEventLinkClick: ((String) -> Unit)? = null
 ) {
+    // A change-request card is the one bubble that goes somewhere. It carries the event id in
+    // `attachments`; the inbox resolves that to the request itself.
+    val linkedEventId = message.attachments.firstOrNull()
+        ?.takeIf { message.messageType == MessageType.EVENT_LINK && onEventLinkClick != null }
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(top = if (startsGroup) 8.dp else 0.dp),
         horizontalAlignment = if (isCurrentUser) Alignment.End else Alignment.Start
     ) {
-        Box(
+        val openLabel = stringResource(R.string.chat_open_change_request)
+        Row(
             modifier = Modifier
                 .widthIn(max = BUBBLE_MAX_WIDTH)
                 .clip(bubbleShape(isCurrentUser, startsGroup))
@@ -280,7 +315,18 @@ fun MessageItem(
                         MaterialTheme.colorScheme.surfaceVariant
                     }
                 )
-                .padding(horizontal = 14.dp, vertical = 10.dp)
+                .then(
+                    if (linkedEventId != null) {
+                        Modifier.clickable(
+                            onClickLabel = openLabel,
+                            role = Role.Button
+                        ) { onEventLinkClick?.invoke(linkedEventId) }
+                    } else {
+                        Modifier
+                    }
+                )
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
                 text = message.content,
@@ -289,8 +335,23 @@ fun MessageItem(
                 } else {
                     MaterialTheme.colorScheme.onSurface
                 },
-                style = MaterialTheme.typography.bodyMedium
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.weight(1f, fill = false)
             )
+            if (linkedEventId != null) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    contentDescription = null,
+                    modifier = Modifier
+                        .padding(start = 6.dp)
+                        .size(RECEIPT_ICON_SIZE * CHEVRON_SCALE),
+                    tint = if (isCurrentUser) {
+                        MaterialTheme.colorScheme.onPrimary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    }
+                )
+            }
         }
 
         if (endsGroup) {
@@ -418,6 +479,9 @@ private val BUBBLE_MAX_WIDTH = 280.dp
 
 /** Size of the delivery-receipt glyph under an outgoing bubble. */
 private val RECEIPT_ICON_SIZE = 13.dp
+
+/** How much larger the change-request card's chevron is than the delivery-receipt glyph. */
+private const val CHEVRON_SCALE = 1.4f
 
 /** Brief pause after a manual refresh so the spinner does not flash out instantly. */
 private const val REFRESH_SETTLE_MS = 500L

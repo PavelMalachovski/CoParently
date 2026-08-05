@@ -31,4 +31,5 @@
     <string name="change_request_send">Send Request</string>
     <string name="change_request_ok">OK</string>
     <string name="change_request_cancel">Cancel</string>
+    <string name="change_request_link_missing">That request is no longer open.</string>
 </resources>

@@ -75,35 +75,51 @@ import java.time.ZoneId
 import java.util.Locale
 
 /**
- * Computes the event query range for a view mode and selected date.
- * Single source of truth used by both the initial load and pull-to-refresh.
+ * Months loaded either side of the query anchor in MONTH mode.
+ *
+ * Deliberately larger than [CalendarSelection.QUERY_ANCHOR_TOLERANCE_MONTHS]: the anchor is
+ * sticky, so the window has to cover every grid the user can reach before it re-centres.
+ * Widening this makes each re-anchor more expensive (`RecurrenceExpander` expands over the whole
+ * window); narrowing it makes re-anchors more frequent.
+ */
+internal const val MONTH_WINDOW_RADIUS = 3L
+
+/**
+ * Computes the event query range for a view mode and anchor date.
+ *
+ * Single source of truth, with exactly two callers: the event query and the holiday map.
+ * Pull-to-refresh used to be a third; it now calls `EventViewModel.refresh()`, which re-collects
+ * the range already loaded rather than recomputing one.
+ *
+ * In MONTH mode the anchor is the sticky query anchor (see [CalendarSelection.reanchor]), not the
+ * month on screen; DAY and WEEK anchor on a concrete day.
  */
 internal fun queryRangeFor(
     viewMode: CalendarViewMode,
-    selectedDate: LocalDate
+    anchorDate: LocalDate
 ): Pair<LocalDateTime, LocalDateTime> {
     return when (viewMode) {
         CalendarViewMode.DAY -> {
-            selectedDate.atStartOfDay() to selectedDate.atTime(23, 59, 59)
+            anchorDate.atStartOfDay() to anchorDate.atTime(23, 59, 59)
         }
         CalendarViewMode.WEEK -> {
-            val firstDay = selectedDate.minusDays((selectedDate.dayOfWeek.value - 1).toLong())
+            val firstDay = anchorDate.minusDays((anchorDate.dayOfWeek.value - 1).toLong())
             firstDay.atStartOfDay() to firstDay.plusDays(6).atTime(23, 59, 59)
         }
         CalendarViewMode.MONTH -> {
-            // Extended range to cover the MonthView week buffer (6 weeks before/after)
-            val visibleMonth = YearMonth.from(selectedDate)
-            var startDate = visibleMonth.atDay(1)
+            // The range follows the sticky query anchor, not the displayed month, so ordinary
+            // month paging stays inside an already-loaded window. Week-aligned because the grid
+            // renders whole weeks either side of the month.
+            val anchor = YearMonth.from(anchorDate)
+            var startDate = anchor.minusMonths(MONTH_WINDOW_RADIUS).atDay(1)
             while (startDate.dayOfWeek != java.time.DayOfWeek.MONDAY) {
                 startDate = startDate.minusDays(1)
             }
-            startDate = startDate.minusWeeks(6)
 
-            var endDate = visibleMonth.atEndOfMonth()
+            var endDate = anchor.plusMonths(MONTH_WINDOW_RADIUS).atEndOfMonth()
             while (endDate.dayOfWeek != java.time.DayOfWeek.SUNDAY) {
                 endDate = endDate.plusDays(1)
             }
-            endDate = endDate.plusWeeks(6)
 
             startDate.atStartOfDay() to endDate.atTime(23, 59, 59)
         }
@@ -113,8 +129,10 @@ internal fun queryRangeFor(
 /**
  * Events covering [date], including multi-day and overnight spans, in start order.
  *
- * Mirrors the month grid's own per-cell filter so the agenda card under the grid can never
- * disagree with the dots above it about which day an event belongs to.
+ * The reference definition of "which day does this event belong to". The UI does not call this
+ * per day any more — [eventsByDay] is the indexed form it uses — but this stays as the spec the
+ * index is held to: `EventsByDayTest` asserts the two agree on every day they touch, so the
+ * agenda card under the grid can never disagree with the dots above it.
  *
  * @param events Events already filtered by parent and type
  * @param date The day to collect
@@ -128,6 +146,41 @@ internal fun eventsOn(events: List<Event>, date: LocalDate): List<Event> {
             event.startDateTime < dayEnd && end >= dayStart
         }
         .sortedBy { it.startDateTime }
+}
+
+/**
+ * [events] bucketed by every day each one covers, each bucket in start order.
+ *
+ * Built once per event list so the month grid can index it instead of scanning: `dayContent`
+ * runs for all 42 cells on every recomposition — a day tap, a filter change, any repository
+ * emission — and a per-cell filter+sort made that O(42·N) over a list the ±3-month query window
+ * grew by roughly 1.7×.
+ *
+ * A multi-day or overnight event is bucketed under each day of its span, not only its start day:
+ * matching by start date alone is a bug this project has already shipped once (see the
+ * range/day-query note in CLAUDE.md). Equivalent to calling [eventsOn] per day, which is what
+ * `EventsByDayTest` checks.
+ *
+ * @param events Events already filtered by parent and type
+ */
+internal fun eventsByDay(events: List<Event>): Map<LocalDate, List<Event>> {
+    val buckets = mutableMapOf<LocalDate, MutableList<Event>>()
+    for (event in events) {
+        val firstDay = event.startDateTime.toLocalDate()
+        // `eventsOn` keeps an event whose end lands exactly on a day's 00:00 (`end >= dayStart`),
+        // so the last covered day is the end's own date, not the day before it.
+        val lastDay = (event.endDateTime ?: event.startDateTime).toLocalDate()
+        var day = firstDay
+        // An end before the start covers nothing, and this loop yields nothing for it — same
+        // answer `eventsOn` gives such an event on every date.
+        while (!day.isAfter(lastDay)) {
+            buckets.getOrPut(day) { mutableListOf() }.add(event)
+            day = day.plusDays(1)
+        }
+    }
+    // sortedBy is stable, so events sharing a start time keep the incoming order, exactly as the
+    // filter-then-sort in eventsOn did.
+    return buckets.mapValues { (_, dayEvents) -> dayEvents.sortedBy { it.startDateTime } }
 }
 
 /**
@@ -186,6 +239,17 @@ fun CalendarScreen(
     val custodyModel by calendarViewModel.custodyModel.collectAsState()
     val viewMode by calendarViewModel.viewMode.collectAsState()
     val selectedDate by calendarViewModel.selectedDate.collectAsState()
+    val displayedMonth by calendarViewModel.displayedMonth.collectAsState()
+    val queryAnchorMonth by calendarViewModel.queryAnchorMonth.collectAsState()
+    val today = remember { LocalDate.now() }
+
+    // What the screen says it is showing: the header title, and the day DAY/WEEK render.
+    val anchorDate = CalendarSelection.anchorDate(viewMode, displayedMonth, selectedDate, today)
+
+    // What is loaded. In MONTH mode this lags the displayed month by up to
+    // CalendarSelection.QUERY_ANCHOR_TOLERANCE_MONTHS, which is the entire point; in DAY and WEEK
+    // the two are the same value.
+    val queryAnchorDate = CalendarSelection.anchorDate(viewMode, queryAnchorMonth, selectedDate, today)
     val parentFilter by calendarViewModel.parentFilter.collectAsState()
     val hiddenEventTypes by calendarViewModel.hiddenEventTypes.collectAsState()
     val customEventTypes by calendarViewModel.customEventTypes.collectAsState()
@@ -200,9 +264,8 @@ fun CalendarScreen(
     val now = remember { YearMonth.now() }
 
     var showDatePicker by remember { mutableStateOf(false) }
-    val currentYearMonth = YearMonth.from(selectedDate)
     val datePickerState = rememberDatePickerState(
-        initialSelectedDateMillis = currentYearMonth.atDay(1).atStartOfDay(ZoneId.systemDefault())
+        initialSelectedDateMillis = displayedMonth.atDay(1).atStartOfDay(ZoneId.systemDefault())
             .toInstant().toEpochMilli(),
         yearRange = IntRange(now.year - 5, now.year + 5)
     )
@@ -252,19 +315,24 @@ fun CalendarScreen(
             .filterNot { it.eventType in hiddenEventTypes }
     }
 
+    // One pass over the filtered list, reused by all 42 month cells and by the agenda card
+    // underneath. Built here rather than inside MonthView so the grid and the card read the
+    // same buckets by construction.
+    val eventsByDay = remember(filteredEvents) { eventsByDay(filteredEvents) }
+
     // Czech public holidays and school vacations for the visible range
-    val holidays: Map<LocalDate, Holiday> = remember(viewMode, selectedDate, showHolidays) {
+    val holidays: Map<LocalDate, Holiday> = remember(viewMode, queryAnchorDate, showHolidays) {
         if (!showHolidays) {
             emptyMap()
         } else {
-            val (start, end) = queryRangeFor(viewMode, selectedDate)
+            val (start, end) = queryRangeFor(viewMode, queryAnchorDate)
             CzechHolidays.holidaysInRange(start.toLocalDate(), end.toLocalDate())
         }
     }
 
     // Load events based on view mode
-    LaunchedEffect(viewMode, selectedDate) {
-        val (start, end) = queryRangeFor(viewMode, selectedDate)
+    LaunchedEffect(viewMode, queryAnchorDate) {
+        val (start, end) = queryRangeFor(viewMode, queryAnchorDate)
         eventViewModel.loadEventsForDateRange(start, end)
     }
 
@@ -320,10 +388,10 @@ fun CalendarScreen(
     Scaffold(
         topBar = {
             CalendarHeader(
-                selectedDate = selectedDate,
+                selectedDate = anchorDate,
                 viewMode = viewMode,
                 onViewModeChange = { mode -> calendarViewModel.setViewMode(mode) },
-                onNavigateToToday = { calendarViewModel.setSelectedDate(LocalDate.now()) },
+                onNavigateToToday = { calendarViewModel.showMonth(YearMonth.now()) },
                 onFiltersClick = { showTypeFilters = true },
                 filtersActive = parentFilter != ParentFilter.BOTH ||
                     hiddenEventTypes.isNotEmpty() ||
@@ -393,9 +461,15 @@ fun CalendarScreen(
             onRefresh = {
                 isRefreshing = true
                 scope.launch {
-                    val (start, end) = queryRangeFor(viewMode, selectedDate)
-                    eventViewModel.loadEventsForDateRange(start, end)
-                    calendarViewModel.loadCustodySchedules()
+                    // Re-requesting the range already loaded is a no-op (query state conflates
+                    // equal values), so a stuck/failed query would never recover that way.
+                    // refresh() re-collects the current query from scratch instead.
+                    //
+                    // Custody is deliberately not refreshed here: CalendarViewModel derives it
+                    // straight from the Room flow, which pushes every write on its own. The old
+                    // loadCustodySchedules() call left a permanent extra collector behind on
+                    // each pull.
+                    eventViewModel.refresh()
                     kotlinx.coroutines.delay(500)
                     isRefreshing = false
                 }
@@ -411,7 +485,7 @@ fun CalendarScreen(
                 // School vacation, stated once for the month instead of a teal strip under
                 // every single cell — in July and August that was all 31 of them.
                 if (viewMode == CalendarViewMode.MONTH) {
-                    val vacationLabel = rememberVacationLabel(holidays, YearMonth.from(selectedDate))
+                    val vacationLabel = rememberVacationLabel(holidays, displayedMonth)
                     if (vacationLabel != null) {
                         VacationBanner(
                             label = vacationLabel,
@@ -477,7 +551,7 @@ fun CalendarScreen(
                         when (mode) {
                             CalendarViewMode.DAY, CalendarViewMode.WEEK -> {
                                 DayWeekView(
-                                    selectedDate = selectedDate,
+                                    selectedDate = anchorDate,
                                     daysCount = if (mode == CalendarViewMode.DAY) 1 else 7,
                                     events = filteredEvents,
                                     getCustody = getCustody,
@@ -511,9 +585,9 @@ fun CalendarScreen(
                             }
                             CalendarViewMode.MONTH -> {
                                 MonthView(
-                                    selectedMonth = YearMonth.from(selectedDate),
+                                    selectedMonth = displayedMonth,
                                     selectedDate = selectedDate,
-                                    events = filteredEvents,
+                                    eventsByDay = eventsByDay,
                                     getCustody = getCustody,
                                     // Selects the day so the agenda card below fills in.
                                     // Tapping used to jump straight into Day view, which was
@@ -523,8 +597,10 @@ fun CalendarScreen(
                                     onDayClick = { clickedDate ->
                                         calendarViewModel.setSelectedDate(clickedDate)
                                     },
+                                    // Paging is not choosing: the new month gets today if it
+                                    // holds today, and no selection at all otherwise.
                                     onMonthChange = { newMonth ->
-                                        calendarViewModel.setSelectedDate(newMonth.atDay(1))
+                                        calendarViewModel.showMonth(newMonth)
                                     },
                                     holidays = holidays
                                 )
@@ -538,21 +614,23 @@ fun CalendarScreen(
                 // gives the titles — and it replaces the legend, whose Mom/Dad/vacation
                 // keys are now spelled out in words by this card and the vacation banner.
                 if (viewMode == CalendarViewMode.MONTH) {
-                    val agendaEvents = remember(filteredEvents, selectedDate) {
-                        eventsOn(filteredEvents, selectedDate)
-                    }
-                    DayAgendaCard(
-                        date = selectedDate,
-                        events = agendaEvents,
-                        custody = getCustody(selectedDate),
-                        onEventClick = { eventId -> previewEventId = eventId },
-                        modifier = Modifier.padding(
-                            start = dims.paddingMedium,
-                            // Clears the FAB, which floats over the end side.
-                            end = 72.dp,
-                            bottom = dims.paddingMedium
+                    selectedDate?.let { chosenDay ->
+                        // The same buckets the grid's dots come from: one index, so a title in
+                        // the card and a dot in the cell can never describe different days.
+                        val agendaEvents = eventsByDay[chosenDay].orEmpty()
+                        DayAgendaCard(
+                            date = chosenDay,
+                            events = agendaEvents,
+                            custody = getCustody(chosenDay),
+                            onEventClick = { eventId -> previewEventId = eventId },
+                            modifier = Modifier.padding(
+                                start = dims.paddingMedium,
+                                // Clears the FAB, which floats over the end side.
+                                end = 72.dp,
+                                bottom = dims.paddingMedium
+                            )
                         )
-                    )
+                    }
                 }
             }
         }

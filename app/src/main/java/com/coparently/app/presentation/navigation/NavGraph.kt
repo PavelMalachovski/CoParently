@@ -154,7 +154,7 @@ fun NavGraph(
                         navController.navigate(Screen.EditEvent.createRoute(eventId))
                     },
                     onOpenChangeRequests = {
-                        navController.navigate(Screen.ChangeRequests.route)
+                        navController.navigate(Screen.ChangeRequests.createRoute())
                     },
                     onOpenWeeklySummary = {
                         navController.navigate(Screen.WeeklySummary.route)
@@ -195,7 +195,7 @@ fun NavGraph(
                         navController.navigate(Screen.Settings.route)
                     },
                     onChangeRequestsClick = {
-                        navController.navigate(Screen.ChangeRequests.route)
+                        navController.navigate(Screen.ChangeRequests.createRoute())
                     }
                 )
             }
@@ -299,7 +299,7 @@ fun NavGraph(
                         navController.navigate(Screen.EditEvent.createRoute(eventId))
                     },
                     onOpenChangeRequests = {
-                        navController.navigate(Screen.ChangeRequests.route)
+                        navController.navigate(Screen.ChangeRequests.createRoute())
                     }
                 )
             }
@@ -307,18 +307,27 @@ fun NavGraph(
             // Event change requests inbox (MVP 2)
             composable(
                 route = Screen.ChangeRequests.route,
+                arguments = listOf(
+                    navArgument(Screen.ChangeRequests.ARG_EVENT_ID) {
+                        type = NavType.StringType
+                        nullable = true
+                        defaultValue = null
+                    }
+                ),
                 enterTransition = { slideInFromRight() },
                 exitTransition = { slideOutToLeft() },
                 popEnterTransition = { slideInFromLeft() },
                 popExitTransition = { slideOutToRight() }
-            ) {
+            ) { backStackEntry ->
+                val linkedEventId = backStackEntry.arguments
+                    ?.getString(Screen.ChangeRequests.ARG_EVENT_ID)
+                    ?.takeIf { it != "null" }
                 com.coparently.app.presentation.changerequests.ChangeRequestsScreen(
-                    onBack = {
-                        navController.popBackStack()
-                    },
+                    onBack = { navController.popBackStack() },
                     onOpenEvent = { eventId ->
                         navController.navigate(Screen.EditEvent.createRoute(eventId))
-                    }
+                    },
+                    linkedEventId = linkedEventId
                 )
             }
 
@@ -496,6 +505,9 @@ fun NavGraph(
                         navController.navigate(
                             Screen.RequestChange.createRoute(eventId, threadId)
                         )
+                    },
+                    onOpenChangeRequest = { eventId ->
+                        navController.navigate(Screen.ChangeRequests.createRoute(eventId))
                     }
                 )
             }
@@ -527,6 +539,9 @@ fun NavGraph(
                         navController.navigate(
                             Screen.RequestChange.createRoute(eventId, conversationId)
                         )
+                    },
+                    onOpenChangeRequest = { eventId ->
+                        navController.navigate(Screen.ChangeRequests.createRoute(eventId))
                     }
                 )
             }
@@ -883,7 +898,13 @@ sealed class Screen(val route: String) {
     data object Budgets : Screen("budgets")
 
     data object WeeklySummary : Screen("weekly_summary")
-    data object ChangeRequests : Screen("change_requests")
+    data object ChangeRequests : Screen("change_requests?eventId={eventId}") {
+        const val ARG_EVENT_ID = "eventId"
+
+        /** @param eventId Event whose request should be highlighted, or null for the plain inbox. */
+        fun createRoute(eventId: String? = null): String =
+            "change_requests?eventId=${eventId ?: "null"}"
+    }
     data object RequestChange : Screen("request_change/{eventId}?conversationId={conversationId}") {
         const val ARG_EVENT_ID = "eventId"
         const val ARG_CONVERSATION_ID = "conversationId"

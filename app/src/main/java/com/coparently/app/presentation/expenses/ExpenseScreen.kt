@@ -156,12 +156,18 @@ fun ExpenseScreen(
                     // global empty state handled above.
                     MonthSwitcherBar(
                         navigation = monthNavigation,
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
+                        modifier = Modifier
+                            .monthSwipe(monthNavigation)
+                            .padding(horizontal = 14.dp, vertical = 8.dp)
                     )
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .weight(1f),
+                            .weight(1f)
+                            // Swipe-to-delete is why the populated list below is never a swipe
+                            // surface — there are no rows here to conflict with the gesture, so
+                            // this empty-month placeholder can safely carry month navigation too.
+                            .monthSwipe(monthNavigation),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
@@ -186,7 +192,11 @@ fun ExpenseScreen(
                             currency = currencyBalance.currency,
                             onSettleUp = onSettleUp,
                             monthLabel = monthLabel,
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp),
+                            modifier = Modifier
+                                .then(
+                                    if (index == 0) Modifier.monthSwipe(monthNavigation) else Modifier
+                                )
+                                .padding(horizontal = 14.dp, vertical = 4.dp),
                             monthNavigation = monthNavigation.takeIf { index == 0 }
                         )
                     }

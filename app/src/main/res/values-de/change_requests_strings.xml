@@ -26,4 +26,5 @@
     <string name="change_request_send">Anfrage senden</string>
     <string name="change_request_ok">OK</string>
     <string name="change_request_cancel">Abbrechen</string>
+    <string name="change_request_link_missing">Diese Anfrage ist nicht mehr offen.</string>
 </resources>
