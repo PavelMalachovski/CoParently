@@ -23,9 +23,11 @@
     <string name="expenses_empty_description">Запишіть спільну витрату — садок, одяг, візит до лікаря — і розділіть її з іншим із батьків.</string>
     <string name="expenses_mom_paid">Мама сплатила %1$s</string>
     <string name="expenses_dad_paid">Тато сплатив %1$s</string>
-    <!-- Replaces expenses_mom_paid/expenses_dad_paid: "платник" (payer) is a fixed noun that
-         does not inflect for the referent's gender. %1$s is the payer's name. -->
-    <string name="expenses_paid_by">Платник: %1$s</string>
+    <!-- Replaces expenses_mom_paid/expenses_dad_paid. The call site (ExpenseSummaryHeader's
+         who-paid row) needs both the payer's name and the amount in one Text; the name serves
+         as its own label, so nothing has to agree with it. %1$s is the payer's name, %2$s is
+         the formatted amount. -->
+    <string name="expenses_paid_by">%1$s: %2$s</string>
     <string name="expenses_balance_owed_to_you">Інший із батьків винен вам %1$s</string>
     <string name="expenses_balance_you_owe">Ви винні іншому з батьків %1$s</string>
     <string name="expenses_balance_settled">Усе врегульовано</string>

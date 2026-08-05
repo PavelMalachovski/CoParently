@@ -26,9 +26,11 @@
     <!-- Month summary header: total, who-paid split and settle-up -->
     <string name="expenses_mom_paid">Mom paid %1$s</string>
     <string name="expenses_dad_paid">Dad paid %1$s</string>
-    <!-- Replaces expenses_mom_paid/expenses_dad_paid: a label the parent's name can sit next
-         to without a verb agreeing with it. %1$s is the payer's name. -->
-    <string name="expenses_paid_by">Paid by %1$s</string>
+    <!-- Replaces expenses_mom_paid/expenses_dad_paid. The call site (ExpenseSummaryHeader's
+         who-paid row) needs both the payer's name and the amount in one Text; the name serves
+         as its own label, so nothing has to agree with it. %1$s is the payer's name, %2$s is
+         the formatted amount. -->
+    <string name="expenses_paid_by">%1$s: %2$s</string>
     <string name="expenses_balance_owed_to_you">Your co-parent owes you %1$s</string>
     <string name="expenses_balance_you_owe">You owe your co-parent %1$s</string>
     <string name="expenses_balance_settled">You are all square</string>

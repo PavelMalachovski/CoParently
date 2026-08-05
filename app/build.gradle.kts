@@ -85,8 +85,10 @@ android {
 
     lint {
         // Localization is intentionally partial: strings missing from a locale fall back
-        // to the base (English) resources at runtime. Don't fail the build over it — this
-        // stays a warning. Completing translations is tracked separately.
+        // to the base (English) resources at runtime. This turns the check off entirely
+        // (not merely down to a warning) so an incomplete locale never fails the build.
+        // Completing translations is tracked separately; verify locale completeness with
+        // a direct grep across values*/ instead of relying on lint for it.
         disable += "MissingTranslation"
     }
 

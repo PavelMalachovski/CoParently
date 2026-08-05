@@ -46,7 +46,7 @@
     <string name="calendar_weekday_header_description">Заголовок дней недели календаря</string>
     <string name="calendar_day_desc_today">Сегодня</string>
     <string name="calendar_day_desc_outside_month">Вне текущего месяца</string>
-    <string name="calendar_day_desc_with_parent">С %1$s</string>
+    <string name="calendar_day_desc_with_parent">С кем: %1$s</string>
     <plurals name="calendar_day_desc_events">
         <item quantity="one">%1$d событие</item>
         <item quantity="few">%1$d события</item>

@@ -23,9 +23,14 @@
     <string name="expenses_empty_description">Erfasse eine gemeinsame Ausgabe — Kita, Kleidung, Arztbesuch — und teile sie mit dem anderen Elternteil.</string>
     <string name="expenses_mom_paid">Mama hat %1$s bezahlt</string>
     <string name="expenses_dad_paid">Papa hat %1$s bezahlt</string>
-    <!-- Replaces expenses_mom_paid/expenses_dad_paid: "von" sidesteps the article a role noun
-         would otherwise need to agree in gender with. %1$s is the payer's name. -->
-    <string name="expenses_paid_by">Bezahlt von %1$s</string>
+    <!-- Replaces expenses_mom_paid/expenses_dad_paid. The call site (ExpenseSummaryHeader's
+         who-paid row) needs both the payer's name and the amount in one Text; the name serves
+         as its own label, so nothing has to agree with it. "von %1$s" was dropped: parentLabel's
+         fallbacks include pronouns/common nouns ("dir", "Mitelternteil") that "von" would then
+         govern the case or article of ("von dir", "vom Mitelternteil"), reintroducing the exact
+         problem this key exists to avoid. %1$s is the payer's name, %2$s is the formatted
+         amount. -->
+    <string name="expenses_paid_by">%1$s: %2$s</string>
     <string name="expenses_balance_owed_to_you">Der andere Elternteil schuldet dir %1$s</string>
     <string name="expenses_balance_you_owe">Du schuldest dem anderen Elternteil %1$s</string>
     <string name="expenses_balance_settled">Alles ausgeglichen</string>
