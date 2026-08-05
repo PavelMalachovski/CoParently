@@ -700,7 +700,7 @@ The pattern is the same in Czech and Ukrainian: a noun label plus a colon, never
 $env:JAVA_HOME = "C:\Program Files\Android\Android Studio1\jbr"; ./gradlew lint
 ```
 
-`MissingTranslation` is a warning in this project, not an error — read the report at `app/build/reports/lint-results-debug.html` and confirm it lists none of the new keys.
+**`MissingTranslation` will not help you here.** `app/build.gradle.kts:90` does `disable += "MissingTranslation"` — the check is off entirely, not merely non-fatal, despite the comment beside it claiming it "stays a warning". Verify locale completeness by grepping each new key across the five `values*` directories instead, and confirm the count is five every time.
 
 - [ ] **Step 5: Commit**
 
