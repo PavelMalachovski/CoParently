@@ -72,4 +72,34 @@ class CustodyModelTest {
         val threeWeeks = model(21, (0..6).toSet(), LocalDate.of(2026, 8, 3))
         assert(!fortnight.isEquivalentTo(threeWeeks))
     }
+
+    @Test
+    fun `cycles long enough to overflow their product are not treated as equivalent`() {
+        // 46341 and 46342 are consecutive integers, so coprime: their least common multiple is
+        // their product, 2_147_534_622 - past Int.MAX_VALUE (2_147_483_647). Unguarded Int
+        // arithmetic wraps that to a negative window; `(0 until window)` on a negative window
+        // is an empty range, so `.all { }` returns true - "equivalent" - even though the two
+        // patterns disagree from day zero (mom on day 0 of the first, nobody on day 0 of the
+        // second).
+        val a = model(46341, setOf(0))
+        val b = model(46342, emptySet())
+        assert(!a.isEquivalentTo(b))
+    }
+
+    @Test
+    fun `complemented returns the model unchanged for a non-positive pattern length`() {
+        // (0 until 0).toSet() - momDayIndices is emptySet() regardless of momDayIndices: a
+        // degenerate cycle has nothing to complement, so the model passes through unchanged
+        // instead of silently losing its indices.
+        val degenerate = model(0, setOf(0, 1, 2))
+        assertEquals(degenerate, degenerate.complemented())
+    }
+
+    @Test
+    fun `complementing twice drops an index outside the cycle rather than preserving it`() {
+        // Index 5 is dead for patternDays = 4: getCustodyFor reduces every offset into 0..3
+        // before testing membership, so 5 can never be reached, and complemented() drops it.
+        val withDeadIndex = model(4, setOf(0, 1, 5))
+        assertEquals(setOf(0, 1), withDeadIndex.complemented().complemented().momDayIndices)
+    }
 }
