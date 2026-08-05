@@ -201,7 +201,7 @@ private fun DayHeader(day: LocalDate) {
 }
 
 /**
- * One event row: time, parent color dot (Mom = pink, Dad = blue), title,
+ * One event row: time, parent colour dot (slot 1 = pink, slot 2 = blue), title,
  * pickup confirmation marker.
  */
 @Composable

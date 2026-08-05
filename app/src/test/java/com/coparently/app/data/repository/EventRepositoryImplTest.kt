@@ -198,6 +198,48 @@ class EventRepositoryImplTest {
     }
 
     @Test
+    fun `a private event created while unpaired is still stamped with its creator's uid`() = runTest {
+        // Private events are never synced (see the test above), so the Firestore-sync branch
+        // that used to be the only place `createdByFirebaseUid` was set never runs for them.
+        // Without a stamp at insert time this field stays null forever, and
+        // ParentSlotMigrator's `WHERE createdByFirebaseUid = :myUid` scoping clause can never
+        // find the row to re-stamp once pairing moves this device to a different slot.
+        signIn(uid = "uidA", partnerId = null)
+        val captured = slot<EventEntity>()
+        coEvery { eventDao.insertEvent(capture(captured)) } returns Unit
+
+        repository.insertEvent(baseDomain().copy(isPrivate = true))
+
+        assertEquals("uidA", captured.captured.createdByFirebaseUid)
+    }
+
+    @Test
+    fun `insertEvent stamps createdByFirebaseUid even when the Firestore write is skipped for other reasons`() =
+        runTest {
+            // Same hazard as the private-event case above, but for an event that is eligible
+            // to sync and simply has not yet (offline, or a prior sync attempt failed): the
+            // Firestore branch is what used to do the stamping, and it does not run here either.
+            signIn(uid = "uidA", partnerId = null)
+            val captured = slot<EventEntity>()
+            coEvery { eventDao.insertEvent(capture(captured)) } returns Unit
+
+            repository.insertEvent(baseDomain().copy(syncedToFirestore = true))
+
+            assertEquals("uidA", captured.captured.createdByFirebaseUid)
+        }
+
+    @Test
+    fun `insertEvent never overwrites an already-stamped creator uid`() = runTest {
+        signIn(uid = "uidA", partnerId = null)
+        val captured = slot<EventEntity>()
+        coEvery { eventDao.insertEvent(capture(captured)) } returns Unit
+
+        repository.insertEvent(baseDomain().copy(createdByFirebaseUid = "someone-else"))
+
+        assertEquals("someone-else", captured.captured.createdByFirebaseUid)
+    }
+
+    @Test
     fun `getEventById tolerates blank sharedWith json`() = runTest {
         coEvery { eventDao.getEventById("e1") } returns baseEntity().copy(sharedWithJson = "")
 

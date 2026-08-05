@@ -5,12 +5,12 @@ import com.coparently.app.domain.error.AppError
 import com.coparently.app.domain.error.ErrorHandler
 import com.coparently.app.domain.model.Event
 import com.coparently.app.domain.model.User
-import com.coparently.app.domain.repository.UserRepository
 import com.coparently.app.domain.usecase.CreateEventUseCase
 import com.coparently.app.domain.usecase.DeleteEventUseCase
 import com.coparently.app.domain.usecase.EventUseCases
 import com.coparently.app.domain.usecase.GetEventsUseCase
 import com.coparently.app.domain.usecase.UpdateEventUseCase
+import com.coparently.app.presentation.common.testParentsSource
 import com.google.gson.Gson
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
@@ -51,8 +51,16 @@ class EventViewModelTest {
     private lateinit var getEvents: GetEventsUseCase
     private lateinit var errorHandler: ErrorHandler
     private lateinit var encryptedPreferences: EncryptedPreferences
-    private lateinit var userRepository: UserRepository
     private lateinit var viewModel: EventViewModel
+
+    /** The signed-in parent, in slot 2. `confirmPickup` stamps their slot on the event. */
+    private val signedInParent = User(
+        id = "u1",
+        email = "pavel@example.com",
+        name = "Pavel",
+        role = "dad",
+        colorCode = "#2196F3"
+    )
 
     private val sampleEvent = Event(
         id = "e1",
@@ -76,22 +84,13 @@ class EventViewModelTest {
         }
         errorHandler = mockk(relaxed = true)
         encryptedPreferences = mockk(relaxed = true)
-        userRepository = mockk {
-            coEvery { getCurrentUser() } returns User(
-                id = "u1",
-                email = "dad@example.com",
-                name = "Dad",
-                role = "dad",
-                colorCode = "#2196F3"
-            )
-        }
         viewModel = EventViewModel(
             EventUseCases(createEvent, updateEvent, deleteEvent, getEvents),
             errorHandler,
             encryptedPreferences,
             Gson(),
-            userRepository,
-            eventImageStorage = mockk(relaxed = true)
+            eventImageStorage = mockk(relaxed = true),
+            parentsSource = testParentsSource(me = signedInParent)
         )
     }
 
@@ -118,7 +117,7 @@ class EventViewModelTest {
     }
 
     @Test
-    fun `confirmPickup stamps current user role`() = runTest {
+    fun `confirmPickup stamps the signed-in parent's slot`() = runTest {
         coEvery { getEvents.getById("e1") } returns sampleEvent
         val saved = slot<Event>()
         coEvery { updateEvent.invoke(capture(saved)) } answers { Result.success(saved.captured) }

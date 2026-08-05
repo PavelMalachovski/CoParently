@@ -78,6 +78,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.coparently.app.R
 import com.coparently.app.domain.model.Event
+import com.coparently.app.presentation.common.ParentNames
 import com.coparently.app.presentation.theme.CoPlanlyColors
 import com.coparently.app.presentation.theme.Dimensions
 import com.coparently.app.presentation.theme.dimensions
@@ -129,6 +130,7 @@ fun DayWeekView(
     daysCount: Int,
     events: List<Event>,
     getCustody: (LocalDate) -> String?,
+    parentNames: ParentNames,
     onDateChange: (LocalDate) -> Unit,
     onEventClick: (String) -> Unit,
     onAddEventClick: (LocalDate, Int) -> Unit = { _, _ -> },
@@ -194,6 +196,7 @@ fun DayWeekView(
             daysCount = daysCount,
             events = events,
             getCustody = getCustody,
+            parentNames = parentNames,
             scrollState = scrollState,
             onEventClick = onEventClick,
             onAddEventClick = onAddEventClick,
@@ -221,6 +224,7 @@ private fun DayWeekPage(
     daysCount: Int,
     events: List<Event>,
     getCustody: (LocalDate) -> String?,
+    parentNames: ParentNames,
     scrollState: LazyListState,
     onEventClick: (String) -> Unit,
     onAddEventClick: (LocalDate, Int) -> Unit = { _, _ -> },
@@ -307,6 +311,7 @@ private fun DayWeekPage(
                     CustodyWeekBand(
                         dates = currentDates,
                         getCustody = getCustody,
+                        parentNames = parentNames,
                         gutterWidth = dims.hourGutterWidth,
                         modifier = Modifier.align(Alignment.TopCenter)
                     )
@@ -643,6 +648,7 @@ private fun DayWeekPage(
                                         hourHeightPx = hourCellHeightPx,
                                         baseDate = date,
                                         baseHour = seg.segStart.hour,
+                                        parentNames = parentNames,
                                         onDragDrop = onEventDragDrop,
                                         onResize = onEventResize,
                                         onDelete = onEventDelete,
@@ -699,6 +705,7 @@ private fun EventChip(
     hourHeightPx: Float,
     baseDate: LocalDate,
     baseHour: Int,
+    parentNames: ParentNames,
     onDragDrop: ((String, LocalDate, Int) -> Unit)?,
     onResize: ((String, LocalDateTime?, LocalDateTime?) -> Unit)? = null,
     onDelete: ((String) -> Unit)? = null,
@@ -1038,12 +1045,8 @@ private fun EventChip(
                     )
                 }
                 if (event.pickupConfirmedBy != null) {
-                    // pickupConfirmedBy is "mom"/"dad" — map to the localized parent name
-                    val confirmedByName = if (event.pickupConfirmedBy == "mom") {
-                        stringResource(R.string.calendar_parent_mom)
-                    } else {
-                        stringResource(R.string.calendar_parent_dad)
-                    }
+                    // pickupConfirmedBy is a slot; it is shown as that parent's name.
+                    val confirmedByName = parentNames.labelFor(event.pickupConfirmedBy)
                     Icon(
                         imageVector = Icons.Default.CheckCircle,
                         contentDescription = stringResource(
@@ -1320,6 +1323,7 @@ private fun resizedTime(
 private fun CustodyWeekBand(
     dates: List<LocalDate>,
     getCustody: (LocalDate) -> String?,
+    parentNames: ParentNames,
     gutterWidth: Dp,
     modifier: Modifier = Modifier
 ) {
@@ -1362,11 +1366,7 @@ private fun CustodyWeekBand(
             ) {
                 if (custody != null && days >= 2) {
                     Text(
-                        text = if (custody == "mom") {
-                            stringResource(R.string.calendar_parent_mom)
-                        } else {
-                            stringResource(R.string.calendar_parent_dad)
-                        },
+                        text = parentNames.labelFor(custody),
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.SemiBold,
                         color = Color.White,

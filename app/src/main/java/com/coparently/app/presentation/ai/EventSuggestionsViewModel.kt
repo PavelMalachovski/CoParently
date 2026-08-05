@@ -7,6 +7,7 @@ import com.coparently.app.domain.model.ai.SuggestionContext
 import com.coparently.app.domain.model.ai.UserAction
 import com.coparently.app.domain.repository.EventRepository
 import com.coparently.app.domain.usecase.ai.EventSuggestionEngineUseCase
+import com.coparently.app.presentation.common.ParentsSource
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -21,7 +22,8 @@ import javax.inject.Inject
 @HiltViewModel
 class EventSuggestionsViewModel @Inject constructor(
     private val eventSuggestionEngineUseCase: EventSuggestionEngineUseCase,
-    private val eventRepository: EventRepository
+    private val eventRepository: EventRepository,
+    private val parentsSource: ParentsSource
 ) : ViewModel() {
 
     private val _suggestionsState = MutableStateFlow<SuggestionsUiState>(SuggestionsUiState.Loading)
@@ -52,8 +54,14 @@ class EventSuggestionsViewModel @Inject constructor(
     fun acceptSuggestion(suggestion: EventSuggestion) {
         viewModelScope.launch {
             try {
+                // Attributed to whoever accepted it - the same "yours by default" rule
+                // AddEditEventScreen applies. signedInSlot() is the cheap ParentsSource lookup
+                // built for exactly this; null (not signed in, or a profile Room never named)
+                // means there is nothing sensible to attribute the event to, so skip it rather
+                // than guess a slot.
+                val ownerSlot = parentsSource.signedInSlot() ?: return@launch
                 // Convert suggestion to event and save
-                val event = suggestion.toEvent()
+                val event = suggestion.toEvent(ownerSlot)
                 eventRepository.insertEvent(event)
 
                 // Learn from user action
@@ -102,7 +110,7 @@ sealed class SuggestionsUiState {
 }
 
 // Extension to convert EventSuggestion to Event
-private fun EventSuggestion.toEvent(): com.coparently.app.domain.model.Event {
+private fun EventSuggestion.toEvent(ownerSlot: String): com.coparently.app.domain.model.Event {
     val now = java.time.LocalDateTime.now()
     return com.coparently.app.domain.model.Event(
         id = java.util.UUID.randomUUID().toString(),
@@ -111,7 +119,7 @@ private fun EventSuggestion.toEvent(): com.coparently.app.domain.model.Event {
         startDateTime = this.suggestedDateTime,
         endDateTime = this.suggestedDateTime.plusHours(1),
         eventType = this.eventType,
-        parentOwner = "mom", // Default, can be customized
+        parentOwner = ownerSlot,
         createdAt = now,
         updatedAt = now
     )

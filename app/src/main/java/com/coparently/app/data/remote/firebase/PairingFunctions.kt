@@ -1,5 +1,6 @@
 package com.coparently.app.data.remote.firebase
 
+import android.util.Log
 import com.coparently.app.domain.model.PairingError
 import com.google.firebase.functions.FirebaseFunctions
 import com.google.firebase.functions.FirebaseFunctionsException
@@ -22,9 +23,14 @@ class PairingFunctions @Inject constructor(
     /**
      * Redeems an invitation by [code] or by [invitationId] — exactly one.
      *
-     * @return the co-parent's Firebase UID on success, or a [PairingException]-wrapped
-     *   [PairingError] on failure (a missing/blank `partnerId` in an otherwise successful
-     *   response is treated as [PairingError.Unknown], not silently coerced to an empty UID).
+     * @return the co-parent's Firebase UID and, if the deployed callable reports one, this
+     *   device's newly assigned parent slot (see `assignSlots` in `functions/index.js`) — or a
+     *   [PairingException]-wrapped [PairingError] on failure. `partnerId` is required: a
+     *   response missing it is a contract violation with the callable and is treated as
+     *   [PairingError.Unknown], not silently coerced to a blank UID. `role` is soft-parsed
+     *   instead: a client built against a redeployed backend that has not shipped yet (or a
+     *   backend that has not been redeployed for a client that has) must not report a pairing
+     *   that succeeded server-side as a failed accept — see [AcceptInvitationResult.role].
      * @throws IllegalArgumentException if both or neither of [code] and [invitationId] are
      *   given — this is a caller programming error, not a backend failure, so it is not
      *   folded into the returned [Result].
@@ -32,7 +38,7 @@ class PairingFunctions @Inject constructor(
     suspend fun acceptInvitation(
         code: String? = null,
         invitationId: String? = null
-    ): Result<String> {
+    ): Result<AcceptInvitationResult> {
         require((code == null) != (invitationId == null)) {
             "acceptInvitation requires exactly one of code or invitationId, got " +
                 "code=$code, invitationId=$invitationId"
@@ -43,9 +49,16 @@ class PairingFunctions @Inject constructor(
         }
         return call("acceptPairingInvitation", payload) { data ->
             val partnerId = data["partnerId"] as? String
-            checkNotNull(partnerId?.takeIf { it.isNotBlank() }) {
-                "acceptPairingInvitation succeeded but returned no partnerId"
+            val role = (data["role"] as? String)?.takeIf { it.isNotBlank() }
+            if (role == null) {
+                Log.w(TAG, "acceptPairingInvitation succeeded but returned no role; slot re-stamp will be skipped")
             }
+            AcceptInvitationResult(
+                partnerId = checkNotNull(partnerId?.takeIf { it.isNotBlank() }) {
+                    "acceptPairingInvitation succeeded but returned no partnerId"
+                },
+                role = role
+            )
         }
     }
 
@@ -78,6 +91,7 @@ class PairingFunctions @Inject constructor(
     }
 
     companion object {
+        private const val TAG = "PairingFunctions"
 
         /** Maps a callable failure to the matching [PairingError]. */
         fun toPairingError(e: Throwable): PairingError {
@@ -104,3 +118,22 @@ class PairingFunctions @Inject constructor(
 /** Carries a [PairingError] through `Result.failure`, keeping the original [cause] for logging. */
 class PairingException(val error: PairingError, cause: Throwable? = null) :
     Exception(error.toString(), cause)
+
+/**
+ * What [PairingFunctions.acceptInvitation] returns on success.
+ *
+ * @property partnerId The co-parent's Firebase UID.
+ * @property role The parent slot ("mom" or "dad") this device was just assigned, or null if
+ *   the callable did not report one. The inviter keeps whatever slot it already had; the
+ *   accepter always gets the other one — see `assignSlots` in `functions/index.js`. Callers
+ *   compare this to the slot they held before accepting to detect a change and re-stamp
+ *   accordingly. Nullable rather than required: unlike [partnerId], a missing `role` is not
+ *   treated as a contract violation, because it is reachable in the wild during a staged
+ *   rollout — a client built against a redeployed backend running ahead of it, or the reverse
+ *   — and in both cases the pairing itself has already succeeded server-side by the time this
+ *   is parsed. Failing the whole accept over a field that only gates a best-effort local
+ *   migration would report a successful pairing as failed, with no way to retry it (the
+ *   invitation is no longer pending). A null here means only that the migration is skipped,
+ *   not that pairing failed.
+ */
+data class AcceptInvitationResult(val partnerId: String, val role: String?)

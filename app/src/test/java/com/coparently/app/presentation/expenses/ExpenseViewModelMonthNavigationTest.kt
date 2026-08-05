@@ -8,6 +8,7 @@ import com.coparently.app.domain.repository.ExpenseRepository
 import com.coparently.app.domain.repository.PreferencesRepository
 import com.coparently.app.domain.repository.ReceiptStorage
 import com.coparently.app.domain.repository.UserRepository
+import com.coparently.app.presentation.common.testParentsSource
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
 import io.mockk.every
@@ -81,7 +82,8 @@ class ExpenseViewModelMonthNavigationTest {
             userRepository,
             receiptStorage,
             preferencesRepository,
-            receiptTextRecognizer
+            receiptTextRecognizer,
+            testParentsSource()
         )
     }
 

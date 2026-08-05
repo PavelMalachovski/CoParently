@@ -8,6 +8,8 @@ import com.coparently.app.data.local.preferences.EncryptedPreferences
 import com.coparently.app.domain.model.Event
 import com.coparently.app.domain.repository.EventImageStorage
 import com.coparently.app.domain.repository.EventRepository
+import com.coparently.app.presentation.common.Parents
+import com.coparently.app.presentation.common.ParentsSource
 import com.google.gson.Gson
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -29,6 +31,9 @@ import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.util.UUID
 import javax.inject.Inject
+
+/** Keeps the parents flow warm across brief unsubscriptions (config changes). */
+private const val PARENTS_STOP_TIMEOUT_MS = 5_000L
 
 /**
  * ViewModel for managing events.
@@ -67,9 +72,16 @@ class EventViewModel @Inject constructor(
     private val errorHandler: com.coparently.app.domain.error.ErrorHandler,
     private val encryptedPreferences: EncryptedPreferences,
     private val gson: Gson,
-    private val userRepository: com.coparently.app.domain.repository.UserRepository,
-    private val eventImageStorage: EventImageStorage
+    private val eventImageStorage: EventImageStorage,
+    private val parentsSource: ParentsSource
 ) : ViewModel() {
+
+    /**
+     * Signed-in parent and paired co-parent, for resolving a slot to a name — the event list,
+     * the preview sheet and the editor all show who an event belongs to.
+     */
+    val parents: StateFlow<Parents> = parentsSource.observe()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(PARENTS_STOP_TIMEOUT_MS), Parents())
 
     private val _uiState = MutableStateFlow<EventUiState>(EventUiState.Loading)
     val uiState: StateFlow<EventUiState> = _uiState.asStateFlow()
@@ -386,7 +398,12 @@ class EventViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val event = eventUseCases.getEvents.getById(eventId) ?: return@launch
-                val role = userRepository.getCurrentUser()?.role ?: event.parentOwner
+                // Only this device's own slot is needed, so ask for exactly that: signedInSlot
+                // reads the uid and one Room row. Collecting `parents` here would stand up a
+                // pairing subscription and a partner-document fetch to answer a local question.
+                // Falls back to the event's own slot when the profile cannot be resolved,
+                // exactly as the previous getCurrentUser() did.
+                val role = parentsSource.signedInSlot() ?: event.parentOwner
                 val updated = event.copy(
                     pickupConfirmedBy = role,
                     pickupConfirmedAt = LocalDateTime.now()

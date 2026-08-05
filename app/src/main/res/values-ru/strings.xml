@@ -22,8 +22,6 @@
     <string name="event_cancel">Отмена</string>
     <string name="event_date">Дата: %1$s</string>
     <string name="event_parent">Родитель: %1$s</string>
-    <string name="event_parent_mom">Мама</string>
-    <string name="event_parent_dad">Папа</string>
 
     <!-- Auth Screen -->
     <string name="auth_sign_in">Войти</string>
@@ -72,8 +70,6 @@
     <string name="pairing_unknown">Неизвестно</string>
 
     <!-- Custody -->
-    <string name="custody_with_mom">У мамы</string>
-    <string name="custody_with_dad">У папы</string>
     <string name="custody_today">Сегодня: %1$s</string>
 
     <!-- Common -->

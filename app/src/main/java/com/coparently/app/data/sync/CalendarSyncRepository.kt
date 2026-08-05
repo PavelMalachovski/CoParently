@@ -6,8 +6,8 @@ import com.coparently.app.data.remote.google.CredentialProvider
 import com.coparently.app.data.remote.google.CredentialProviderImpl
 import com.coparently.app.data.remote.google.GoogleCalendarApi
 import com.coparently.app.domain.model.Event
+import com.coparently.app.presentation.common.ParentsSource
 import com.google.api.client.auth.oauth2.Credential
-import com.google.api.services.calendar.model.Event as GoogleEvent
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -17,6 +17,7 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import javax.inject.Inject
 import javax.inject.Singleton
+import com.google.api.services.calendar.model.Event as GoogleEvent
 
 /**
  * Repository for synchronizing events between local database and Google Calendar.
@@ -25,7 +26,8 @@ import javax.inject.Singleton
 class CalendarSyncRepository @Inject constructor(
     private val eventDao: EventDao,
     private val googleCalendarApi: GoogleCalendarApi,
-    private val credentialProvider: CredentialProvider
+    private val credentialProvider: CredentialProvider,
+    private val parentsSource: ParentsSource
 ) {
     /**
      * Syncs events from Google Calendar to local database (pull).
@@ -40,6 +42,13 @@ class CalendarSyncRepository @Inject constructor(
             val credential = credentialProvider.getCredential()
                 ?: throw IllegalStateException("Not authenticated. Please sign in to Google.")
             // Token refresh is now handled automatically in getCredential()
+
+            // A Google Calendar import is created by whoever pulled it in - the same "yours by
+            // default" rule AddEditEventScreen applies, via the same cheap lookup ParentsSource
+            // exposes for exactly this (no pairing subscription, just this device's own Room
+            // row). Resolved once per sync, not once per event.
+            val ownerSlot = parentsSource.signedInSlot()
+                ?: throw IllegalStateException("Not signed in. Please sign in to CoPlanly.")
 
             emit(SyncResult.Progress("Fetching events from Google Calendar..."))
 
@@ -57,7 +66,7 @@ class CalendarSyncRepository @Inject constructor(
             val eventsToInsert = mutableListOf<EventEntity>()
 
             googleEvents.forEach { googleEvent ->
-                val eventEntity = googleEvent.toEventEntity()
+                val eventEntity = googleEvent.toEventEntity(ownerSlot)
                 eventsToInsert.add(eventEntity)
             }
 
@@ -189,8 +198,11 @@ class CalendarSyncRepository @Inject constructor(
 
     /**
      * Converts Google Calendar Event to EventEntity.
+     *
+     * @param ownerSlot This device's own slot, attributed to the import - see the call site in
+     *   [syncFromGoogle] for why it isn't looked up per event.
      */
-    private fun GoogleEvent.toEventEntity(): EventEntity {
+    private fun GoogleEvent.toEventEntity(ownerSlot: String): EventEntity {
         val startDateTime = start?.dateTime?.value?.let {
             LocalDateTime.ofInstant(
                 java.time.Instant.ofEpochMilli(it),
@@ -212,7 +224,7 @@ class CalendarSyncRepository @Inject constructor(
             startDateTime = startDateTime,
             endDateTime = endDateTime,
             eventType = "google",
-            parentOwner = "mom", // TODO: Determine from event data
+            parentOwner = ownerSlot,
             isRecurring = recurrence != null,
             recurrencePattern = recurrence?.firstOrNull()?.toString(),
             createdAt = LocalDateTime.now(),

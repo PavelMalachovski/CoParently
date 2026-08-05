@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import com.coparently.app.R
 import com.coparently.app.domain.holidays.Holiday
 import com.coparently.app.domain.model.Event
+import com.coparently.app.presentation.common.ParentNames
 import com.coparently.app.presentation.theme.CoPlanlyColors
 import com.coparently.app.presentation.theme.dimensions
 import com.kizitonwose.calendar.compose.HorizontalCalendar
@@ -70,10 +71,12 @@ private val CUSTODY_EDGE_WIDTH = 2.dp
  * Classic month grid: always starts at the 1st of the month, pages horizontally
  * between months with follow-the-finger physics (kizitonwose HorizontalCalendar).
  *
- * Day cells show custody coloring (Mom pink / Dad blue), public holidays and
+ * Day cells show custody colouring (slot 1 pink / slot 2 blue), public holidays and
  * parent-coloured event dots. School vacation is a month-level banner above the grid,
  * not a per-day marker.
  *
+ * @param parentNames Resolves a slot to that parent's name, for the cells' accessibility
+ *   descriptions — the grid says the colour out loud for anyone not reading it.
  * @param eventsByDay Events pre-bucketed per day by `eventsByDay` in `CalendarScreen`. Taking the
  *   index rather than the flat list is deliberate: `dayContent` runs for all 42 cells on every
  *   recomposition, so filtering the whole list per cell cost O(42·N) each time. The agenda card
@@ -86,6 +89,7 @@ fun MonthView(
     selectedDate: LocalDate? = null,
     eventsByDay: Map<LocalDate, List<Event>>,
     getCustody: (LocalDate) -> String?,
+    parentNames: ParentNames,
     onDayClick: (LocalDate) -> Unit,
     onMonthChange: (YearMonth) -> Unit,
     holidays: Map<LocalDate, Holiday> = emptyMap()
@@ -169,6 +173,7 @@ fun MonthView(
                         isSelected = selectedDate == day.date,
                         events = eventsByDay[day.date].orEmpty(),
                         getCustody = getCustody,
+                        parentNames = parentNames,
                         onDayClick = onDayClick,
                         holiday = holidays[day.date]
                     )
@@ -248,6 +253,7 @@ private fun DayCell(
     isSelected: Boolean,
     events: List<Event>,
     getCustody: (LocalDate) -> String?,
+    parentNames: ParentNames,
     onDayClick: (LocalDate) -> Unit,
     holiday: Holiday? = null
 ) {
@@ -285,16 +291,8 @@ private fun DayCell(
     // All localized pieces are resolved in composable scope; buildString itself is not one.
     val todayLabel = stringResource(R.string.calendar_day_desc_today)
     val outsideMonthLabel = stringResource(R.string.calendar_day_desc_outside_month)
-    val custodyLabel = when (custody) {
-        "mom" -> stringResource(
-            R.string.calendar_day_desc_with_parent,
-            stringResource(R.string.calendar_parent_mom)
-        )
-        "dad" -> stringResource(
-            R.string.calendar_day_desc_with_parent,
-            stringResource(R.string.calendar_parent_dad)
-        )
-        else -> null
+    val custodyLabel = custody?.let {
+        stringResource(R.string.calendar_day_desc_with_parent, parentNames.labelFor(it))
     }
     val eventsLabel = if (events.isNotEmpty()) {
         pluralStringResource(R.plurals.calendar_day_desc_events, events.size, events.size)

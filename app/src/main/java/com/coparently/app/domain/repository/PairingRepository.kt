@@ -47,11 +47,27 @@ interface PairingRepository {
      */
     suspend fun sendEmailInvitation(email: String): Result<Unit>
 
-    /** Redeems an invitation by its short [code]. */
-    suspend fun redeem(code: String): Result<Unit>
+    /**
+     * Redeems an invitation by its short [code].
+     *
+     * Reaches the same `acceptPairingInvitation` callable as [acceptIncoming] — a code/QR/
+     * deep-link redemption and an addressed-invitation accept are two entry points to the
+     * same server-side pairing — so it can move this device's parent slot the same way. See
+     * [acceptIncoming]'s return doc for what the caller does with it.
+     */
+    suspend fun redeem(code: String): Result<String?>
 
-    /** Accepts an invitation addressed to this user by document id. */
-    suspend fun acceptIncoming(invitationId: String): Result<Unit>
+    /**
+     * Accepts an invitation addressed to this user by document id.
+     *
+     * @return the parent slot ("mom"/"dad") this device was just assigned, or null if the
+     *   backend did not report one (see `PairingFunctions.AcceptInvitationResult.role` for
+     *   why that is tolerated rather than treated as a failure). Accepting may move this
+     *   device from the slot it held while unpaired to the other one — the caller compares
+     *   this against the slot it read locally beforehand to decide whether records created
+     *   before pairing need to be re-stamped (see `ParentSlotMigrator`).
+     */
+    suspend fun acceptIncoming(invitationId: String): Result<String?>
 
     /** Declines an invitation addressed to this user. */
     suspend fun rejectIncoming(invitationId: String): Result<Unit>

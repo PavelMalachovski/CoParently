@@ -7,8 +7,6 @@
 -->
 <resources>
     <!-- Parent names, used to compose custody and handover copy -->
-    <string name="calendar_parent_mom">Mom</string>
-    <string name="calendar_parent_dad">Dad</string>
 
     <!-- Custody ribbon -->
     <string name="calendar_custody_today_with">Today with %1$s</string>
@@ -62,7 +60,7 @@
     <string name="calendar_weekday_header_description">Calendar weekday header</string>
     <string name="calendar_day_desc_today">Today</string>
     <string name="calendar_day_desc_outside_month">Outside current month</string>
-    <!-- %1$s = localized parent name (Mom/Dad) -->
+    <!-- %1$s = that parent's name, resolved by presentation/common/ParentLabels.kt -->
     <string name="calendar_day_desc_with_parent">With %1$s</string>
     <plurals name="calendar_day_desc_events">
         <item quantity="one">%1$d event</item>
@@ -83,7 +81,7 @@
     <string name="calendar_event_long_pressed">Long pressed, delete button shown</string>
     <string name="calendar_event_chip_hint">Tap to view, long press to show delete, drag corners to resize</string>
     <string name="calendar_event_private">Private event</string>
-    <!-- %1$s = localized parent name (Mom/Dad) -->
+    <!-- %1$s = that parent's name, resolved by presentation/common/ParentLabels.kt -->
     <string name="calendar_event_pickup_confirmed">Pickup confirmed by %1$s</string>
     <string name="calendar_resize_start_handle">Resize start time. Drag up or down (15-minute steps).</string>
     <string name="calendar_resize_end_handle">Resize end time. Drag up or down (15-minute steps).</string>

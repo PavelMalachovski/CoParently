@@ -84,4 +84,5 @@
     <string name="event_form_delete_failed">Termin konnte nicht gelöscht werden: %1$s</string>
     <string name="event_form_save_failed">Termin konnte nicht gespeichert werden: %1$s</string>
     <string name="event_form_photo_upload_failed">Foto-Upload fehlgeschlagen — Termin ohne neues Foto gespeichert</string>
+    <string name="event_form_owner_unknown">Wir wissen noch nicht, wessen Termin das ist — wähle oben aus, um zu speichern</string>
 </resources>

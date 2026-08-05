@@ -62,8 +62,10 @@ import com.coparently.app.R
 import com.coparently.app.domain.custody.HandoverInfo
 import com.coparently.app.domain.expenses.CurrencyBalance
 import com.coparently.app.domain.model.Event
+import com.coparently.app.presentation.common.ParentNames
 import com.coparently.app.presentation.common.PillChip
 import com.coparently.app.presentation.common.SectionGroup
+import com.coparently.app.presentation.common.rememberParentNames
 import com.coparently.app.presentation.theme.ParentColors
 import java.text.NumberFormat
 import java.time.LocalDate
@@ -124,6 +126,7 @@ fun HomeScreen(
     val monthSpend by viewModel.monthSpend.collectAsState()
     val monthBalances by viewModel.monthBalances.collectAsState()
     val unreadCount by viewModel.unreadCount.collectAsState()
+    val parentNames = rememberParentNames(viewModel.parents.collectAsState().value)
 
     Scaffold(
         topBar = {
@@ -162,7 +165,13 @@ fun HomeScreen(
             }
 
             nextHandover?.let { handover ->
-                item { HandoverHero(info = handover, onConfirm = onOpenChangeRequests) }
+                item {
+                    HandoverHero(
+                        info = handover,
+                        parentNames = parentNames,
+                        onConfirm = onOpenChangeRequests
+                    )
+                }
             }
 
             item {
@@ -185,6 +194,7 @@ fun HomeScreen(
                 ) { index, event ->
                     TimelineRow(
                         event = event,
+                        parentNames = parentNames,
                         isLast = index == upcomingEvents.lastIndex,
                         onClick = { onOpenEvent(event.id) }
                     )
@@ -192,6 +202,18 @@ fun HomeScreen(
             }
 
             item {
+                // Deliberately `partner?.name` and not `parentNames`, which is what the hero and
+                // the timeline above use. The two answer different questions. This header names
+                // a *person* - the account this one is paired with - and that identity is known
+                // as soon as pairing resolves. The hero names whoever holds a *slot*, and on a
+                // pair whose two parents still share slot 1 nobody holds the other one, so it
+                // says "Parent" until the backfill separates them.
+                //
+                // So a legacy pair reads "Olya changed" here and "Today with Parent" above, and
+                // that is correct rather than an inconsistency to iron out: degrading this to
+                // "Parent" would throw away a fact we hold, and resolving the hero from the
+                // partner's name would assert a slot nobody has stored - the guess this whole
+                // branch exists to remove.
                 SectionHeader(
                     partner?.name?.takeIf { it.isNotBlank() }
                         ?.let { stringResource(R.string.home_section_partner_changed, it) }
@@ -282,22 +304,26 @@ private fun PairingCta(onNavigateToPairing: () -> Unit) {
  */
 @Composable
 @Suppress("LongMethod") // one card: gradient, headline, chips and action read as a single block
-private fun HandoverHero(info: HandoverInfo, onConfirm: () -> Unit) {
+private fun HandoverHero(
+    info: HandoverInfo,
+    parentNames: ParentNames,
+    onConfirm: () -> Unit
+) {
     val fromColor = ParentColors.fill(info.fromParent)
     val toColor = ParentColors.fill(info.toParent)
     val headline = when (info.daysUntil) {
         0L -> stringResource(
             R.string.home_handover_hero_today,
-            stringResource(parentLabelRes(info.toParent))
+            parentNames.labelFor(info.toParent)
         )
         1L -> stringResource(
             R.string.home_handover_hero_tomorrow,
-            stringResource(parentLabelRes(info.toParent))
+            parentNames.labelFor(info.toParent)
         )
         else -> pluralStringResource(
             R.plurals.home_handover_hero_in_days,
             info.daysUntil.toInt(),
-            stringResource(parentLabelRes(info.toParent)),
+            parentNames.labelFor(info.toParent),
             info.daysUntil.toInt()
         )
     }
@@ -334,7 +360,7 @@ private fun HandoverHero(info: HandoverInfo, onConfirm: () -> Unit) {
                 Text(
                     text = stringResource(
                         R.string.home_handover_current,
-                        stringResource(parentLabelRes(info.fromParent))
+                        parentNames.labelFor(info.fromParent)
                     ),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -503,7 +529,12 @@ private fun StatTile(
  * @param onClick Opens the event
  */
 @Composable
-private fun TimelineRow(event: Event, isLast: Boolean, onClick: () -> Unit) {
+private fun TimelineRow(
+    event: Event,
+    parentNames: ParentNames,
+    isLast: Boolean,
+    onClick: () -> Unit
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -543,7 +574,7 @@ private fun TimelineRow(event: Event, isLast: Boolean, onClick: () -> Unit) {
                 text = stringResource(
                     R.string.home_timeline_meta,
                     event.startDateTime.format(timelineFormatter),
-                    stringResource(parentLabelRes(event.parentOwner))
+                    parentNames.labelFor(event.parentOwner)
                 ),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -609,11 +640,6 @@ private fun ActivityGroup(
             if (index != items.lastIndex) Divider()
         }
     }
-}
-
-private fun parentLabelRes(parent: String): Int = when (parent) {
-    "dad" -> R.string.home_parent_dad
-    else -> R.string.home_parent_mom
 }
 
 private fun formatMoney(amount: Double, currencyCode: String): String {

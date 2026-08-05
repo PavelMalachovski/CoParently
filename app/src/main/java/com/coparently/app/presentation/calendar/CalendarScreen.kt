@@ -64,6 +64,7 @@ import com.coparently.app.presentation.calendar.components.CustodyRibbon
 import com.coparently.app.presentation.calendar.components.DayAgendaCard
 import com.coparently.app.presentation.calendar.components.EventTypeFilterSheet
 import com.coparently.app.presentation.calendar.components.VacationBanner
+import com.coparently.app.presentation.common.rememberParentNames
 import com.coparently.app.presentation.event.EventUiState
 import com.coparently.app.presentation.event.EventViewModel
 import com.coparently.app.presentation.theme.dimensions
@@ -255,6 +256,11 @@ fun CalendarScreen(
     val customEventTypes by calendarViewModel.customEventTypes.collectAsState()
     val showHolidays by calendarViewModel.showHolidays.collectAsState()
     val nextHandover by calendarViewModel.nextHandover.collectAsState()
+
+    // Who the two parents are, resolved with the fallback strings once for the whole screen.
+    // Every label below this line - ribbon, grid, agenda card, filters, preview sheet - reads
+    // this one value, so no two of them can name the same slot differently.
+    val parentNames = rememberParentNames(calendarViewModel.parents.collectAsState().value)
 
     // Reduce animation duration on older devices for better performance
     val animationDuration = remember {
@@ -532,7 +538,11 @@ fun CalendarScreen(
                                     vertical = dims.paddingSmall / 2
                                 )
                             ) { custody ->
-                                CustodyRibbon(custody = custody, handover = nextHandover)
+                                CustodyRibbon(
+                                    custody = custody,
+                                    handover = nextHandover,
+                                    parentNames = parentNames
+                                )
                             }
                         }
                     }
@@ -555,6 +565,7 @@ fun CalendarScreen(
                                     daysCount = if (mode == CalendarViewMode.DAY) 1 else 7,
                                     events = filteredEvents,
                                     getCustody = getCustody,
+                                    parentNames = parentNames,
                                     onDateChange = { calendarViewModel.setSelectedDate(it) },
                                     onEventClick = { eventId -> previewEventId = eventId },
                                     onAddEventClick = { date, hour ->
@@ -589,6 +600,7 @@ fun CalendarScreen(
                                     selectedDate = selectedDate,
                                     eventsByDay = eventsByDay,
                                     getCustody = getCustody,
+                                    parentNames = parentNames,
                                     // Selects the day so the agenda card below fills in.
                                     // Tapping used to jump straight into Day view, which was
                                     // the only way to read a cell's events at all — now the
@@ -622,6 +634,7 @@ fun CalendarScreen(
                             date = chosenDay,
                             events = agendaEvents,
                             custody = getCustody(chosenDay),
+                            parentNames = parentNames,
                             onEventClick = { eventId -> previewEventId = eventId },
                             modifier = Modifier.padding(
                                 start = dims.paddingMedium,
@@ -683,6 +696,7 @@ fun CalendarScreen(
         if (previewEvent != null) {
             com.coparently.app.presentation.event.EventPreviewSheet(
                 event = previewEvent,
+                parentNames = parentNames,
                 onEdit = {
                     previewEventId = null
                     onEventClick(eventId)
@@ -706,6 +720,7 @@ fun CalendarScreen(
             hiddenEventTypes = hiddenEventTypes,
             showHolidays = showHolidays,
             parentFilter = parentFilter,
+            parentNames = parentNames,
             onParentFilterChange = { calendarViewModel.setParentFilter(it) },
             onToggleType = { calendarViewModel.toggleEventTypeVisibility(it) },
             onAddCustomType = { calendarViewModel.addCustomEventType(it) },

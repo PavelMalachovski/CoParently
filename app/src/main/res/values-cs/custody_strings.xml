@@ -7,18 +7,22 @@
     <string name="custody_pattern_start_date">Datum začátku vzoru</string>
     <string name="custody_start_date_hint">Toto je výchozí datum – vzor se bude opakovat od tohoto dne</string>
     <string name="custody_who_starts_first">Kdo začíná první?</string>
-    <string name="custody_mom_starts_first">Máma začíná první</string>
-    <string name="custody_dad_starts_first">Táta začíná první</string>
+    <!-- Replaces custody_mom_starts_first/custody_dad_starts_first. Present tense "začíná" and
+         the soft adjective "první" have one form for every gender in Czech nominative
+         singular, so the label stays safe next to any name. %1$s is that parent's name. -->
+    <string name="custody_starts_first">Začíná první: %1$s</string>
     <string name="custody_custom_pattern">Vlastní vzor</string>
-    <string name="custody_custom_pattern_hint">Klepnutím přiřaďte dny mámě (růžová). Zbývající dny připadnou tátovi (modrá).</string>
+    <!-- The two names are colour labels, not grammatical objects: "Pink: <name>" so
+         nothing has to agree with the name. The old value named Mom and Dad outright
+         and, in ru/uk/cs, put them in a governed case. %1$s is slot 1, %2$s is slot 2. -->
+    <string name="custody_custom_pattern_hint">Klepnutím na den změníte, čí je. Růžová: %1$s. Modrá: %2$s.</string>
     <string name="custody_week_abbrev">T%1$d</string>
     <string name="custody_day_abbrev">D%1$d</string>
-    <string name="custody_week1_to_mom">1. týden → Máma</string>
-    <string name="custody_week2_to_mom">2. týden → Máma</string>
+    <!-- Replaces custody_week1_to_mom/custody_week2_to_mom: "týden" (week) does not inflect
+         for the referent's gender. %1$d is the week number, %2$s is the parent's name. -->
+    <string name="custody_week_to">Týden %1$d: %2$s</string>
     <string name="custody_preview">Náhled</string>
     <string name="custody_next_14_days">Dalších 14 dní:</string>
-    <string name="custody_mom">Máma</string>
-    <string name="custody_dad">Táta</string>
     <string name="custody_ok">OK</string>
     <string name="custody_cancel">Zrušit</string>
     <string name="custody_model_week_on_week_off">Střídání po týdnu</string>
@@ -29,4 +33,14 @@
     <string name="custody_model_two_two_three_desc">Vzor 2 dny, 2 dny, 3 dny. Častější střídání.</string>
     <string name="custody_model_three_four_four_three_desc">Střídání 3 a 4 dnů. Vyvážený čas ve všední dny i o víkendu.</string>
     <string name="custody_model_custom_desc">Vytvořte si vlastní vzor rozvrhu.</string>
+    <!-- Preview sentences for the custody Preview card. These replace a hardcoded
+         English string built in CustodySetupViewModel that named Mom and Dad outright.
+         Each name follows a colon or a dash and is never the subject of a verb or the
+         head of an adjective, so nothing has to agree with it. %1$s/%2$s are the two
+         parents in pattern order; custody_preview_custom takes the two day counts
+         first and the slot-1 parent last. -->
+    <string name="custody_preview_week_on_week_off">První týden: %1$s, poté se to každý týden střídá.</string>
+    <string name="custody_preview_two_two_three">Po–Út: %1$s. St–Čt: %2$s. Pá–Ne se střídají.</string>
+    <string name="custody_preview_three_four_four_three">Po–St (3 dny): %1$s. Čt–Ne (4 dny): %2$s. Poté opačně.</string>
+    <string name="custody_preview_custom">Vlastní vzor: %1$d z %2$d dnů — %3$s.</string>
 </resources>

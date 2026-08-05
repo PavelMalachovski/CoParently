@@ -3,8 +3,6 @@
     <string name="event_preview_edit">Изменить</string>
     <string name="event_preview_delete">Удалить</string>
     <string name="event_preview_private">Личное событие — видите только вы</string>
-    <string name="event_preview_mom">Мама</string>
-    <string name="event_preview_dad">Папа</string>
     <string name="event_form_save">Сохранить событие</string>
     <string name="event_deleted_message">Событие удалено</string>
     <string name="event_deleted_undo">Отменить</string>

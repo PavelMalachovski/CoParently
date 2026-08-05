@@ -84,4 +84,5 @@
     <string name="event_form_delete_failed">Не вдалося видалити подію: %1$s</string>
     <string name="event_form_save_failed">Не вдалося зберегти подію: %1$s</string>
     <string name="event_form_photo_upload_failed">Не вдалося завантажити фото — подію збережено без нового фото</string>
+    <string name="event_form_owner_unknown">Поки незрозуміло, чия це подія — виберіть вище, щоб зберегти</string>
 </resources>

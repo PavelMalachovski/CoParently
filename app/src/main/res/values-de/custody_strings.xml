@@ -7,18 +7,22 @@
     <string name="custody_pattern_start_date">Startdatum des Musters</string>
     <string name="custody_start_date_hint">Dies ist das Ankerdatum – das Muster wiederholt sich ab diesem Tag</string>
     <string name="custody_who_starts_first">Wer beginnt zuerst?</string>
-    <string name="custody_mom_starts_first">Mama beginnt zuerst</string>
-    <string name="custody_dad_starts_first">Papa beginnt zuerst</string>
+    <!-- Replaces custody_mom_starts_first/custody_dad_starts_first. "Beginnt" (3rd person
+         singular) and the adverb "zuerst" never inflect for gender, so the label stays safe
+         next to any name. %1$s is that parent's name. -->
+    <string name="custody_starts_first">Beginnt zuerst: %1$s</string>
     <string name="custody_custom_pattern">Eigenes Muster</string>
-    <string name="custody_custom_pattern_hint">Tippe auf Tage, um sie Mama zuzuweisen (rosa). Die übrigen Tage gehen an Papa (blau).</string>
+    <!-- The two names are colour labels, not grammatical objects: "Pink: <name>" so
+         nothing has to agree with the name. The old value named Mom and Dad outright
+         and, in ru/uk/cs, put them in a governed case. %1$s is slot 1, %2$s is slot 2. -->
+    <string name="custody_custom_pattern_hint">Tippe auf einen Tag, um zu wechseln, wem er gehört. Rosa: %1$s. Blau: %2$s.</string>
     <string name="custody_week_abbrev">W%1$d</string>
     <string name="custody_day_abbrev">T%1$d</string>
-    <string name="custody_week1_to_mom">Woche 1 → Mama</string>
-    <string name="custody_week2_to_mom">Woche 2 → Mama</string>
+    <!-- Replaces custody_week1_to_mom/custody_week2_to_mom: "Woche" (week) does not inflect
+         for the referent's gender. %1$d is the week number, %2$s is the parent's name. -->
+    <string name="custody_week_to">Woche %1$d: %2$s</string>
     <string name="custody_preview">Vorschau</string>
     <string name="custody_next_14_days">Nächste 14 Tage:</string>
-    <string name="custody_mom">Mama</string>
-    <string name="custody_dad">Papa</string>
     <string name="custody_ok">OK</string>
     <string name="custody_cancel">Abbrechen</string>
     <string name="custody_model_week_on_week_off">Wochenweise im Wechsel</string>
@@ -29,4 +33,14 @@
     <string name="custody_model_two_two_three_desc">Muster aus 2 Tagen, 2 Tagen, 3 Tagen. Häufigere Wechsel.</string>
     <string name="custody_model_three_four_four_three_desc">Abwechselnd 3 und 4 Tage. Ausgewogene Zeit unter der Woche und am Wochenende.</string>
     <string name="custody_model_custom_desc">Erstelle dein eigenes Planmuster.</string>
+    <!-- Preview sentences for the custody Preview card. These replace a hardcoded
+         English string built in CustodySetupViewModel that named Mom and Dad outright.
+         Each name follows a colon or a dash and is never the subject of a verb or the
+         head of an adjective, so nothing has to agree with it. %1$s/%2$s are the two
+         parents in pattern order; custody_preview_custom takes the two day counts
+         first and the slot-1 parent last. -->
+    <string name="custody_preview_week_on_week_off">Erste Woche: %1$s, danach wird wöchentlich gewechselt.</string>
+    <string name="custody_preview_two_two_three">Mo–Di: %1$s. Mi–Do: %2$s. Fr–So wechseln sich ab.</string>
+    <string name="custody_preview_three_four_four_three">Mo–Mi (3 Tage): %1$s. Do–So (4 Tage): %2$s. Danach umgekehrt.</string>
+    <string name="custody_preview_custom">Eigenes Muster: %1$d von %2$d Tagen — %3$s.</string>
 </resources>

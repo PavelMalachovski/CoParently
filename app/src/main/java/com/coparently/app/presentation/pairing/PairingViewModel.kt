@@ -1,6 +1,7 @@
 package com.coparently.app.presentation.pairing
 
 import android.graphics.Bitmap
+import android.util.Log
 import androidx.annotation.StringRes
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -8,6 +9,7 @@ import com.coparently.app.R
 import com.coparently.app.data.analytics.AnalyticsManager
 import com.coparently.app.data.remote.firebase.PairingException
 import com.coparently.app.data.remote.firebase.QRCodeService
+import com.coparently.app.data.repository.ParentSlotMigrator
 import com.coparently.app.data.session.SignedInAccountSource
 import com.coparently.app.domain.model.AccountSummary
 import com.coparently.app.domain.model.PairingError
@@ -15,6 +17,7 @@ import com.coparently.app.domain.model.PairingState
 import com.coparently.app.domain.pairing.InviteCodeGenerator
 import com.coparently.app.domain.pairing.PairingUri
 import com.coparently.app.domain.repository.PairingRepository
+import com.coparently.app.domain.repository.UserRepository
 import com.coparently.app.utils.ValidationResult
 import com.coparently.app.utils.ValidationUtils
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -61,6 +64,8 @@ class PairingViewModel @Inject constructor(
     private val pairingRepository: PairingRepository,
     private val qrCodeService: QRCodeService,
     private val analyticsManager: AnalyticsManager,
+    private val userRepository: UserRepository,
+    private val parentSlotMigrator: ParentSlotMigrator,
     signedInAccountSource: SignedInAccountSource
 ) : ViewModel() {
 
@@ -122,7 +127,14 @@ class PairingViewModel @Inject constructor(
         _form.value = _form.value.copy(emailInput = email, emailErrorRes = null)
     }
 
-    /** Redeems the code currently in the input field. */
+    /**
+     * Redeems the code currently in the input field.
+     *
+     * Reaches the same `acceptPairingInvitation` callable as [acceptIncoming] — manual code
+     * entry, QR scan and deep link all funnel into [PairingRepository.redeem] — so it can
+     * flip this device's parent slot the same way and needs the same re-stamp; see
+     * [withSlotReslot].
+     */
     fun redeemCode() {
         val code = _form.value.codeInput
         if (!InviteCodeGenerator.isValid(code)) {
@@ -131,7 +143,7 @@ class PairingViewModel @Inject constructor(
         }
         launchAction(
             onError = { res -> _form.value = _form.value.copy(codeErrorRes = res) }
-        ) { pairingRepository.redeem(code) }
+        ) { withSlotReslot { pairingRepository.redeem(code) } }
     }
 
     /** Sends an email invitation to the address currently in the email field. */
@@ -151,10 +163,65 @@ class PairingViewModel @Inject constructor(
         ) { pairingRepository.sendEmailInvitation(email) }
     }
 
-    /** Accepts an invitation addressed to this user. */
+    /**
+     * Accepts an invitation addressed to this user.
+     *
+     * Pairing may move this device from one parent slot to the other (the inviter keeps its
+     * slot, the accepter gets the other one — see `assignSlots` in `functions/index.js`), so
+     * a successful accept re-stamps this user's records via [withSlotReslot].
+     */
     fun acceptIncoming(invitationId: String) = launchAction(
         onSuccess = { analyticsManager.logInvitationAccepted() }
-    ) { pairingRepository.acceptIncoming(invitationId) }
+    ) { withSlotReslot { pairingRepository.acceptIncoming(invitationId) } }
+
+    /**
+     * Runs a pairing [action] that can move this device to a different parent slot, and
+     * re-stamps this user's records if it did.
+     *
+     * Shared by [acceptIncoming] and [redeemCode]: both ultimately call the same
+     * `acceptPairingInvitation` callable through different [PairingRepository] entry points
+     * (accepting an addressed invitation vs. redeeming a code/QR/deep-link), and either one
+     * can flip this device's slot — the same comparison has to run on both paths, or one of
+     * them silently stops re-stamping.
+     *
+     * The before-slot is read from Room, this device's own state, before the network call;
+     * the after-slot comes straight from [action]'s response, because
+     * [UserRepository.getCurrentUser] reads Room only and a second local read after the call
+     * would still show the stale, pre-accept value.
+     */
+    private suspend fun withSlotReslot(action: suspend () -> Result<String?>): Result<Unit> {
+        val user = userRepository.getCurrentUser()
+        val before = user?.role
+        val result = action()
+        // `getOrNull()` is null both on a genuine failure and on a success carrying a null
+        // role (server did not report one) — both are cases to skip the re-stamp, not just
+        // the failure, so no separate `result.isSuccess` check is needed here.
+        val after = result.getOrNull()
+        if (user != null && before != null && after != null) {
+            reslotIfChanged(myUid = user.id, from = before, to = after)
+        }
+        return result.map { }
+    }
+
+    /**
+     * Runs [ParentSlotMigrator.reslot] only when pairing actually moved this device from
+     * [from] to [to]. Split out of [withSlotReslot] so its null-checks and this change-check
+     * stay two separate conditions rather than one long expression.
+     *
+     * The pairing itself has already committed server-side by the time this runs, and for
+     * [acceptIncoming] specifically the invitation is no longer pending — there is no way to
+     * retry the accept. A migration failure (the blank-uid guard, or any `SQLiteException`)
+     * must therefore never propagate: it is logged and swallowed, not reported as a failed
+     * pairing, which is the one thing that did *not* fail here. The row count is logged on
+     * success too, because this is a one-shot, unrepeatable pass — a silent zero would
+     * otherwise be undetectable in the field.
+     */
+    private suspend fun reslotIfChanged(myUid: String, from: String, to: String) {
+        if (from == to) return
+        runCatching { parentSlotMigrator.reslot(from = from, to = to, myUid = myUid) }
+            .onSuccess { changed -> Log.i(TAG, "Re-stamped $changed record(s) from $from to $to") }
+            .onFailure { e -> Log.e(TAG, "Failed to re-stamp records from $from to $to", e) }
+    }
 
     /**
      * Declines an invitation addressed to this user. Has no field of its own,
@@ -221,6 +288,7 @@ class PairingViewModel @Inject constructor(
         }
 
     private companion object {
+        const val TAG = "PairingViewModel"
         const val STOP_TIMEOUT_MS = 5_000L
     }
 }

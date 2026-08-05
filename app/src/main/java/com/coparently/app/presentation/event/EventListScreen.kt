@@ -44,7 +44,9 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.coparently.app.R
 import com.coparently.app.domain.model.Event
+import com.coparently.app.presentation.common.ParentNames
 import com.coparently.app.presentation.common.animations.AnimatedEmptyState
+import com.coparently.app.presentation.common.rememberParentNames
 import com.coparently.app.presentation.theme.CoPlanlyColors
 import kotlinx.coroutines.launch
 
@@ -61,6 +63,7 @@ fun EventListScreen(
     viewModel: EventViewModel = hiltViewModel()
 ) {
     val events by viewModel.events.collectAsState()
+    val parentNames = rememberParentNames(viewModel.parents.collectAsState().value)
     val uiState by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -165,6 +168,7 @@ fun EventListScreen(
                         items(events, key = { it.id }) { event ->
                             SwipeableEventCard(
                                 event = event,
+                                parentNames = parentNames,
                                 onClick = { onEventClick(event.id) },
                                 onDelete = { deleteWithUndo(event) },
                                 modifier = Modifier.padding(vertical = 4.dp)
@@ -185,6 +189,7 @@ fun EventListScreen(
 @Composable
 private fun SwipeableEventCard(
     event: Event,
+    parentNames: ParentNames,
     onClick: () -> Unit,
     onDelete: () -> Unit,
     modifier: Modifier = Modifier
@@ -223,7 +228,7 @@ private fun SwipeableEventCard(
             }
         }
     ) {
-        EventCardContent(event = event, onClick = onClick)
+        EventCardContent(event = event, parentNames = parentNames, onClick = onClick)
     }
 }
 
@@ -231,6 +236,7 @@ private fun SwipeableEventCard(
 @Composable
 private fun EventCardContent(
     event: Event,
+    parentNames: ParentNames,
     onClick: () -> Unit
 ) {
     Card(
@@ -256,11 +262,7 @@ private fun EventCardContent(
                 text = stringResource(R.string.event_list_date, event.startDateTime.toString()),
                 style = MaterialTheme.typography.bodySmall
             )
-            val parentLabel = when (event.parentOwner) {
-                "mom" -> stringResource(R.string.event_preview_mom)
-                "dad" -> stringResource(R.string.event_preview_dad)
-                else -> event.parentOwner
-            }
+            val parentLabel = parentNames.labelFor(event.parentOwner)
             Text(
                 text = stringResource(R.string.event_list_parent, parentLabel),
                 style = MaterialTheme.typography.bodySmall,

@@ -41,6 +41,4 @@
     <string name="home_activity_change_requested">Änderung angefragt: %1$s</string>
     <string name="home_activity_review">Prüfen</string>
 
-    <string name="home_parent_mom">Mama</string>
-    <string name="home_parent_dad">Papa</string>
 </resources>

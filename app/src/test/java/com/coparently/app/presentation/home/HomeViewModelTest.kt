@@ -12,6 +12,7 @@ import com.coparently.app.domain.repository.MessageRepository
 import com.coparently.app.domain.repository.PairingRepository
 import com.coparently.app.domain.repository.PreferencesRepository
 import com.coparently.app.domain.repository.UserRepository
+import com.coparently.app.presentation.common.ParentsSource
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
@@ -68,6 +69,7 @@ class HomeViewModelTest {
             // The refreshed dashboard attributes spend per parent, so construction now reads
             // the user list to build its uid -> "mom"/"dad" map.
             every { getAllUsers() } returns flowOf(emptyList())
+            every { observeCurrentUserId() } returns flowOf(null)
         }
         pairingState = MutableStateFlow(PairingState.Loading)
         val pairingRepository = mockk<PairingRepository> {
@@ -80,7 +82,11 @@ class HomeViewModelTest {
             custodyModelRepository = custodyModelRepository,
             monthSpendDependencies = MonthSpendDependencies(expenseRepository, preferencesRepository),
             messageRepository = messageRepository,
-            homeIdentityDependencies = HomeIdentityDependencies(userRepository, pairingRepository)
+            homeIdentityDependencies = HomeIdentityDependencies(
+                userRepository,
+                pairingRepository,
+                ParentsSource(userRepository, pairingRepository)
+            )
         )
     }
 

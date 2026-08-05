@@ -5,11 +5,14 @@ import com.coparently.app.R
 import com.coparently.app.data.analytics.AnalyticsManager
 import com.coparently.app.data.remote.firebase.PairingException
 import com.coparently.app.data.remote.firebase.QRCodeService
+import com.coparently.app.data.repository.ParentSlotMigrator
 import com.coparently.app.data.session.SignedInAccountSource
 import com.coparently.app.domain.model.AccountSummary
 import com.coparently.app.domain.model.PairingError
 import com.coparently.app.domain.model.PairingState
+import com.coparently.app.domain.model.User
 import com.coparently.app.domain.repository.PairingRepository
+import com.coparently.app.domain.repository.UserRepository
 import com.coparently.app.utils.ValidationResult
 import com.coparently.app.utils.ValidationUtils
 import io.mockk.coEvery
@@ -38,6 +41,8 @@ class PairingViewModelTest {
     private val dispatcher = StandardTestDispatcher()
     private lateinit var repository: PairingRepository
     private lateinit var analyticsManager: AnalyticsManager
+    private lateinit var userRepository: UserRepository
+    private lateinit var parentSlotMigrator: ParentSlotMigrator
     private lateinit var signedInAccountSource: SignedInAccountSource
     private lateinit var viewModel: PairingViewModel
 
@@ -52,6 +57,8 @@ class PairingViewModelTest {
         mockkObject(ValidationUtils)
         repository = mockk(relaxed = true)
         analyticsManager = mockk(relaxed = true)
+        userRepository = mockk(relaxed = true)
+        parentSlotMigrator = mockk(relaxed = true)
         coEvery { repository.observePairingState() } returns
             flowOf(PairingState.NotPaired())
         signedInAccountSource = mockk(relaxed = true)
@@ -60,6 +67,8 @@ class PairingViewModelTest {
             pairingRepository = repository,
             qrCodeService = mockk<QRCodeService>(relaxed = true),
             analyticsManager = analyticsManager,
+            userRepository = userRepository,
+            parentSlotMigrator = parentSlotMigrator,
             signedInAccountSource = signedInAccountSource
         )
     }
@@ -200,6 +209,147 @@ class PairingViewModelTest {
         }
     }
 
+    // ---- acceptIncoming / slot re-stamping --------------------------------
+
+    @Test
+    fun `accepting an invitation that changes this device's slot re-stamps its records`() =
+        runTest(dispatcher) {
+            coEvery { userRepository.getCurrentUser() } returns userWithRole("mom")
+            coEvery { repository.acceptIncoming("invite-1") } returns Result.success("dad")
+
+            viewModel.acceptIncoming("invite-1")
+            dispatcher.scheduler.advanceUntilIdle()
+
+            coVerify(exactly = 1) {
+                parentSlotMigrator.reslot(from = "mom", to = "dad", myUid = "user-a")
+            }
+            coVerify(exactly = 1) { analyticsManager.logInvitationAccepted() }
+        }
+
+    @Test
+    fun `accepting an invitation that keeps this device's slot does not migrate`() =
+        runTest(dispatcher) {
+            // The inviter's own device never moves slots; only the accepter's can. Running the
+            // migrator here would be harmless (it is a no-op when from == to) but pointless work.
+            coEvery { userRepository.getCurrentUser() } returns userWithRole("mom")
+            coEvery { repository.acceptIncoming("invite-1") } returns Result.success("mom")
+
+            viewModel.acceptIncoming("invite-1")
+            dispatcher.scheduler.advanceUntilIdle()
+
+            coVerify(exactly = 0) { parentSlotMigrator.reslot(any(), any(), any()) }
+        }
+
+    @Test
+    fun `a failed accept never runs the migrator`() = runTest(dispatcher) {
+        coEvery { userRepository.getCurrentUser() } returns userWithRole("mom")
+        coEvery { repository.acceptIncoming("invite-1") } returns
+            Result.failure(PairingException(PairingError.NotFound))
+
+        viewModel.acceptIncoming("invite-1")
+        dispatcher.scheduler.advanceUntilIdle()
+
+        coVerify(exactly = 0) { parentSlotMigrator.reslot(any(), any(), any()) }
+        assertEquals(R.string.pairing_error_not_found, viewModel.form.value.actionErrorRes)
+    }
+
+    @Test
+    fun `no local profile yet means nothing to compare, so the migrator is skipped`() =
+        runTest(dispatcher) {
+            coEvery { userRepository.getCurrentUser() } returns null
+            coEvery { repository.acceptIncoming("invite-1") } returns Result.success("dad")
+
+            viewModel.acceptIncoming("invite-1")
+            dispatcher.scheduler.advanceUntilIdle()
+
+            coVerify(exactly = 0) { parentSlotMigrator.reslot(any(), any(), any()) }
+        }
+
+    @Test
+    fun `accepting when the server reports no role does not migrate but still succeeds`() =
+        runTest(dispatcher) {
+            // A staged rollout can pair a client against a backend build that predates the
+            // role field (or the reverse). Pairing already succeeded server-side; only the
+            // migration hint is missing, so this must behave like an ordinary successful
+            // accept — not a failure.
+            coEvery { userRepository.getCurrentUser() } returns userWithRole("mom")
+            coEvery { repository.acceptIncoming("invite-1") } returns Result.success(null)
+
+            viewModel.acceptIncoming("invite-1")
+            dispatcher.scheduler.advanceUntilIdle()
+
+            coVerify(exactly = 0) { parentSlotMigrator.reslot(any(), any(), any()) }
+            coVerify(exactly = 1) { analyticsManager.logInvitationAccepted() }
+            assertEquals(null, viewModel.form.value.actionErrorRes)
+        }
+
+    @Test
+    fun `a migrator failure is swallowed, not reported as a failed pairing`() = runTest(dispatcher) {
+        // The pairing itself already committed server-side and the invitation is no longer
+        // pending by the time the migrator could throw (the blank-uid guard, or a
+        // SQLiteException) — there is no way to retry the accept. Crashing here, or reporting
+        // this as a failed accept, would be strictly worse than the re-stamp silently not
+        // happening.
+        coEvery { userRepository.getCurrentUser() } returns userWithRole("mom")
+        coEvery { repository.acceptIncoming("invite-1") } returns Result.success("dad")
+        coEvery { parentSlotMigrator.reslot(any(), any(), any()) } throws IllegalStateException("boom")
+
+        viewModel.acceptIncoming("invite-1")
+        dispatcher.scheduler.advanceUntilIdle()
+
+        coVerify(exactly = 1) { analyticsManager.logInvitationAccepted() }
+        assertEquals(null, viewModel.form.value.actionErrorRes)
+    }
+
+    // ---- redeemCode / slot re-stamping -------------------------------------
+    //
+    // redeemCode() and acceptIncoming() are two different entry points to the same
+    // acceptPairingInvitation callable (QR/code/deep-link redemption vs. accepting an
+    // addressed invitation), and either one can flip this device's parent slot — these tests
+    // pin that redeemCode() reaches the migrator by the same route as acceptIncoming(),
+    // not a second, divergent copy of the comparison.
+
+    @Test
+    fun `redeeming a code that changes this device's slot re-stamps its records`() =
+        runTest(dispatcher) {
+            coEvery { userRepository.getCurrentUser() } returns userWithRole("mom")
+            coEvery { repository.redeem("4F7K2M") } returns Result.success("dad")
+
+            viewModel.onCodeInputChange("4F7K2M")
+            viewModel.redeemCode()
+            dispatcher.scheduler.advanceUntilIdle()
+
+            coVerify(exactly = 1) {
+                parentSlotMigrator.reslot(from = "mom", to = "dad", myUid = "user-a")
+            }
+        }
+
+    @Test
+    fun `redeeming a code that keeps this device's slot does not migrate`() =
+        runTest(dispatcher) {
+            coEvery { userRepository.getCurrentUser() } returns userWithRole("mom")
+            coEvery { repository.redeem("4F7K2M") } returns Result.success("mom")
+
+            viewModel.onCodeInputChange("4F7K2M")
+            viewModel.redeemCode()
+            dispatcher.scheduler.advanceUntilIdle()
+
+            coVerify(exactly = 0) { parentSlotMigrator.reslot(any(), any(), any()) }
+        }
+
+    @Test
+    fun `a failed redeem never runs the migrator`() = runTest(dispatcher) {
+        coEvery { userRepository.getCurrentUser() } returns userWithRole("mom")
+        coEvery { repository.redeem("4F7K2M") } returns
+            Result.failure(PairingException(PairingError.NotFound))
+
+        viewModel.onCodeInputChange("4F7K2M")
+        viewModel.redeemCode()
+        dispatcher.scheduler.advanceUntilIdle()
+
+        coVerify(exactly = 0) { parentSlotMigrator.reslot(any(), any(), any()) }
+    }
+
     @Test
     fun `state mirrors the repository`() = runTest(dispatcher) {
         viewModel.state.test {
@@ -223,6 +373,14 @@ class PairingViewModelTest {
                 cancelAndIgnoreRemainingEvents()
             }
         }
+
+    private fun userWithRole(role: String) = User(
+        id = "user-a",
+        email = "alice@example.com",
+        name = "Alice Novak",
+        role = role,
+        colorCode = "#FF4081"
+    )
 
     private companion object {
         val ACCOUNT = AccountSummary(

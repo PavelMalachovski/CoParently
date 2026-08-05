@@ -3,8 +3,6 @@
     <string name="event_preview_edit">Bearbeiten</string>
     <string name="event_preview_delete">Löschen</string>
     <string name="event_preview_private">Privater Termin — nur du kannst ihn sehen</string>
-    <string name="event_preview_mom">Mama</string>
-    <string name="event_preview_dad">Papa</string>
     <string name="event_form_save">Termin speichern</string>
     <string name="event_deleted_message">Termin gelöscht</string>
     <string name="event_deleted_undo">Rückgängig</string>

@@ -22,8 +22,6 @@
     <string name="event_cancel">Zrušit</string>
     <string name="event_date">Datum: %1$s</string>
     <string name="event_parent">Rodič: %1$s</string>
-    <string name="event_parent_mom">Máma</string>
-    <string name="event_parent_dad">Táta</string>
 
     <!-- Auth Screen -->
     <string name="auth_sign_in">Přihlásit se</string>
@@ -72,8 +70,6 @@
     <string name="pairing_unknown">Neznámé</string>
 
     <!-- Custody -->
-    <string name="custody_with_mom">U mámy</string>
-    <string name="custody_with_dad">U táty</string>
     <string name="custody_today">Dnes: %1$s</string>
 
     <!-- Common -->

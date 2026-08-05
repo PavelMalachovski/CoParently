@@ -1,7 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="calendar_parent_mom">Мама</string>
-    <string name="calendar_parent_dad">Тато</string>
 
     <string name="calendar_custody_today_with">Сьогодні з %1$s</string>
     <string name="calendar_custody_handover_tomorrow">→ %1$s завтра</string>
@@ -46,7 +44,7 @@
     <string name="calendar_weekday_header_description">Заголовок днів тижня календаря</string>
     <string name="calendar_day_desc_today">Сьогодні</string>
     <string name="calendar_day_desc_outside_month">Поза поточним місяцем</string>
-    <string name="calendar_day_desc_with_parent">З %1$s</string>
+    <string name="calendar_day_desc_with_parent">З ким: %1$s</string>
     <plurals name="calendar_day_desc_events">
         <item quantity="one">%1$d подія</item>
         <item quantity="few">%1$d події</item>

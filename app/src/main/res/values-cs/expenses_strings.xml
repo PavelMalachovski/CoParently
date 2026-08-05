@@ -21,8 +21,11 @@
     <string name="budgets_empty_description">Nastavte měsíční limit pro každou kategorii, ať máte společné výdaje pod kontrolou.</string>
     <string name="expenses_empty_title">Zatím žádné výdaje</string>
     <string name="expenses_empty_description">Zaznamenejte společný náklad — školku, oblečení, návštěvu lékaře — a rozdělte ho s druhým rodičem.</string>
-    <string name="expenses_mom_paid">Máma zaplatila %1$s</string>
-    <string name="expenses_dad_paid">Táta zaplatil %1$s</string>
+    <!-- Replaces expenses_mom_paid/expenses_dad_paid. The call site (ExpenseSummaryHeader's
+         who-paid row) needs both the payer's name and the amount in one Text; the name serves
+         as its own label, so nothing has to agree with it. %1$s is the payer's name, %2$s is
+         the formatted amount. -->
+    <string name="expenses_paid_by">%1$s: %2$s</string>
     <string name="expenses_balance_owed_to_you">Druhý rodič vám dluží %1$s</string>
     <string name="expenses_balance_you_owe">Dlužíte druhému rodiči %1$s</string>
     <string name="expenses_balance_settled">Máte vyrovnáno</string>

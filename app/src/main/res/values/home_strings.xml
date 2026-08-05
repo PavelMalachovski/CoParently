@@ -53,6 +53,4 @@
     <string name="home_activity_review">Review</string>
 
     <!-- Parent identity labels. -->
-    <string name="home_parent_mom">Mom</string>
-    <string name="home_parent_dad">Dad</string>
 </resources>

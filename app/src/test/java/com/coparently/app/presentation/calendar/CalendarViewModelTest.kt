@@ -3,6 +3,7 @@ package com.coparently.app.presentation.calendar
 import com.coparently.app.data.local.dao.CustodyScheduleDao
 import com.coparently.app.data.local.preferences.EncryptedPreferences
 import com.coparently.app.data.repository.CustodyModelRepository
+import com.coparently.app.presentation.common.testParentsSource
 import io.mockk.Runs
 import io.mockk.clearAllMocks
 import io.mockk.every
@@ -55,7 +56,12 @@ class CalendarViewModelTest {
             every { putString(any(), any()) } just Runs
             every { putBoolean(any(), any()) } just Runs
         }
-        viewModel = CalendarViewModel(custodyScheduleDao, custodyModelRepository, encryptedPreferences)
+        viewModel = CalendarViewModel(
+            custodyScheduleDao,
+            custodyModelRepository,
+            encryptedPreferences,
+            testParentsSource()
+        )
     }
 
     @After

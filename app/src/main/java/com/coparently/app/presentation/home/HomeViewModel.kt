@@ -22,6 +22,8 @@ import com.coparently.app.domain.repository.MessageRepository
 import com.coparently.app.domain.repository.PairingRepository
 import com.coparently.app.domain.repository.PreferencesRepository
 import com.coparently.app.domain.repository.UserRepository
+import com.coparently.app.presentation.common.Parents
+import com.coparently.app.presentation.common.ParentsSource
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -91,15 +93,20 @@ data class MonthSpendDependencies @Inject constructor(
  * keeps the real dependency count visible (no `@Suppress`, no widened detekt threshold)
  * rather than hiding it behind a wider limit.
  *
- * Unlike [MonthSpendDependencies], the two repositories here don't feed one shared
- * computed value — they feed two independent flows. The grouping is by usage locality
- * (both are otherwise-unused-elsewhere, single-consumer dependencies), not by shared
+ * Unlike [MonthSpendDependencies], the dependencies here don't feed one shared
+ * computed value — they feed independent flows. The grouping is by usage locality
+ * (each is an otherwise-unused-elsewhere, single-consumer dependency), not by shared
  * purpose; don't take this as a precedent for bundling unrelated repositories together
  * more broadly.
+ *
+ * [parentsSource] joined them rather than becoming a seventh constructor parameter, for the
+ * same reason the other two are here and because "who are the two parents" is precisely what
+ * this bundle is about.
  */
 data class HomeIdentityDependencies @Inject constructor(
     val userRepository: UserRepository,
-    val pairingRepository: PairingRepository
+    val pairingRepository: PairingRepository,
+    val parentsSource: ParentsSource
 )
 
 /**
@@ -203,9 +210,23 @@ class HomeViewModel @Inject constructor(
             expenses.filter { it.date.year == month.year && it.date.month == month.month }
         }
 
-    /** uid -> "mom"/"dad", needed to attribute who paid what. Empty until users sync. */
-    private val roleByUid = homeIdentityDependencies.userRepository.getAllUsers()
-        .map { users -> users.associate { it.id to it.role } }
+    /**
+     * Signed-in parent and paired co-parent, for resolving a slot to a name — the handover
+     * tile, the timeline and the activity feed all name a parent.
+     */
+    val parents: StateFlow<Parents> = homeIdentityDependencies.parentsSource.observe()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), Parents())
+
+    /**
+     * uid -> slot, needed to attribute who paid what. Empty until the profiles load.
+     *
+     * Built from [parents], not from `getAllUsers()`: Room stores a `users` row for the
+     * signed-in user only, so the old map could never contain both parents and
+     * `ExpenseBalance.splitKnown` was false on every device — which silently emptied the
+     * settle-up line this dashboard filters on (see [monthBalances]). See
+     * `ExpenseViewModel.roleByUid` for the full account.
+     */
+    private val roleByUid = parents.map { it.roleByUid }
 
     /** This calendar month's spend, one subtotal per currency (no cross-currency summing). */
     val monthSpend: StateFlow<MonthSpend> = combine(
