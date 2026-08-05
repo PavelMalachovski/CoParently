@@ -88,7 +88,7 @@ Append to `functions/test/pairing.test.js`, inside the existing `describe('accep
   it('puts the two parents in different slots', () => {
     const {assignSlots} = require('../index');
     assert.deepStrictEqual(
-        assignSlots('mom', 'mom'),
+        assignSlots('mom'),
         {inviterRole: 'mom', accepterRole: 'dad'},
         'a pair where both defaulted to mom must be separated');
   });
@@ -96,21 +96,21 @@ Append to `functions/test/pairing.test.js`, inside the existing `describe('accep
   it('keeps the inviter slot and gives the accepter the other one', () => {
     const {assignSlots} = require('../index');
     assert.deepStrictEqual(
-        assignSlots('dad', 'dad'),
+        assignSlots('dad'),
         {inviterRole: 'dad', accepterRole: 'mom'});
   });
 
   it('is idempotent for a pair that is already separated', () => {
     const {assignSlots} = require('../index');
     assert.deepStrictEqual(
-        assignSlots('mom', 'dad'),
+        assignSlots('mom'),
         {inviterRole: 'mom', accepterRole: 'dad'});
   });
 
   it('falls back to mom for the inviter when no slot is stored', () => {
     const {assignSlots} = require('../index');
     assert.deepStrictEqual(
-        assignSlots(undefined, undefined),
+        assignSlots(undefined),
         {inviterRole: 'mom', accepterRole: 'dad'});
   });
 ```
@@ -137,12 +137,13 @@ Add near the other helpers in `functions/index.js`:
  * they already had — their existing events are stamped with it — and the accepter takes the
  * other one, which is why the accepter's device has re-stamping to do (ParentSlotMigrator).
  *
+ * The accepter's own stored slot never factors in: their slot is always the strict
+ * inverse of the inviter's, whatever value they currently carry.
+ *
  * @param {string|undefined} inviterRole Slot stored on the inviter, if any.
- * @param {string|undefined} accepterRole Slot stored on the accepter; ignored, present so the
- *   caller reads as a function of both parents rather than of one.
  * @return {{inviterRole: string, accepterRole: string}} The slots to write.
  */
-function assignSlots(inviterRole, accepterRole) {
+function assignSlots(inviterRole) {
   const inviter = inviterRole === 'dad' ? 'dad' : 'mom';
   return {inviterRole: inviter, accepterRole: inviter === 'mom' ? 'dad' : 'mom'};
 }
@@ -159,8 +160,7 @@ Then, inside the transaction, replace the two existing update calls:
 with:
 
 ```javascript
-    const slots = assignSlots(
-        inviterSnap.data().role, accepterSnap.data().role);
+    const slots = assignSlots(inviterSnap.data().role);
     tx.update(inviterRef, {
       partnerId: acceptingUserId, pairedAt, role: slots.inviterRole,
     });
@@ -1603,7 +1603,7 @@ Report what the run actually shows. A step that did not happen is recorded as no
 
 **Spec coverage.** Part A: slot assignment → Task 1; re-stamp → Task 2; `parentLabel` → Task 3; the gendered-string rewrite → Task 4; screens, `ParentColors` KDoc and `CLAUDE.md` → Task 5; event default and the hidden selector → Task 6. Part B: `CustodyKey`, `complemented`, `isEquivalentTo` → Task 7; rule plus the dead block → Task 8; data source, write-through and the retrying listener → Task 9; banner → Task 10; conflict screen and the ordering → Task 11; unpair deletion and the existing-pairs backfill → Task 12. Non-goals are constraints, not work. Every risk in the spec has a task: the slot flip (2, 11), existing pairs (12), five-language copy (4), the LCM window (7).
 
-**Type consistency.** `assignSlots(inviterRole, accepterRole) → {inviterRole, accepterRole}` is defined in Task 1 and consumed in Task 12. `ParentSlotMigrator.reslot(from, to, myUid): Int` is defined in Task 2 and consumed in Task 11. `parentLabel(slot, me, coParent, youFallback, coParentFallback): String` is defined in Task 3 and consumed in Tasks 5, 6, 10, 11. `CustodyKey.of`, `complemented()`, `isEquivalentTo()` are defined in Task 7 and consumed in Tasks 8, 9, 11.
+**Type consistency.** `assignSlots(inviterRole) → {inviterRole, accepterRole}` is defined in Task 1 and consumed in Task 12. `ParentSlotMigrator.reslot(from, to, myUid): Int` is defined in Task 2 and consumed in Task 11. `parentLabel(slot, me, coParent, youFallback, coParentFallback): String` is defined in Task 3 and consumed in Tasks 5, 6, 10, 11. `CustodyKey.of`, `complemented()`, `isEquivalentTo()` are defined in Task 7 and consumed in Tasks 8, 9, 11.
 
 **Known weak points, stated rather than hidden.**
 

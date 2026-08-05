@@ -462,8 +462,7 @@ exports.acceptPairingInvitation = functions.https.onCall(async (data, context) =
           'failed-precondition', 'One of the accounts is already paired',
           {reason: 'already-paired'});
     }
-    const slots = assignSlots(
-        inviterSnap.data().role, accepterSnap.data().role);
+    const slots = assignSlots(inviterSnap.data().role);
     tx.update(inviterRef, {
       partnerId: acceptingUserId, pairedAt, role: slots.inviterRole,
     });
@@ -800,12 +799,13 @@ function hasPartner(snap) {
  * they already had — their existing events are stamped with it — and the accepter takes the
  * other one, which is why the accepter's device has re-stamping to do (ParentSlotMigrator).
  *
+ * The accepter's own stored slot never factors in: their slot is always the strict
+ * inverse of the inviter's, whatever value they currently carry.
+ *
  * @param {string|undefined} inviterRole Slot stored on the inviter, if any.
- * @param {string|undefined} accepterRole Slot stored on the accepter; ignored, present so the
- *   caller reads as a function of both parents rather than of one.
  * @return {{inviterRole: string, accepterRole: string}} The slots to write.
  */
-function assignSlots(inviterRole, accepterRole) {
+function assignSlots(inviterRole) {
   const inviter = inviterRole === 'dad' ? 'dad' : 'mom';
   return {inviterRole: inviter, accepterRole: inviter === 'mom' ? 'dad' : 'mom'};
 }
