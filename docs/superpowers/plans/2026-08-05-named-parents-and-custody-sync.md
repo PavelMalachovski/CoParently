@@ -448,7 +448,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 
 **Interfaces:**
 - Consumes: `com.coparently.app.domain.model.User`.
-- Produces: `parentLabel(slot: String, me: User?, coParent: User?, youFallback: String, coParentFallback: String): String`. Task 5 and Task 6 call it; the fallbacks are passed in as already-resolved strings because a pure function cannot call `stringResource`.
+- Produces: `parentLabel(slot: String, me: User?, coParent: User?, youFallback: String, coParentFallback: String, unknownFallback: String): String`. Task 5 and Task 6 call it; the three fallbacks are passed in as already-resolved strings because a pure function cannot call `stringResource`.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -472,45 +472,75 @@ class ParentLabelsTest {
 
     @Test
     fun `my own slot is my name`() {
-        assertEquals("Olya", parentLabel("mom", me, coParent, "You", "Co-parent"))
+        assertEquals(
+            "Olya",
+            parentLabel("mom", me, coParent, "You", "Co-parent", "Parent")
+        )
     }
 
     @Test
     fun `the other slot is the co-parent's name`() {
-        assertEquals("Pavel", parentLabel("dad", me, coParent, "You", "Co-parent"))
+        assertEquals(
+            "Pavel",
+            parentLabel("dad", me, coParent, "You", "Co-parent", "Parent")
+        )
     }
 
     @Test
     fun `my slot with no name stored falls back to You`() {
         assertEquals(
             "You",
-            parentLabel("mom", me.copy(name = ""), coParent, "You", "Co-parent")
+            parentLabel("mom", me.copy(name = ""), coParent, "You", "Co-parent", "Parent")
         )
     }
 
     @Test
-    fun `the other slot with no co-parent falls back to Co-parent`() {
-        assertEquals("Co-parent", parentLabel("dad", me, null, "You", "Co-parent"))
+    fun `an unmatched slot with no co-parent resolves to unknown fallback`() {
+        // When the co-parent hasn't loaded, their slot is unknown, not guessed.
+        assertEquals(
+            "Parent",
+            parentLabel("dad", me, null, "You", "Co-parent", "Parent")
+        )
     }
 
     @Test
     fun `the other slot with a nameless co-parent falls back to Co-parent`() {
         assertEquals(
             "Co-parent",
-            parentLabel("dad", me, coParent.copy(name = "   "), "You", "Co-parent")
+            parentLabel("dad", me, coParent.copy(name = "   "), "You", "Co-parent", "Parent")
         )
     }
 
     @Test
-    fun `an unknown signed-in user resolves both slots by fallback`() {
-        assertEquals("You", parentLabel("mom", null, null, "You", "Co-parent"))
-        assertEquals("Co-parent", parentLabel("dad", null, null, "You", "Co-parent"))
+    fun `both unloaded users resolve slots to the unknown fallback`() {
+        assertEquals(
+            "Parent",
+            parentLabel("mom", null, null, "You", "Co-parent", "Parent")
+        )
+        assertEquals(
+            "Parent",
+            parentLabel("dad", null, null, "You", "Co-parent", "Parent")
+        )
     }
 
     @Test
-    fun `a slot that is neither mine nor my co-parent's is the co-parent fallback`() {
+    fun `an unmatched slot with known parents resolves to the unknown fallback`() {
         // Defensive: a stale row could carry a slot string from a future schema.
-        assertEquals("Co-parent", parentLabel("guardian", me, coParent, "You", "Co-parent"))
+        assertEquals(
+            "Parent",
+            parentLabel("guardian", me, coParent, "You", "Co-parent", "Parent")
+        )
+    }
+
+    @Test
+    fun `a loaded co-parent does not cause the unknown me slot to be guessed`() {
+        // Regression test: when me hasn't loaded, we must not guess "mom" is their slot.
+        // With the bug (`?: "mom"`), calling parentLabel("mom", null, coParent) would
+        // incorrectly return youFallback, guessing that an unknown me has role "mom".
+        assertEquals(
+            "Parent",
+            parentLabel("mom", null, coParent, "You", "Co-parent", "Parent")
+        )
     }
 }
 ```
@@ -542,6 +572,12 @@ import com.coparently.app.domain.model.User
  * "Mom" in one place and a name in another, and so families the mom/dad model does not
  * describe are not told who they are.
  *
+ * When a parent cannot be identified (their User is null, or the slot matches neither parent),
+ * the function returns `unknownFallback`. It never guesses a slot: an unloaded profile or
+ * an invalid slot identifier is a fact to report, not a coin to flip. This ensures that
+ * after a cold start, before profiles load, the calendar shows "Parent" instead of inverting
+ * the names by assuming who is who.
+ *
  * The fallbacks arrive already resolved because this function is pure and cannot call
  * `stringResource`; composables resolve them in composable scope and pass them down, the same
  * way `CalendarScreen` resolves its snackbar strings before the effect that uses them.
@@ -551,16 +587,19 @@ import com.coparently.app.domain.model.User
  * @param coParent The paired co-parent, or null when unpaired.
  * @param youFallback Shown for my own slot when no name is stored.
  * @param coParentFallback Shown for the other slot when there is no co-parent or no name.
+ * @param unknownFallback Shown when the parent cannot be identified (slot does not match either user).
  */
 fun parentLabel(
     slot: String,
     me: User?,
     coParent: User?,
     youFallback: String,
-    coParentFallback: String
+    coParentFallback: String,
+    unknownFallback: String
 ): String = when (slot) {
     me?.role -> me.name.trim().ifBlank { youFallback }
-    else -> coParent?.name?.trim()?.ifBlank { null } ?: coParentFallback
+    coParent?.role -> coParent.name.trim().ifBlank { coParentFallback }
+    else -> unknownFallback
 }
 ```
 
@@ -570,7 +609,7 @@ fun parentLabel(
 $env:JAVA_HOME = "C:\Program Files\Android\Android Studio1\jbr"; ./gradlew testDebugUnitTest --tests "com.coparently.app.presentation.common.ParentLabelsTest"
 ```
 
-Expected: PASS, 7 tests.
+Expected: PASS, 8 tests.
 
 - [ ] **Step 5: Commit**
 
@@ -630,11 +669,12 @@ So every affected string becomes a label-and-value or a bare substitution:
 | `custody_with_mom`, `custody_with_dad` | `custody_with` | `With %1$s` |
 | `calendar_day_desc_with_parent` | keep the key | reword so the parent is a trailing substitution, never a subject |
 
-Add two fallback keys used by `parentLabel`:
+Add three fallback keys used by `parentLabel`:
 
 ```xml
 <string name="parent_label_you">You</string>
 <string name="parent_label_coparent">Co-parent</string>
+<string name="parent_label_unknown">Parent</string>
 ```
 
 - [ ] **Step 3: Write the four locales**
@@ -649,6 +689,7 @@ Each new key goes into `values-cs`, `values-de`, `values-ru`, `values-uk` in the
 <string name="custody_with">С кем: %1$s</string>
 <string name="parent_label_you">Вы</string>
 <string name="parent_label_coparent">Сородитель</string>
+<string name="parent_label_unknown">Родитель</string>
 ```
 
 The pattern is the same in Czech and Ukrainian: a noun label plus a colon, never a verb the name has to agree with.
@@ -711,8 +752,9 @@ Do not inject `Context` into a ViewModel to resolve the fallback strings — tha
 ```kotlin
 val youFallback = stringResource(R.string.parent_label_you)
 val coParentFallback = stringResource(R.string.parent_label_coparent)
+val unknownFallback = stringResource(R.string.parent_label_unknown)
 val (me, coParent) = parents
-val label = parentLabel(event.parentOwner, me, coParent, youFallback, coParentFallback)
+val label = parentLabel(event.parentOwner, me, coParent, youFallback, coParentFallback, unknownFallback)
 ```
 
 - [ ] **Step 2: Replace every deleted key's call site**
@@ -726,7 +768,7 @@ Text(stringResource(if (parentOwner == "mom") R.string.event_parent_mom else R.s
 becomes
 
 ```kotlin
-Text(parentLabel(parentOwner, me, coParent, youFallback, coParentFallback))
+Text(parentLabel(parentOwner, me, coParent, youFallback, coParentFallback, unknownFallback))
 ```
 
 - [ ] **Step 3: Update `ParentColors` KDoc**

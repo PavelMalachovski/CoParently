@@ -15,44 +15,74 @@ class ParentLabelsTest {
 
     @Test
     fun `my own slot is my name`() {
-        assertEquals("Olya", parentLabel("mom", me, coParent, "You", "Co-parent"))
+        assertEquals(
+            "Olya",
+            parentLabel("mom", me, coParent, "You", "Co-parent", "Parent")
+        )
     }
 
     @Test
     fun `the other slot is the co-parent's name`() {
-        assertEquals("Pavel", parentLabel("dad", me, coParent, "You", "Co-parent"))
+        assertEquals(
+            "Pavel",
+            parentLabel("dad", me, coParent, "You", "Co-parent", "Parent")
+        )
     }
 
     @Test
     fun `my slot with no name stored falls back to You`() {
         assertEquals(
             "You",
-            parentLabel("mom", me.copy(name = ""), coParent, "You", "Co-parent")
+            parentLabel("mom", me.copy(name = ""), coParent, "You", "Co-parent", "Parent")
         )
     }
 
     @Test
-    fun `the other slot with no co-parent falls back to Co-parent`() {
-        assertEquals("Co-parent", parentLabel("dad", me, null, "You", "Co-parent"))
+    fun `an unmatched slot with no co-parent resolves to unknown fallback`() {
+        // When the co-parent hasn't loaded, their slot is unknown, not guessed.
+        assertEquals(
+            "Parent",
+            parentLabel("dad", me, null, "You", "Co-parent", "Parent")
+        )
     }
 
     @Test
     fun `the other slot with a nameless co-parent falls back to Co-parent`() {
         assertEquals(
             "Co-parent",
-            parentLabel("dad", me, coParent.copy(name = "   "), "You", "Co-parent")
+            parentLabel("dad", me, coParent.copy(name = "   "), "You", "Co-parent", "Parent")
         )
     }
 
     @Test
-    fun `an unknown signed-in user resolves both slots by fallback`() {
-        assertEquals("You", parentLabel("mom", null, null, "You", "Co-parent"))
-        assertEquals("Co-parent", parentLabel("dad", null, null, "You", "Co-parent"))
+    fun `both unloaded users resolve slots to the unknown fallback`() {
+        assertEquals(
+            "Parent",
+            parentLabel("mom", null, null, "You", "Co-parent", "Parent")
+        )
+        assertEquals(
+            "Parent",
+            parentLabel("dad", null, null, "You", "Co-parent", "Parent")
+        )
     }
 
     @Test
-    fun `a slot that is neither mine nor my co-parent's is the co-parent fallback`() {
+    fun `an unmatched slot with known parents resolves to the unknown fallback`() {
         // Defensive: a stale row could carry a slot string from a future schema.
-        assertEquals("Co-parent", parentLabel("guardian", me, coParent, "You", "Co-parent"))
+        assertEquals(
+            "Parent",
+            parentLabel("guardian", me, coParent, "You", "Co-parent", "Parent")
+        )
+    }
+
+    @Test
+    fun `a loaded co-parent does not cause the unknown me slot to be guessed`() {
+        // Regression test: when me hasn't loaded, we must not guess "mom" is their slot.
+        // With the bug (`?: "mom"`), calling parentLabel("mom", null, coParent) would
+        // incorrectly return youFallback, guessing that an unknown me has role "mom".
+        assertEquals(
+            "Parent",
+            parentLabel("mom", null, coParent, "You", "Co-parent", "Parent")
+        )
     }
 }
