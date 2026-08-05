@@ -9,16 +9,27 @@
     <string name="custody_who_starts_first">Кто начинает первым?</string>
     <string name="custody_mom_starts_first">Мама начинает первой</string>
     <string name="custody_dad_starts_first">Папа начинает первым</string>
+    <!-- Replaces custody_mom_starts_first/custody_dad_starts_first: dropping "первым/первой"
+         removes the adjective that would otherwise have to agree with the name. %1$s is that
+         parent's name. -->
+    <string name="custody_starts_first">Начинает: %1$s</string>
     <string name="custody_custom_pattern">Свой шаблон</string>
     <string name="custody_custom_pattern_hint">Нажимайте на дни, чтобы назначить их маме (розовый). Остальные дни достанутся папе (синий).</string>
     <string name="custody_week_abbrev">Н%1$d</string>
     <string name="custody_day_abbrev">Д%1$d</string>
     <string name="custody_week1_to_mom">Неделя 1 → Мама</string>
     <string name="custody_week2_to_mom">Неделя 2 → Мама</string>
+    <!-- Replaces custody_week1_to_mom/custody_week2_to_mom: "неделя" (week) does not inflect
+         for the referent's gender. %1$d is the week number, %2$s is the parent's name. -->
+    <string name="custody_week_to">Неделя %1$d: %2$s</string>
     <string name="custody_preview">Предпросмотр</string>
     <string name="custody_next_14_days">Следующие 14 дней:</string>
     <string name="custody_mom">Мама</string>
     <string name="custody_dad">Папа</string>
+    <!-- Replaces custody_with_mom/custody_with_dad (strings.xml). "С кем" (with whom) is a
+         fixed question phrase, so the name that follows never has to agree. %1$s is that
+         parent's name. -->
+    <string name="custody_with">С кем: %1$s</string>
     <string name="custody_ok">OK</string>
     <string name="custody_cancel">Отмена</string>
     <string name="custody_model_week_on_week_off">Неделя через неделю</string>

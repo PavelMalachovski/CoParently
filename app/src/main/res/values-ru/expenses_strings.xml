@@ -23,6 +23,9 @@
     <string name="expenses_empty_description">Запишите общий расход — сад, одежду, визит к врачу — и разделите его со вторым родителем.</string>
     <string name="expenses_mom_paid">Мама заплатила %1$s</string>
     <string name="expenses_dad_paid">Папа заплатил %1$s</string>
+    <!-- Replaces expenses_mom_paid/expenses_dad_paid: "плательщик" (payer) is a fixed noun
+         that does not inflect for the referent's gender. %1$s is the payer's name. -->
+    <string name="expenses_paid_by">Плательщик: %1$s</string>
     <string name="expenses_balance_owed_to_you">Второй родитель должен вам %1$s</string>
     <string name="expenses_balance_you_owe">Вы должны второму родителю %1$s</string>
     <string name="expenses_balance_settled">Всё улажено</string>
