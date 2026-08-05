@@ -152,6 +152,14 @@ fallback. RULING (human, 5 August 2026): the ordinals, not "You"/"Co-parent" pos
 an unpaired account's slot may be either one, and captioning slot 1 "You" is the same
 inversion this branch exists to remove.
 
+**Per card, not per pair** — SECOND RULING (human, same day), after the first review read the
+two statements in this task against each other and found them inconsistent. A legacy pair has
+a real co-parent whose slot is not known yet, so one card resolves to a name and the other
+does not: it renders "Olya" beside "Second parent". That mixed shape is correct. It says what
+is known and honestly numbers what is not, and it is strictly better than the "Olya" beside
+"Parent" it replaces. Say so where the strings are defined — a future reader will otherwise
+read the mixed pair as a bug.
+
 New keys, in `common_strings.xml` beside `parent_label_unknown`, in all five locales:
 
 | key | en | cs | de | ru | uk |
