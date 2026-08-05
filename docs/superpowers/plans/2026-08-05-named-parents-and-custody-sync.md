@@ -265,7 +265,22 @@ import kotlin.test.assertEquals
 class ParentSlotMigratorTest {
 
     private val eventDao: EventDao = mockk(relaxed = true)
-    private val migrator = ParentSlotMigrator(eventDao)
+    private val database: CoPlanlyDatabase = mockk()
+    private val migrator = ParentSlotMigrator(database, eventDao)
+
+    @Before
+    fun setup() {
+        // `withTransaction` is an extension on RoomDatabase, so it is mocked statically and
+        // made to simply run its block — these tests are about which rows the migration
+        // targets, not about Room's transaction machinery.
+        mockkStatic("androidx.room.RoomDatabaseKt")
+        coEvery { database.withTransaction(any<suspend () -> Int>()) } coAnswers {
+            firstArg<suspend () -> Int>().invoke()
+        }
+    }
+
+    @After
+    fun tearDown() = unmockkStatic("androidx.room.RoomDatabaseKt")
 
     @Test
     fun `re-stamps only rows this user created`() = runTest {
@@ -361,15 +376,7 @@ class ParentSlotMigrator @Inject constructor(
 }
 ```
 
-The test constructs `ParentSlotMigrator(eventDao)`; add a secondary constructor is **not** the fix — change the test's construction to `ParentSlotMigrator(mockk(relaxed = true), eventDao)` and stub `database.withTransaction` by having the test call the DAO methods directly. Simplest working shape: make the test pass `database = mockk<CoPlanlyDatabase>()` and use MockK's `mockkStatic("androidx.room.RoomDatabaseKt")` with
-
-```kotlin
-coEvery { database.withTransaction(any<suspend () -> Int>()) } coAnswers {
-    firstArg<suspend () -> Int>().invoke()
-}
-```
-
-Adjust the test file accordingly before moving on.
+Imports the test file needs: `androidx.room.withTransaction`, `com.coparently.app.data.local.CoPlanlyDatabase`, `io.mockk.mockkStatic`, `io.mockk.unmockkStatic`, `io.mockk.coEvery`, `org.junit.Before`, `org.junit.After`.
 
 - [ ] **Step 5: Run the test to verify it passes**
 
@@ -1578,6 +1585,5 @@ Report what the run actually shows. A step that did not happen is recorded as no
 
 **Known weak points, stated rather than hidden.**
 
-- **Task 2 Step 4 is untidy.** It gives the implementation, then corrects the test's construction of it mid-step. Whoever runs that task should settle the `withTransaction` mocking first and write the test against the real two-argument constructor.
 - **Tasks 9, 10, 11 and 12 carry less literal code than Tasks 1–8.** Their shape depends on files this plan describes but does not quote in full (`FirebaseModule`, `PairingViewModel`, `harness.js`). Each names the file to read first. If an implementer reaches one of them and cannot proceed from what is written, that is a plan defect worth reporting rather than improvising around.
 - **Task 5 touches eleven screens in one commit.** It is the largest task here and the least mechanical. If it grows past what one reviewer can judge, split it by feature area — calendar, expenses, home/summary, events — and say so.
