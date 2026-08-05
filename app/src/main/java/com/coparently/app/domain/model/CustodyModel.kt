@@ -34,6 +34,38 @@ data class CustodyModel(
         return if (momDayIndices.contains(adjustedDays)) "mom" else "dad"
     }
 
+    /**
+     * This pattern with the two slots swapped.
+     *
+     * [momDayIndices] means "the days slot 1 has custody". When pairing moves this device to
+     * the other slot, the same set would silently start describing the co-parent's days, so
+     * the set is complemented to keep meaning "my days".
+     *
+     * Getting this wrong is not a cosmetic bug: the pairing conflict screen would offer a
+     * parent their own schedule inverted, they would reject it, and hand over exactly the days
+     * they meant to keep.
+     */
+    fun complemented(): CustodyModel =
+        copy(momDayIndices = (0 until patternDays).toSet() - momDayIndices)
+
+    /**
+     * Whether [other] assigns custody the same way this model does, on every day.
+     *
+     * Compared by outcome rather than by field: two models with start dates a whole number of
+     * cycles apart describe the same schedule, and two different [modelType]s can produce
+     * identical assignments. The window is the least common multiple of the two cycle lengths,
+     * because a shorter window can make a 14-day and a 21-day pattern look identical.
+     */
+    fun isEquivalentTo(other: CustodyModel): Boolean {
+        if (patternDays <= 0 || other.patternDays <= 0) return false
+        val window = lcm(patternDays, other.patternDays)
+        val from = minOf(startDate, other.startDate)
+        return (0 until window).all { offset ->
+            val date = from.plusDays(offset.toLong())
+            getCustodyFor(date) == other.getCustodyFor(date)
+        }
+    }
+
     companion object {
         /**
          * Creates a week-on-week-off pattern.
@@ -163,4 +195,16 @@ enum class CustodyModelType(val displayName: String) {
             }
         }
     }
+}
+
+/** Least common multiple, for sizing the comparison window in [CustodyModel.isEquivalentTo]. */
+private fun lcm(a: Int, b: Int): Int {
+    var x = a
+    var y = b
+    while (y != 0) {
+        val t = y
+        y = x % y
+        x = t
+    }
+    return a / x * b
 }
