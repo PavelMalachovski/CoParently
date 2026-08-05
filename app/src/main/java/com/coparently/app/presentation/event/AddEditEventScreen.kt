@@ -130,6 +130,35 @@ private val REMINDER_OPTIONS: List<Pair<Int?, Int>> = listOf(
 )
 
 /**
+ * Whether the parent-owner picker (the two animated cards) should render.
+ *
+ * A plain function, not inlined into the `if`, so the property that decides it can be pinned in
+ * a JVM test — this repo has no Compose UI tests, so an expression that only lives inside the
+ * composable is untestable.
+ *
+ * Gated on [parentsLoaded] first: before `ParentsSource`'s upstream has emitted, `Parents()`
+ * reads exactly like an unpaired, unresolved account (`isPaired = false`, no owner), so without
+ * this the picker would render on every first composition and vanish the instant the real answer
+ * arrives.
+ *
+ * The second half is deliberately not `parentOwner == null`. [parentOwner] starts null and is
+ * only filled by a `LaunchedEffect` that runs *after* the composition in which `parents` first
+ * resolves — so for an unpaired account whose slot already resolved, `parentOwner == null` is
+ * still true for that one composition, and the picker would flash open for a frame anyway.
+ * [currentUserSlot] is the same value that effect is about to assign [parentOwner] to, so
+ * falling back to it answers "is there really nobody to choose between yet" without waiting a
+ * frame for the effect to catch up: [parentOwner] takes priority once it diverges from
+ * [currentUserSlot] (a loaded event, a restored draft, a manual pick), and only when neither is
+ * known does the picker stay up to give the user a way to fill it in themselves.
+ */
+internal fun showParentOwnerSelector(
+    parentsLoaded: Boolean,
+    isPaired: Boolean,
+    parentOwner: String?,
+    currentUserSlot: String?
+): Boolean = parentsLoaded && (isPaired || (parentOwner ?: currentUserSlot) == null)
+
+/**
  * Screen for adding or editing an event.
  * Modernized with Material 3 design, date/time pickers, and validation.
  * Based on Design Roadmap Day 3: Forms & Input.
@@ -710,15 +739,13 @@ fun AddEditEventScreen(
             // Parent Owner Selection with animated cards. Shown whenever there is a real choice
             // to make (isPaired - a co-parent exists even if their slot isn't known yet, in
             // which case their card falls through to the "unknown" label via parentLabel) or
-            // whenever parentOwner is null and there is otherwise no way to fill it in: an
-            // unpaired account whose own slot has not resolved would else have no escape from a
-            // permanently disabled Save. A family of one with a resolved slot has neither
-            // condition and correctly sees no control - nobody else an event could belong to.
-            // Gated on parentsLoaded first: before ParentsSource's upstream has emitted,
-            // Parents() reads exactly like an unpaired, unresolved account, so without this the
-            // block rendered on every first composition and vanished the instant the real
-            // answer arrived.
-            if (parentsLoaded && (isPaired || parentOwner == null)) {
+            // whenever there is otherwise no way to fill the owner in: an unpaired account whose
+            // own slot has not resolved would else have no escape from a permanently disabled
+            // Save. A family of one with a resolved slot has neither condition and correctly
+            // sees no control - nobody else an event could belong to. See
+            // showParentOwnerSelector's KDoc for why this is a named function rather than the
+            // condition inline.
+            if (showParentOwnerSelector(parentsLoaded, isPaired, parentOwner, currentUser?.slot)) {
                 Text(
                     text = stringResource(R.string.event_form_assigned_to),
                     style = MaterialTheme.typography.titleMedium,
