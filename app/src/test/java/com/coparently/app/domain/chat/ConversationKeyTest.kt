@@ -46,14 +46,19 @@ class ConversationKeyTest {
     }
 
     @Test
-    fun `matches the literal id firestore rules' canonicalConversationId derives for the pair`() {
-        // The drift pin's Kotlin-side half. `firestore.rules`' `canonicalConversationId`
+    fun `matches the literal id firestore rules' canonicalPairId derives for the pair`() {
+        // The drift pin's Kotlin-side half. `firestore.rules`' `canonicalPairId`
         // re-derives this exact sorted-join formula in Rules, to constrain the
         // legacy-conversation merge's message re-point to the canonical conversation only (see
         // `conversations-messages.test.js`'s "computes the same canonical id..." case, which
         // asserts the matching literal succeeds against the real rule in the emulator). If
         // either side's formula ever changes, only one of the two pins moves and the other's
         // literal assertion catches it — the two derivations cannot silently disagree.
+        //
+        // `canonicalPairId` also gates `custody_models` now (renamed from
+        // `canonicalConversationId` when that collection started sharing it); this test's name
+        // and this comment were updated to match so the pin still points at a symbol that
+        // exists.
         assertEquals("alice-uid__bob-uid", ConversationKey.of("alice-uid", "bob-uid"))
     }
 

@@ -150,6 +150,40 @@ describe('custody_models', () => {
     });
   });
 
+  describe('the stored participants array must itself be sorted', () => {
+    // canonicalPairId normalises order for the *id* comparison: [MOM, DAD] and [DAD, MOM]
+    // both resolve to the same id, since the function tries both orderings internally. That
+    // is not enough on its own — nothing else re-sorts what actually gets *stored*, and
+    // `update` demands exact array equality, which is order-sensitive (see the "reorders"
+    // case below). A client that creates with the right pair in the wrong order would
+    // therefore brick the document for every future write from a client that sends
+    // `CustodyKey.of`'s sorted order — permanently, since no rule path can rewrite
+    // `participants` back into the matching order (delete-then-recreate is the only way out,
+    // and no client path does that; Task 9 only ever `.set()`s an existing document, which
+    // Firestore evaluates as `update`).
+    it('refuses a create whose participants are the right pair but stored in the wrong order',
+        async () => {
+          const db = env.authenticatedContext(MOM).firestore();
+          // [MOM, DAD] is the right pair - MOM and DAD really are each other's partner, and
+          // canonicalPairId(['uid-mom', 'uid-dad']) is still KEY - but it is not the sorted
+          // order ([DAD, MOM], since 'uid-dad' < 'uid-mom'), which is what must be stored.
+          await assertFails(db.doc(PATH).set(custodyDoc({participants: [MOM, DAD]})));
+        });
+
+    it('leaves an unsorted document permanently un-updatable by a client that sorts',
+        async () => {
+          // Stands in for a document that reached this state despite the rule above - an
+          // older client build, or (before this fix existed) the create case just above.
+          // seed() bypasses rules entirely, which is exactly the point: this is what the rule
+          // can no longer let happen, and what already-existing bad data would still suffer.
+          await seed(env, {[PATH]: custodyDoc({participants: [MOM, DAD]})});
+          const db = env.authenticatedContext(DAD).firestore();
+          await assertFails(db.doc(PATH).update({
+            participants: [MOM, DAD].sort(), patternDays: 7,
+          }));
+        });
+  });
+
   describe('access follows the live pairing, not just stored participants', () => {
     it('refuses a create between two accounts that are not currently paired', async () => {
       // MOM and STRANGER are both real, authenticated accounts, and STRANGER would be a

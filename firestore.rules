@@ -344,10 +344,23 @@ service cloud.firestore {
       // of exactly the two named uids, makes that impossible — nobody outside the real pair
       // can ever satisfy this rule at this id. `isPartnerOf` additionally requires the pairing
       // itself to already be live, the same shape `conversations` uses below.
+      //
+      // `participants[0] < participants[1]` additionally requires the *stored* array itself to
+      // be sorted, not merely id-equivalent to a sorted pair: `canonicalPairId` normalises
+      // order for the id comparison above, so an unsorted array — e.g. [momUid, dadUid] where
+      // dadUid < momUid — passes that check too, since it resolves to the same id either way.
+      // But `update` demands exact array equality (below), which is order-sensitive, and every
+      // client writes `CustodyKey.of`'s sorted order — so an unsorted stored array would deny
+      // every subsequent write forever, with no rule path able to re-sort it back (recovery
+      // would need delete-then-recreate, and no client path does that; Task 9 only ever
+      // `.set()`s, which Firestore evaluates as `update` over an existing document). This makes
+      // the `canonicalPairId` ternary redundant at this call site, but it is left in place —
+      // it documents the id/participants relationship and the two call sites stay identical.
       allow create: if isAuthenticated() &&
                       request.resource.data.participants.size() == 2 &&
                       request.auth.uid in request.resource.data.participants &&
                       modelId == canonicalPairId(request.resource.data.participants) &&
+                      request.resource.data.participants[0] < request.resource.data.participants[1] &&
                       (isPartnerOf(request.resource.data.participants[0]) ||
                        isPartnerOf(request.resource.data.participants[1]));
 
