@@ -6,13 +6,22 @@ package com.coparently.app.domain.model
  * @property photoUrl The co-parent's avatar, read from their profile document. Null
  *   whenever their phone has not yet run a build that stores one, so the initial-letter
  *   fallback stays load-bearing rather than decorative.
+ * @property role The co-parent's slot, `"mom"` or `"dad"`, read from their profile document.
+ *   This is the only thing on this device that knows which slot the *other* parent holds —
+ *   Room stores a `users` row for the signed-in user alone — so every screen that names a
+ *   parent resolves the second name through here. Null when their document carries no slot
+ *   yet, which is true of every pair created before slot assignment shipped and stays true
+ *   until the backfill runs. Null must not be replaced by "whichever slot is left": with both
+ *   parents still on the same slot, that would attribute one parent's days to the other by
+ *   name. It is a slot identifier and is never displayed.
  */
 data class PartnerSummary(
     val id: String,
     val name: String,
     val email: String,
     val pairedSinceMillis: Long?,
-    val photoUrl: String? = null
+    val photoUrl: String? = null,
+    val role: String? = null
 )
 
 /**

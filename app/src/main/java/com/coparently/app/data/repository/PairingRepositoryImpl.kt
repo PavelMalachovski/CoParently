@@ -296,7 +296,14 @@ class PairingRepositoryImpl @Inject constructor(
             // phone runs a build that stores one — the card falls back to the initial.
             // Blank is normalized to null: the legacy full-profile write stores "" for a
             // missing photo, and an empty URL must read as "no photo", not as a broken one.
-            photoUrl = data.getString("profilePhotoUrl")?.takeIf { it.isNotBlank() }
+            photoUrl = data.getString("profilePhotoUrl")?.takeIf { it.isNotBlank() },
+            // The co-parent's slot, written by `assignSlots` when the pairing was accepted.
+            // Room holds a `users` row for the signed-in user only, so this read is the app's
+            // one source for which slot the other parent occupies — every screen that shows
+            // their name depends on it. Blank normalizes to null for the same reason as the
+            // photo: a pair created before slot assignment shipped has no slot here, and
+            // "unknown" must not be dressed up as an answer.
+            role = data.getString("role")?.takeIf { it.isNotBlank() }
         )
     }
 

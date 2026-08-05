@@ -15,6 +15,8 @@ import com.coparently.app.domain.repository.ExpenseRepository
 import com.coparently.app.domain.repository.PreferencesRepository
 import com.coparently.app.domain.repository.ReceiptStorage
 import com.coparently.app.domain.repository.UserRepository
+import com.coparently.app.presentation.common.Parents
+import com.coparently.app.presentation.common.ParentsSource
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -71,8 +73,15 @@ class ExpenseViewModel @Inject constructor(
     private val userRepository: UserRepository,
     private val receiptStorage: ReceiptStorage,
     private val preferencesRepository: PreferencesRepository,
-    private val receiptTextRecognizer: ReceiptTextRecognizer
+    private val receiptTextRecognizer: ReceiptTextRecognizer,
+    parentsSource: ParentsSource
 ) : ViewModel() {
+
+    /**
+     * Signed-in parent and paired co-parent, for naming a payer and for [roleByUid].
+     */
+    val parents: StateFlow<Parents> = parentsSource.observe()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), Parents())
 
     private val _currentUserId = MutableStateFlow<String>("")
     val currentUserId: StateFlow<String> = _currentUserId.asStateFlow()
@@ -104,9 +113,24 @@ class ExpenseViewModel @Inject constructor(
     private val _expenseSummary = MutableStateFlow<ExpenseSummary?>(null)
     val expenseSummary: StateFlow<ExpenseSummary?> = _expenseSummary.asStateFlow()
 
-    /** uid -> "mom"/"dad", so a payer can be named and coloured. Empty until users sync. */
-    val roleByUid: StateFlow<Map<String, String>> = userRepository.getAllUsers()
-        .map { users -> users.associate { it.id to it.role } }
+    /**
+     * uid -> slot, so a payer can be named and coloured. Empty until the profiles load.
+     *
+     * Built from the two parents rather than from `userRepository.getAllUsers()`, which is what
+     * this used to read. Room only ever stores a `users` row for the signed-in user — nothing
+     * anywhere writes one for the co-parent — so that map could never hold more than one uid,
+     * and `ExpenseBalance.splitKnown` (which requires both slots to be present) was therefore
+     * false on every device, hiding the entire split block in `ExpenseSummaryHeader` from
+     * everyone who has ever used the app. Reading the co-parent's slot from their own profile
+     * document is what makes the second entry real.
+     *
+     * A pair whose two parents still share a slot yields two entries with the same value, which
+     * keeps `splitKnown` false. That is correct and deliberate: the two people cannot be told
+     * apart yet, and a split bar attributing one parent's spending to the other would be worse
+     * than no split bar.
+     */
+    val roleByUid: StateFlow<Map<String, String>> = parents
+        .map { it.roleByUid }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), emptyMap())
 
     /**

@@ -1,0 +1,84 @@
+package com.coparently.app.presentation.common
+
+import com.coparently.app.domain.model.PairingState
+import com.coparently.app.domain.repository.PairingRepository
+import com.coparently.app.domain.repository.UserRepository
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import javax.inject.Inject
+import javax.inject.Singleton
+
+/**
+ * The two parents of this family, as this device knows them.
+ *
+ * Either side may be null and the two nulls mean different things: a null [me] is a profile
+ * that has not loaded yet, a null [coParent] is nobody paired *or* a co-parent whose slot is
+ * not known. Neither is ever filled in by inference — see [parentLabel].
+ *
+ * @property me The signed-in parent.
+ * @property coParent The paired co-parent.
+ */
+data class Parents(
+    val me: NamedParent? = null,
+    val coParent: NamedParent? = null
+) {
+    /**
+     * uid to slot, for whichever parents are known.
+     *
+     * The domain calls a slot a "role" (`Expense`/`User` predate the rename of the concept, and
+     * the stored field name is part of the Firestore schema), so this is what
+     * `calculateExpenseBalancesByCurrency` takes as its `roleByUid`.
+     *
+     * Note what this map does *not* do: it never contains a uid whose slot was assumed. A pair
+     * whose two parents both still read `"mom"` produces two entries with the same value, which
+     * is exactly what leaves `ExpenseBalance.splitKnown` false — the split bar stays hidden
+     * because the two people genuinely cannot be told apart yet, not because the data is
+     * missing.
+     */
+    val roleByUid: Map<String, String>
+        get() = listOfNotNull(me, coParent).associate { it.uid to it.slot }
+}
+
+/**
+ * Who the two parents are, as one stream, for every ViewModel that has to name one.
+ *
+ * There is one of these rather than a copy of the derivation in each ViewModel, and that is the
+ * whole point: the moment two screens work out who the co-parent is by different routes, one of
+ * them starts labelling the calendar differently from the other and nothing in the type system
+ * notices. Five ViewModels expose `parents` and all five get it from here.
+ *
+ * The two halves come from different places because the app stores them differently:
+ *
+ * - **[me]** is a real Room row, matched *by uid* against [UserRepository.observeCurrentUserId].
+ *   Never "the only row": [UserRepository.deleteUser] is called from nowhere and sign-out does
+ *   not clear Room, so a device where two accounts have signed in over time holds two rows and
+ *   picking either by position would name the calendar after a stranger.
+ * - **[coParent]** comes from the pairing listener's [PartnerSummary][com.coparently.app.domain.model.PartnerSummary],
+ *   which reads their `users/{uid}` document directly. Room never stores a row for the other
+ *   parent, which is why [UserRepository.getAllUsers] alone cannot answer this question.
+ */
+@Singleton
+class ParentsSource @Inject constructor(
+    private val userRepository: UserRepository,
+    private val pairingRepository: PairingRepository
+) {
+
+    /**
+     * Re-emits on sign-in, sign-out, account switch, any local profile edit, and every pairing
+     * transition — including the co-parent renaming themselves or being assigned a slot.
+     */
+    fun observe(): Flow<Parents> = combine(
+        userRepository.observeCurrentUserId(),
+        userRepository.getAllUsers(),
+        pairingRepository.observePairingState()
+    ) { uid, users, pairing ->
+        Parents(
+            me = uid?.let { id -> users.firstOrNull { it.id == id } }?.asNamedParent(),
+            coParent = (pairing as? PairingState.Paired)?.partner?.asNamedParent()
+        )
+    }
+        // The pairing state re-emits whenever an invite list changes and Room re-emits the whole
+        // row when an unrelated column moves; neither renames anybody.
+        .distinctUntilChanged()
+}

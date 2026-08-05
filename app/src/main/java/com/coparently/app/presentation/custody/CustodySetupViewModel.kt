@@ -5,13 +5,20 @@ import androidx.lifecycle.viewModelScope
 import com.coparently.app.data.repository.CustodyModelRepository
 import com.coparently.app.domain.model.CustodyModel
 import com.coparently.app.domain.model.CustodyModelType
+import com.coparently.app.presentation.common.Parents
+import com.coparently.app.presentation.common.ParentsSource
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import javax.inject.Inject
+
+/** Keeps the parents flow warm across brief unsubscriptions (config changes). */
+private const val PARENTS_STOP_TIMEOUT_MS = 5_000L
 
 /**
  * ViewModel for custody setup screen.
@@ -19,8 +26,16 @@ import javax.inject.Inject
  */
 @HiltViewModel
 class CustodySetupViewModel @Inject constructor(
-    private val custodyModelRepository: CustodyModelRepository
+    private val custodyModelRepository: CustodyModelRepository,
+    parentsSource: ParentsSource
 ) : ViewModel() {
+
+    /**
+     * Signed-in parent and paired co-parent, for resolving a slot to a name — the "starts
+     * first" toggle, the week quick-select buttons and the colour-dot legend all name a person.
+     */
+    val parents: StateFlow<Parents> = parentsSource.observe()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(PARENTS_STOP_TIMEOUT_MS), Parents())
 
     private val _uiState = MutableStateFlow(CustodySetupUiState())
     val uiState: StateFlow<CustodySetupUiState> = _uiState.asStateFlow()

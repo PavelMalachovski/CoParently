@@ -9,6 +9,8 @@ import com.coparently.app.data.repository.CustodyModelRepository
 import com.coparently.app.domain.custody.HandoverCalculator
 import com.coparently.app.domain.custody.HandoverInfo
 import com.coparently.app.domain.model.CustodyModel
+import com.coparently.app.presentation.common.Parents
+import com.coparently.app.presentation.common.ParentsSource
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -33,8 +35,17 @@ private const val HANDOVER_STOP_TIMEOUT_MS = 5_000L
 class CalendarViewModel @Inject constructor(
     private val custodyScheduleDao: CustodyScheduleDao,
     private val custodyModelRepository: CustodyModelRepository,
-    private val encryptedPreferences: EncryptedPreferences
+    private val encryptedPreferences: EncryptedPreferences,
+    parentsSource: ParentsSource
 ) : ViewModel() {
+
+    /**
+     * Signed-in parent and paired co-parent, for resolving a slot to a name. The whole calendar
+     * tree — grid, ribbon, agenda card, filters, preview sheet — labels parents from this one
+     * value, so no two of them can disagree about who somebody is.
+     */
+    val parents: StateFlow<Parents> = parentsSource.observe()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(HANDOVER_STOP_TIMEOUT_MS), Parents())
 
     /**
      * Active legacy custody schedules, the fallback half of the unified custody lookup.
