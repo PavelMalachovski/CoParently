@@ -58,11 +58,231 @@ cd firestore-tests && npm test
 
 ## Sequencing
 
-1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9 → 10 → 11 → 12 → 13.
+1 → 2 → 3 → 4 → 5 → 6 → **0** → 7 → 8 → 9 → 10 → 11 → 12 → 12b → 13.
+
+Task 0 is numbered zero because it belongs to Part A and was written after Part A merged:
+it is the three defects the Part A reviews deferred rather than new feature work. It runs
+first in the Part B round because two of the three are visible to a user today.
+
+Task 12b was added in the Part B pre-flight scan: the Task 12 backfill flips a slot
+server-side for pairs that paired long ago, and nothing on those devices re-stamps in
+response — `ParentSlotMigrator.reslot` is reachable only from the accept path. Without 12b
+the backfill inflicts exactly the damage Task 2 exists to prevent.
 
 Part A is Tasks 1–6 and stands on its own: after Task 6 the app shows names and defaults an event to you, with no custody sync at all. Part B is Tasks 7–12. Task 11 (the conflict screen) is the one place they cross and it depends on both Task 2 (the slot flip) and Task 7 (`complemented`). Task 13 is device acceptance and closes both.
 
 If the branch has to be cut short, cut it after Task 6. Part B without Part A works, but the conflict screen without the slot flip shows a parent their own schedule inverted.
+
+---
+
+## Task 0: The three defects Part A deferred
+
+Added after Part A merged (PR #44). Two of these are visible to a user right now; the third
+is cheap only until something else copies it. All three are recorded in the ledger with their
+diagnosis — this task re-states it so the implementer needs nothing else.
+
+**Files:**
+- Modify: `app/src/main/java/com/coparently/app/presentation/common/ParentsSource.kt`
+- Modify: `app/src/main/java/com/coparently/app/presentation/common/ParentNames.kt`
+- Modify: `app/src/main/java/com/coparently/app/presentation/event/AddEditEventScreen.kt`
+- Modify: `app/src/main/java/com/coparently/app/data/sync/CalendarSyncRepository.kt`
+- Modify: `app/src/main/res/values{,-cs,-de,-ru,-uk}/common_strings.xml`
+- Test: `app/src/test/java/com/coparently/app/presentation/common/` (whichever `ParentsSource`
+  / `ParentNames` tests exist — find them, do not assume the file name)
+
+**Interfaces:**
+- Consumes: nothing.
+- Produces: `Parents.loaded: Boolean`; `ParentNames.isKnown(slot: String): Boolean`.
+  Nothing in Part B depends on either, but every later task that reads `Parents` gets them.
+
+### Defect 1 — the parent selector flashes open on every new-event screen
+
+`AddEditEventScreen.kt:711` gates the selector on `isPaired || parentOwner == null`.
+`EventViewModel.kt:83` seeds its `parents` StateFlow with `Parents()`, whose defaults are
+`me = null, coParent = null, isPaired = false`, so on the first composition the gate is
+`false || true` → the two-card block renders. When `ParentsSource` resolves, the
+`LaunchedEffect(currentUser)` at `:286` sets `parentOwner`, the gate turns false, and the
+block disappears — a layout jump in the middle of a form, for every user including one with
+no co-parent at all. `ParentsSource.shared` uses `replayExpirationMillis = 0`, so this
+happens on any re-entry more than 5 s after the last screen left, not only on cold start.
+
+**The fix is to make "not loaded yet" representable.** `Parents` cannot express it today, and
+its own KDoc's claim that "a null `me` is a profile that has not loaded yet" is false — `me`
+stays null forever for an account `UserRepositoryImpl` never wrote a Room row for. Add:
+
+```kotlin
+data class Parents(
+    val me: NamedParent? = null,
+    val coParent: NamedParent? = null,
+    val isPaired: Boolean = false,
+    /**
+     * Whether this is a real answer rather than the synthetic starting value.
+     *
+     * False only before [ParentsSource]'s upstream has emitted once. It is not "we know who
+     * both parents are": [me] can be null in a loaded answer forever, for an account with no
+     * Room profile row. A control that appears and then vanishes is worse than one that
+     * appears late, so anything that *hides* itself once the answer arrives waits on this.
+     */
+    val loaded: Boolean = false
+)
+```
+
+set `loaded = true` inside the `combine` in `ParentsSource.shared`, and gate the selector on
+it. Correct the `Parents` KDoc's null-`me` sentence in the same change.
+
+### Defect 2 — the escape hatch offers two cards with the same label
+
+When `me` is null and there is no co-parent, both `parentNames.labelFor("mom")` and
+`labelFor("dad")` fall through `parentLabel`'s `else` branch to `parent_label_unknown`
+("Родитель"), so `AddEditEventScreen.kt:722` renders two cards reading "Родитель" and
+"Родитель", told apart only by tint after one is selected. That is a choice with no caption.
+
+**`parentLabel` does not change** — not its signature, not its semantics, not its three
+fallbacks. It answers "who is this", and "we do not know" is the correct answer it already
+gives. The selector is asking a different question: it is a slot picker, and slots have an
+order. Add to `ParentNames`:
+
+```kotlin
+/** Whether [slot] resolves to a named person rather than to the unknown fallback. */
+fun isKnown(slot: String): Boolean
+```
+
+and in the selector, when `!isKnown(slot)`, render the ordinal instead of the unknown
+fallback. RULING (human, 5 August 2026): the ordinals, not "You"/"Co-parent" positionally —
+an unpaired account's slot may be either one, and captioning slot 1 "You" is the same
+inversion this branch exists to remove.
+
+New keys, in `common_strings.xml` beside `parent_label_unknown`, in all five locales:
+
+| key | en | cs | de | ru | uk |
+|---|---|---|---|---|---|
+| `parent_label_slot_first` | First parent | První rodič | Erster Elternteil | Первый родитель | Перший з батьків |
+| `parent_label_slot_second` | Second parent | Druhý rodič | Zweiter Elternteil | Второй родитель | Другий з батьків |
+
+Verify with a grep that each key appears exactly five times across `values*` —
+`MissingTranslation` is disabled outright in `app/build.gradle.kts`, not merely non-fatal.
+
+### Defect 3 — a data-layer repository imports from presentation
+
+`CalendarSyncRepository.kt` (package `com.coparently.app.data.sync`) imports
+`com.coparently.app.presentation.common.ParentsSource` and injects it, for one call at `:50`:
+
+```kotlin
+val ownerSlot = parentsSource.signedInSlot()
+    ?: throw IllegalStateException("Not signed in. Please sign in to CoPlanly.")
+```
+
+This is the first `data → presentation` edge in the tree and it contradicts the architecture
+map in `CLAUDE.md`. `signedInSlot()` is two calls on a domain interface:
+
+```kotlin
+val uid = userRepository.getCurrentUserId() ?: return null
+return userRepository.getUserById(uid)?.role
+```
+
+so the repository takes `UserRepository` (already `@Binds`-bound in `FirebaseModule.kt:133`)
+and does the lookup itself. `ParentsSource.signedInSlot()` stays where it is — its other two
+callers (`EventSuggestionsViewModel.kt:62`, `EventViewModel.kt:406`) are presentation and are
+correct as they are. Update any test that constructs `CalendarSyncRepository`.
+
+- [ ] **Step 1: Find the existing tests before changing anything**
+
+```bash
+git grep -ln "ParentsSource\|CalendarSyncRepository" -- app/src/test
+```
+
+Whatever comes back is what you extend, and what must still pass. Do not create a parallel
+test file for a class that already has one.
+
+- [ ] **Step 2: Write the failing tests**
+
+Three properties, one per defect:
+
+1. `ParentsSource.observe()` emits `loaded = true` on its first real emission, and
+   `Parents()` — the synthetic starting value every `stateIn` uses — has `loaded = false`.
+2. `ParentNames.isKnown` is false for both slots when `me` and `coParent` are both null, and
+   true for a slot that matches a named parent.
+3. `CalendarSyncRepository` reads the owner slot through `UserRepository`: with
+   `getCurrentUserId()` returning a uid and `getUserById(uid)` a `User(role = "dad")`, the
+   entity it builds is stamped `"dad"`; with `getCurrentUserId()` null it throws rather than
+   stamping anything.
+
+The selector's flash is Compose state and this repo has no Compose UI tests (the plan's
+testing strategy says so). Assert the property that causes it — `loaded` — not the pixels.
+
+- [ ] **Step 3: Run them to verify they fail**
+
+```bash
+$env:JAVA_HOME = "C:\Program Files\Android\Android Studio1\jbr"; ./gradlew testDebugUnitTest --tests "com.coparently.app.presentation.common.*" --tests "com.coparently.app.data.sync.*"
+```
+
+- [ ] **Step 4: Implement all three**
+
+As described above. Keep them in three commits, one per defect — they share no code and a
+reviewer should be able to judge the layering change without reading the copy change.
+
+- [ ] **Step 5: Build and run the full suite**
+
+```bash
+$env:JAVA_HOME = "C:\Program Files\Android\Android Studio1\jbr"; ./gradlew assembleDebug testDebugUnitTest
+```
+
+- [ ] **Step 6: Confirm the layering edge is gone**
+
+```bash
+git grep -n "presentation" -- app/src/main/java/com/coparently/app/data
+```
+
+Expected: no output. Any hit is another edge of the same kind.
+
+- [ ] **Step 7: Commit**
+
+Three commits:
+
+```
+fix(events): stop the parent selector flashing open before the profile loads
+
+The selector hides itself once it knows there is nobody to choose between, and
+"knows" was not representable: Parents() seeds isPaired=false and me=null, which
+is indistinguishable from a loaded answer for an unpaired account. So the gate
+was true on every first composition and the block appeared and vanished mid-form
+- including for a family of one, which is the case it exists to spare.
+
+Parents gains `loaded`, false only before the upstream has emitted once. Not
+"both parents are known": me stays null forever for an account with no Room
+profile row, and the KDoc claiming otherwise is corrected in the same change.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+```
+
+```
+fix(events): caption the slot picker when neither parent is known
+
+With no profile row and no co-parent, both cards resolved to the unknown
+fallback and read "Родитель" twice - a choice between two options with the same
+name, told apart only by tint after one was already chosen.
+
+parentLabel is untouched: "we do not know who this is" is the right answer to the
+question it asks, and guessing is what this branch exists to remove. The selector
+asks a different question - it picks a slot, and slots have an order - so it
+captions them first and second when, and only when, neither resolves to a person.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+```
+
+```
+refactor(sync): read the owner slot from the domain, not from presentation
+
+CalendarSyncRepository is in data/ and imported ParentsSource from presentation/
+for one call. It is the first data -> presentation edge in the tree and it
+contradicts the architecture map in CLAUDE.md.
+
+signedInSlot() is two calls on UserRepository, a domain interface already bound
+in the graph, so the repository makes them itself. ParentsSource keeps the helper
+for its presentation-layer callers, which are where it belongs.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+```
 
 ---
 
@@ -1210,6 +1430,8 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 **Files:**
 - Modify: `firestore.rules`
 - Create: `firestore-tests/rules/custody-models.test.js`
+- Modify: `CLAUDE.md` — the "known issues" bullet that records `custody_schedules` as a dead
+  rule left in place
 
 **Interfaces:**
 - Consumes: the document shape Task 9 writes — `participants: [uidA, uidB]`, `lastModifiedBy`, and the pattern fields.
@@ -1217,68 +1439,124 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 - [ ] **Step 1: Write the failing rules test**
 
-Create `firestore-tests/rules/custody-models.test.js`, following the shape of the neighbouring files (read `firestore-tests/rules/budgets-change-requests.test.js` for the harness calls):
+Create `firestore-tests/rules/custody-models.test.js`. The harness API below is the real one,
+verified 5 August 2026 against `firestore-tests/harness.js:68` — an earlier draft of this plan
+invented `rulesFixture`/`as`/`asAdmin`, none of which exist. `seed()` writes with rules
+disabled and is what stands in for an admin write. Mocha globs `rules/**/*.test.js`, so the
+file needs no registration; a root hook already tears the environment down.
 
 ```javascript
-const {rulesFixture, assertSucceeds, assertFails} = require('../harness');
+/**
+ * The one custody document a pair shares. Gated on a `participants` array that must match the
+ * derived document id; read by id only, so no list query has to mirror the rule.
+ */
 
-describe('custody_models', () => {
-  const fixture = rulesFixture('custody-models');
-  const MOM = 'uid-mom';
-  const DAD = 'uid-dad';
-  const STRANGER = 'uid-stranger';
-  const KEY = [MOM, DAD].sort().join('__');
+const {
+  CURRENT_RULES, testEnv, seed, assertSucceeds, assertFails,
+} = require('../harness');
 
-  const doc = () => ({
+const PROJECT = 'demo-coplanly-custody';
+const MOM = 'uid-mom';
+const DAD = 'uid-dad';
+const STRANGER = 'uid-stranger';
+const KEY = [MOM, DAD].sort().join('__');
+const PATH = `custody_models/${KEY}`;
+
+const PAIRED_USERS = {
+  'users/uid-mom': {name: 'Olya', email: 'o@x.test', partnerId: DAD},
+  'users/uid-dad': {name: 'Pavel', email: 'p@x.test', partnerId: MOM},
+  'users/uid-stranger': {name: 'Carol', email: 'c@x.test', partnerId: ''},
+};
+
+/** Builds the document as `FirestoreCustodyDataSource` writes it. */
+function custodyDoc(overrides) {
+  return Object.assign({
     participants: [MOM, DAD].sort(),
     lastModifiedBy: MOM,
-    modelType: 'week_on_week_off',
+    modelType: 'WEEK_ON_WEEK_OFF',
     patternDays: 14,
     momDayIndices: [0, 1, 2, 3, 4, 5, 6],
     startDate: '2026-08-03',
     repeatYearly: true,
     createdAt: '2026-08-03T10:00:00',
     lastModifiedAt: '2026-08-03T10:00:00',
+  }, overrides);
+}
+
+describe('custody_models', () => {
+  let env;
+
+  before(async () => {
+    env = await testEnv(PROJECT, CURRENT_RULES);
+  });
+
+  beforeEach(async () => {
+    await env.clearFirestore();
+    await seed(env, PAIRED_USERS);
   });
 
   it('lets a participant create the pair document', async () => {
-    await assertSucceeds(
-        fixture.as(MOM).doc(`custody_models/${KEY}`).set(doc()));
+    const db = env.authenticatedContext(MOM).firestore();
+    await assertSucceeds(db.doc(PATH).set(custodyDoc({})));
   });
 
   it('lets both participants read it', async () => {
-    await fixture.asAdmin().doc(`custody_models/${KEY}`).set(doc());
-    await assertSucceeds(fixture.as(MOM).doc(`custody_models/${KEY}`).get());
-    await assertSucceeds(fixture.as(DAD).doc(`custody_models/${KEY}`).get());
+    await seed(env, {[PATH]: custodyDoc({})});
+    await assertSucceeds(env.authenticatedContext(MOM).firestore().doc(PATH).get());
+    await assertSucceeds(env.authenticatedContext(DAD).firestore().doc(PATH).get());
+  });
+
+  it('lets the other participant overwrite it, which is last-write-wins', async () => {
+    await seed(env, {[PATH]: custodyDoc({})});
+    const db = env.authenticatedContext(DAD).firestore();
+    await assertSucceeds(db.doc(PATH).update({
+      momDayIndices: [7, 8, 9, 10, 11, 12, 13], lastModifiedBy: DAD,
+    }));
   });
 
   it('refuses a third account', async () => {
-    await fixture.asAdmin().doc(`custody_models/${KEY}`).set(doc());
-    await assertFails(fixture.as(STRANGER).doc(`custody_models/${KEY}`).get());
-    await assertFails(
-        fixture.as(STRANGER).doc(`custody_models/${KEY}`).update({patternDays: 7}));
+    await seed(env, {[PATH]: custodyDoc({})});
+    const db = env.authenticatedContext(STRANGER).firestore();
+    await assertFails(db.doc(PATH).get());
+    await assertFails(db.doc(PATH).update({patternDays: 7}));
+    await assertFails(db.doc(PATH).delete());
   });
 
   it('refuses a create that leaves the author out of participants', async () => {
+    const db = env.authenticatedContext(STRANGER).firestore();
+    await assertFails(db.doc(PATH).set(custodyDoc({})));
+  });
+
+  it('refuses a create whose participants are not a pair', async () => {
+    const db = env.authenticatedContext(MOM).firestore();
+    await assertFails(db.doc(PATH).set(custodyDoc({participants: [MOM]})));
     await assertFails(
-        fixture.as(STRANGER).doc(`custody_models/${KEY}`)
-            .set({...doc(), participants: [MOM, DAD]}));
+        db.doc(PATH).set(custodyDoc({participants: [MOM, DAD, STRANGER]})));
   });
 
   it('refuses an update that removes the other participant', async () => {
-    await fixture.asAdmin().doc(`custody_models/${KEY}`).set(doc());
+    await seed(env, {[PATH]: custodyDoc({})});
+    const db = env.authenticatedContext(MOM).firestore();
+    await assertFails(db.doc(PATH).update({participants: [MOM]}));
+  });
+
+  it('refuses an update that swaps a stranger in for the co-parent', async () => {
+    // Without the immutability check this passes every other clause: the author is still in
+    // participants and there are still two of them - but the document's id no longer names
+    // the pair it is now shared with, and the co-parent silently loses their schedule.
+    await seed(env, {[PATH]: custodyDoc({})});
+    const db = env.authenticatedContext(MOM).firestore();
     await assertFails(
-        fixture.as(MOM).doc(`custody_models/${KEY}`).update({participants: [MOM]}));
+        db.doc(PATH).update({participants: [MOM, STRANGER].sort()}));
   });
 
   it('lets a participant delete it, which is what unpairing does', async () => {
-    await fixture.asAdmin().doc(`custody_models/${KEY}`).set(doc());
-    await assertSucceeds(fixture.as(DAD).doc(`custody_models/${KEY}`).delete());
+    await seed(env, {[PATH]: custodyDoc({})});
+    const db = env.authenticatedContext(DAD).firestore();
+    await assertSucceeds(db.doc(PATH).delete());
   });
 });
 ```
-
-Adjust `rulesFixture`/`as`/`asAdmin` to the exact helper names `harness.js` exports — read it first rather than assuming.
 
 - [ ] **Step 2: Run it to verify it fails**
 
@@ -1304,16 +1582,27 @@ Add:
       allow create: if isAuthenticated()
         && request.auth.uid in request.resource.data.participants
         && request.resource.data.participants.size() == 2;
+      // participants is immutable. Without this an existing participant could swap the other
+      // one out for a third account: they would still be in the array and it would still hold
+      // two uids, but the document id - derived from the original pair - would no longer name
+      // who it is shared with, and the co-parent would lose the schedule with no trace.
       allow update: if isAuthenticated()
         && request.auth.uid in resource.data.participants
-        && request.auth.uid in request.resource.data.participants
-        && request.resource.data.participants.size() == 2;
+        && request.resource.data.participants == resource.data.participants;
       allow delete: if isAuthenticated()
         && request.auth.uid in resource.data.participants;
     }
 ```
 
-- [ ] **Step 4: Run the suite to verify it passes**
+- [ ] **Step 4: Correct the `CLAUDE.md` entry that describes the deleted block**
+
+Its "Known issues / do not fix silently" section records `custody_schedules` as a rule with no
+data source, "left in place rather than removed mid-pairing-feature-work". That is now false
+in two ways: the block is gone, and there is a live `custody_models` rule beside where it was.
+Replace the bullet rather than deleting it — the next reader needs to know the Room table
+`custody_schedules` still exists and is deliberately Room-only.
+
+- [ ] **Step 5: Run the suite to verify it passes**
 
 ```bash
 cd firestore-tests && npm test
@@ -1321,7 +1610,7 @@ cd firestore-tests && npm test
 
 Expected: PASS, including the neighbouring suites — deleting the `custody_schedules` block must not break any of them.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
 git add firestore.rules firestore-tests/rules/custody-models.test.js
@@ -1349,13 +1638,52 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 **Files:**
 - Create: `app/src/main/java/com/coparently/app/data/remote/firebase/FirestoreCustodyDataSource.kt`
+- Create: `app/src/main/java/com/coparently/app/domain/custody/SharedCustody.kt`
 - Modify: `app/src/main/java/com/coparently/app/data/repository/CustodyModelRepository.kt`
-- Modify: `app/src/main/java/com/coparently/app/di/FirebaseModule.kt` (or the module that binds the other Firestore data sources)
 - Create: `app/src/test/java/com/coparently/app/data/repository/CustodyModelRepositoryTest.kt`
 
 **Interfaces:**
 - Consumes: `CustodyKey.of` (Task 7); the rule from Task 8.
-- Produces: `CustodyModelRepository.observeShared()` — a `Flow<CustodyModel?>` that survives a denied read; `saveAndActivate` now writes through to Firestore.
+- Produces:
+  - `CustodyModelRepository.observeShared(): Flow<SharedCustody?>` — survives a denied read.
+  - `CustodyModelRepository.getShared(): SharedCustody?` — suspending, one-shot. Task 11 needs
+    the co-parent's pattern *at the moment of accept*, which a stream cannot answer.
+  - `saveAndActivate` writes through to Firestore, guarded.
+
+**Two facts an earlier draft of this task got wrong, verified 5 August 2026:**
+
+1. **`CustodyModel` cannot carry the document's metadata.** It is
+   `(id, modelType, patternDays, momDayIndices, startDate, isActive)` and nothing else —
+   no `lastModifiedBy`, no `lastModifiedAt`, no `repeatYearly`. Those last three live on
+   `CustodyModelEntity`, not on the domain model. Task 10's banner is specified as "the last
+   remote change whose `lastModifiedBy` is not me, keyed on `lastModifiedAt`", so a
+   `Flow<CustodyModel?>` cannot feed it. Hence `SharedCustody`, an envelope:
+
+   ```kotlin
+   package com.coparently.app.domain.custody
+
+   /**
+    * The pair's shared custody document: the pattern, plus what only the shared copy knows.
+    *
+    * [CustodyModel] is the pattern and deliberately stays that — it is what the calendar asks
+    * "who has the child on this date". Who last changed it and when are facts about the
+    * *document*, not about the schedule, and they exist only because two people write to it.
+    */
+   data class SharedCustody(
+       val model: CustodyModel,
+       val lastModifiedBy: String,
+       val lastModifiedAt: String,
+       val createdAt: String,
+       val repeatYearly: Boolean = true
+   )
+   ```
+
+2. **No Hilt module changes.** Firestore data sources in this project are plain
+   `@Singleton class X @Inject constructor(private val firestore: FirebaseFirestore)` and are
+   constructor-injected wherever they are needed; `FirebaseModule` only provides the
+   `FirebaseFirestore` singleton. `CustodyModelRepository` is a concrete `@Singleton` class
+   with no domain interface and no entry in `RepositoryModule` — leave it that way. Extracting
+   an interface for one implementation is not this task's job.
 
 - [ ] **Step 1: Write the data source**
 
@@ -1374,6 +1702,27 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 Fields written: `participants` (sorted), `lastModifiedBy`, `modelType`, `patternDays`, `momDayIndices` (array), `startDate`, `repeatYearly`, `createdAt`, `lastModifiedAt` — dates as ISO strings, as everywhere else in this schema.
 
+Read `FirestoreBudgetDataSource.kt` first: it is the closest shape (`callbackFlow` +
+`addSnapshotListener` + `awaitClose { subscription.remove() }`), and unlike this one it has to
+carry a `whereIn` filter. **This collection is read by document id only** — no list query, so
+no filter mirrors the rule. `CLAUDE.md` item 12 is about the opposite mistake; say so in the
+KDoc, because the reflex here is to add a `whereArrayContains` that nothing needs.
+
+Numbers cross Firestore as `Long`. `patternDays` and every entry of `momDayIndices` must be
+narrowed on the way in, not cast blindly — a `ClassCastException` inside a snapshot listener
+is not caught by the retry.
+
+- [ ] **Step 1b: Decide where the two UIDs come from — domain only**
+
+`CustodyKey.of(myUid, partnerUid)` and the `participants` array need both. Take them from a
+domain interface: `UserRepository` if `User`/`getCurrentUserId` already reach `partnerId`,
+otherwise `PairingRepository`. **Not `ParentsSource`** — that is a presentation-layer class,
+and Task 0 has just removed the only `data → presentation` edge in the tree. Do not add it back
+one task later.
+
+When there is no partner, there is no shared document: `observeShared()` emits `null` and
+`getShared()` returns `null`. An unpaired user writes Room and nothing else.
+
 - [ ] **Step 2: Make the observer survive a denial**
 
 The document may not exist yet, and the rules may deny the first read by seconds if pairing has only just completed. Build the observer with `retryWhen` and backoff:
@@ -1389,31 +1738,62 @@ The document may not exist yet, and the rules may deny the first read by seconds
      * and receives nothing. It is in CLAUDE.md's known issues with the fix named. A new
      * listener has no excuse to repeat it.
      */
-    fun observeShared(): Flow<CustodyModel?> = … .retryWhen { cause, attempt ->
+    fun observeShared(): Flow<SharedCustody?> = … .retryWhen { cause, attempt ->
         Log.w(TAG, "custody listener failed (attempt $attempt), retrying", cause)
         delay(RETRY_BASE_MS * (1L shl attempt.coerceAtMost(MAX_BACKOFF_SHIFT).toInt()))
         true
     }
 ```
 
+Share it. Two collectors want this stream — the mirror in Step 2b and the banner in Task 10 —
+and each raw collection attaches its own snapshot listener. `ParentsSource.shared` is the
+precedent this project already set for exactly that, including the two parameters that matter:
+`SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS, replayExpirationMillis = 0)` and `replay = 1`.
+The expiration is not optional — a replayed value that outlives a sign-out serves the previous
+account's custody schedule to the next one.
+
+- [ ] **Step 2b: Mirror the remote document into Room**
+
+Room stays the source of truth, so a remote change has to land there or the calendar never
+shows it. Follow the shape `MessageRepositoryImpl` already uses — a mirror branch merged with
+the local flow — so that one subscription point does both, and change the one thing that shape
+gets wrong: **it ends in a terminal `.catch { Log.w(...) }`, which completes the flow.** That
+is the live defect in `CLAUDE.md`'s known issues. `retryWhen` from Step 2 is the fix; do not
+also add a terminal `.catch`.
+
+A remote model arrives with the writer's `id`. Reuse it rather than generating a new one, so
+the two devices converge on one row instead of accumulating a copy per sync.
+
 - [ ] **Step 3: Write through on save, guarded**
 
 `saveAndActivate` keeps writing Room first — Room is the source of truth — then pushes to Firestore inside `runCatching`. An uncaught `PERMISSION_DENIED` from a suspend call inside `viewModelScope.launch` crashes the app rather than failing the sync; `addBudget`/`deleteBudget` gained the same guard for the same reason.
 
+`saveAndActivate` is the only write path that matters: `createWeekOnWeekOff`,
+`createTwoTwoThree`, `createThreeFourFourThree` and `createCustom` all funnel through it.
+Confirm that by reading the file rather than trusting this sentence, and if any of them
+bypasses it, route it too — a pattern that syncs from one entry point and not another is worse
+than one that does not sync at all.
+
+`lastModifiedBy` is the signed-in uid on every write. `createdAt` is preserved from the
+existing document when there is one, so an update does not re-date the pair's arrangement.
+
 - [ ] **Step 4: Write the repository tests**
 
+Case names below; write real assertions, not skeletons — mock `CustodyModelDao` and
+`FirestoreCustodyDataSource` with MockK the way the existing repository tests in
+`app/src/test/java/com/coparently/app/data/repository/` do. Read one of them first.
+
 ```kotlin
-    @Test
-    fun `saving writes Room before Firestore`() = runTest { /* coVerifyOrder */ }
-
-    @Test
-    fun `a Firestore failure on save leaves the local model in place`() = runTest { /* … */ }
-
-    @Test
-    fun `the observer resubscribes after a failure`() = runTest {
-        // Emit an error, then a value, and assert the value still arrives.
-    }
+    @Test fun `saving writes Room before Firestore`()
+    @Test fun `a Firestore failure on save leaves the local model in place`()
+    @Test fun `an unpaired user saves to Room and writes no document`()
+    @Test fun `the observer keeps delivering after a failure`()
+    @Test fun `a remote model is mirrored into Room under the id it arrived with`()
 ```
+
+The retry test is the one that matters and it is the one that is easy to write vacuously: make
+the data source's flow throw on its first collection and emit a value on its second, and assert
+the value arrives. A test that only checks `retryWhen` was called proves nothing.
 
 - [ ] **Step 5: Run tests and build**
 
@@ -1451,12 +1831,21 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 - Modify: `app/src/main/res/values{,-cs,-de,-ru,-uk}/calendar_strings.xml`
 
 **Interfaces:**
-- Consumes: `observeShared()` (Task 9), `parentLabel(...)` (Task 3).
+- Consumes: `observeShared(): Flow<SharedCustody?>` (Task 9), `parentLabel(...)` (Task 3).
 - Produces: nothing later tasks depend on.
 
 - [ ] **Step 1: Add the banner**
 
 `CustodyChangedBanner(byName: String, onDismiss: () -> Unit)` next to `ChangeRequestBanner` and `VacationBanner`, in the same visual treatment — the August design refresh established inline banners over the grid as the pattern, and a badged glyph or a per-day strip is explicitly not it.
+
+`VacationBanner` is the closest shape to copy (a tinted `Row`, a coloured dash, a `Text`).
+Neither existing banner is dismissible, so the dismiss affordance has no precedent in that
+file: give it a plain trailing `IconButton`, not a second visual language.
+
+The name comes from `parentLabel` resolving `SharedCustody.lastModifiedBy`'s **uid**, not a
+slot. `Parents.roleByUid` maps uid to slot; go uid → slot → `parentLabel`. A uid that maps to
+neither parent resolves to the unknown fallback and the banner still shows — it says the
+schedule changed, which is true, without naming a stranger.
 
 - [ ] **Step 2: Add the string, in five locales**
 
@@ -1467,6 +1856,11 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 - [ ] **Step 3: Raise it when the remote change is not mine**
 
 In `CalendarViewModel`, expose the last remote change whose `lastModifiedBy` is not the current user, keyed on `lastModifiedAt` so a dismissed banner returns on the next change and not before. No push notification: this app requests notification permission contextually and there is nothing here worth requesting it for.
+
+`CalendarViewModel` already injects `ParentsSource` and `EncryptedPreferences`, so it can name
+the changer and remember the dismissal without new dependencies. Persist the dismissed
+`lastModifiedAt` rather than holding it in ViewModel state: a change the user has already
+acknowledged should not reappear because they killed the app, and the value is one string.
 
 - [ ] **Step 4: Build, test, commit**
 
@@ -1499,25 +1893,31 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 - Create: `app/src/test/java/com/coparently/app/presentation/pairing/CustodyConflictResolverTest.kt`
 
 **Interfaces:**
-- Consumes: `ParentSlotMigrator.reslot` (Task 2), `CustodyModel.complemented()` and `isEquivalentTo()` (Task 7), `CustodyModelRepository` (Task 9).
+- Consumes: `ParentSlotMigrator.reslot` (Task 2), `CustodyModel.complemented()` and `isEquivalentTo()` (Task 7), `CustodyModelRepository.getShared()` (Task 9).
 - Produces: nothing later tasks depend on.
+
+**Scope correction, verified 5 August 2026.** An earlier draft called the screen "wiring".
+It is not: `PairingViewModel` emits **no navigation signal at all** — `NavGraph.kt:435` passes
+`PairingScreen` only `onNavigateBack`, and a caller learns about success by watching `state`
+become `PairingState.Paired`. So this task also adds a one-shot event channel on the ViewModel,
+a `Screen` entry and a `composable` route, and the decision of what Back does on the conflict
+screen. Treat that as part of the task, not as a surprise: a conflict screen the accepter can
+dismiss with Back and never see again silently keeps whichever pattern was already local.
+Back therefore is not offered — the screen has two actions, one per pattern, and no third exit.
 
 - [ ] **Step 1: Write the failing resolver test**
 
-The screen is wiring; the decision is a pure function. `CustodyConflictResolver.resolve(mineAfterFlip, theirs)` returns one of `NoConflict(model)`, `NoLocal(theirs)`, `Conflict(mine, theirs)`.
+The decision is a pure function. `CustodyConflictResolver.resolve(mineAfterFlip, theirs)`
+returns one of `NoConflict(model)`, `NoLocal(theirs)`, `Conflict(mine, theirs)`.
+
+Write real assertions for these cases — they are a list of cases, not code to transcribe:
 
 ```kotlin
-    @Test
-    fun `equivalent patterns are not a conflict`() { /* … */ }
-
-    @Test
-    fun `no local pattern means take theirs without asking`() { /* … */ }
-
-    @Test
-    fun `no remote pattern means keep mine without asking`() { /* … */ }
-
-    @Test
-    fun `different patterns are a conflict`() { /* … */ }
+    @Test fun `equivalent patterns are not a conflict`()
+    @Test fun `no local pattern means take theirs without asking`()
+    @Test fun `no remote pattern means keep mine without asking`()
+    @Test fun `neither pattern present is not a conflict`()
+    @Test fun `different patterns are a conflict`()
 ```
 
 - [ ] **Step 2: Pin the ordering that matters most in this branch**
@@ -1529,14 +1929,20 @@ The screen is wiring; the decision is a pure function. `CustodyConflictResolver.
         // The co-parent, in slot 1, has days 7-13 — describing the same arrangement.
         // Comparing without complementing calls this a conflict and offers me my own
         // schedule inverted; I reject it and hand over exactly the days I meant to keep.
-        val mineBeforeFlip = model(14, (0..6).toSet())
-        val theirs = model(14, (7..13).toSet())
+        val mineBeforeFlip = model(14, (0..6).toSet(), id = "mine")
+        val theirs = model(14, (7..13).toSet(), id = "theirs")
         assertEquals(
             CustodyConflict.NoConflict(theirs),
             CustodyConflictResolver.resolve(mineBeforeFlip.complemented(), theirs)
         )
     }
 ```
+
+**The two models must differ in `id`.** With the same id they are equal `data class`
+instances, and the assertion passes whether `resolve` returns `NoConflict(mine)` or
+`NoConflict(theirs)` — the test would pin nothing. Which one `NoConflict` carries is itself a
+decision: it is **theirs**, because the shared document is what both phones will converge on
+and the local copy is the one that has to move.
 
 - [ ] **Step 3: Implement the resolver, then the screen**
 
@@ -1545,6 +1951,12 @@ The screen renders both patterns as a week grid using the existing custody colou
 - [ ] **Step 4: Wire the order in `PairingViewModel`**
 
 Strictly: slot flip (Task 2) → complement the local model → resolve → show the screen only on `Conflict`.
+
+The flip already happens in `withSlotReslot` (`PairingViewModel.kt:201`), which both accept
+paths — `redeemCode()` and `acceptIncoming()` — funnel through. Extend that one place, not the
+two callers: the reason it exists is that an earlier round shipped the re-stamp on one path
+only. `getShared()` (Task 9) supplies "theirs" — a one-shot read, because a stream cannot
+answer "what was there when I accepted".
 
 - [ ] **Step 5: Build, test, commit**
 
@@ -1589,11 +2001,49 @@ Every existing pair has both parents at `"mom"`: `DEFAULT_ROLE` gave everyone th
 
 Where no invitation survives, **leave the pair alone**. Guessing which parent to move would re-stamp the wrong person's events. Those pairs stay indistinct until one of them re-saves, and that is stated in the spec rather than papered over.
 
-- [ ] **Step 3: Test both**
+**Shape (RULING, human, 5 August 2026): an admin-gated callable.** There is no precedent for a
+one-off migration anywhere in `functions/` — no script, no npm entry, nothing — so this
+invents one, and a callable is the shape that matches everything around it and can be tested by
+the pattern the neighbouring tests already use.
 
 ```javascript
-  it('deletes the shared custody document when unpairing', async () => { /* … */ });
-  it('leaves a pair with no surviving invitation alone', async () => { /* … */ });
+exports.backfillParentSlots = functions.https.onCall(async (data, context) => { … });
+exports.backfillParentSlotsImpl = backfillParentSlotsImpl;   // what the tests call
+```
+
+Rules for it, all load-bearing:
+
+- **It refuses everyone but an operator.** Gate on an allow-list of admin UIDs read from
+  functions config or an env var, or on a custom claim — not on "is authenticated". A callable
+  that re-slots arbitrary pairs is not a user-facing feature.
+- **It is idempotent.** A pair whose two parents already hold different slots is skipped, not
+  re-flipped. Running it twice must be indistinguishable from running it once, because it
+  will be run twice.
+- **It reads `invitations` where `status == 'accepted'` and `acceptedBy != null`.** That field
+  exists: `PairingRepositoryImpl.kt:334` seeds it null at creation and
+  `functions/index.js:464` sets it on accept.
+- **It reuses `assignSlots(inviterRole)`** — one parameter, corrected in Task 1. The inviter is
+  `invite.fromUserId` and keeps their stored slot; `acceptedBy` takes the other one.
+- **It verifies the pair is still a pair** before touching either document: both users must
+  still carry `partnerId` pointing at each other. An invitation accepted and later unpaired
+  must not re-slot two strangers.
+- **It reports what it did** — counts of scanned, updated and skipped, and the reason for each
+  skip class — as the callable's return value. A migration whose only output is "ok" cannot be
+  checked afterwards.
+
+- [ ] **Step 3: Test all of it**
+
+Follow the `fakeDb` + direct `*Impl` call pattern of `functions/test/unpair-callable.test.js`,
+and `test.wrap` only for the auth gate. Case names:
+
+```javascript
+  it('deletes the shared custody document when unpairing');
+  it('leaves the co-parent local copies alone when unpairing');
+  it('gives the accepter the other slot, reading acceptedBy from the invitation');
+  it('leaves a pair with no surviving invitation alone');
+  it('skips a pair whose parents already hold different slots');
+  it('skips an invitation whose pair has since unpaired');
+  it('refuses a caller who is not an operator');
 ```
 
 - [ ] **Step 4: Run and commit**
@@ -1618,6 +2068,99 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 ---
 
+## Task 12b: React to a slot that changed while you were not looking
+
+Added in the Part B pre-flight scan, 5 August 2026. RULING (human): build the detector.
+
+**The gap.** `ParentSlotMigrator.reslot` is reachable from exactly one place —
+`PairingViewModel.withSlotReslot` (`PairingViewModel.kt:201`), on the accept path. Task 12's
+backfill flips the accepter's slot server-side for a pair that accepted months ago. Nothing on
+that device is watching. Their `role` becomes `"dad"` while every event they ever created is
+still stamped `"mom"`, so their whole history reads as the co-parent's — which is precisely the
+damage Task 2 exists to prevent, delivered by our own migration.
+
+The accepter's local custody model has the same problem for the same reason: `momDayIndices`
+means "slot 1's days", and their slot just stopped being slot 1.
+
+**Files:**
+- Modify: `app/src/main/java/com/coparently/app/data/repository/UserRepositoryImpl.kt` — or
+  wherever the remote `users/{uid}` document is written into Room. Find it; do not assume.
+- Modify: `app/src/main/java/com/coparently/app/data/repository/ParentSlotMigrator.kt`
+- Modify: `app/src/main/java/com/coparently/app/data/repository/CustodyModelRepository.kt`
+- Test: extend `app/src/test/java/com/coparently/app/data/repository/ParentSlotMigratorTest.kt`
+
+**Interfaces:**
+- Consumes: `ParentSlotMigrator.reslot` (Task 2), `CustodyModel.complemented()` (Task 7).
+- Produces: nothing later tasks depend on.
+
+- [ ] **Step 1: Find the one place a remote profile lands in Room**
+
+```bash
+git grep -n "insertUser\|updateUser" -- app/src/main/java
+```
+
+There is a single write path for the signed-in user's document (`UserRepositoryImpl` around
+lines 242, 333, 386 per the Task 5 investigation — verify, the numbers are from before Part A
+landed). The detector belongs there, at the moment the new value is known and the old one has
+not been overwritten yet. Not at app start: a cold start is not when the change arrives, and
+a startup hook re-runs on every launch for a fact that changes twice in a lifetime.
+
+- [ ] **Step 2: Write the failing tests**
+
+```kotlin
+    @Test fun `a profile arriving with a different slot re-stamps this user's rows`()
+    @Test fun `a profile arriving with the same slot changes nothing`()
+    @Test fun `the first profile this device has ever seen is not treated as a change`()
+    @Test fun `a slot change complements the active custody model`()
+    @Test fun `a slot change with no active custody model is not an error`()
+```
+
+The third is the one that protects everyone: on a fresh install there is no previous row, and
+"null → dad" must not be read as a flip. There is nothing to re-stamp anyway, but the custody
+complement would invert a model that arrived from the co-parent's document.
+
+- [ ] **Step 3: Implement**
+
+Read the existing Room row before writing the incoming one. If both carry a non-blank slot and
+they differ, run `reslot(from = old, to = new, myUid = uid)` and complement the active custody
+model, in that order, in the same suspend function — the same order Task 11 fixes for the
+pairing path, for the same reason.
+
+Complementing the custody model is a Room write, not a Firestore write: the shared document is
+expressed in slot terms and is already correct for the pair. Writing the complement back would
+invert it for the co-parent, whose slot did not change.
+
+- [ ] **Step 4: Build, test, commit**
+
+```bash
+$env:JAVA_HOME = "C:\Program Files\Android\Android Studio1\jbr"; ./gradlew assembleDebug testDebugUnitTest
+```
+
+```
+feat(pairing): re-stamp when a slot changes outside the accept flow
+
+reslot was reachable from one place: the moment a user taps Accept. That covered
+every slot change that existed when it was written, and stopped covering them the
+moment the backfill in the previous commit could flip a slot for a pair that
+accepted months ago. Their device would have gone on stamping the old slot while
+the server held the new one, and every event they had ever created would have
+started reading as their co-parent's - the exact damage the accept-path re-stamp
+exists to prevent, delivered by our own migration.
+
+The detector sits where the remote profile is written into Room, which is where
+the two values are both in hand. A first profile is not a change: on a fresh
+install there is no previous row, and reading "nothing -> dad" as a flip would
+complement a custody model that was never in the other slot.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+```
+
+**Release order this creates.** The app carrying this task must be in users' hands *before*
+the Task 12 backfill is invoked. Say so in the PR body: the backfill is a manual call and
+running it early leaves the accepter's device on the old stamp until they update.
+
+---
+
 ## Task 13: Two phones
 
 **Files:**
@@ -1637,7 +2180,9 @@ Cross-phone is the only way to see the slot flip work. Both handsets are on wire
 - [ ] **Step 5: Change it on phone B; confirm phone A shows the banner naming B's owner**
 - [ ] **Step 6: Create an event on each phone and confirm it defaults to that phone's owner**
 - [ ] **Step 7: Unpair; confirm both keep a local schedule and the shared document is gone**
-- [ ] **Step 8: Record the result in both documents and commit**
+- [ ] **Step 8: Open the new-event screen on an unpaired account and confirm the selector does not appear and vanish** — Task 0's flash, the one defect here that no unit test can see
+- [ ] **Step 9: Run the Task 12 backfill against the legacy pair and confirm Task 12b re-stamps** — pair the two phones on the *old* build if one is still installable, or simulate by setting both `users/{uid}.role` to `"mom"` in the console; then invoke the callable and confirm the accepter's own events still read as theirs and their custody pattern did not invert
+- [ ] **Step 10: Record the result in both documents and commit**
 
 Report what the run actually shows. A step that did not happen is recorded as not run, not as passed.
 
