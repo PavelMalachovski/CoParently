@@ -13,9 +13,20 @@ import javax.inject.Singleton
  * an invitation moves them to slot 2, at which point their own past records would read as the
  * co-parent's. This re-stamps them.
  *
- * Scoped to rows this user created, so it can never touch the co-parent's records if it is
- * ever run on a device that already has both parents' data. Idempotent by construction: the
- * second run matches nothing, because the first left no rows in the old slot.
+ * Both queries are scoped to `createdByFirebaseUid = myUid`, so neither can *select* a row
+ * this user did not create. That alone guarantees [EventDao.reslotOwner] can never touch the
+ * co-parent's records: it rewrites `parentOwner`, the same "whose event is this" concept the
+ * scoping clause already keys on. It does **not**, by itself, make the identical claim true of
+ * [EventDao.reslotPickup]: that query rewrites `pickupConfirmedBy`, which records who
+ * confirmed the pickup — a different person's action, potentially the co-parent's, on an
+ * event this user created. What actually makes today's call site safe is that this migrator
+ * runs exactly once, immediately after this device's own slot changes, before any co-parent
+ * could plausibly have confirmed a pickup on rows created before that moment — not a
+ * structural guarantee of the query itself. A future caller re-running this once both parents
+ * already share history would need to re-examine that.
+ *
+ * Idempotent by construction: the second run matches nothing, because the first left no rows
+ * in the old slot.
  */
 @Singleton
 class ParentSlotMigrator @Inject constructor(

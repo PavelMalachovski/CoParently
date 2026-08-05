@@ -76,14 +76,27 @@ class EventRepositoryImpl @Inject constructor(
     }
 
     override suspend fun insertEvent(event: Event) {
-        eventDao.insertEvent(event.toEntity())
-
         val firebaseUser = firebaseAuthService.getCurrentUser()
-        if (firebaseUser != null && !event.syncedToFirestore && !event.isPrivate) {
-            val audience = shareTargets(event, firebaseUser.uid, firebaseUser.uid)
-            firestoreEventDataSource.insertEvent(event.id, event.toFirestoreMap(firebaseUser.uid, audience))
+        // `createdByFirebaseUid` records who created the event, not whether it ever synced —
+        // it must be stamped here, unconditionally, rather than only inside the sync branch
+        // below. A private event is never synced by design, and an offline device or a failed
+        // sync leaves `syncedToFirestore` false indefinitely; either way the old code left the
+        // field null forever. That field is also what scopes `ParentSlotMigrator`'s re-stamp
+        // (`WHERE createdByFirebaseUid = :myUid`), so a null row could never be found once
+        // pairing moved this device to a different slot — private events were the worst case,
+        // since they get no second chance from a later sync to pick up the stamp.
+        val stamped = if (firebaseUser != null) {
+            event.copy(createdByFirebaseUid = event.createdByFirebaseUid ?: firebaseUser.uid)
+        } else {
+            event
+        }
+        eventDao.insertEvent(stamped.toEntity())
 
-            val syncedEvent = event.copy(
+        if (firebaseUser != null && !stamped.syncedToFirestore && !stamped.isPrivate) {
+            val audience = shareTargets(stamped, firebaseUser.uid, firebaseUser.uid)
+            firestoreEventDataSource.insertEvent(stamped.id, stamped.toFirestoreMap(firebaseUser.uid, audience))
+
+            val syncedEvent = stamped.copy(
                 syncedToFirestore = true,
                 createdByFirebaseUid = firebaseUser.uid,
                 sharedWith = audience

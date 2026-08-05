@@ -211,7 +211,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 - Create: `app/src/main/java/com/coparently/app/data/repository/ParentSlotMigrator.kt`
 - Create: `app/src/test/java/com/coparently/app/data/repository/ParentSlotMigratorTest.kt`
 - Modify: `app/src/main/java/com/coparently/app/data/local/dao/EventDao.kt`
-- Modify: `app/src/main/java/com/coparently/app/presentation/pairing/PairingViewModel.kt` — the `acceptIncoming` path
+- Modify: `app/src/main/java/com/coparently/app/presentation/pairing/PairingViewModel.kt` — both the `acceptIncoming` path and the `redeemCode` path (manual code entry, QR scan and deep link all funnel through `PairingRepository.redeem`, which reaches the same `acceptPairingInvitation` callable and can flip this device's slot the same way; both paths must reach the migrator through one shared comparison, not two copies of it)
 
 **Interfaces:**
 - Consumes: Task 1's slot assignment — after `acceptInvitation` returns, this device may occupy a different slot than it did.

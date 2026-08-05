@@ -1,11 +1,17 @@
 package com.coparently.app.data.remote.firebase
 
 import com.coparently.app.domain.model.PairingError
+import com.google.android.gms.tasks.Tasks
+import com.google.firebase.functions.FirebaseFunctions
 import com.google.firebase.functions.FirebaseFunctionsException
+import com.google.firebase.functions.HttpsCallableReference
+import com.google.firebase.functions.HttpsCallableResult
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Test
 
 /**
@@ -18,6 +24,60 @@ import org.junit.Test
  * "something went wrong" with nothing failing, so the strings are pinned here verbatim.
  */
 class PairingFunctionsTest {
+
+    private lateinit var functions: FirebaseFunctions
+    private lateinit var callableRef: HttpsCallableReference
+    private lateinit var pairingFunctions: PairingFunctions
+
+    @Before
+    fun setUp() {
+        functions = mockk()
+        callableRef = mockk()
+        pairingFunctions = PairingFunctions(functions)
+        every { functions.getHttpsCallable("acceptPairingInvitation") } returns callableRef
+    }
+
+    // ---- acceptInvitation response parsing ---------------------------------
+
+    @Test
+    fun `acceptInvitation carries the role through when the callable reports one`() = runTest {
+        stubResponse(mapOf("partnerId" to "user-b", "role" to "dad"))
+
+        val outcome = pairingFunctions.acceptInvitation(invitationId = "invite-1")
+
+        assertEquals(AcceptInvitationResult(partnerId = "user-b", role = "dad"), outcome.getOrNull())
+    }
+
+    @Test
+    fun `acceptInvitation succeeds with a null role when the callable does not report one`() = runTest {
+        // A staged rollout can pair a client against a backend (or the reverse) that predates
+        // the role field. Pairing already succeeded server-side by the time this is parsed;
+        // only the local migration hint is missing, so this must not fail the whole accept —
+        // that would report a successful pairing as failed, with no way to retry it (the
+        // invitation is no longer pending once accepted).
+        stubResponse(mapOf("partnerId" to "user-b"))
+
+        val outcome = pairingFunctions.acceptInvitation(invitationId = "invite-1")
+
+        assertEquals(AcceptInvitationResult(partnerId = "user-b", role = null), outcome.getOrNull())
+    }
+
+    @Test
+    fun `acceptInvitation still fails when partnerId is missing`() = runTest {
+        // Unlike role, partnerId is required: a response without it is a genuine contract
+        // violation with the callable, not a version-skew case to tolerate.
+        stubResponse(mapOf("role" to "dad"))
+
+        val outcome = pairingFunctions.acceptInvitation(invitationId = "invite-1")
+
+        assertTrue(outcome.isFailure)
+    }
+
+    private fun stubResponse(data: Map<String, Any?>) {
+        val result = mockk<HttpsCallableResult>()
+        every { result.getData() } returns data
+        every { callableRef.call(any()) } returns Tasks.forResult(result)
+    }
 
     @Test
     fun `not-found maps to NotFound`() {

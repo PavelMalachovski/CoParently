@@ -252,6 +252,30 @@ class PairingRepositoryImplTest {
         coVerify { pairingFunctions.acceptInvitation(code = "4F7K2M", invitationId = null) }
     }
 
+    @Test
+    fun `redeem surfaces the newly assigned slot from the callable, the same as acceptIncoming`() = runTest {
+        // QR scan, manual code entry and deep link all funnel through redeem(), and reach the
+        // same acceptPairingInvitation callable as an addressed-invitation accept — this path
+        // must carry the role through too, or PairingViewModel has nothing to re-stamp with.
+        coEvery { pairingFunctions.acceptInvitation(code = "4F7K2M") } returns
+            Result.success(AcceptInvitationResult(partnerId = "user-b", role = "dad"))
+
+        val result = repository.redeem("4F7K2M")
+
+        assertEquals("dad", result.getOrNull())
+    }
+
+    @Test
+    fun `redeem surfaces a null role without failing when the callable does not report one`() = runTest {
+        coEvery { pairingFunctions.acceptInvitation(code = "4F7K2M") } returns
+            Result.success(AcceptInvitationResult(partnerId = "user-b", role = null))
+
+        val result = repository.redeem("4F7K2M")
+
+        assertTrue(result.isSuccess)
+        assertEquals(null, result.getOrNull())
+    }
+
     // ---- acceptIncoming ----------------------------------------------------
 
     @Test
@@ -262,6 +286,17 @@ class PairingRepositoryImplTest {
         val result = repository.acceptIncoming("invite-1")
 
         assertEquals("dad", result.getOrNull())
+    }
+
+    @Test
+    fun `acceptIncoming surfaces a null role without failing when the callable does not report one`() = runTest {
+        coEvery { pairingFunctions.acceptInvitation(invitationId = "invite-1") } returns
+            Result.success(AcceptInvitationResult(partnerId = "user-b", role = null))
+
+        val result = repository.acceptIncoming("invite-1")
+
+        assertTrue(result.isSuccess)
+        assertEquals(null, result.getOrNull())
     }
 
     @Test

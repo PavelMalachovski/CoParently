@@ -151,7 +151,7 @@ class PairingRepositoryImpl @Inject constructor(
         return runPairing { writeNewInvite(toEmail = normalized) }
     }
 
-    override suspend fun redeem(code: String): Result<Unit> {
+    override suspend fun redeem(code: String): Result<String?> {
         val normalized = code.trim().uppercase()
         if (!InviteCodeGenerator.isValid(normalized)) {
             return Result.failure(PairingException(PairingError.NotFound))
@@ -159,10 +159,10 @@ class PairingRepositoryImpl @Inject constructor(
         // Conversation creation deliberately does NOT hang off this call: it is driven by the
         // observed Paired transition in [onPairingStateObserved] instead, so the inviter's
         // phone — which never calls anything — ends up with a thread too.
-        return pairingFunctions.acceptInvitation(code = normalized).map { }
+        return pairingFunctions.acceptInvitation(code = normalized).map { it.role }
     }
 
-    override suspend fun acceptIncoming(invitationId: String): Result<String> =
+    override suspend fun acceptIncoming(invitationId: String): Result<String?> =
         pairingFunctions.acceptInvitation(invitationId = invitationId).map { it.role }
 
     override suspend fun rejectIncoming(invitationId: String): Result<Unit> = runPairing {
