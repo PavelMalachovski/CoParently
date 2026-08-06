@@ -5,3 +5,8 @@ firebase-debug.*.log
 *.local
 .runtimeconfig.json
 
+# Loaded into process.env at deploy/runtime by the Firebase CLI (see "Admin operations" in
+# README.md). Never committed: it is where BACKFILL_ADMIN_UIDS, an operator allow-list,
+# lives for this project. .env.example documents the format and is tracked.
+.env
+

@@ -868,6 +868,15 @@ exports.assignSlots = assignSlots;
  * feature — "is authenticated" is not a strong enough gate for a callable that rewrites
  * someone else's `role` field — so the caller's uid must appear on this list.
  *
+ * Populated at deploy time from `functions/.env` (see "Admin operations" in
+ * `functions/README.md`), which the Firebase CLI loads into `process.env` for every
+ * function — 1st and 2nd gen alike — with no extra binding on the function itself. That is
+ * deliberately not a Secret Manager secret: a secret additionally requires
+ * `functions.runWith({secrets: [...]})` on the callable that reads it, and without that
+ * binding the value never reaches `process.env` at runtime even though `firebase
+ * functions:secrets:set` reports success — which would leave this gate impossible to open by
+ * the very route that looks like it should open it.
+ *
  * @return {!Array<string>} The operator UIDs, or an empty list if none are configured.
  */
 function backfillAdminUids() {
@@ -876,6 +885,43 @@ function backfillAdminUids() {
 }
 
 exports.backfillAdminUids = backfillAdminUids;
+
+/**
+ * Whether an `onCall` context belongs to an allow-listed backfill operator.
+ *
+ * Split out from `backfillParentSlots` itself so the gate — the allow-list check — can be
+ * exercised directly for the uid it is supposed to *admit*, not only for the ones it
+ * refuses. Testing only the refusal path leaves a gate that is broken **closed** (the wrong
+ * env var name, an inverted condition) invisible: every "refuses ..." case would still pass,
+ * since none of them ever supplies a uid the code is supposed to let through.
+ *
+ * @param {?{auth: ?{uid: string}}} context The `onCall` context.
+ * @return {boolean} Whether the caller may invoke the backfill.
+ */
+function isBackfillOperator(context) {
+  return Boolean(context && context.auth && backfillAdminUids().includes(context.auth.uid));
+}
+
+exports.isBackfillOperator = isBackfillOperator;
+
+/**
+ * A stored parent-slot value, normalized the same way `assignSlots` normalizes one: anything
+ * other than `'dad'` is `'mom'`.
+ *
+ * Exists so "does this pair already hold two distinct slots" can be decided without
+ * re-deriving that rule. Comparing two stored `role` values with plain `!==` would call a
+ * pair "already separated" the moment one side is a stale or invalid value — `undefined`,
+ * `''`, a typo — that happens to differ textually from `'mom'`, even though `assignSlots`
+ * would treat both as the same slot.
+ *
+ * @param {string|undefined} role A stored slot value.
+ * @return {string} `'dad'` or `'mom'`.
+ */
+function normalizedSlot(role) {
+  return assignSlots(role).inviterRole;
+}
+
+exports.normalizedSlot = normalizedSlot;
 
 /**
  * Body of the `backfillParentSlots` callable — re-slots pairs that were created before
@@ -887,36 +933,58 @@ exports.backfillAdminUids = backfillAdminUids;
  * reads `acceptedBy` off the invitation that created the pair, which is the one record that
  * still remembers.
  *
+ * Every invitation returned by the query counts toward `scanned`, even the ones this then
+ * skips — a migration whose only report is a bare "ok" cannot be checked afterwards, and
+ * that is doubly true for the invitations lacking `acceptedBy`: those name the pairs the spec
+ * calls *permanently* unrepairable, so how many of them exist is exactly what an operator
+ * needs to see, not a count silently folded into "0 scanned, 0 skipped".
+ *
  * Skipped, not guessed at, when:
  * - the invitation carries no `acceptedBy` (never accepted, or accepted before that field
- *   existed) — such an invitation simply is not read by the query below;
- * - either user document is missing;
- * - the two users are not *currently* mutually paired with each other. An invitation
- *   accepted and later unpaired (or re-paired with someone else) must not re-slot two
- *   people who are no longer, or never were, each other's live co-parent;
- * - the inviter and accepter already hold different slots. Running this twice must look
- *   like running it once, and a pair a previous run (or a manual fix) already separated
- *   must not be flipped back.
+ *   existed) — `skippedReasons.noAccepter`;
+ * - either user document is missing (the account was deleted) —
+ *   `skippedReasons.missingAccount`;
+ * - the two users exist but are not *currently* mutually paired with each other — an
+ *   invitation accepted and later unpaired, or re-paired with someone else, must not re-slot
+ *   two people who are no longer, or never were, each other's live co-parent —
+ *   `skippedReasons.notPaired`;
+ * - the inviter and accepter already hold the same normalized slot as each other is false —
+ *   i.e. they already hold different slots — `skippedReasons.alreadySeparated`. Running this
+ *   twice must look like running it once, and a pair a previous run (or a manual fix) already
+ *   separated must not be flipped back.
  *
  * A pair with no surviving invitation at all is never seen by this function in the first
  * place, which is the correct outcome: guessing which parent to move would risk re-stamping
  * the wrong person's events, so those pairs are left indistinct until one of them re-saves.
  *
+ * A failure processing one invitation — a malformed document (e.g. a missing
+ * `fromUserId`, which makes `db.collection('users').doc(...)` throw synchronously) or a
+ * transient Firestore error — is caught per-invitation and counted under `failed` rather than
+ * aborting the run: a migration with no undo must not discard the outcome for every pair it
+ * already reasoned about, or already wrote, because one later pair was broken.
+ *
  * Reuses `assignSlots(inviterRole)` rather than re-deriving the two slots, so this and the
  * accept path can never disagree about what "separated" means.
  *
  * @param {FirebaseFirestore.Firestore} db Firestore instance.
- * @return {Promise<{scanned: number, updated: number, skipped: number,
- *   skippedReasons: {notPaired: number, alreadySeparated: number}}>} What the migration did:
- *   how many accepted invitations with a known accepter were examined, how many pairs were
- *   re-slotted, and how many were skipped, broken down by reason.
+ * @return {Promise<{scanned: number, updated: number, skipped: number, failed: number,
+ *   skippedReasons: {noAccepter: number, missingAccount: number, notPaired: number,
+ *   alreadySeparated: number}}>} What the migration did: how many accepted invitations were
+ *   examined, how many pairs were re-slotted, and how many were skipped or failed, each
+ *   broken down by reason.
  */
 async function backfillParentSlotsImpl(db) {
   const summary = {
     scanned: 0,
     updated: 0,
     skipped: 0,
-    skippedReasons: {notPaired: 0, alreadySeparated: 0},
+    failed: 0,
+    skippedReasons: {
+      noAccepter: 0,
+      missingAccount: 0,
+      notPaired: 0,
+      alreadySeparated: 0,
+    },
   };
 
   const acceptedInvitations = await db.collection('invitations')
@@ -924,52 +992,54 @@ async function backfillParentSlotsImpl(db) {
       .get();
 
   for (const doc of acceptedInvitations.docs) {
-    const invite = doc.data();
-    if (!invite.acceptedBy) {
-      // Query reads status == 'accepted'; the acceptedBy != null half of "reads invitations
-      // where status == 'accepted' and acceptedBy != null" is applied here rather than as a
-      // second Firestore inequality filter, to avoid a composite-index requirement for a
-      // one-off migration.
-      continue;
-    }
-
     summary.scanned++;
+    const invite = doc.data();
 
-    const inviterId = invite.fromUserId;
-    const accepterId = invite.acceptedBy;
-    const inviterRef = db.collection('users').doc(inviterId);
-    const accepterRef = db.collection('users').doc(accepterId);
-    const [inviterSnap, accepterSnap] = await Promise.all([
-      inviterRef.get(), accepterRef.get(),
-    ]);
-
-    if (!inviterSnap.exists || !accepterSnap.exists) {
+    if (!invite.acceptedBy) {
       summary.skipped++;
-      summary.skippedReasons.notPaired++;
+      summary.skippedReasons.noAccepter++;
       continue;
     }
 
-    const inviterData = inviterSnap.data();
-    const accepterData = accepterSnap.data();
-    const stillPaired = inviterData.partnerId === accepterId &&
-      accepterData.partnerId === inviterId;
+    try {
+      const inviterId = invite.fromUserId;
+      const accepterId = invite.acceptedBy;
+      const inviterRef = db.collection('users').doc(inviterId);
+      const accepterRef = db.collection('users').doc(accepterId);
+      const [inviterSnap, accepterSnap] = await Promise.all([
+        inviterRef.get(), accepterRef.get(),
+      ]);
 
-    if (!stillPaired) {
-      summary.skipped++;
-      summary.skippedReasons.notPaired++;
-      continue;
+      if (!inviterSnap.exists || !accepterSnap.exists) {
+        summary.skipped++;
+        summary.skippedReasons.missingAccount++;
+        continue;
+      }
+
+      const inviterData = inviterSnap.data();
+      const accepterData = accepterSnap.data();
+      const stillPaired = inviterData.partnerId === accepterId &&
+        accepterData.partnerId === inviterId;
+
+      if (!stillPaired) {
+        summary.skipped++;
+        summary.skippedReasons.notPaired++;
+        continue;
+      }
+
+      if (normalizedSlot(inviterData.role) === normalizedSlot(accepterData.role)) {
+        const slots = assignSlots(inviterData.role);
+        await inviterRef.update({role: slots.inviterRole});
+        await accepterRef.update({role: slots.accepterRole});
+        summary.updated++;
+      } else {
+        summary.skipped++;
+        summary.skippedReasons.alreadySeparated++;
+      }
+    } catch (err) {
+      console.error(`backfillParentSlots failed on invitation ${doc.id}`, err);
+      summary.failed++;
     }
-
-    if (inviterData.role !== accepterData.role) {
-      summary.skipped++;
-      summary.skippedReasons.alreadySeparated++;
-      continue;
-    }
-
-    const slots = assignSlots(inviterData.role);
-    await inviterRef.update({role: slots.inviterRole});
-    await accepterRef.update({role: slots.accepterRole});
-    summary.updated++;
   }
 
   return summary;
@@ -986,6 +1056,16 @@ exports.backfillParentSlotsImpl = backfillParentSlotsImpl;
  * same reason slot assignment lives server-side at all — so it must not be reachable by an
  * arbitrary signed-in caller.
  *
+ * Runs with a 540-second timeout, well above the 60-second default `onCall` functions get
+ * without a `runWith` override (`onCall` itself allows up to 3,600s; 540 is generous headroom
+ * for this migration specifically, not the ceiling). The scan is a single unbounded `.get()`
+ * over `invitations` with no pagination, and each qualifying pair costs two reads plus up to
+ * two writes. Pagination was left out rather than added alongside the timeout bump: this is
+ * expected to run once over a historical, bounded set, nothing else in `functions/` scans an
+ * unbounded collection in one call, and there is no resume/retry bookkeeping to match it
+ * against — the extra timeout budget is the proportionate fix, not a second migration-shaped
+ * subsystem.
+ *
  * Must not be invoked before the client that watches for a slot changing outside the accept
  * flow (Task 12b) has shipped to users. Flipping a slot here while no device is watching for
  * it leaves that parent's app still stamping their old slot on new records, while the
@@ -993,17 +1073,19 @@ exports.backfillParentSlotsImpl = backfillParentSlotsImpl;
  * parent's" damage the accept-path re-stamp exists to prevent, delivered by this migration
  * instead.
  *
- * @return {Promise<{scanned: number, updated: number, skipped: number,
- *   skippedReasons: {notPaired: number, alreadySeparated: number}}>} See
- *   [backfillParentSlotsImpl].
+ * @return {Promise<{scanned: number, updated: number, skipped: number, failed: number,
+ *   skippedReasons: {noAccepter: number, missingAccount: number, notPaired: number,
+ *   alreadySeparated: number}}>} See [backfillParentSlotsImpl].
  */
-exports.backfillParentSlots = functions.https.onCall(async (data, context) => {
-  if (!context.auth || !backfillAdminUids().includes(context.auth.uid)) {
-    throw new functions.https.HttpsError(
-        'permission-denied', 'Operator access only', {reason: 'not-operator'});
-  }
-  return backfillParentSlotsImpl(admin.firestore());
-});
+exports.backfillParentSlots = functions.runWith({timeoutSeconds: 540}).https.onCall(
+    async (data, context) => {
+      if (!isBackfillOperator(context)) {
+        throw new functions.https.HttpsError(
+            'permission-denied', 'Operator access only', {reason: 'not-operator'});
+      }
+      return backfillParentSlotsImpl(admin.firestore());
+    },
+);
 
 /**
  * How many characters of a chat message body are carried into the push notification preview.

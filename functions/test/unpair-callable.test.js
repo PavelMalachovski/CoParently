@@ -133,7 +133,16 @@ function fakeDb(seed, options) {
     _added: added,
     collection(name) {
       return {
-        doc: (id) => docRef(name, id),
+        doc: (id) => {
+          // The real Admin SDK throws synchronously for a falsy document id (e.g. an
+          // invitation missing `fromUserId`) rather than returning a reference to
+          // nothing — mirrored here so a malformed document exercises the same
+          // failure mode in tests that it would in production.
+          if (!id) {
+            throw new Error('Value for argument "documentPath" must be a non-empty string.');
+          }
+          return docRef(name, id);
+        },
         async add(data) {
           added.push({collection: name, data});
           return {id: `generated-${added.length}`};
@@ -380,7 +389,12 @@ describe('unpairCoParentImpl', () => {
   });
 
   describe('the shared custody_models document', () => {
-    const CUSTODY_KEY = ['alice', 'bob'].sort().join('__');
+    // Deliberately the literal, not `['alice', 'bob'].sort().join('__')`: pinning the same
+    // formula the production code uses would only ever prove a delete was issued at
+    // whatever that formula happens to yield, not that it matches the id the client
+    // actually derives (`CustodyKey.of` / `canonicalPairId` in firestore.rules). Each side
+    // of that agreement is checked against a literal, not against a shared expression.
+    const CUSTODY_KEY = 'alice__bob';
 
     /**
      * Seeds a pair with a shared custody document alongside the usual pairing fixture.
@@ -403,7 +417,7 @@ describe('unpairCoParentImpl', () => {
 
       await unpairCoParentImpl(db, 'alice');
 
-      assert.ok(!(CUSTODY_KEY in (db._docs.custody_models || {})),
+      assert.ok(!('alice__bob' in (db._docs.custody_models || {})),
           'the shared custody document should be gone');
     });
 
@@ -433,7 +447,7 @@ describe('unpairCoParentImpl', () => {
 
       await unpairCoParentImpl(db, 'alice');
 
-      assert.ok(!(CUSTODY_KEY in (db._docs.custody_models || {})));
+      assert.ok(!('alice__bob' in (db._docs.custody_models || {})));
     });
   });
 });
@@ -498,6 +512,28 @@ function backfillSeed(overrides) {
   };
 }
 
+/**
+ * The zeroed-out shape of `backfillParentSlotsImpl`'s summary, with `scanned`, `updated`,
+ * `skipped`, `failed` and/or individual `skippedReasons` overridden. Centralising the shape
+ * means every test asserts the *whole* return value — including the reason counters it does
+ * not expect to move — rather than only the fields a given case happens to care about.
+ *
+ * @param {!Object=} overrides Top-level fields, plus an optional `skippedReasons` map.
+ * @return {!Object} The expected summary.
+ */
+function expectedSummary(overrides) {
+  const o = overrides || {};
+  return {
+    scanned: 'scanned' in o ? o.scanned : 0,
+    updated: 'updated' in o ? o.updated : 0,
+    skipped: 'skipped' in o ? o.skipped : 0,
+    failed: 'failed' in o ? o.failed : 0,
+    skippedReasons: Object.assign(
+        {noAccepter: 0, missingAccount: 0, notPaired: 0, alreadySeparated: 0},
+        o.skippedReasons || {}),
+  };
+}
+
 describe('backfillParentSlotsImpl', () => {
   let backfillParentSlotsImpl;
 
@@ -516,12 +552,7 @@ describe('backfillParentSlotsImpl', () => {
 
     assert.strictEqual(db._docs.users.alice.role, 'mom', 'the inviter keeps their slot');
     assert.strictEqual(db._docs.users.bob.role, 'dad', 'the accepter takes the other one');
-    assert.deepStrictEqual(summary, {
-      scanned: 1,
-      updated: 1,
-      skipped: 0,
-      skippedReasons: {notPaired: 0, alreadySeparated: 0},
-    });
+    assert.deepStrictEqual(summary, expectedSummary({scanned: 1, updated: 1}));
   });
 
   it('leaves a pair with no surviving invitation alone', async () => {
@@ -533,8 +564,7 @@ describe('backfillParentSlotsImpl', () => {
 
     assert.strictEqual(db._docs.users.alice.role, 'mom');
     assert.strictEqual(db._docs.users.bob.role, 'mom');
-    assert.strictEqual(summary.scanned, 0);
-    assert.strictEqual(summary.updated, 0);
+    assert.deepStrictEqual(summary, expectedSummary({}));
   });
 
   it('skips a pair whose parents already hold different slots', async () => {
@@ -544,9 +574,22 @@ describe('backfillParentSlotsImpl', () => {
 
     assert.strictEqual(db._docs.users.alice.role, 'mom');
     assert.strictEqual(db._docs.users.bob.role, 'dad');
-    assert.strictEqual(summary.updated, 0);
-    assert.strictEqual(summary.skipped, 1);
-    assert.strictEqual(summary.skippedReasons.alreadySeparated, 1);
+    assert.deepStrictEqual(summary,
+        expectedSummary({scanned: 1, skipped: 1, skippedReasons: {alreadySeparated: 1}}));
+  });
+
+  it('does not misclassify a pair as already separated when a stale value merely differs ' +
+      'textually from mom, rather than holding a distinct slot', async () => {
+    // assignSlots normalizes anything but 'dad' to 'mom', so an empty string on one side and
+    // 'mom' on the other are the *same* slot as far as assignSlots is concerned. A raw
+    // string comparison would disagree and wrongly call this pair already repaired.
+    const db = fakeDb(backfillSeed({bobRole: ''}));
+
+    const summary = await backfillParentSlotsImpl(db);
+
+    assert.strictEqual(db._docs.users.alice.role, 'mom');
+    assert.strictEqual(db._docs.users.bob.role, 'dad');
+    assert.deepStrictEqual(summary, expectedSummary({scanned: 1, updated: 1}));
   });
 
   it('running it twice is indistinguishable from running it once', async () => {
@@ -557,12 +600,8 @@ describe('backfillParentSlotsImpl', () => {
 
     assert.strictEqual(db._docs.users.alice.role, 'mom');
     assert.strictEqual(db._docs.users.bob.role, 'dad');
-    assert.deepStrictEqual(second, {
-      scanned: 1,
-      updated: 0,
-      skipped: 1,
-      skippedReasons: {notPaired: 0, alreadySeparated: 1},
-    });
+    assert.deepStrictEqual(second,
+        expectedSummary({scanned: 1, skipped: 1, skippedReasons: {alreadySeparated: 1}}));
   });
 
   it('skips an invitation whose pair has since unpaired', async () => {
@@ -572,9 +611,8 @@ describe('backfillParentSlotsImpl', () => {
 
     assert.strictEqual(db._docs.users.alice.role, 'mom');
     assert.strictEqual(db._docs.users.bob.role, 'mom');
-    assert.strictEqual(summary.updated, 0);
-    assert.strictEqual(summary.skipped, 1);
-    assert.strictEqual(summary.skippedReasons.notPaired, 1);
+    assert.deepStrictEqual(summary,
+        expectedSummary({scanned: 1, skipped: 1, skippedReasons: {notPaired: 1}}));
   });
 
   it('skips an invitation whose accepter has since re-paired with someone else', async () => {
@@ -584,12 +622,30 @@ describe('backfillParentSlotsImpl', () => {
 
     assert.strictEqual(db._docs.users.alice.role, 'mom');
     assert.strictEqual(db._docs.users.bob.role, 'mom');
-    assert.strictEqual(summary.skippedReasons.notPaired, 1);
+    assert.deepStrictEqual(summary,
+        expectedSummary({scanned: 1, skipped: 1, skippedReasons: {notPaired: 1}}));
   });
 
-  it('does not read an invitation with no recorded accepter', async () => {
-    // Never accepted, or accepted before `acceptedBy` existed. Either way it must not be
-    // counted as scanned, let alone acted on.
+  it('reports a missing account separately from an ended pairing', async () => {
+    // Bob's account was deleted outright, as opposed to the pairing having ended while
+    // both accounts still exist (the previous two cases). An operator reading the report
+    // afterwards cannot tell those apart unless they are counted separately.
+    const seed = backfillSeed();
+    delete seed.users.bob;
+    const db = fakeDb(seed);
+
+    const summary = await backfillParentSlotsImpl(db);
+
+    assert.strictEqual(db._docs.users.alice.role, 'mom');
+    assert.deepStrictEqual(summary,
+        expectedSummary({scanned: 1, skipped: 1, skippedReasons: {missingAccount: 1}}));
+  });
+
+  it('counts, but does not act on, an invitation with no recorded accepter', async () => {
+    // Never accepted, or accepted before `acceptedBy` existed - the one class the spec
+    // calls permanently unrepairable. It must still be visible in the report: a run over
+    // many legacy invitations that never recorded an accepter must not look identical to a
+    // run over an empty collection.
     const seed = backfillSeed();
     seed.invitations.inv1.acceptedBy = null;
     const db = fakeDb(seed);
@@ -598,7 +654,8 @@ describe('backfillParentSlotsImpl', () => {
 
     assert.strictEqual(db._docs.users.alice.role, 'mom');
     assert.strictEqual(db._docs.users.bob.role, 'mom');
-    assert.strictEqual(summary.scanned, 0);
+    assert.deepStrictEqual(summary,
+        expectedSummary({scanned: 1, skipped: 1, skippedReasons: {noAccepter: 1}}));
   });
 
   it('ignores an invitation that is still pending', async () => {
@@ -609,7 +666,29 @@ describe('backfillParentSlotsImpl', () => {
     const summary = await backfillParentSlotsImpl(db);
 
     assert.strictEqual(db._docs.users.bob.role, 'mom');
-    assert.strictEqual(summary.scanned, 0);
+    assert.deepStrictEqual(summary, expectedSummary({}));
+  });
+
+  it('counts a per-invitation failure without aborting the run', async () => {
+    // A malformed invitation - here, one missing fromUserId - makes
+    // db.collection('users').doc(...) throw synchronously, mirroring the real Admin SDK.
+    // The good pair alongside it must still be repaired: a migration with no undo must not
+    // let one broken document discard everything already reasoned about, or already
+    // written, for every other pair in the same run.
+    const seed = backfillSeed();
+    seed.invitations.bad = {
+      id: 'bad',
+      status: 'accepted',
+      fromUserId: '',
+      acceptedBy: 'bob',
+    };
+    const db = fakeDb(seed);
+
+    const summary = await backfillParentSlotsImpl(db);
+
+    assert.strictEqual(db._docs.users.alice.role, 'mom', 'the good pair still gets repaired');
+    assert.strictEqual(db._docs.users.bob.role, 'dad');
+    assert.deepStrictEqual(summary, expectedSummary({scanned: 2, updated: 1, failed: 1}));
   });
 });
 
@@ -643,6 +722,22 @@ describe('backfillParentSlots operator gate', () => {
     await assert.rejects(
         () => wrapped({}, {}),
         (err) => err.code === 'permission-denied');
+  });
+
+  it('lets an allow-listed operator through the gate', () => {
+    // A gate broken closed - the wrong env var name, an inverted condition - would still
+    // pass every "refuses ..." case above, since none of them ever supplies a uid the code
+    // is supposed to admit. `isBackfillOperator` is exercised directly (rather than through
+    // `test.wrap`, which would carry the call all the way to a real `admin.firestore()`
+    // with no Firestore available in this test run) so the affirmative case is checked
+    // too, not only the negative ones.
+    process.env.BACKFILL_ADMIN_UIDS = 'op-uid, other-op';
+
+    assert.strictEqual(myFunctions.isBackfillOperator({auth: {uid: 'op-uid'}}), true);
+    assert.strictEqual(myFunctions.isBackfillOperator({auth: {uid: 'other-op'}}), true);
+    assert.strictEqual(myFunctions.isBackfillOperator({auth: {uid: 'someone-else'}}), false);
+    assert.strictEqual(myFunctions.isBackfillOperator({}), false);
+    assert.strictEqual(myFunctions.isBackfillOperator(undefined), false);
   });
 
   it('reads a comma-separated allow-list and trims whitespace around each uid', () => {
