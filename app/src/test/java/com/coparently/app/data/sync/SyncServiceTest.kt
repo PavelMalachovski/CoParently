@@ -20,10 +20,12 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.Before
 import org.junit.Test
+import java.io.File
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import kotlin.test.assertEquals
@@ -47,6 +49,12 @@ import kotlin.test.assertEquals
  *    only test coverage there is for that containment — a round-1 review found the earlier
  *    version of this file exercised none of `syncUserData`'s role/slot-change branch at all,
  *    since every pre-existing test stubs the remote user to `null`.
+ * 4. A parent-slot re-stamp performed in step 1 must still be there when step 2 has finished.
+ *    Steps 1 and 2 were each covered on their own and the seam between them was not: the
+ *    re-stamp wrote Room directly, the upload half only looks at `getUnsyncedEvents()`, and the
+ *    download half REPLACEs whatever it receives — so the re-stamp was reverted seconds later,
+ *    in the same pass, with no error and no log, and the slot marker had already advanced so
+ *    nothing ever retried it.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class SyncServiceTest {
@@ -265,6 +273,49 @@ class SyncServiceTest {
     }
 
     @Test
+    fun `a re-stamped event survives the download half of the same sync pass`() = runTest {
+        // The seam neither scoped review could see. `syncUserData` re-stamps this user's rows in
+        // step 1 and `syncEvents` runs in step 2 of the *same* pass: its upload half only looks at
+        // `getUnsyncedEvents()`, and its download half REPLACEs every row it receives. Unless the
+        // re-stamp also marks the rows unsynced, the upload skips them, the document keeps the
+        // pre-pairing slot, and the download writes that slot straight back over the re-stamp —
+        // permanently, because `reslot` has already advanced the slot marker and
+        // `reslotIfSlotChanged` never retries once `marker == to`.
+        pairWith(partnerId = BOB)
+        val rows = mutableMapOf(
+            EVENT_ID to eventEntity(createdByFirebaseUid = ALICE, sharedWith = listOf(ALICE))
+                .copy(syncedToFirestore = true)
+        )
+        // The pair's document as it stands before this pass: the old slot, an audience of one.
+        var document = eventDocument(rows.getValue(EVENT_ID), sharedWith = listOf(ALICE))
+        backEventDaoWith(rows)
+        coEvery { firestoreEventDataSource.insertEvent(any(), any()) } answers {
+            document = secondArg()
+            Result.success(Unit)
+        }
+        // A live listener re-delivers the document as it stands when the download half runs.
+        every { firestoreEventDataSource.observeEventsSharedWith(ALICE) } returns
+            flow { emit(listOf(document)) }
+        coEvery { firestoreUserDataSource.getUserById(ALICE) } returns mapOf("role" to "dad")
+        // Read here rather than inside the stub: `syncUserData` swallows everything the migrator
+        // throws, so a failure to read the statement would vanish into a confusing assertion.
+        val clearsSyncFlag = declaredSql("reslotOwner")
+            .filterNot { it.isWhitespace() }
+            .contains("syncedToFirestore=0")
+        coEvery { parentSlotMigrator.reslotIfSlotChanged(ALICE, "dad") } answers {
+            applyReslot(rows, from = "mom", to = "dad", myUid = ALICE, clearsSyncFlag)
+        }
+
+        syncService.performFullSync()
+
+        assertEquals("dad", rows.getValue(EVENT_ID).parentOwner)
+        // And the other half of the spec's promise: the document the co-parent reads now carries
+        // the new slot *and* lists them, so it reaches them at all.
+        assertEquals("dad", document["parentOwner"])
+        assertEquals(listOf(ALICE, BOB), document["sharedWith"])
+    }
+
+    @Test
     fun `a failure reacting to a slot change does not fail the rest of the sync pass`() = runTest {
         // The containment a round-1 review specifically asked to see covered: `syncEvents`
         // and `syncChildInfo` run after `syncUserData` in the same `performFullSync` pass, so
@@ -285,6 +336,97 @@ class SyncServiceTest {
         coVerify(exactly = 1) { firestoreEventDataSource.insertEvent(any(), any()) }
     }
 
+    /**
+     * Backs the mocked [EventDao] with [rows], so a write in one half of a sync pass is visible
+     * to the half that follows it. The default `relaxed` mock forgets everything, which is
+     * exactly why the two halves could disagree unnoticed.
+     */
+    private fun backEventDaoWith(rows: MutableMap<String, EventEntity>) {
+        coEvery { eventDao.getUnsyncedEvents() } answers {
+            rows.values.filterNot { it.syncedToFirestore }
+        }
+        coEvery { eventDao.getEventById(any()) } answers { rows[firstArg()] }
+        coEvery { eventDao.insertEvent(any()) } answers {
+            val entity = firstArg<EventEntity>()
+            rows[entity.id] = entity
+        }
+        coEvery { eventDao.markAsSynced(any()) } answers {
+            val id = firstArg<String>()
+            rows[id]?.let { rows[id] = it.copy(syncedToFirestore = true) }
+        }
+    }
+
+    /**
+     * Applies [EventDao]'s two re-stamp statements to [rows] the way SQLite would.
+     *
+     * The one effect this fake does not restate is [clearsSyncFlag], which the caller reads off
+     * the declared statement via [declaredSql]. There is no Room/Robolectric harness on this
+     * source set, so the SQL cannot be executed here — deriving the behaviour that matters from
+     * the production statement rather than from a copy of it is what stops this test from
+     * passing while the statement says otherwise.
+     */
+    private fun applyReslot(
+        rows: MutableMap<String, EventEntity>,
+        from: String,
+        to: String,
+        myUid: String,
+        clearsSyncFlag: Boolean
+    ) {
+        rows.keys.toList()
+            .map { id -> id to rows.getValue(id) }
+            .filter { (_, row) -> row.createdByFirebaseUid == myUid }
+            .forEach { (id, row) ->
+                val restamped = row
+                    .let { if (it.parentOwner == from) it.copy(parentOwner = to) else it }
+                    .let { if (it.pickupConfirmedBy == from) it.copy(pickupConfirmedBy = to) else it }
+                if (restamped == row) return@forEach
+                rows[id] =
+                    if (clearsSyncFlag) restamped.copy(syncedToFirestore = false) else restamped
+            }
+    }
+
+    /**
+     * The SQL [EventDao] declares for [method], read out of the source file.
+     *
+     * Not reflection: Room's `@Query` is `BINARY`-retention and is simply not there at runtime.
+     * Not the generated `EventDao_Impl` either — its statement is a string constant inside a
+     * method body. The source is the only place the statement can be read from on a plain-JVM
+     * source set, and reading it is what gives [applyDeclaredReslot] its teeth.
+     */
+    private fun declaredSql(method: String): String {
+        val source = generateSequence(File("").absoluteFile) { it.parentFile }
+            .map { File(it, DAO_SOURCE_PATH) }
+            .first { it.isFile }
+            .readText()
+        val declaredAt = source.indexOf("suspend fun $method(")
+        check(declaredAt > 0) { "EventDao.$method is not declared where this test expects it" }
+        return source.substring(0, declaredAt).substringAfterLast("@Query(")
+    }
+
+    /** The Firestore document `SyncService` would write for [entity]. */
+    private fun eventDocument(entity: EventEntity, sharedWith: List<String>): Map<String, Any?> =
+        mapOf(
+            "id" to entity.id,
+            "title" to entity.title,
+            "description" to entity.description,
+            "startDateTime" to entity.startDateTime.format(formatter),
+            "endDateTime" to entity.endDateTime?.format(formatter),
+            "eventType" to entity.eventType,
+            "parentOwner" to entity.parentOwner,
+            "isRecurring" to entity.isRecurring,
+            "recurrencePattern" to entity.recurrencePattern,
+            "recurrenceEndDate" to entity.recurrenceEndDate?.toString(),
+            "pickupConfirmedBy" to entity.pickupConfirmedBy,
+            "pickupConfirmedAt" to entity.pickupConfirmedAt?.format(formatter),
+            "createdAt" to entity.createdAt.format(formatter),
+            "updatedAt" to entity.updatedAt.format(formatter),
+            "createdByFirebaseUid" to entity.createdByFirebaseUid,
+            "sharedWith" to sharedWith,
+            "lastModifiedBy" to entity.lastModifiedBy,
+            "permissions" to entity.permissions,
+            "imageUrl" to entity.imageUrl
+        )
+
     /** Gives Alice's Room row the supplied co-parent (or none). */
     private fun pairWith(partnerId: String?) {
         coEvery { userDao.getUserById(ALICE) } returns UserEntity(
@@ -298,7 +440,7 @@ class SyncServiceTest {
     }
 
     private fun eventEntity(createdByFirebaseUid: String, sharedWith: List<String>) = EventEntity(
-        id = "event-1",
+        id = EVENT_ID,
         title = "Swimming lesson",
         startDateTime = now,
         endDateTime = now.plusHours(1),
@@ -349,5 +491,10 @@ class SyncServiceTest {
         const val BOB = "bob-uid"
         const val CAROL = "carol-uid"
         const val CHILD_ID = "child-1"
+        const val EVENT_ID = "event-1"
+
+        /** Where [SyncServiceTest.declaredSql] looks, relative to the repository root. */
+        const val DAO_SOURCE_PATH =
+            "app/src/main/java/com/coparently/app/data/local/dao/EventDao.kt"
     }
 }
