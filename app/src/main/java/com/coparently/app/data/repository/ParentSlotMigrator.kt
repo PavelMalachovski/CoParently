@@ -31,6 +31,12 @@ import javax.inject.Singleton
  * Idempotent by construction: the second run matches nothing, because the first left no rows
  * in the old slot.
  *
+ * Both statements also clear `syncedToFirestore` on the rows they touch, which is what carries
+ * the re-stamp off this device. Without it the next `SyncService.performFullSync` skipped these
+ * rows in its upload half and then overwrote them from the still-stale documents in its download
+ * half — in the same pass, one step after this class had run, and permanently, because the slot
+ * marker below had already advanced. See [EventDao.reslotOwner].
+ *
  * [reslot] also records, in [EncryptedPreferences], which slot this user's records are now
  * stamped with — see [reslotIfSlotChanged] for why that record exists and why it is not
  * [com.coparently.app.domain.model.User.role].
@@ -65,6 +71,24 @@ class ParentSlotMigrator @Inject constructor(
         encryptedPreferences.putString(slotMarkerKey(myUid), to)
         return changed
     }
+
+    /**
+     * The slot this device last stamped [myUid]'s records with, or null if it never has.
+     *
+     * The same marker [reslotIfSlotChanged] compares against, exposed because
+     * `PairingViewModel.withSlotReslot` needs exactly the same "before" and had been deriving it
+     * from `User.role` — the field this class documents, at length, as unusable for that. A
+     * wrong `from` re-stamps nothing (it matches no row), reports zero, and then complements a
+     * pattern that may already be complemented; it self-heals only if a later detector pass
+     * re-stamps, and after [reslot] has advanced the marker no later pass ever will.
+     *
+     * Null is a real answer and not an error: it means this device has never moved [myUid]
+     * between slots, which is the ordinary state of an unpaired account. The caller falls back
+     * to the profile's `role` there, because with no marker there is nothing better and the
+     * placeholder is at least what new records were stamped with.
+     */
+    fun knownSlot(myUid: String): String? =
+        encryptedPreferences.getString(slotMarkerKey(myUid))
 
     /**
      * Reacts to this user's own profile arriving with a different parent slot than the one
@@ -109,16 +133,26 @@ class ParentSlotMigrator @Inject constructor(
      * marker stale, so the next sync retries the *re-stamp* rather than silently treating the
      * interrupted attempt as done.
      *
-     * **Residual, disclosed rather than hidden:** because the marker advances before the
-     * complement rather than after it, a process death in the narrow window between the two
-     * would leave the marker already at its new value while the complement below never ran —
-     * and the next sync, seeing no change, would not retry it. Tying the marker to the
-     * complement's completion instead was considered and rejected: `reconcileCustody` runs the
-     * complement in a detached coroutine on the accept path, so the marker would then depend on
-     * a best-effort background task rather than on [reslot] itself, and a sync landing while
-     * that task was still in flight would see a stale marker and start a second, concurrent
-     * reaction. The accepted risk here is narrower and lower-severity than that alternative's:
-     * at worst a skipped complement, never a re-inverted or permanently un-re-stamped schedule.
+     * **Residual, disclosed rather than hidden, and it is not a small one.** Because the marker
+     * advances inside [reslot] and the complement runs after it, a process death in the window
+     * between the two leaves the marker already at its new value while the complement never ran
+     * — and the next sync, seeing no change, does not retry it. Do not read "a skipped
+     * complement" as a deferred reconciliation: `momDayIndices` means "the days slot 1 has
+     * custody", so a pattern left un-complemented after this device moved to slot 2 hands the
+     * user's own custody days to their co-parent, on their own calendar, permanently, with no
+     * banner and no error. It is the same outcome the ordering in
+     * `PairingViewModel.reconcileCustody` exists to prevent on the accept path.
+     *
+     * It is nonetheless the better of the two available orderings, and the reason is that
+     * [com.coparently.app.domain.model.CustodyModel.complemented] is **not idempotent**:
+     * applying it twice restores the original, so a retry that re-complements is an inversion of
+     * exactly the same severity, in the opposite direction, and it can fire on a device that was
+     * never interrupted at all. Tying the marker to the complement's completion — the obvious
+     * alternative — buys "retried once" at the price of "possibly applied twice", and there is no
+     * transaction that could span both, because the marker lives in [EncryptedPreferences] and
+     * the complement in Room. Closing this properly needs the model to record which slot it is
+     * expressed in, so that complementing becomes an assertion about state rather than a toggle;
+     * that is a Room schema change and a follow-up, not a comment.
      *
      * @param myUid Firebase UID of the signed-in user; forwarded to [reslot] unchanged and used
      *   to scope the marker, so a device where a second account has signed in later (Room's
@@ -150,7 +184,7 @@ class ParentSlotMigrator @Inject constructor(
      */
     suspend fun reslotIfSlotChanged(myUid: String, newRole: String?) {
         val to = newRole?.takeIf { it.isNotBlank() } ?: return
-        val marker = encryptedPreferences.getString(slotMarkerKey(myUid))
+        val marker = knownSlot(myUid)
         if (marker == null) {
             encryptedPreferences.putString(slotMarkerKey(myUid), to)
             return

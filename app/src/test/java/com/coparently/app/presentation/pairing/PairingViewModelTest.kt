@@ -1,5 +1,6 @@
 package com.coparently.app.presentation.pairing
 
+import androidx.lifecycle.viewModelScope
 import app.cash.turbine.test
 import com.coparently.app.R
 import com.coparently.app.data.analytics.AnalyticsManager
@@ -30,6 +31,7 @@ import io.mockk.mockkObject
 import io.mockk.unmockkObject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.resetMain
@@ -68,6 +70,9 @@ class PairingViewModelTest {
         analyticsManager = mockk(relaxed = true)
         userRepository = mockk(relaxed = true)
         parentSlotMigrator = mockk(relaxed = true)
+        // No marker unless a test says otherwise: a relaxed mock would answer "" for a
+        // String-returning call and silently become a *wrong* before-slot on every accept.
+        every { parentSlotMigrator.knownSlot(any()) } returns null
         custodyModelRepository = mockk(relaxed = true)
         pendingCustodyConflict = PendingCustodyConflict()
         coEvery { repository.observePairingState() } returns
@@ -327,6 +332,29 @@ class PairingViewModelTest {
         assertEquals(null, viewModel.form.value.actionErrorRes)
     }
 
+    @Test
+    fun `the before-slot is the migrator's marker, not Room's role`() = runTest(dispatcher) {
+        // Room's `role` is unusable as a "before": the accept path never writes it, it is seeded
+        // with a placeholder on profile creation, and it is written non-atomically with respect
+        // to the re-stamp - the three reasons `ParentSlotMigrator.reslotIfSlotChanged` already
+        // stopped using it. Here the marker says this device's records are stamped "dad"
+        // already, while Room's stale row still says "mom". Trusting `role` would re-stamp from
+        // a slot no row is in - matching nothing, reporting zero - and then complement a pattern
+        // that was already complemented, inverting it.
+        every { parentSlotMigrator.knownSlot("user-a") } returns "dad"
+        coEvery { userRepository.getCurrentUser() } returns userWithRole("mom")
+        coEvery { repository.acceptIncoming("invite-1") } returns Result.success("dad")
+        coEvery { custodyModelRepository.getActiveModelSync() } returns
+            pattern((0..6).toSet(), "mine")
+        coEvery { custodyModelRepository.readShared() } returns SharedCustodyRead.Absent
+
+        viewModel.acceptIncoming("invite-1")
+        dispatcher.scheduler.advanceUntilIdle()
+
+        coVerify(exactly = 0) { parentSlotMigrator.reslot(any(), any(), any()) }
+        coVerify(exactly = 0) { custodyModelRepository.saveReslotted(any()) }
+    }
+
     // ---- redeemCode / slot re-stamping -------------------------------------
     //
     // redeemCode() and acceptIncoming() are two different entry points to the same
@@ -570,6 +598,54 @@ class PairingViewModelTest {
 
         dispatcher.scheduler.advanceUntilIdle()
     }
+
+    @Test
+    fun `the complement is persisted before the wait for the pairing to reach Room`() =
+        runTest(dispatcher) {
+            // The complement depends on nothing the wait or the shared read provides: `slotChanged`
+            // comes from the callable and `mine` is a Room read. Running it after them parks the
+            // one write that must not be lost behind a five-second wait and an untimed Firestore
+            // `get()`, in a detached coroutine, while the screen already says "Paired" - and
+            // popping the Pairing entry, the natural next tap, cancels it.
+            neverPairedLocally(from = "mom", to = "dad")
+            coEvery { custodyModelRepository.getActiveModelSync() } returns
+                pattern((0..6).toSet(), "mine")
+            coEvery { custodyModelRepository.readShared() } returns SharedCustodyRead.Absent
+
+            viewModel.acceptIncoming("invite-1")
+            // Far short of the wait's timeout, so nothing downstream of it can have run yet.
+            dispatcher.scheduler.advanceTimeBy(1)
+            dispatcher.scheduler.runCurrent()
+
+            coVerify(exactly = 1) {
+                custodyModelRepository.saveReslotted(pattern((7..13).toSet(), "mine"))
+            }
+            coVerify(exactly = 0) { custodyModelRepository.readShared() }
+
+            dispatcher.scheduler.advanceUntilIdle()
+        }
+
+    @Test
+    fun `leaving the pairing screen mid-wait still leaves the complement in Room`() =
+        runTest(dispatcher) {
+            // Cancelling the ViewModel's scope is what popping the Pairing back-stack entry does.
+            // Before the reorder this lost the complement outright, and nothing retried it: the
+            // slot marker had already advanced, so the periodic detector sees no change - leaving
+            // the accepter's own days assigned to their co-parent, on their own calendar, forever.
+            neverPairedLocally(from = "mom", to = "dad")
+            coEvery { custodyModelRepository.getActiveModelSync() } returns
+                pattern((0..6).toSet(), "mine")
+
+            viewModel.acceptIncoming("invite-1")
+            dispatcher.scheduler.runCurrent()
+            viewModel.viewModelScope.cancel()
+            dispatcher.scheduler.advanceUntilIdle()
+
+            coVerify(exactly = 1) {
+                custodyModelRepository.saveReslotted(pattern((7..13).toSet(), "mine"))
+            }
+            coVerify(exactly = 0) { custodyModelRepository.saveAndActivate(any()) }
+        }
 
     @Test
     fun `an accept that keeps this device's slot does not complement`() = runTest(dispatcher) {
