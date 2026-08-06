@@ -345,10 +345,11 @@ class SyncService @Inject constructor(
      * held the new one, and every record it had ever created would start reading as its
      * co-parent's the moment anyone compared the two.
      *
-     * [ParentSlotMigrator.reslotIfSlotChanged] is handed [localUser]'s role — read before this
-     * function overwrites it — as `previousRole`, and [updatedUser]'s as `newRole`, so the
-     * comparison sees the actual transition. Re-reading Room after the write below would show
-     * the same value on both sides forever.
+     * [updatedUser]'s role is handed to [ParentSlotMigrator.reslotIfSlotChanged] as the incoming
+     * value; the *previous* value it compares against is not read from Room at all — see that
+     * method's KDoc for why `role` cannot be the "before" side of this comparison (it is never
+     * written by the accept path, it is seeded with a placeholder on profile creation, and it is
+     * written non-atomically with respect to the re-stamp).
      *
      * A failure reacting to the change is logged and swallowed rather than left to fail
      * [performFullSync]: the token, `partnerId` and `role` fields already written above are
@@ -371,19 +372,19 @@ class SyncService @Inject constructor(
             val updatedUser = localUser.copy(
                 partnerId = remoteUserData["partnerId"] as? String,
                 fcmToken = remoteUserData["fcmToken"] as? String,
-                // A document that predates the `role` field, or a failed partial read, must
-                // not blank out a role Room already has - `role` is non-nullable, unlike
-                // partnerId/fcmToken above, and there is no "unknown slot" to fall back to.
-                role = remoteUserData["role"] as? String ?: localUser.role
+                // A document that predates the `role` field, a failed partial read, or one
+                // that (should not, but did) carry a blank string must not blank out a role
+                // Room already has - `role` is non-nullable, unlike partnerId/fcmToken above,
+                // and there is no "unknown slot" to fall back to. Blank is rejected the same
+                // way `ParentSlotMigrator.reslotIfSlotChanged` rejects a blank incoming role,
+                // so a document with `role: ""` cannot get stamped onto new records and then
+                // permanently block a real re-stamp of them.
+                role = (remoteUserData["role"] as? String)?.takeIf { it.isNotBlank() } ?: localUser.role
             )
             userDao.updateUser(updatedUser)
 
             runCatching {
-                parentSlotMigrator.reslotIfSlotChanged(
-                    myUid = userId,
-                    previousRole = localUser.role,
-                    newRole = updatedUser.role
-                )
+                parentSlotMigrator.reslotIfSlotChanged(myUid = userId, newRole = updatedUser.role)
             }.onFailure { e ->
                 if (e is CancellationException) throw e
                 Log.e(TAG, "Failed to react to a remote slot change for $userId", e)

@@ -1,8 +1,11 @@
 package com.coparently.app.data.repository
 
+import android.util.Log
 import androidx.room.withTransaction
 import com.coparently.app.data.local.CoPlanlyDatabase
 import com.coparently.app.data.local.dao.EventDao
+import com.coparently.app.data.local.preferences.EncryptedPreferences
+import com.coparently.app.data.local.preferences.PreferenceKeys
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -27,15 +30,27 @@ import javax.inject.Singleton
  *
  * Idempotent by construction: the second run matches nothing, because the first left no rows
  * in the old slot.
+ *
+ * [reslot] also records, in [EncryptedPreferences], which slot this user's records are now
+ * stamped with — see [reslotIfSlotChanged] for why that record exists and why it is not
+ * [com.coparently.app.domain.model.User.role].
  */
 @Singleton
 class ParentSlotMigrator @Inject constructor(
     private val database: CoPlanlyDatabase,
     private val eventDao: EventDao,
-    private val custodyModelRepository: CustodyModelRepository
+    private val custodyModelRepository: CustodyModelRepository,
+    private val encryptedPreferences: EncryptedPreferences
 ) {
     /**
      * Re-stamps this user's rows from [from] to [to].
+     *
+     * Also records [to] as [myUid]'s current slot in [EncryptedPreferences] — see
+     * [reslotIfSlotChanged] — so this, the one place this device's records actually change
+     * slot, is the one place that record is kept current. Both of today's callers
+     * (`PairingViewModel.withSlotReslot` on the accept path, and [reslotIfSlotChanged] on the
+     * periodic-sync path) get the record for free by going through here rather than having to
+     * remember to keep it current themselves.
      *
      * @param myUid Firebase UID of the signed-in user; must not be blank, or the scoping
      *   clause would match every row in the table including the co-parent's.
@@ -44,15 +59,17 @@ class ParentSlotMigrator @Inject constructor(
     suspend fun reslot(from: String, to: String, myUid: String): Int {
         require(myUid.isNotBlank()) { "reslot needs a uid to scope by" }
         if (from == to) return 0
-        return database.withTransaction {
+        val changed = database.withTransaction {
             eventDao.reslotOwner(from, to, myUid) + eventDao.reslotPickup(from, to, myUid)
         }
+        encryptedPreferences.putString(slotMarkerKey(myUid), to)
+        return changed
     }
 
     /**
-     * Reacts to this user's own profile landing in Room with a different parent slot than the
-     * row already there — the shape a server-side slot backfill takes, not a UI action this
-     * device performed.
+     * Reacts to this user's own profile arriving with a different parent slot than the one
+     * this device last knew about — the shape a server-side slot backfill takes, not a UI
+     * action this device performed.
      *
      * [reslot] had exactly one caller: `PairingViewModel.withSlotReslot`, on the
      * accept-invitation path, which reads the slot before and after its own network call. A
@@ -61,17 +78,45 @@ class ParentSlotMigrator @Inject constructor(
      * nothing about that path resembles "the user tapped Accept", so it gets a second entry
      * point rather than a second caller of the first one.
      *
-     * @param myUid Firebase UID of the signed-in user; forwarded to [reslot] unchanged.
-     * @param previousRole The role Room held for [myUid] immediately before the profile that
-     *   was just written. Null on a fresh install, where there is no previous row to compare
-     *   against — the caller is expected to have captured this *before* writing the new value,
-     *   not to re-read it afterwards, or "before" and "after" would read identically.
-     * @param newRole The role the profile that was just written carries.
+     * **The "before" side is [EncryptedPreferences]'s marker, never `User.role`.** An earlier
+     * version of this method compared against Room's `role` field and had three separate,
+     * related defects:
      *
-     * Both values must be present, non-blank, and different from each other, or nothing runs.
-     * A fresh install reports [previousRole] as null: there is no history to mis-attribute, and
-     * reading `null -> "dad"` as a flip would complement a custody model that just arrived,
-     * correctly, from the co-parent's shared document, inverting it for no reason.
+     * 1. `role` is never written by the accept path (`PairingRepositoryImpl` only writes
+     *    `partnerId`; see `PairingViewModel.withSlotReslot`'s own KDoc). So after an Accept that
+     *    changes the slot, Room's `role` still says the *old* slot for up to fifteen minutes,
+     *    until the next sync happens to overwrite it — and when that sync ran the old
+     *    role-based comparison, it read the accept as a second, brand-new transition and
+     *    complemented an already-correct custody model a second time, inverting it.
+     * 2. `role` is non-nullable and seeded with a placeholder (`DEFAULT_ROLE`, `"mom"`) the
+     *    moment a local row is first created, whether or not the real value was ever read
+     *    successfully — so a "no previous value" guard keyed on `role == null` can never fire
+     *    in production, even though the scenario it exists for (a fresh install whose first
+     *    profile read is a placeholder) is real.
+     * 3. The `role` write and the re-stamp were two separate, non-atomic steps. A process death
+     *    or a cancelled `SyncWorker` between them left Room holding the new slot with every
+     *    record still stamped with the old one, permanently: the next comparison found `role`
+     *    already equal to the incoming value and never retried.
+     *
+     * A marker this method alone advances — only once [reslot] (and, when there is one, the
+     * custody complement) has actually run — closes all three: it does not exist at all until a
+     * slot has genuinely been dealt with once, so a fresh install's placeholder cannot be
+     * mistaken for a change; it is already advanced by the time a sync follows an Accept that
+     * changed the slot, so that sync sees no change to react to; and a run interrupted before
+     * this method updates it leaves the marker stale, so the next sync retries rather than
+     * silently treating the interrupted attempt as done.
+     *
+     * @param myUid Firebase UID of the signed-in user; forwarded to [reslot] unchanged and used
+     *   to scope the marker, so a device where a second account has signed in later (Room's
+     *   `users` rows are never cleared on sign-out either) reads its own marker, not the
+     *   previous account's.
+     * @param newRole The role the profile that was just written carries. Null or blank is
+     *   treated as "nothing to react to", the same as an absent marker.
+     *
+     * A missing marker for [myUid] is not a change: there is nothing to re-stamp against, and
+     * complementing the active custody model on the strength of it would invert a pattern that
+     * may have just arrived, correctly, from the co-parent's shared document. The marker is
+     * seeded with [newRole] instead, so the *next* call has a real baseline.
      *
      * The re-stamp runs before the custody complement, in that order — the same order
      * `PairingViewModel.reconcileCustody` already uses on the accept path, for the same
@@ -89,14 +134,31 @@ class ParentSlotMigrator @Inject constructor(
      * A missing active custody model — an unpaired user, or one who has never set a schedule —
      * is not an error: there is nothing to complement.
      */
-    suspend fun reslotIfSlotChanged(myUid: String, previousRole: String?, newRole: String?) {
-        val from = previousRole?.takeIf { it.isNotBlank() }
-        val to = newRole?.takeIf { it.isNotBlank() }
-        if (from == null || to == null || from == to) return
+    suspend fun reslotIfSlotChanged(myUid: String, newRole: String?) {
+        val to = newRole?.takeIf { it.isNotBlank() } ?: return
+        val marker = encryptedPreferences.getString(slotMarkerKey(myUid))
+        if (marker == null) {
+            encryptedPreferences.putString(slotMarkerKey(myUid), to)
+            return
+        }
+        if (marker == to) return
 
-        reslot(from = from, to = to, myUid = myUid)
+        // Row count logged on success for the same reason `PairingViewModel.reslotIfChanged`
+        // logs it: this is a one-shot reaction with nobody watching a screen, so a silent zero
+        // would be undetectable in the field — and it is the only symptom an interrupted pass
+        // (see the class doc's point 3) leaves behind for an operator to find.
+        val changed = reslot(from = marker, to = to, myUid = myUid)
+        Log.i(TAG, "Reacted to a remote slot change ($marker -> $to) for $myUid: re-stamped $changed record(s)")
+
         custodyModelRepository.getActiveModelSync()?.complemented()?.let { complemented ->
             custodyModelRepository.saveReslotted(complemented)
         }
+    }
+
+    /** The per-user key this user's slot marker is stored under; see [PreferenceKeys]. */
+    private fun slotMarkerKey(myUid: String) = "${PreferenceKeys.PARENT_SLOT_MARKER_PREFIX}$myUid"
+
+    private companion object {
+        const val TAG = "ParentSlotMigrator"
     }
 }

@@ -24,4 +24,19 @@ object PreferenceKeys {
 
     /** Separator for multi-value string preferences. */
     const val LIST_SEPARATOR = "|"
+
+    /**
+     * Prefix for the per-user key that records the parent slot (`"mom"`/`"dad"`) this device's
+     * own records are currently stamped with — the actual key is this prefix plus the Firebase
+     * UID, so a device where two accounts have signed in over time (Room's `users` rows are
+     * never cleared on sign-out either, see `CustodyModelRepository`) does not read one
+     * account's marker as another's.
+     *
+     * This is deliberately **not** `User.role`: that field is a placeholder on profile creation
+     * (`UserRepositoryImpl.DEFAULT_ROLE`) whenever the first profile read fails or has not
+     * landed yet, and the accept path (`PairingViewModel.withSlotReslot`) changes which slot a
+     * device is in without ever writing it — see `ParentSlotMigrator.reslotIfSlotChanged` for
+     * why a value that can lag or be a guess cannot be the "before" side of a change detector.
+     */
+    const val PARENT_SLOT_MARKER_PREFIX = "parent_slot_marker_"
 }

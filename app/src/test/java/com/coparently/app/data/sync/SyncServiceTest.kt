@@ -29,9 +29,10 @@ import java.time.format.DateTimeFormatter
 import kotlin.test.assertEquals
 
 /**
- * Unit tests for [SyncService]'s upload paths.
+ * Unit tests for [SyncService]'s upload paths, and for [SyncService.syncUserData]'s `role`
+ * refresh and slot-change reaction.
  *
- * Two properties are pinned here, both of which the pre-fix code got wrong:
+ * Three properties are pinned here, the first two of which the pre-fix code got wrong:
  *
  * 1. The event upload audience must be the *entitled* set, not the stored list widened.
  *    `syncEvents` uploads unsynced events **before** it downloads, so under the widen-only
@@ -42,6 +43,10 @@ import kotlin.test.assertEquals
  *    `updateChildInfo`, never a full `upsertChildInfo`. `ChildInfoEntity` carries no
  *    `sharedWith`, so the `.set()` shape stripped the field and left the document
  *    unreadable and un-updatable for both parents.
+ * 3. A failure reacting to a slot change must not fail the rest of the sync pass. This is the
+ *    only test coverage there is for that containment — a round-1 review found the earlier
+ *    version of this file exercised none of `syncUserData`'s role/slot-change branch at all,
+ *    since every pre-existing test stubs the remote user to `null`.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class SyncServiceTest {
@@ -213,6 +218,71 @@ class SyncServiceTest {
 
         coVerify(exactly = 0) { firestoreChildInfoDataSource.updateChildInfo(any(), any()) }
         coVerify(exactly = 0) { firestoreChildInfoDataSource.upsertChildInfo(any(), any()) }
+    }
+
+    @Test
+    fun `syncUserData persists the role a remote document carries`() = runTest {
+        pairWith(partnerId = BOB)
+        coEvery { firestoreUserDataSource.getUserById(ALICE) } returns mapOf("role" to "dad")
+
+        syncService.performFullSync()
+
+        val row = slot<UserEntity>()
+        coVerify { userDao.updateUser(capture(row)) }
+        assertEquals("dad", row.captured.role)
+    }
+
+    @Test
+    fun `syncUserData hands the migrator the incoming role`() = runTest {
+        // Alice's local row says "mom"; the remote document already says "dad". The migrator,
+        // not this test, decides whether that is a real change — this only pins that the
+        // value it is handed is the one the document actually carries.
+        pairWith(partnerId = BOB)
+        coEvery { firestoreUserDataSource.getUserById(ALICE) } returns mapOf("role" to "dad")
+
+        syncService.performFullSync()
+
+        coVerify(exactly = 1) {
+            parentSlotMigrator.reslotIfSlotChanged(myUid = ALICE, newRole = "dad")
+        }
+    }
+
+    @Test
+    fun `a blank remote role does not blank out the role Room already has`() = runTest {
+        // `role` is non-nullable, unlike partnerId/fcmToken: there is no "unknown slot" this
+        // entity can fall back to on its own, so a document carrying `role: ""` — which
+        // should never happen, but `as? String` would accept it — must not land in Room, or
+        // it would be stamped onto new records and then permanently block a real re-stamp of
+        // them (the migrator's own guard treats a blank incoming role as absent).
+        pairWith(partnerId = BOB)
+        coEvery { firestoreUserDataSource.getUserById(ALICE) } returns mapOf("role" to "")
+
+        syncService.performFullSync()
+
+        val row = slot<UserEntity>()
+        coVerify { userDao.updateUser(capture(row)) }
+        assertEquals("mom", row.captured.role)
+    }
+
+    @Test
+    fun `a failure reacting to a slot change does not fail the rest of the sync pass`() = runTest {
+        // The containment a round-1 review specifically asked to see covered: `syncEvents`
+        // and `syncChildInfo` run after `syncUserData` in the same `performFullSync` pass, so
+        // an uncaught exception here would have silently dropped both for this pass too.
+        pairWith(partnerId = BOB)
+        coEvery { firestoreUserDataSource.getUserById(ALICE) } returns mapOf("role" to "dad")
+        coEvery {
+            parentSlotMigrator.reslotIfSlotChanged(myUid = ALICE, newRole = "dad")
+        } throws IllegalStateException("boom")
+        coEvery { eventDao.getUnsyncedEvents() } returns listOf(
+            eventEntity(createdByFirebaseUid = ALICE, sharedWith = listOf(ALICE, BOB))
+        )
+        coEvery { firestoreEventDataSource.insertEvent(any(), any()) } returns Result.success(Unit)
+
+        val result = syncService.performFullSync()
+
+        assert(result.isSuccess) { "a re-stamp failure must not fail the whole sync pass" }
+        coVerify(exactly = 1) { firestoreEventDataSource.insertEvent(any(), any()) }
     }
 
     /** Gives Alice's Room row the supplied co-parent (or none). */
