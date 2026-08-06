@@ -60,6 +60,7 @@ import com.coparently.app.domain.holidays.Holiday
 import com.coparently.app.domain.model.Event
 import com.coparently.app.presentation.calendar.components.CalendarHeader
 import com.coparently.app.presentation.calendar.components.ChangeRequestBanner
+import com.coparently.app.presentation.calendar.components.CustodyChangedBanner
 import com.coparently.app.presentation.calendar.components.CustodyRibbon
 import com.coparently.app.presentation.calendar.components.DayAgendaCard
 import com.coparently.app.presentation.calendar.components.EventTypeFilterSheet
@@ -256,11 +257,13 @@ fun CalendarScreen(
     val customEventTypes by calendarViewModel.customEventTypes.collectAsState()
     val showHolidays by calendarViewModel.showHolidays.collectAsState()
     val nextHandover by calendarViewModel.nextHandover.collectAsState()
+    val custodyChangeAnnouncement by calendarViewModel.custodyChangeAnnouncement.collectAsState()
 
     // Who the two parents are, resolved with the fallback strings once for the whole screen.
     // Every label below this line - ribbon, grid, agenda card, filters, preview sheet - reads
     // this one value, so no two of them can name the same slot differently.
-    val parentNames = rememberParentNames(calendarViewModel.parents.collectAsState().value)
+    val parents by calendarViewModel.parents.collectAsState()
+    val parentNames = rememberParentNames(parents)
 
     // Reduce animation duration on older devices for better performance
     val animationDuration = remember {
@@ -508,6 +511,23 @@ fun CalendarScreen(
                     ChangeRequestBanner(
                         pendingCount = pendingChangeRequests,
                         onReview = onChangeRequestsClick,
+                        modifier = Modifier.padding(
+                            horizontal = dims.paddingMedium,
+                            vertical = dims.paddingSmall / 2
+                        )
+                    )
+                }
+
+                // Custody is last-write-wins with no consent step; this is what keeps a remote
+                // change from landing silently. Never shown for this device's own write - see
+                // CalendarViewModel.custodyChangeAnnouncement.
+                custodyChangeAnnouncement?.let { announcement ->
+                    val changerSlot = parents.roleByUid[announcement.lastModifiedBy]
+                    CustodyChangedBanner(
+                        byName = parentNames.labelFor(changerSlot),
+                        onDismiss = {
+                            calendarViewModel.dismissCustodyChange(announcement.lastModifiedAt)
+                        },
                         modifier = Modifier.padding(
                             horizontal = dims.paddingMedium,
                             vertical = dims.paddingSmall / 2

@@ -87,6 +87,10 @@
     </plurals>
     <string name="calendar_change_requests_review">Zkontrolovat</string>
     <string name="calendar_change_view_mode">Změnit zobrazení</string>
+
+    <!-- Noun phrase, not "X změnil(a)" — Czech inflects that verb for gender and a name cannot
+         agree with one; the software would end up guessing or hedging with "(a)". -->
+    <string name="calendar_custody_changed_by">Změna rozvrhu péče od %1$s</string>
     <string name="calendar_agenda_header_with_custody">%1$s · den rodiče %2$s</string>
     <string name="calendar_agenda_empty">Nic naplánováno.</string>
     <string name="calendar_agenda_time_range">%1$s–%2$s</string>

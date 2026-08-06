@@ -5,9 +5,12 @@ import androidx.lifecycle.viewModelScope
 import com.coparently.app.data.local.dao.CustodyScheduleDao
 import com.coparently.app.data.local.entity.CustodyScheduleEntity
 import com.coparently.app.data.local.preferences.EncryptedPreferences
+import com.coparently.app.data.local.preferences.PreferenceKeys
 import com.coparently.app.data.repository.CustodyModelRepository
+import com.coparently.app.domain.custody.CustodyChangeAnnouncement
 import com.coparently.app.domain.custody.HandoverCalculator
 import com.coparently.app.domain.custody.HandoverInfo
+import com.coparently.app.domain.custody.SharedCustody
 import com.coparently.app.domain.model.CustodyModel
 import com.coparently.app.presentation.common.Parents
 import com.coparently.app.presentation.common.ParentsSource
@@ -16,6 +19,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -71,6 +75,38 @@ class CalendarViewModel @Inject constructor(
     val nextHandover: StateFlow<HandoverInfo?> = _custodyModel
         .map { model -> model?.let { HandoverCalculator.nextHandoverFrom(it, LocalDate.now()) } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(HANDOVER_STOP_TIMEOUT_MS), null)
+
+    /**
+     * The `lastModifiedAt` of the shared-custody change the user last dismissed the banner for,
+     * or null if none was ever dismissed. Seeded from [EncryptedPreferences] so an
+     * acknowledged change stays acknowledged across process death, and updated in place by
+     * [dismissCustodyChange] rather than re-read from disk each time.
+     */
+    private val dismissedCustodyChangeAt = MutableStateFlow(
+        encryptedPreferences.getString(KEY_DISMISSED_CUSTODY_CHANGE_AT)
+    )
+
+    /**
+     * The remote custody change to tell this user about, or null when there is nothing to say.
+     *
+     * Custody is last-write-wins with no consent step, so this is what keeps that from being
+     * *silent*: [CustodyChangeAnnouncement.toAnnounce] excludes this device's own writes (by
+     * uid, from [parents]) and anything already dismissed (by `lastModifiedAt`).
+     *
+     * `WhileSubscribed`, like [nextHandover], and not an eager collector: [parents] itself only
+     * subscribes to [ParentsSource]'s pairing listener while something is collecting it, and
+     * that stream is expensive to hold open (three Firestore listeners — see
+     * [ParentsSource.observe]'s own doc). An always-on collector here would keep it attached for
+     * this ViewModel's entire lifetime regardless of whether any screen is showing the banner,
+     * undoing the exact saving `WhileSubscribed` exists for.
+     */
+    val custodyChangeAnnouncement: StateFlow<SharedCustody?> = combine(
+        custodyModelRepository.observeShared(),
+        parents,
+        dismissedCustodyChangeAt
+    ) { shared, currentParents, dismissedAt ->
+        CustodyChangeAnnouncement.toAnnounce(shared, currentParents.me?.uid, dismissedAt)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(HANDOVER_STOP_TIMEOUT_MS), null)
 
     private val _viewMode = MutableStateFlow(CalendarViewMode.MONTH)
     val viewMode: StateFlow<CalendarViewMode> = _viewMode.asStateFlow()
@@ -131,6 +167,19 @@ class CalendarViewModel @Inject constructor(
                 _custodyModel.value = model
             }
         }
+    }
+
+    /**
+     * Dismisses the custody-changed banner for the change stamped with [lastModifiedAt].
+     *
+     * Persisted to [EncryptedPreferences] rather than kept only in memory: a change the user has
+     * already acknowledged must not reappear just because the app process died. Keying on the
+     * change's own `lastModifiedAt` (instead of, say, a boolean) is what lets the *next* change —
+     * a different `lastModifiedAt` — be announced again without a separate "seen" reset.
+     */
+    fun dismissCustodyChange(lastModifiedAt: String) {
+        dismissedCustodyChangeAt.value = lastModifiedAt
+        encryptedPreferences.putString(KEY_DISMISSED_CUSTODY_CHANGE_AT, lastModifiedAt)
     }
 
     /**
@@ -249,6 +298,8 @@ class CalendarViewModel @Inject constructor(
             com.coparently.app.data.local.preferences.PreferenceKeys.CUSTOM_EVENT_TYPES
         private const val KEY_SHOW_HOLIDAYS =
             com.coparently.app.data.local.preferences.PreferenceKeys.SHOW_HOLIDAYS
+        private const val KEY_DISMISSED_CUSTODY_CHANGE_AT =
+            PreferenceKeys.DISMISSED_CUSTODY_CHANGE_AT
         private const val SEPARATOR =
             com.coparently.app.data.local.preferences.PreferenceKeys.LIST_SEPARATOR
     }
