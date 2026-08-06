@@ -28,9 +28,15 @@ object PreferenceKeys {
     /**
      * Prefix for the per-user key that records the parent slot (`"mom"`/`"dad"`) this device's
      * own records are currently stamped with — the actual key is this prefix plus the Firebase
-     * UID, so a device where two accounts have signed in over time (Room's `users` rows are
-     * never cleared on sign-out either, see `CustodyModelRepository`) does not read one
-     * account's marker as another's.
+     * UID.
+     *
+     * **`EncryptedPreferences.clear()` deliberately exempts every key under this prefix** — see
+     * its KDoc. That exemption is exactly why the per-UID scoping here is load-bearing rather
+     * than defensive-only: a marker that now survives sign-out would otherwise be read by a
+     * second account that later signs in on the same device as if it were that account's own
+     * history. (Room's `users`/`events` rows already survive sign-out the same way, unscoped —
+     * they are matched by uid at the query level instead; see `CustodyModelRepository`'s own
+     * doc for that precedent.)
      *
      * This is deliberately **not** `User.role`: that field is a placeholder on profile creation
      * (`UserRepositoryImpl.DEFAULT_ROLE`) whenever the first profile read fails or has not

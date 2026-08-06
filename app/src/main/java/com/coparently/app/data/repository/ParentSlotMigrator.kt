@@ -98,13 +98,27 @@ class ParentSlotMigrator @Inject constructor(
      *    record still stamped with the old one, permanently: the next comparison found `role`
      *    already equal to the incoming value and never retried.
      *
-     * A marker this method alone advances — only once [reslot] (and, when there is one, the
-     * custody complement) has actually run — closes all three: it does not exist at all until a
-     * slot has genuinely been dealt with once, so a fresh install's placeholder cannot be
-     * mistaken for a change; it is already advanced by the time a sync follows an Accept that
-     * changed the slot, so that sync sees no change to react to; and a run interrupted before
-     * this method updates it leaves the marker stale, so the next sync retries rather than
-     * silently treating the interrupted attempt as done.
+     * A marker closes all three, and it is [reslot] — not this method — that advances it, right
+     * after its own transaction commits and **before** the custody complement below runs. That
+     * ordering is deliberate, not incidental: it is what lets `PairingViewModel.withSlotReslot`
+     * — which calls [reslot] directly and never this method — advance the same marker for free,
+     * with no change to that class at all. It does not exist at all until a slot has genuinely
+     * been re-stamped once, so a fresh install's placeholder cannot be mistaken for a change; it
+     * is already advanced by the time a sync follows an Accept that changed the slot, so that
+     * sync sees no change to react to; and a run interrupted before [reslot] returns leaves the
+     * marker stale, so the next sync retries the *re-stamp* rather than silently treating the
+     * interrupted attempt as done.
+     *
+     * **Residual, disclosed rather than hidden:** because the marker advances before the
+     * complement rather than after it, a process death in the narrow window between the two
+     * would leave the marker already at its new value while the complement below never ran —
+     * and the next sync, seeing no change, would not retry it. Tying the marker to the
+     * complement's completion instead was considered and rejected: `reconcileCustody` runs the
+     * complement in a detached coroutine on the accept path, so the marker would then depend on
+     * a best-effort background task rather than on [reslot] itself, and a sync landing while
+     * that task was still in flight would see a stale marker and start a second, concurrent
+     * reaction. The accepted risk here is narrower and lower-severity than that alternative's:
+     * at worst a skipped complement, never a re-inverted or permanently un-re-stamped schedule.
      *
      * @param myUid Firebase UID of the signed-in user; forwarded to [reslot] unchanged and used
      *   to scope the marker, so a device where a second account has signed in later (Room's
