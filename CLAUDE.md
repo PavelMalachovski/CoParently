@@ -236,7 +236,10 @@ Data flow: UI → ViewModel → UseCase → Repository → Room (source of truth
     older build stays readable. Deliberately *not* changed: `Event`, `Expense`, `Budget`
     and `ChildInfo` dates, where a naive local time is often the right model — whether a
     custody handover follows the child's zone or the viewer's is an unmade product
-    decision, not an oversight.
+    decision, not an oversight. **`CustodyModelEntity.lastModifiedAt` is a fifth, and it
+    does not belong with those four**: it is not merely displayed, it decides which phone's
+    schedule survives. See the custody entry in "Known issues" below before adding to this
+    list.
 
 ## Known issues / do not "fix" silently
 
@@ -268,6 +271,26 @@ Data flow: UI → ViewModel → UseCase → Repository → Room (source of truth
   badge clears on open, and the ticks reach READ — was **deferred, not run**. Backlog item for
   the next review round. Everything else in that acceptance run passed on real devices.
 
+- **The shared custody schedule orders the two phones' writes by a naive local date-time.**
+  `CustodyModelEntity.lastModifiedAt` (and the `lastModifiedAt` field of the `custody_models`
+  document, which mirrors it) is `LocalDateTime.now()` formatted ISO — no zone, no offset.
+  `CustodyModelRepository.isNewer` parses both sides and compares them, and `mirrorIntoRoom`
+  acts on the answer: the side it judges newer is not merely kept, it is **re-pushed over the
+  other**. So for two parents 2–3 zones apart the wrong side can win *and overwrite*, where
+  before the custody sync existed a local pattern merely stayed local. The banner does fire on
+  the loser's phone (`lastModifiedBy` is the other parent), so this is silent-wrong-answer, not
+  silent-loss — but the answer can still be wrong by exactly the offset between the two zones.
+  Accepted for this round rather than fixed: the correct fix is epoch millis with a Room
+  migration, the same move `Message.sentAtMillis` made in item 13, and it drags the Firestore
+  field, a legacy-ISO read path for a co-parent on an older build, and a migration test with it
+  — a change of its own size, not a rider on the sync work. `isNewer` already degrades an
+  unparseable value on either side to "not newer", so a mixed-format transition is survivable.
+  Until then: do not add more decisions to `lastModifiedAt`, and do not "fix" it by comparing
+  the strings (they are ISO, so string order agrees with the same wrong answer) or by stamping
+  `now()` in `saveReslotted`/`archiveRejected` — those two keep the stored dates on purpose,
+  and re-dating them makes this device win every comparison forever
+  (`CustodyModelRepositoryTest` pins both).
+
 - **The calendar never renders `EventUiState.Error`.** `EventViewModel` sets it when a range query
   fails, but the only `LaunchedEffect(uiState)` branch in `CalendarScreen` handles
   `OperationSuccess` — so a failed range leaves the last-loaded grid on screen, or an empty one on
@@ -284,8 +307,12 @@ Data flow: UI → ViewModel → UseCase → Repository → Room (source of truth
 - `firestore.rules` (strict) was realigned with the real document schema (ISO **string**
   dates, presence-based key validation, `change_requests`/`expenses` collections added,
   over-strict `lastModifiedBy`/`canModify` gates dropped) so it no longer rejects the app's
-  own writes, and now also covers `invitations`, `custody_schedules`, `conversations` and
-  `messages` for co-parent pairing and chat. It was deployed live to `coparently-a39c9`
+  own writes, and now also covers `invitations`, `conversations` and `messages` for
+  co-parent pairing and chat, plus `custody_models` for the shared custody schedule. (This
+  sentence used to name `custody_schedules` instead: that block was dead — the Room table it
+  was named after has no Firestore data source — and it has since been **deleted**. Do not put
+  it back; see the audit bullet below, which exists for exactly that reflex.) It was
+  deployed live to `coparently-a39c9`
   as of this change (`firebase deploy --only firestore:rules`), replacing the permissive
   `firestore.rules.simple` the project ran on until the client's last write to another
   user's `users/{uid}` document was removed. `firestore.rules.simple` remains in the repo
@@ -321,8 +348,12 @@ Data flow: UI → ViewModel → UseCase → Repository → Room (source of truth
     per-parent custody table) has no Firestore data source and never will — it stays
     Room-only. Its rule block, which matched no client code, has been deleted from
     `firestore.rules`; the live custody rule now guards the real synced collection,
-    `custody_models` (one document per pair, gated on `participants`). Do not resurrect
-    the `custody_schedules` block just because the Room table name is still there.
+    `custody_models` (one document per pair, gated on `participants`, with `allow get`
+    rather than `allow read` so no list query can ever be issued, and with
+    `lastModifiedBy == request.auth.uid` required on create and update — the change banner
+    suppresses a reader's own uid, so an unvalidated author field lets either parent
+    overwrite the shared schedule without the other being told). Do not resurrect the
+    `custody_schedules` block just because the Room table name is still there.
 - `strings.xml` is **no longer gitignored** (older docs/audit §2.1 claim otherwise —
   stale). No secrets live in resources: the OAuth client secret is injected via
   BuildConfig (`GOOGLE_CLIENT_SECRET` gradle property / env var), `GEMINI_API_KEY`
