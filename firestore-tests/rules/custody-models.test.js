@@ -96,7 +96,47 @@ describe('custody_models', () => {
 
   it('refuses a create that leaves the author out of participants', async () => {
     const db = env.authenticatedContext(STRANGER).firestore();
-    await assertFails(db.doc(PATH).set(custodyDoc({})));
+    // Self-stamped, so the only clause this can fail on is the membership one under test.
+    await assertFails(db.doc(PATH).set(custodyDoc({lastModifiedBy: STRANGER})));
+  });
+
+  describe('the author a write claims must be the caller', () => {
+    // `lastModifiedBy` is not bookkeeping: `CustodyChangeAnnouncement.toAnnounce` suppresses any
+    // change whose `lastModifiedBy` equals the reader's own uid, which is how a device ignores
+    // the echo of its own write. Leave the field unvalidated and either parent can overwrite the
+    // shared schedule while stamping the *other's* uid on it — the co-parent's phone then files
+    // the change as its own echo and says nothing. The spec's guarantee is "last write wins, but
+    // never silently", and this is the one field that defeats it, in a product whose premise is
+    // an adversarial counterparty.
+
+    it('refuses a create that stamps the co-parent as the author', async () => {
+      const db = env.authenticatedContext(MOM).firestore();
+      await assertFails(db.doc(PATH).set(custodyDoc({lastModifiedBy: DAD})));
+    });
+
+    it('refuses an update that stamps the co-parent as the author', async () => {
+      await seed(env, {[PATH]: custodyDoc({})});
+      const db = env.authenticatedContext(DAD).firestore();
+      await assertFails(db.doc(PATH).update({
+        momDayIndices: [7, 8, 9, 10, 11, 12, 13], lastModifiedBy: MOM,
+      }));
+    });
+
+    it('refuses an update that silently leaves the co-parent as the author', async () => {
+      // The shape that needs no bad faith to write, only a partial update: the field is simply
+      // not touched, so DAD's change keeps MOM's uid and is suppressed on MOM's phone. Every
+      // real client write goes through `FirestoreCustodyDataSource.setCustody`, which always
+      // stamps the signed-in uid, so nothing legitimate is refused here.
+      await seed(env, {[PATH]: custodyDoc({})});
+      const db = env.authenticatedContext(DAD).firestore();
+      await assertFails(db.doc(PATH).update({momDayIndices: [7, 8, 9]}));
+    });
+
+    it('lets a participant stamp themselves, which is all any client ever does', async () => {
+      await seed(env, {[PATH]: custodyDoc({})});
+      const db = env.authenticatedContext(DAD).firestore();
+      await assertSucceeds(db.doc(PATH).update({momDayIndices: [7], lastModifiedBy: DAD}));
+    });
   });
 
   it('refuses a create whose participants are not a pair', async () => {
@@ -146,7 +186,7 @@ describe('custody_models', () => {
       // matching the id succeeds" — the id must be canonicalPairId(participants), and here
       // it genuinely is.
       const db = env.authenticatedContext(DAD).firestore();
-      await assertSucceeds(db.doc(PATH).set(custodyDoc({})));
+      await assertSucceeds(db.doc(PATH).set(custodyDoc({lastModifiedBy: DAD})));
     });
   });
 
@@ -179,7 +219,7 @@ describe('custody_models', () => {
           await seed(env, {[PATH]: custodyDoc({participants: [MOM, DAD]})});
           const db = env.authenticatedContext(DAD).firestore();
           await assertFails(db.doc(PATH).update({
-            participants: [MOM, DAD].sort(), patternDays: 7,
+            participants: [MOM, DAD].sort(), patternDays: 7, lastModifiedBy: DAD,
           }));
         });
   });

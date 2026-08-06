@@ -356,11 +356,24 @@ service cloud.firestore {
       // `.set()`s, which Firestore evaluates as `update` over an existing document). This makes
       // the `canonicalPairId` ternary redundant at this call site, but it is left in place —
       // it documents the id/participants relationship and the two call sites stay identical.
+      //
+      // `lastModifiedBy` must be the caller, on create and on update alike. It is not
+      // bookkeeping: `CustodyChangeAnnouncement.toAnnounce` suppresses any change whose
+      // `lastModifiedBy` equals the reader's own uid, which is how a device ignores the echo of
+      // its own write. Unvalidated, either parent could overwrite the shared schedule while
+      // stamping the *other's* uid on it, and the co-parent's phone would file the change as its
+      // own echo and never raise the banner — defeating the spec's "last write wins, but never
+      // silently" with one field, in a product whose premise is an adversarial counterparty.
+      // This is deliberately stricter than `conversations` below, which has no banner resting on
+      // the field. An update must therefore carry the field: a partial write that leaves a stale
+      // author behind is the same silencing without the bad faith, and every client write goes
+      // through `FirestoreCustodyDataSource.setCustody`, which always stamps the signed-in uid.
       allow create: if isAuthenticated() &&
                       request.resource.data.participants.size() == 2 &&
                       request.auth.uid in request.resource.data.participants &&
                       modelId == canonicalPairId(request.resource.data.participants) &&
                       request.resource.data.participants[0] < request.resource.data.participants[1] &&
+                      request.resource.data.lastModifiedBy == request.auth.uid &&
                       (isPartnerOf(request.resource.data.participants[0]) ||
                        isPartnerOf(request.resource.data.participants[1]));
 
@@ -371,6 +384,7 @@ service cloud.firestore {
       allow update: if isAuthenticated() &&
                       request.auth.uid in resource.data.participants &&
                       request.resource.data.participants == resource.data.participants &&
+                      request.resource.data.lastModifiedBy == request.auth.uid &&
                       (isPartnerOf(resource.data.participants[0]) ||
                        isPartnerOf(resource.data.participants[1]));
 
