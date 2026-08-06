@@ -112,6 +112,30 @@ class CalendarViewModelCustodyChangeTest {
         return viewModel
     }
 
+    /**
+     * Builds a [CalendarViewModel] whose [ParentsSource.observe] is [parentsFlow], so a test can
+     * control exactly when `parents` resolves relative to `sharedCustody` — the ordering that
+     * [CustodyChangeAnnouncement.toAnnounce][com.coparently.app.domain.custody.CustodyChangeAnnouncement.toAnnounce]'s
+     * `parentsLoaded` gate exists to get right.
+     */
+    private fun TestScope.viewModelWithParents(parentsFlow: MutableStateFlow<Parents>): CalendarViewModel {
+        val custodyModelRepository = mockk<CustodyModelRepository> {
+            every { getActiveModel() } returns flowOf(null)
+            every { observeShared() } returns sharedCustody
+        }
+        val parentsSource = mockk<ParentsSource> {
+            every { observe() } returns parentsFlow
+        }
+        val viewModel = CalendarViewModel(
+            custodyScheduleDao,
+            custodyModelRepository,
+            encryptedPreferences,
+            parentsSource
+        )
+        backgroundScope.launch { viewModel.custodyChangeAnnouncement.collect {} }
+        return viewModel
+    }
+
     @Test
     fun `a remote change by the co-parent is announced`() = runTest(testDispatcher) {
         val viewModel = viewModelSignedInAs(MY_UID)
@@ -197,6 +221,53 @@ class CalendarViewModelCustodyChangeTest {
 
         assertNull(viewModel.custodyChangeAnnouncement.value)
     }
+
+    @Test
+    fun `nothing is announced before parents has loaded, then the change surfaces once it does`() =
+        runTest(testDispatcher) {
+            // Parents starts every fresh subscription from a synthetic "nobody is known yet".
+            // CustodyModelRepository's pair resolution is Room-only and reliably faster than
+            // Parents resolving three Firestore pairing listeners, so a real change can arrive
+            // before this device's own uid is known.
+            val parentsFlow = MutableStateFlow(Parents())
+            val viewModel = viewModelWithParents(parentsFlow)
+            advanceUntilIdle()
+
+            val change = custodyOf(lastModifiedBy = CO_PARENT_UID)
+            sharedCustody.value = change
+            advanceUntilIdle()
+            assertNull(viewModel.custodyChangeAnnouncement.value)
+
+            parentsFlow.value = Parents(
+                me = NamedParent(uid = MY_UID, slot = "mom", name = "Me"),
+                coParent = NamedParent(uid = CO_PARENT_UID, slot = "dad", name = "Co-parent"),
+                loaded = true
+            )
+            advanceUntilIdle()
+
+            assertEquals(change, viewModel.custodyChangeAnnouncement.value)
+        }
+
+    @Test
+    fun `an echo of this device's own write is never announced, even while parents is still loading`() =
+        runTest(testDispatcher) {
+            // The failure this test pins: before the parentsLoaded gate, a null myUid read as
+            // "definitely not mine" would announce the user's own edit as the co-parent's the
+            // instant the echo of their own write arrived ahead of Parents resolving.
+            val parentsFlow = MutableStateFlow(Parents())
+            val viewModel = viewModelWithParents(parentsFlow)
+            advanceUntilIdle()
+
+            val change = custodyOf(lastModifiedBy = MY_UID)
+            sharedCustody.value = change
+            advanceUntilIdle()
+            assertNull(viewModel.custodyChangeAnnouncement.value)
+
+            parentsFlow.value = Parents(me = NamedParent(uid = MY_UID, slot = "mom", name = "Me"), loaded = true)
+            advanceUntilIdle()
+
+            assertNull(viewModel.custodyChangeAnnouncement.value)
+        }
 
     private fun custodyOf(
         lastModifiedBy: String,

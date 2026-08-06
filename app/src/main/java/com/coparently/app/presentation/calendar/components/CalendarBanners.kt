@@ -145,11 +145,12 @@ fun VacationBanner(label: String, modifier: Modifier = Modifier) {
  * something waiting on the user, so it is the one banner in this file with something to
  * acknowledge: a plain trailing `IconButton`, not a second visual language for dismissal.
  *
- * @param byName The name of whoever changed it, already resolved by the caller. Resolution goes
- *   uid ([com.coparently.app.domain.custody.SharedCustody.lastModifiedBy]) to slot
- *   (`Parents.roleByUid`) to label (`parentLabel`) — a composable cannot do that lookup itself
- *   without also being handed the raw uid, which would let it guess a slot instead of reporting
- *   "unknown parent" for one that matches neither. This parameter is that already-safe result.
+ * @param byName The name of whoever changed it, already resolved by the caller via
+ *   `ParentNames.labelForUid` — the uid
+ *   ([com.coparently.app.domain.custody.SharedCustody.lastModifiedBy]) resolved directly against
+ *   the known parents, never through a slot: a pair sharing one slot before migration would
+ *   otherwise have the co-parent's write reported as the signed-in parent's own. This parameter
+ *   is that already-safe result.
  * @param onDismiss Persists the dismissal, keyed by the caller on the change's own
  *   `lastModifiedAt` so a later change is announced again.
  * @param modifier Modifier for the banner

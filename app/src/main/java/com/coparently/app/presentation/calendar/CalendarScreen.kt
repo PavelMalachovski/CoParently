@@ -520,11 +520,12 @@ fun CalendarScreen(
 
                 // Custody is last-write-wins with no consent step; this is what keeps a remote
                 // change from landing silently. Never shown for this device's own write - see
-                // CalendarViewModel.custodyChangeAnnouncement.
+                // CalendarViewModel.custodyChangeAnnouncement. Named via labelForUid, not a
+                // slot lookup: a pair not yet migrated off a shared "mom" slot would otherwise
+                // have the co-parent's write reported as the signed-in parent's own.
                 custodyChangeAnnouncement?.let { announcement ->
-                    val changerSlot = parents.roleByUid[announcement.lastModifiedBy]
                     CustodyChangedBanner(
-                        byName = parentNames.labelFor(changerSlot),
+                        byName = parentNames.labelForUid(announcement.lastModifiedBy),
                         onDismiss = {
                             calendarViewModel.dismissCustodyChange(announcement.lastModifiedAt)
                         },

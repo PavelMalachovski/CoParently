@@ -146,4 +146,68 @@ class ParentLabelsTest {
         )
         assertNull(partner.asNamedParent())
     }
+
+    @Test
+    fun `my own uid resolves to my name`() {
+        assertEquals(
+            "Olya",
+            parentLabelByUid("u1", me, coParent, "You", "Co-parent", "Parent")
+        )
+    }
+
+    @Test
+    fun `the co-parent's uid resolves to their name`() {
+        assertEquals(
+            "Pavel",
+            parentLabelByUid("u2", me, coParent, "You", "Co-parent", "Parent")
+        )
+    }
+
+    @Test
+    fun `a uid matching neither parent resolves to the unknown fallback`() {
+        assertEquals(
+            "Parent",
+            parentLabelByUid("some-stranger-uid", me, coParent, "You", "Co-parent", "Parent")
+        )
+    }
+
+    @Test
+    fun `a co-parent write on an unmigrated pair still names the co-parent, not me`() {
+        // Every pair created before slot assignment shipped has both parents reading "mom".
+        // Resolving lastModifiedBy through the slot (parentLabel) would collapse both uids onto
+        // "mom" and report the co-parent's write as mine; resolving the uid directly does not.
+        val sameSlotCoParent = coParent.copy(slot = "mom")
+        assertEquals(
+            "Pavel",
+            parentLabelByUid("u2", me, sameSlotCoParent, "You", "Co-parent", "Parent")
+        )
+        assertEquals(
+            "Olya",
+            parentLabelByUid("u1", me, sameSlotCoParent, "You", "Co-parent", "Parent")
+        )
+    }
+
+    @Test
+    fun `my uid with no name stored falls back to You`() {
+        assertEquals(
+            "You",
+            parentLabelByUid("u1", me.copy(name = ""), coParent, "You", "Co-parent", "Parent")
+        )
+    }
+
+    @Test
+    fun `the co-parent's uid with no name stored falls back to Co-parent`() {
+        assertEquals(
+            "Co-parent",
+            parentLabelByUid("u2", me, coParent.copy(name = "   "), "You", "Co-parent", "Parent")
+        )
+    }
+
+    @Test
+    fun `an unloaded co-parent does not cause a matching uid to be guessed`() {
+        assertEquals(
+            "Parent",
+            parentLabelByUid("u2", me, null, "You", "Co-parent", "Parent")
+        )
+    }
 }

@@ -1,6 +1,7 @@
 package com.coparently.app.presentation.common
 
 import org.junit.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -39,5 +40,21 @@ class ParentNamesTest {
     fun `a slot matching neither parent is not known`() {
         val names = parentNames(Parents(me = me, coParent = null))
         assertFalse(names.isKnown("dad"))
+    }
+
+    @Test
+    fun `labelForUid resolves the co-parent's uid even on an unmigrated pair sharing a slot`() {
+        // The regression labelFor cannot be trusted with: both parents on "mom" would collapse
+        // to the same slot, but their uids are always distinct.
+        val sameSlotCoParent = coParent.copy(slot = "mom")
+        val names = parentNames(Parents(me = me, coParent = sameSlotCoParent))
+        assertEquals("Pavel", names.labelForUid("u2"))
+        assertEquals("Olya", names.labelForUid("u1"))
+    }
+
+    @Test
+    fun `labelForUid falls back to unknown for a null uid`() {
+        val names = parentNames(Parents(me = me, coParent = coParent))
+        assertEquals("Parent", names.labelForUid(null))
     }
 }

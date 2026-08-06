@@ -12,7 +12,8 @@ import kotlin.test.assertNull
  *
  * Custody is last-write-wins with no consent step, so the one thing this decision must get
  * right is that a losing write is never silently swallowed: it has to surface as "the other
- * parent changed it" unless it demonstrably is not that.
+ * parent changed it" unless it demonstrably is not that — and the reverse failure is just as
+ * real: it must never report this device's own write as the co-parent's.
  */
 class CustodyChangeAnnouncementTest {
 
@@ -23,6 +24,7 @@ class CustodyChangeAnnouncementTest {
         val result = CustodyChangeAnnouncement.toAnnounce(
             shared = shared,
             myUid = MY_UID,
+            parentsLoaded = true,
             dismissedLastModifiedAt = null
         )
 
@@ -36,6 +38,7 @@ class CustodyChangeAnnouncementTest {
         val result = CustodyChangeAnnouncement.toAnnounce(
             shared = shared,
             myUid = MY_UID,
+            parentsLoaded = true,
             dismissedLastModifiedAt = null
         )
 
@@ -49,6 +52,7 @@ class CustodyChangeAnnouncementTest {
         val result = CustodyChangeAnnouncement.toAnnounce(
             shared = shared,
             myUid = MY_UID,
+            parentsLoaded = true,
             dismissedLastModifiedAt = MODIFIED_AT
         )
 
@@ -62,6 +66,7 @@ class CustodyChangeAnnouncementTest {
         val result = CustodyChangeAnnouncement.toAnnounce(
             shared = shared,
             myUid = MY_UID,
+            parentsLoaded = true,
             dismissedLastModifiedAt = "2026-08-05T09:00:00"
         )
 
@@ -71,13 +76,15 @@ class CustodyChangeAnnouncementTest {
     @Test
     fun `a lastModifiedBy matching neither parent is still announced`() {
         // Naming falls back to "unknown parent" for a uid like this one — that is the caller's
-        // job (uid to slot to parentLabel). This decision only answers "is there a change to
-        // announce", and a stranger uid is not a reason to suppress a real change.
+        // job (parentLabelByUid, resolved directly against the uid, never through a slot). This
+        // decision only answers "is there a change to announce", and a stranger uid is not a
+        // reason to suppress a real change.
         val shared = custodyOf(lastModifiedBy = "some-stranger-uid")
 
         val result = CustodyChangeAnnouncement.toAnnounce(
             shared = shared,
             myUid = MY_UID,
+            parentsLoaded = true,
             dismissedLastModifiedAt = null
         )
 
@@ -89,6 +96,7 @@ class CustodyChangeAnnouncementTest {
         val result = CustodyChangeAnnouncement.toAnnounce(
             shared = null,
             myUid = MY_UID,
+            parentsLoaded = true,
             dismissedLastModifiedAt = null
         )
 
@@ -96,14 +104,51 @@ class CustodyChangeAnnouncementTest {
     }
 
     @Test
-    fun `an unknown own uid does not suppress a real remote change`() {
-        // Before Parents has loaded, myUid is null. A change must not be misread as "mine"
-        // merely because this device does not yet know its own uid.
+    fun `an account with no Room profile row never suppresses a real remote change`() {
+        // Parents.me can be null forever for an account with no local profile row - loaded is
+        // still true, and there is nothing more to wait for. A null myUid must not be read as
+        // "this could be my write" once parents has actually loaded.
         val shared = custodyOf(lastModifiedBy = CO_PARENT_UID)
 
         val result = CustodyChangeAnnouncement.toAnnounce(
             shared = shared,
             myUid = null,
+            parentsLoaded = true,
+            dismissedLastModifiedAt = null
+        )
+
+        assertEquals(shared, result)
+    }
+
+    @Test
+    fun `nothing is announced before parents has loaded, even for a genuine remote change`() {
+        // Parents starts every fresh subscription from a synthetic "nobody is known yet", and
+        // CustodyModelRepository's pair resolution (Room-only) is reliably faster than Parents
+        // resolving three Firestore pairing listeners. So the echo of this device's own
+        // just-made write can arrive before myUid is known - treating "not loaded" as "definitely
+        // not mine" would announce the user's own edit as the co-parent's.
+        val shared = custodyOf(lastModifiedBy = CO_PARENT_UID)
+
+        val result = CustodyChangeAnnouncement.toAnnounce(
+            shared = shared,
+            myUid = null,
+            parentsLoaded = false,
+            dismissedLastModifiedAt = null
+        )
+
+        assertNull(result)
+    }
+
+    @Test
+    fun `the same change is announced once parents resolves`() {
+        // The other half of the test above: once parents has produced a real answer, the change
+        // that was withheld while unloaded is announced - nothing is lost, only delayed.
+        val shared = custodyOf(lastModifiedBy = CO_PARENT_UID)
+
+        val result = CustodyChangeAnnouncement.toAnnounce(
+            shared = shared,
+            myUid = MY_UID,
+            parentsLoaded = true,
             dismissedLastModifiedAt = null
         )
 

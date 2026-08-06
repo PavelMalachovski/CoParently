@@ -91,7 +91,13 @@ class CalendarViewModel @Inject constructor(
      *
      * Custody is last-write-wins with no consent step, so this is what keeps that from being
      * *silent*: [CustodyChangeAnnouncement.toAnnounce] excludes this device's own writes (by
-     * uid, from [parents]) and anything already dismissed (by `lastModifiedAt`).
+     * uid, from [parents]) and anything already dismissed (by `lastModifiedAt`). It also excludes
+     * anything at all until [Parents.loaded] is true — [parents] starts from a synthetic
+     * "nobody is known yet" on every fresh subscription, and `CustodyModelRepository`'s own pair
+     * resolution is Room-only and reliably faster than `Parents` resolving three Firestore
+     * pairing listeners, so the echo of this device's own just-made write can otherwise arrive
+     * before its own uid is known — announcing the user's own edit as the co-parent's, exactly
+     * the failure this feature must not have, just pointed the other way.
      *
      * `WhileSubscribed`, like [nextHandover], and not an eager collector: [parents] itself only
      * subscribes to [ParentsSource]'s pairing listener while something is collecting it, and
@@ -105,7 +111,7 @@ class CalendarViewModel @Inject constructor(
         parents,
         dismissedCustodyChangeAt
     ) { shared, currentParents, dismissedAt ->
-        CustodyChangeAnnouncement.toAnnounce(shared, currentParents.me?.uid, dismissedAt)
+        CustodyChangeAnnouncement.toAnnounce(shared, currentParents.me?.uid, currentParents.loaded, dismissedAt)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(HANDOVER_STOP_TIMEOUT_MS), null)
 
     private val _viewMode = MutableStateFlow(CalendarViewMode.MONTH)

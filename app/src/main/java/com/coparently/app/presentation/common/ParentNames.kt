@@ -46,6 +46,33 @@ data class ParentNames(
     }
 
     /**
+     * The name to show for whoever holds [uid], or a fallback when that uid cannot be
+     * identified.
+     *
+     * Distinct from [labelFor]: that resolves a *slot* via [parentLabel], which collapses to the
+     * same value for both parents on a pair that has not been migrated yet (both still reading
+     * `"mom"` — see [Parents.roleByUid]). A caller that already holds a uid — a document's
+     * `lastModifiedBy`, say — must resolve it here, via [parentLabelByUid], rather than detouring
+     * through a slot: that detour is what would report the co-parent's write as the signed-in
+     * parent's own on exactly the pairs this branch's slot-assignment work exists to serve.
+     *
+     * A null uid is not a parent at all, so it takes the same "cannot be identified" answer as
+     * an unrecognised one — the same rule [labelFor] applies to a null slot.
+     */
+    fun labelForUid(uid: String?): String = if (uid == null) {
+        unknownFallback
+    } else {
+        parentLabelByUid(
+            uid = uid,
+            me = parents.me,
+            coParent = parents.coParent,
+            youFallback = youFallback,
+            coParentFallback = coParentFallback,
+            unknownFallback = unknownFallback
+        )
+    }
+
+    /**
      * Whether [slot] resolves to a named person rather than to the unknown fallback.
      *
      * [parentLabel] itself is not asked this — it already gives the correct answer to "who is
