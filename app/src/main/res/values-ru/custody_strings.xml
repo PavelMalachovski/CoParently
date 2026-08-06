@@ -43,4 +43,12 @@
     <string name="custody_preview_two_two_three">Пн–Вт: %1$s. Ср–Чт: %2$s. Пт–Вс чередуются.</string>
     <string name="custody_preview_three_four_four_three">Пн–Ср (3 дня): %1$s. Чт–Вс (4 дня): %2$s. Затем наоборот.</string>
     <string name="custody_preview_custom">Свой график: %1$d из %2$d дней — %3$s.</string>
+
+    <!-- The pairing conflict screen — noun labels only, never a sentence with a name as subject. -->
+    <string name="custody_conflict_title">Два графика</string>
+    <string name="custody_conflict_body">На этом телефоне и в общем календаре разные графики опеки. Выберите тот, который действует. Второй останется сохранённым, но неактивным.</string>
+    <string name="custody_conflict_local_label">На этом телефоне</string>
+    <string name="custody_conflict_shared_label">Общий график</string>
+    <string name="custody_conflict_keep_local">Оставить график этого телефона</string>
+    <string name="custody_conflict_use_shared">Использовать общий график</string>
 </resources>

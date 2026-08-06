@@ -5,11 +5,16 @@ import com.coparently.app.R
 import com.coparently.app.data.analytics.AnalyticsManager
 import com.coparently.app.data.remote.firebase.PairingException
 import com.coparently.app.data.remote.firebase.QRCodeService
+import com.coparently.app.data.repository.CustodyModelRepository
 import com.coparently.app.data.repository.ParentSlotMigrator
 import com.coparently.app.data.session.SignedInAccountSource
+import com.coparently.app.domain.custody.SharedCustody
 import com.coparently.app.domain.model.AccountSummary
+import com.coparently.app.domain.model.CustodyModel
+import com.coparently.app.domain.model.CustodyModelType
 import com.coparently.app.domain.model.PairingError
 import com.coparently.app.domain.model.PairingState
+import com.coparently.app.domain.model.PartnerSummary
 import com.coparently.app.domain.model.User
 import com.coparently.app.domain.repository.PairingRepository
 import com.coparently.app.domain.repository.UserRepository
@@ -43,6 +48,8 @@ class PairingViewModelTest {
     private lateinit var analyticsManager: AnalyticsManager
     private lateinit var userRepository: UserRepository
     private lateinit var parentSlotMigrator: ParentSlotMigrator
+    private lateinit var custodyModelRepository: CustodyModelRepository
+    private lateinit var pendingCustodyConflict: PendingCustodyConflict
     private lateinit var signedInAccountSource: SignedInAccountSource
     private lateinit var viewModel: PairingViewModel
 
@@ -59,16 +66,33 @@ class PairingViewModelTest {
         analyticsManager = mockk(relaxed = true)
         userRepository = mockk(relaxed = true)
         parentSlotMigrator = mockk(relaxed = true)
+        custodyModelRepository = mockk(relaxed = true)
+        pendingCustodyConflict = PendingCustodyConflict()
         coEvery { repository.observePairingState() } returns
             flowOf(PairingState.NotPaired())
         signedInAccountSource = mockk(relaxed = true)
         every { signedInAccountSource.observe() } returns flowOf(ACCOUNT)
+        buildViewModel()
+    }
+
+    /**
+     * Builds the subject from whatever the current stubs say.
+     *
+     * The custody tests restub `observePairingState()` first: `reconcileCustody` waits for the
+     * pairing to be mirrored into Room before reading the shared document, and it observes that
+     * through the same flow the screen does. A ViewModel built against the default `NotPaired`
+     * stub would take the timeout branch instead — correct behaviour, but not the branch those
+     * tests are about.
+     */
+    private fun buildViewModel() {
         viewModel = PairingViewModel(
             pairingRepository = repository,
             qrCodeService = mockk<QRCodeService>(relaxed = true),
             analyticsManager = analyticsManager,
             userRepository = userRepository,
             parentSlotMigrator = parentSlotMigrator,
+            custodyModelRepository = custodyModelRepository,
+            pendingCustodyConflict = pendingCustodyConflict,
             signedInAccountSource = signedInAccountSource
         )
     }
@@ -373,6 +397,169 @@ class PairingViewModelTest {
                 cancelAndIgnoreRemainingEvents()
             }
         }
+
+    // ---- custody reconciliation --------------------------------------------
+    //
+    // The order these pin is the sharpest thing on this branch: the slot flips, then the local
+    // pattern is complemented for the new slot, and only then are the two compared. Complement
+    // after comparing and the screen offers a parent their own schedule inverted.
+
+    @Test
+    fun `the local pattern is complemented before the two are compared`() = runTest(dispatcher) {
+        // Slot 1 with days 0-6, moving to slot 2 — so "my days" become 7-13, which is exactly
+        // what the co-parent's slot-1 pattern already says. Same arrangement, no question to ask.
+        pairedFrom("mom", to = "dad")
+        coEvery { custodyModelRepository.getActiveModelSync() } returns pattern((0..6).toSet(), "mine")
+        coEvery { custodyModelRepository.getShared() } returns shared(pattern((7..13).toSet(), "theirs"))
+
+        viewModel.acceptIncoming("invite-1")
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertNull(pendingCustodyConflict.prompt.value)
+        coVerify(exactly = 1) {
+            custodyModelRepository.saveAndActivate(pattern((7..13).toSet(), "theirs"))
+        }
+    }
+
+    @Test
+    fun `two disagreeing patterns are put to the user, and nothing is written`() = runTest(dispatcher) {
+        pairedFrom("mom", to = "dad")
+        coEvery { custodyModelRepository.getActiveModelSync() } returns pattern((0..6).toSet(), "mine")
+        coEvery { custodyModelRepository.getShared() } returns
+            shared(pattern(setOf(0, 1, 4, 5, 6, 9, 10), "theirs"))
+
+        viewModel.acceptIncoming("invite-1")
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(
+            CustodyConflictPrompt(
+                conflict = CustodyConflict.Conflict(
+                    // Complemented, not as stored — the whole point.
+                    mine = pattern((7..13).toSet(), "mine"),
+                    theirs = pattern(setOf(0, 1, 4, 5, 6, 9, 10), "theirs")
+                ),
+                // The slot the callable reported, not the stale one Room still holds.
+                mySlot = "dad"
+            ),
+            pendingCustodyConflict.prompt.value
+        )
+        coVerify(exactly = 0) { custodyModelRepository.saveAndActivate(any()) }
+    }
+
+    @Test
+    fun `the conflict screen is asked for exactly once`() = runTest(dispatcher) {
+        pairedFrom("mom", to = "dad")
+        coEvery { custodyModelRepository.getActiveModelSync() } returns pattern((0..6).toSet(), "mine")
+        coEvery { custodyModelRepository.getShared() } returns
+            shared(pattern(setOf(0, 1, 4, 5, 6, 9, 10), "theirs"))
+
+        viewModel.events.test {
+            viewModel.acceptIncoming("invite-1")
+            dispatcher.scheduler.advanceUntilIdle()
+
+            assertEquals(PairingEvent.ChooseCustodySchedule, awaitItem())
+            expectNoEvents()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `no shared pattern keeps the local one, complemented for the new slot`() = runTest(dispatcher) {
+        // getShared() answers null both for "no document" and for a read it could not make.
+        // Either way the local pattern must end up describing this device's *new* slot.
+        pairedFrom("mom", to = "dad")
+        coEvery { custodyModelRepository.getActiveModelSync() } returns pattern((0..6).toSet(), "mine")
+        coEvery { custodyModelRepository.getShared() } returns null
+
+        viewModel.acceptIncoming("invite-1")
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertNull(pendingCustodyConflict.prompt.value)
+        coVerify(exactly = 1) {
+            custodyModelRepository.saveAndActivate(pattern((7..13).toSet(), "mine"))
+        }
+    }
+
+    @Test
+    fun `an accept that keeps this device's slot does not complement`() = runTest(dispatcher) {
+        // Nothing moved, so the stored pattern already means "my days"; complementing it here
+        // would invert a schedule nobody asked to change.
+        pairedFrom("mom", to = "mom")
+        coEvery { custodyModelRepository.getActiveModelSync() } returns pattern((0..6).toSet(), "mine")
+        coEvery { custodyModelRepository.getShared() } returns null
+
+        viewModel.acceptIncoming("invite-1")
+        dispatcher.scheduler.advanceUntilIdle()
+
+        coVerify(exactly = 1) {
+            custodyModelRepository.saveAndActivate(pattern((0..6).toSet(), "mine"))
+        }
+    }
+
+    @Test
+    fun `an accept that reports no slot leaves custody untouched`() = runTest(dispatcher) {
+        // With no reported slot there is no way to know whether the pattern needs complementing,
+        // and comparing an un-complemented pattern is worse than not comparing at all.
+        pairedFrom("mom", to = null)
+        coEvery { custodyModelRepository.getActiveModelSync() } returns pattern((0..6).toSet(), "mine")
+        coEvery { custodyModelRepository.getShared() } returns shared(pattern((7..13).toSet(), "theirs"))
+
+        viewModel.acceptIncoming("invite-1")
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertNull(pendingCustodyConflict.prompt.value)
+        coVerify(exactly = 0) { custodyModelRepository.saveAndActivate(any()) }
+    }
+
+    @Test
+    fun `a failed custody reconciliation is not reported as a failed pairing`() = runTest(dispatcher) {
+        // The pairing has already committed server-side and the invitation is no longer pending,
+        // so there is nothing to retry — a Room failure here must not surface as a failed accept.
+        pairedFrom("mom", to = "dad")
+        coEvery { custodyModelRepository.getActiveModelSync() } throws IllegalStateException("boom")
+
+        viewModel.acceptIncoming("invite-1")
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertNull(viewModel.form.value.actionErrorRes)
+        coVerify(exactly = 1) { analyticsManager.logInvitationAccepted() }
+    }
+
+    /**
+     * Stubs a successful accept that moves this device from [from] to [to], with the pairing
+     * already visible as [PairingState.Paired] — the state `reconcileCustody` waits for before
+     * reading the shared document.
+     */
+    private fun pairedFrom(from: String, to: String?) {
+        coEvery { userRepository.getCurrentUser() } returns userWithRole(from)
+        coEvery { repository.acceptIncoming("invite-1") } returns Result.success(to)
+        coEvery { repository.observePairingState() } returns flowOf(
+            PairingState.Paired(
+                partner = PartnerSummary(
+                    id = "user-b",
+                    name = "Bob Novak",
+                    email = "bob@example.com",
+                    pairedSinceMillis = null
+                )
+            )
+        )
+        buildViewModel()
+    }
+
+    private fun pattern(momDays: Set<Int>, id: String) = CustodyModel(
+        id = id,
+        modelType = CustodyModelType.CUSTOM,
+        patternDays = 14,
+        momDayIndices = momDays,
+        startDate = java.time.LocalDate.of(2026, 8, 3)
+    )
+
+    private fun shared(model: CustodyModel) = SharedCustody(
+        model = model,
+        lastModifiedBy = "user-b",
+        lastModifiedAt = "2026-08-01T10:00:00",
+        createdAt = "2026-08-01T10:00:00"
+    )
 
     private fun userWithRole(role: String) = User(
         id = "user-a",

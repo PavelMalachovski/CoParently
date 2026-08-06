@@ -91,6 +91,8 @@ private enum class PairingMode { SHARE, ENTER }
  * an email invitation — and unlink again.
  *
  * @param onNavigateBack Up navigation.
+ * @param onCustodyConflict Opens the conflict screen when an accepted pairing found two
+ *   custody patterns that disagree. Nothing is written until the user chooses there.
  * @param prefilledCode Code carried by a `coplanly://pair` deep link, if any.
  * @param viewModel Pairing state and actions.
  */
@@ -98,6 +100,7 @@ private enum class PairingMode { SHARE, ENTER }
 @Composable
 fun PairingScreen(
     onNavigateBack: () -> Unit,
+    onCustodyConflict: () -> Unit,
     prefilledCode: String? = null,
     viewModel: PairingViewModel = hiltViewModel()
 ) {
@@ -133,15 +136,7 @@ fun PairingScreen(
     val showUnpairConfirm = rememberSaveable { mutableStateOf(false) }
     val pendingDeepLinkCode = rememberSaveable(prefilledCode) { mutableStateOf(prefilledCode) }
 
-    LaunchedEffect(prefilledCode) {
-        prefilledCode?.let { viewModel.onCodeInputChange(it) }
-    }
-    // The QR renders inline now, so it is generated as soon as there is a code to encode
-    // rather than waiting for a button. Keyed on the code so regenerating rebuilds it.
-    val activeCode = (state as? PairingState.NotPaired)?.activeInvite?.code
-    LaunchedEffect(activeCode) {
-        if (activeCode != null) viewModel.showQr()
-    }
+    PairingSideEffects(viewModel, state, prefilledCode, onCustodyConflict)
     ActionErrorSnackbar(form.actionErrorRes, snackbarHostState, context, viewModel::consumeActionError)
 
     Scaffold(
@@ -176,6 +171,39 @@ fun PairingScreen(
 
     UnpairFlow(state, showUnpairConfirm, viewModel::unpair)
     DeepLinkFlow(pendingDeepLinkCode, viewModel::redeemCode)
+}
+
+/**
+ * The screen's effects, in one place: the deep-linked code, the inline QR, and the ViewModel's
+ * one-shot events.
+ *
+ * The event collector is keyed on [viewModel] rather than on a state value — each event is
+ * delivered exactly once by the channel behind it, so re-running the effect on every
+ * recomposition would be the way to navigate twice.
+ */
+@Composable
+private fun PairingSideEffects(
+    viewModel: PairingViewModel,
+    state: PairingState,
+    prefilledCode: String?,
+    onCustodyConflict: () -> Unit
+) {
+    LaunchedEffect(prefilledCode) {
+        prefilledCode?.let { viewModel.onCodeInputChange(it) }
+    }
+    // The QR renders inline now, so it is generated as soon as there is a code to encode
+    // rather than waiting for a button. Keyed on the code so regenerating rebuilds it.
+    val activeCode = (state as? PairingState.NotPaired)?.activeInvite?.code
+    LaunchedEffect(activeCode) {
+        if (activeCode != null) viewModel.showQr()
+    }
+    LaunchedEffect(viewModel) {
+        viewModel.events.collect { event ->
+            when (event) {
+                PairingEvent.ChooseCustodySchedule -> onCustodyConflict()
+            }
+        }
+    }
 }
 
 /** Confirms ending the co-parent link once [visible] is set, e.g. from the paired screen's danger action. */
