@@ -51,4 +51,5 @@
     <string name="custody_conflict_shared_label">Спільний графік</string>
     <string name="custody_conflict_keep_local">Залишити графік цього телефона</string>
     <string name="custody_conflict_use_shared">Використати спільний графік</string>
+    <string name="custody_conflict_save_failed">Графік не вдалося зберегти. Спробуйте ще раз.</string>
 </resources>

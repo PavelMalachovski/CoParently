@@ -51,4 +51,5 @@
     <string name="custody_conflict_shared_label">Geteilter Zeitplan</string>
     <string name="custody_conflict_keep_local">Zeitplan dieses Telefons behalten</string>
     <string name="custody_conflict_use_shared">Geteilten Zeitplan verwenden</string>
+    <string name="custody_conflict_save_failed">Der Zeitplan konnte nicht gespeichert werden. Versuchen Sie es erneut.</string>
 </resources>

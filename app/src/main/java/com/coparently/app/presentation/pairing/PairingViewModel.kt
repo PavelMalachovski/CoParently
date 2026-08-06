@@ -12,6 +12,7 @@ import com.coparently.app.data.remote.firebase.QRCodeService
 import com.coparently.app.data.repository.CustodyModelRepository
 import com.coparently.app.data.repository.ParentSlotMigrator
 import com.coparently.app.data.session.SignedInAccountSource
+import com.coparently.app.domain.custody.SharedCustodyRead
 import com.coparently.app.domain.model.AccountSummary
 import com.coparently.app.domain.model.PairingError
 import com.coparently.app.domain.model.PairingState
@@ -243,7 +244,13 @@ class PairingViewModel @Inject constructor(
         val after = result.getOrNull()
         if (user != null && before != null && after != null) {
             reslotIfChanged(myUid = user.id, from = before, to = after)
-            reconcileCustody(slotChanged = before != after, mySlot = after)
+            // Detached, and launched *after* the re-stamp so the order of the two is still
+            // fixed. The reconciliation waits for the pairing to be mirrored into Room, and the
+            // accept must not sit behind that wait with its button spinning: the pairing itself
+            // has already succeeded server-side, and saying so is not contingent on custody.
+            viewModelScope.launch {
+                reconcileCustody(slotChanged = before != after, mySlot = after)
+            }
         }
         return result.map { }
     }
@@ -265,6 +272,20 @@ class PairingViewModel @Inject constructor(
      * so "theirs" can be gone from Firestore seconds after this runs. Whatever the user picks is
      * written last, and last write wins.
      *
+     * **The complement is persisted before anything else can go wrong, and it is not a decision.**
+     * It re-expresses the same arrangement for this device's new slot, so it is written through
+     * [CustodyModelRepository.saveReslotted] — locally, keeping its dates — the moment it is
+     * computed, whether the two patterns then turn out to agree, disagree, or be unknowable.
+     * Deferring it to the conflict screen was wrong: the pending prompt lives only in memory, so
+     * process death, leaving the pairing screen before the event is collected, or any failure
+     * below would all have left Room holding the *un-complemented* pattern, still active, now
+     * assigning the accepter's days to the co-parent with nothing to say so.
+     *
+     * **Only one write from here reaches Firestore**, and only when the read *proved* the pair has
+     * no document. Everything else is left to the mirror, which settles Room and the document
+     * against each other by the last-write-wins rule the rest of custody sync already runs on.
+     * Re-stamping a pattern here would make this device win that comparison forever.
+     *
      * A failure is logged and swallowed, exactly as in [reslotIfChanged]: the pairing has already
      * committed server-side and cannot be retried, so a Room or Firestore error here must fail
      * the reconciliation, not the pairing that did not fail.
@@ -278,19 +299,38 @@ class PairingViewModel @Inject constructor(
     private suspend fun reconcileCustody(slotChanged: Boolean, mySlot: String) {
         runCatching {
             awaitPairingVisibleLocally()
-            val theirs = custodyModelRepository.getShared()?.model
+            val read = custodyModelRepository.readShared()
             val mine = custodyModelRepository.getActiveModelSync()
             val mineAfterFlip = if (slotChanged) mine?.complemented() else mine
-            when (val outcome = CustodyConflictResolver.resolve(mineAfterFlip, theirs)) {
-                is CustodyConflict.Conflict -> {
-                    pendingCustodyConflict.set(CustodyConflictPrompt(outcome, mySlot))
-                    _events.send(PairingEvent.ChooseCustodySchedule)
-                }
-                // Not a question, so not a screen: whichever single pattern stands is written
-                // through, which is also what persists the complement above. Skipping the write
-                // would leave Room holding a pattern that now describes the wrong parent.
-                else -> outcome.settled?.let { custodyModelRepository.saveAndActivate(it) }
+            if (slotChanged && mineAfterFlip != null) {
+                custodyModelRepository.saveReslotted(mineAfterFlip)
             }
+
+            val theirs = when (read) {
+                is SharedCustodyRead.Found -> read.custody.model
+                SharedCustodyRead.Absent -> null
+                // Not "they have no pattern" — "we could not ask". Publishing on the strength of
+                // this is exactly how a co-parent's schedule gets replaced by a device that
+                // merely failed to read it. The complement above has already landed, so the
+                // accepter's own calendar is right; the mirror reconciles the pair later.
+                SharedCustodyRead.Unavailable -> {
+                    Log.w(TAG, "The shared pattern could not be read; leaving it to the mirror")
+                    return@runCatching
+                }
+            }
+
+            val outcome = CustodyConflictResolver.resolve(mineAfterFlip, theirs)
+            if (outcome is CustodyConflict.Conflict) {
+                pendingCustodyConflict.set(CustodyConflictPrompt(outcome, mySlot))
+                _events.send(PairingEvent.ChooseCustodySchedule)
+                return@runCatching
+            }
+            // Not a question. The one case still needing a write is a pattern on this phone and
+            // a document the read proved absent: publishing creates the pair's document rather
+            // than replacing one, and without it pairing would leave the arrangement stranded on
+            // a single phone. When they simply agree, `theirs` is non-null and nothing is
+            // written — Room already holds the re-slotted pattern.
+            if (theirs == null) outcome.settled?.let { custodyModelRepository.saveAndActivate(it) }
         }.onFailure { e ->
             // Cancellation is not a failure — leaving the pairing screen mid-reconcile cancels
             // this scope, and reporting that as an error would bury the ones that matter.
@@ -305,17 +345,25 @@ class PairingViewModel @Inject constructor(
      * `CustodyModelRepository` derives the pair — and therefore the shared document's id — from
      * Room's `partnerId`, which is written by `PairingRepositoryImpl.onPairingStateObserved` off
      * the pairing snapshot listener, *not* by the accept callable's response. Reading the shared
-     * document the instant the callable returns therefore finds no pair at all and answers
-     * "the co-parent has no pattern" on essentially every accept, which would leave the conflict
-     * screen unreachable in practice. The mirror hook is upstream of [state], so a [state]
-     * emission of [PairingState.Paired] means the Room write has already been attempted.
+     * document the instant the callable returns therefore finds no pair at all, which would leave
+     * the conflict screen unreachable in practice. The mirror hook is an `onEach` upstream of
+     * [state], so waiting for [PairingState.Paired] usually means the Room write has already run.
+     *
+     * **This narrows the window; it does not close it.** `onPairingStateObserved` dedupes on a
+     * single `AtomicReference` shared by every subscriber, and `observePairingState()` has four
+     * independent collectors, each with its own snapshot listener. If another collector wins the
+     * `getAndSet`, this chain forwards `Paired` downstream while the winner's `userDao.updateUser`
+     * is still in flight, and the pair lookup below still finds a stale `partnerId`.
+     *
+     * That residue, and the timeout, are both safe for one reason and it is not this wait:
+     * [CustodyModelRepository.readShared] reports an unknown pair as
+     * [SharedCustodyRead.Unavailable] rather than as an absent document, and
+     * [reconcileCustody] publishes nothing on that answer. So the worst outcome of this wait
+     * being wrong is a reconciliation deferred to the mirror — never a co-parent's pattern
+     * replaced by a device that could not read it.
      *
      * Bounded rather than indefinite: if the transition never arrives — a snapshot listener that
-     * has not recovered, a Room write that failed — the accept must still finish. Timing out
-     * degrades to the same answer as before this wait existed, which is safe in both directions:
-     * a null `getShared()` from an unknown pair also makes the write below a no-op, since
-     * `pushToFirestore` gates on the same lookup, so nothing of the co-parent's can be
-     * overwritten by a pattern chosen on incomplete information.
+     * has not recovered, a Room write that failed — the reconciliation must still finish.
      */
     private suspend fun awaitPairingVisibleLocally() {
         withTimeoutOrNull(PAIRING_VISIBLE_TIMEOUT_MS) {

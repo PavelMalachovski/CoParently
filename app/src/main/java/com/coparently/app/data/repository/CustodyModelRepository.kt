@@ -6,6 +6,7 @@ import com.coparently.app.data.local.entity.CustodyModelEntity
 import com.coparently.app.data.remote.firebase.FirestoreCustodyDataSource
 import com.coparently.app.domain.custody.CustodyKey
 import com.coparently.app.domain.custody.SharedCustody
+import com.coparently.app.domain.custody.SharedCustodyRead
 import com.coparently.app.domain.model.CustodyModel
 import com.coparently.app.domain.model.CustodyModelType
 import com.coparently.app.domain.repository.UserRepository
@@ -141,18 +142,41 @@ class CustodyModelRepository(
     fun observeShared(): Flow<SharedCustody?> = shared
 
     /**
-     * The pair's shared pattern, read once, or null when there is none.
+     * The pair's shared pattern, read once.
      *
      * The one-shot counterpart of [observeShared], for the question a stream cannot answer:
-     * what the co-parent's pattern is *at the moment* pairing is accepted. A failed read
-     * degrades to null with a log rather than propagating — callers run inside
-     * `viewModelScope.launch`, where an uncaught `PERMISSION_DENIED` kills the process instead
-     * of failing the read.
+     * what the co-parent's pattern is *at the moment* pairing is accepted.
+     *
+     * Answers with a [SharedCustodyRead] rather than a nullable [SharedCustody] because the
+     * caller's next move differs by *why* there is nothing: [SharedCustodyRead.Absent] means the
+     * pair has no document and one may safely be created, while [SharedCustodyRead.Unavailable]
+     * means the question could not be answered and nothing may be published on the strength of
+     * it. Collapsing the two is how a device that merely failed to read decides the co-parent has
+     * no schedule and replaces it.
+     *
+     * Never propagates: callers run inside `viewModelScope.launch`, where an uncaught
+     * `PERMISSION_DENIED` kills the process instead of failing the read. Cancellation is
+     * rethrown — it is not a failure.
      */
-    suspend fun getShared(): SharedCustody? {
-        val pair = currentPair() ?: return null
-        return guarded("read", pair.documentId) {
+    suspend fun readShared(): SharedCustodyRead {
+        val pair = currentPair() ?: return SharedCustodyRead.Unavailable
+        return try {
             firestoreCustodyDataSource.getCustody(pair.documentId)
+                ?.let { SharedCustodyRead.Found(it) }
+                ?: SharedCustodyRead.Absent
+        } catch (e: CancellationException) {
+            throw e
+        } catch (
+            @Suppress("TooGenericExceptionCaught") e: Exception
+        ) {
+            Log.w(
+                TAG,
+                "Could not read custody_models/${pair.documentId}. Reported as Unavailable, not " +
+                    "as an absent document: a caller that mistook the two would publish its own " +
+                    "pattern over a co-parent's that is simply unreadable right now.",
+                e
+            )
+            SharedCustodyRead.Unavailable
         }
     }
 
@@ -169,6 +193,60 @@ class CustodyModelRepository(
         custodyModelDao.deactivateAllModels()
         custodyModelDao.insertModel(entity)
         pushToFirestore(model, entity)
+    }
+
+    /**
+     * Rewrites the active pattern in place: Room only, and without re-dating it.
+     *
+     * For a *re-expression* of an arrangement rather than a change to one — complementing a
+     * pattern after pairing moved this device to the other slot, where `momDayIndices` would
+     * otherwise silently start describing the co-parent's days. Nothing about who has the child
+     * on which date changes; only which slot the same schedule is written from.
+     *
+     * Both departures from [saveAndActivate] are the point:
+     *
+     * - **The dates are kept.** [toEntity]'s default stamps `lastModifiedAt` with now, which
+     *   would make this device the unconditional winner of every later comparison in
+     *   [mirrorIntoRoom] — so the re-slot alone would cause this pattern to be republished over
+     *   the co-parent's document, with nobody having chosen anything.
+     * - **Nothing is pushed.** The shared document may hold a pattern this device has not been
+     *   allowed to see, or one the user is at that moment being asked to choose between. Writing
+     *   locally leaves that decision where it belongs and lets the ordinary last-write-wins
+     *   mirror settle the rest.
+     *
+     * The equality guard is [mirrorIntoRoom]'s, for the same reason: an identical re-insert would
+     * tick Room's invalidation tracker and re-emit to every observer for no change at all.
+     */
+    suspend fun saveReslotted(model: CustodyModel) {
+        val existing = custodyModelDao.getModelById(model.id)
+        val entity = model.toEntity(
+            createdAt = existing?.createdAt ?: nowIso(),
+            lastModifiedAt = existing?.lastModifiedAt ?: nowIso()
+        ).copy(isActive = true, repeatYearly = existing?.repeatYearly ?: true)
+        if (entity == existing) return
+        custodyModelDao.deactivateAllModels()
+        custodyModelDao.insertModel(entity)
+    }
+
+    /**
+     * Keeps a deactivated copy of a pattern that is about to be replaced by one sharing its id.
+     *
+     * Room's insert REPLACEs on the primary key, so when the accepter's pattern and the shared
+     * document's carry the *same* id — a re-pair whose document was created from this device's
+     * own model — [saveAndActivate] would delete the rejected one rather than deactivate it.
+     * The copy is stored under a fresh id, inactive, keeping the original's dates: nobody's
+     * schedule disappears because of a choice made in one moment.
+     *
+     * Inactive rows are never pushed, so the fresh id stays local and cannot confuse the pair's
+     * document.
+     */
+    suspend fun archiveRejected(model: CustodyModel) {
+        val original = custodyModelDao.getModelById(model.id)
+        val entity = model.toEntity(
+            createdAt = original?.createdAt ?: nowIso(),
+            lastModifiedAt = original?.lastModifiedAt ?: nowIso()
+        ).copy(id = UUID.randomUUID().toString(), isActive = false)
+        custodyModelDao.insertModel(entity)
     }
 
     /**

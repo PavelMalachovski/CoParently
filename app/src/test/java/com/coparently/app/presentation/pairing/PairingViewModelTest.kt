@@ -9,6 +9,7 @@ import com.coparently.app.data.repository.CustodyModelRepository
 import com.coparently.app.data.repository.ParentSlotMigrator
 import com.coparently.app.data.session.SignedInAccountSource
 import com.coparently.app.domain.custody.SharedCustody
+import com.coparently.app.domain.custody.SharedCustodyRead
 import com.coparently.app.domain.model.AccountSummary
 import com.coparently.app.domain.model.CustodyModel
 import com.coparently.app.domain.model.CustodyModelType
@@ -36,6 +37,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Before
 import org.junit.Test
@@ -403,30 +405,39 @@ class PairingViewModelTest {
     // The order these pin is the sharpest thing on this branch: the slot flips, then the local
     // pattern is complemented for the new slot, and only then are the two compared. Complement
     // after comparing and the screen offers a parent their own schedule inverted.
+    //
+    // The complement is persisted through `saveReslotted` (Room only, dates kept) rather than
+    // `saveAndActivate` (stamped now, pushed) because it re-expresses an arrangement instead of
+    // changing one. Re-stamping it would make this device the unconditional winner of the
+    // mirror's staleness comparison, which is how a pattern nobody chose ends up replacing the
+    // co-parent's document.
 
     @Test
     fun `the local pattern is complemented before the two are compared`() = runTest(dispatcher) {
-        // Slot 1 with days 0-6, moving to slot 2 — so "my days" become 7-13, which is exactly
+        // Slot 1 with days 0-6, moving to slot 2 - so "my days" become 7-13, which is exactly
         // what the co-parent's slot-1 pattern already says. Same arrangement, no question to ask.
         pairedFrom("mom", to = "dad")
         coEvery { custodyModelRepository.getActiveModelSync() } returns pattern((0..6).toSet(), "mine")
-        coEvery { custodyModelRepository.getShared() } returns shared(pattern((7..13).toSet(), "theirs"))
+        coEvery { custodyModelRepository.readShared() } returns found(pattern((7..13).toSet(), "theirs"))
 
         viewModel.acceptIncoming("invite-1")
         dispatcher.scheduler.advanceUntilIdle()
 
         assertNull(pendingCustodyConflict.prompt.value)
         coVerify(exactly = 1) {
-            custodyModelRepository.saveAndActivate(pattern((7..13).toSet(), "theirs"))
+            custodyModelRepository.saveReslotted(pattern((7..13).toSet(), "mine"))
         }
+        // The two agree, so the shared document needs nothing from this device. Writing here
+        // would re-date an identical pattern and win every later comparison for it.
+        coVerify(exactly = 0) { custodyModelRepository.saveAndActivate(any()) }
     }
 
     @Test
-    fun `two disagreeing patterns are put to the user, and nothing is written`() = runTest(dispatcher) {
+    fun `two disagreeing patterns are put to the user, and nothing is published`() = runTest(dispatcher) {
         pairedFrom("mom", to = "dad")
         coEvery { custodyModelRepository.getActiveModelSync() } returns pattern((0..6).toSet(), "mine")
-        coEvery { custodyModelRepository.getShared() } returns
-            shared(pattern(setOf(0, 1, 4, 5, 6, 9, 10), "theirs"))
+        coEvery { custodyModelRepository.readShared() } returns
+            found(pattern(setOf(0, 1, 4, 5, 6, 9, 10), "theirs"))
 
         viewModel.acceptIncoming("invite-1")
         dispatcher.scheduler.advanceUntilIdle()
@@ -434,7 +445,7 @@ class PairingViewModelTest {
         assertEquals(
             CustodyConflictPrompt(
                 conflict = CustodyConflict.Conflict(
-                    // Complemented, not as stored — the whole point.
+                    // Complemented, not as stored - the whole point.
                     mine = pattern((7..13).toSet(), "mine"),
                     theirs = pattern(setOf(0, 1, 4, 5, 6, 9, 10), "theirs")
                 ),
@@ -447,11 +458,30 @@ class PairingViewModelTest {
     }
 
     @Test
+    fun `a conflict still persists the complement before asking`() = runTest(dispatcher) {
+        // Losing the prompt - process death, or leaving the pairing screen before the event is
+        // collected - must not leave Room holding the un-complemented pattern. After the slot
+        // flip that pattern is not merely unreconciled: it hands the accepter's own days to the
+        // co-parent, on their own calendar, with nothing to say so.
+        pairedFrom("mom", to = "dad")
+        coEvery { custodyModelRepository.getActiveModelSync() } returns pattern((0..6).toSet(), "mine")
+        coEvery { custodyModelRepository.readShared() } returns
+            found(pattern(setOf(0, 1, 4, 5, 6, 9, 10), "theirs"))
+
+        viewModel.acceptIncoming("invite-1")
+        dispatcher.scheduler.advanceUntilIdle()
+
+        coVerify(exactly = 1) {
+            custodyModelRepository.saveReslotted(pattern((7..13).toSet(), "mine"))
+        }
+    }
+
+    @Test
     fun `the conflict screen is asked for exactly once`() = runTest(dispatcher) {
         pairedFrom("mom", to = "dad")
         coEvery { custodyModelRepository.getActiveModelSync() } returns pattern((0..6).toSet(), "mine")
-        coEvery { custodyModelRepository.getShared() } returns
-            shared(pattern(setOf(0, 1, 4, 5, 6, 9, 10), "theirs"))
+        coEvery { custodyModelRepository.readShared() } returns
+            found(pattern(setOf(0, 1, 4, 5, 6, 9, 10), "theirs"))
 
         viewModel.events.test {
             viewModel.acceptIncoming("invite-1")
@@ -464,12 +494,13 @@ class PairingViewModelTest {
     }
 
     @Test
-    fun `no shared pattern keeps the local one, complemented for the new slot`() = runTest(dispatcher) {
-        // getShared() answers null both for "no document" and for a read it could not make.
-        // Either way the local pattern must end up describing this device's *new* slot.
+    fun `an absent shared document is the one case that publishes`() = runTest(dispatcher) {
+        // The read succeeded and there is no document, so publishing creates the pair's first
+        // one rather than replacing anything. Without it, pairing would leave the arrangement
+        // stranded on a single phone.
         pairedFrom("mom", to = "dad")
         coEvery { custodyModelRepository.getActiveModelSync() } returns pattern((0..6).toSet(), "mine")
-        coEvery { custodyModelRepository.getShared() } returns null
+        coEvery { custodyModelRepository.readShared() } returns SharedCustodyRead.Absent
 
         viewModel.acceptIncoming("invite-1")
         dispatcher.scheduler.advanceUntilIdle()
@@ -481,16 +512,77 @@ class PairingViewModelTest {
     }
 
     @Test
+    fun `a shared pattern that could not be read publishes nothing`() = runTest(dispatcher) {
+        // "We could not ask" is not "they have no schedule". Publishing on the strength of a
+        // failed read replaces a co-parent's pattern that is merely unreadable right now - and
+        // it would do so with no screen shown and nobody asked.
+        pairedFrom("mom", to = "dad")
+        coEvery { custodyModelRepository.getActiveModelSync() } returns pattern((0..6).toSet(), "mine")
+        coEvery { custodyModelRepository.readShared() } returns SharedCustodyRead.Unavailable
+
+        viewModel.acceptIncoming("invite-1")
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertNull(pendingCustodyConflict.prompt.value)
+        coVerify(exactly = 0) { custodyModelRepository.saveAndActivate(any()) }
+        // The accepter's own calendar is still put right; only the pair's document is left alone.
+        coVerify(exactly = 1) {
+            custodyModelRepository.saveReslotted(pattern((7..13).toSet(), "mine"))
+        }
+    }
+
+    @Test
+    fun `a pairing that never reaches Room still finishes, and still publishes nothing`() =
+        runTest(dispatcher) {
+            // The wait for PairingState.Paired times out - a snapshot listener that has not
+            // recovered, or another collector winning the mirror's dedupe. The reconciliation
+            // must complete rather than hang, and must not read an unanswerable read as an
+            // absent document.
+            neverPairedLocally(from = "mom", to = "dad")
+            coEvery { custodyModelRepository.getActiveModelSync() } returns
+                pattern((0..6).toSet(), "mine")
+            coEvery { custodyModelRepository.readShared() } returns SharedCustodyRead.Unavailable
+
+            viewModel.acceptIncoming("invite-1")
+            dispatcher.scheduler.advanceUntilIdle()
+
+            assertNull(viewModel.form.value.actionErrorRes)
+            assertNull(pendingCustodyConflict.prompt.value)
+            coVerify(exactly = 0) { custodyModelRepository.saveAndActivate(any()) }
+            coVerify(exactly = 1) {
+                custodyModelRepository.saveReslotted(pattern((7..13).toSet(), "mine"))
+            }
+        }
+
+    @Test
+    fun `the accept does not wait for the custody reconciliation`() = runTest(dispatcher) {
+        // The pairing has already succeeded server-side; saying so must not sit behind the wait
+        // for it to be mirrored into Room, or the button spins for the whole timeout.
+        neverPairedLocally(from = "mom", to = "dad")
+
+        viewModel.acceptIncoming("invite-1")
+        // Enough to drain the accept itself, but nowhere near the timeout the reconciliation
+        // waits out before giving up.
+        dispatcher.scheduler.runCurrent()
+
+        assertFalse(viewModel.form.value.isBusy)
+        coVerify(exactly = 1) { analyticsManager.logInvitationAccepted() }
+
+        dispatcher.scheduler.advanceUntilIdle()
+    }
+
+    @Test
     fun `an accept that keeps this device's slot does not complement`() = runTest(dispatcher) {
         // Nothing moved, so the stored pattern already means "my days"; complementing it here
         // would invert a schedule nobody asked to change.
         pairedFrom("mom", to = "mom")
         coEvery { custodyModelRepository.getActiveModelSync() } returns pattern((0..6).toSet(), "mine")
-        coEvery { custodyModelRepository.getShared() } returns null
+        coEvery { custodyModelRepository.readShared() } returns SharedCustodyRead.Absent
 
         viewModel.acceptIncoming("invite-1")
         dispatcher.scheduler.advanceUntilIdle()
 
+        coVerify(exactly = 0) { custodyModelRepository.saveReslotted(any()) }
         coVerify(exactly = 1) {
             custodyModelRepository.saveAndActivate(pattern((0..6).toSet(), "mine"))
         }
@@ -502,27 +594,14 @@ class PairingViewModelTest {
         // and comparing an un-complemented pattern is worse than not comparing at all.
         pairedFrom("mom", to = null)
         coEvery { custodyModelRepository.getActiveModelSync() } returns pattern((0..6).toSet(), "mine")
-        coEvery { custodyModelRepository.getShared() } returns shared(pattern((7..13).toSet(), "theirs"))
+        coEvery { custodyModelRepository.readShared() } returns found(pattern((7..13).toSet(), "theirs"))
 
         viewModel.acceptIncoming("invite-1")
         dispatcher.scheduler.advanceUntilIdle()
 
         assertNull(pendingCustodyConflict.prompt.value)
+        coVerify(exactly = 0) { custodyModelRepository.saveReslotted(any()) }
         coVerify(exactly = 0) { custodyModelRepository.saveAndActivate(any()) }
-    }
-
-    @Test
-    fun `a failed custody reconciliation is not reported as a failed pairing`() = runTest(dispatcher) {
-        // The pairing has already committed server-side and the invitation is no longer pending,
-        // so there is nothing to retry — a Room failure here must not surface as a failed accept.
-        pairedFrom("mom", to = "dad")
-        coEvery { custodyModelRepository.getActiveModelSync() } throws IllegalStateException("boom")
-
-        viewModel.acceptIncoming("invite-1")
-        dispatcher.scheduler.advanceUntilIdle()
-
-        assertNull(viewModel.form.value.actionErrorRes)
-        coVerify(exactly = 1) { analyticsManager.logInvitationAccepted() }
     }
 
     /**
@@ -546,6 +625,18 @@ class PairingViewModelTest {
         buildViewModel()
     }
 
+    /**
+     * Stubs a successful accept whose pairing never becomes visible locally, so the wait in
+     * `reconcileCustody` runs out. `runTest` advances the timeout on virtual time, so this costs
+     * nothing to exercise - and it is the branch on which nothing may be published.
+     */
+    private fun neverPairedLocally(from: String, to: String) {
+        coEvery { userRepository.getCurrentUser() } returns userWithRole(from)
+        coEvery { repository.acceptIncoming("invite-1") } returns Result.success(to)
+        coEvery { repository.observePairingState() } returns flowOf(PairingState.NotPaired())
+        buildViewModel()
+    }
+
     private fun pattern(momDays: Set<Int>, id: String) = CustodyModel(
         id = id,
         modelType = CustodyModelType.CUSTOM,
@@ -554,11 +645,13 @@ class PairingViewModelTest {
         startDate = java.time.LocalDate.of(2026, 8, 3)
     )
 
-    private fun shared(model: CustodyModel) = SharedCustody(
-        model = model,
-        lastModifiedBy = "user-b",
-        lastModifiedAt = "2026-08-01T10:00:00",
-        createdAt = "2026-08-01T10:00:00"
+    private fun found(model: CustodyModel) = SharedCustodyRead.Found(
+        SharedCustody(
+            model = model,
+            lastModifiedBy = "user-b",
+            lastModifiedAt = "2026-08-01T10:00:00",
+            createdAt = "2026-08-01T10:00:00"
+        )
     )
 
     private fun userWithRole(role: String) = User(

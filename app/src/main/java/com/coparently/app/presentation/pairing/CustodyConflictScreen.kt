@@ -14,14 +14,16 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -75,17 +77,19 @@ fun CustodyConflictScreen(
     val prompt by viewModel.prompt.collectAsState()
     val isSaving by viewModel.isSaving.collectAsState()
     val resolved by viewModel.resolved.collectAsState()
+    val saveFailed by viewModel.saveFailed.collectAsState()
     val parents = viewModel.parents.collectAsState().value
     val parentNames = rememberParentNames(parents)
+    val snackbarHostState = remember { SnackbarHostState() }
     val dims = dimensions()
 
-    // Back is not an exit here — see the class comment. Enabled unconditionally so predictive
-    // back never previews a destination this screen does not offer.
-    BackHandler { }
-
-    LaunchedEffect(prompt, resolved) {
-        if (prompt == null || resolved) onResolved()
-    }
+    CustodyConflictEffects(
+        viewModel = viewModel,
+        shouldLeave = prompt == null || resolved,
+        saveFailed = saveFailed,
+        snackbarHostState = snackbarHostState,
+        onResolved = onResolved
+    )
 
     val pending = prompt ?: return
     val legend = rememberLegend(mySlot = pending.mySlot, parents = parents, parentNames = parentNames)
@@ -93,7 +97,8 @@ fun CustodyConflictScreen(
     Scaffold(
         topBar = {
             TopAppBar(title = { Text(stringResource(R.string.custody_conflict_title)) })
-        }
+        },
+        snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { padding ->
         LazyColumn(
             modifier = Modifier
@@ -102,37 +107,97 @@ fun CustodyConflictScreen(
             contentPadding = PaddingValues(dims.paddingMedium),
             verticalArrangement = Arrangement.spacedBy(dims.paddingMedium)
         ) {
-            item {
-                Text(
-                    text = stringResource(R.string.custody_conflict_body),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            item {
-                PatternOption(
-                    choice = PatternChoice(
-                        labelRes = R.string.custody_conflict_local_label,
-                        actionRes = R.string.custody_conflict_keep_local,
-                        model = pending.conflict.mine
-                    ),
-                    legend = legend,
-                    enabled = !isSaving,
-                    onChoose = viewModel::choose
-                )
-            }
-            item {
-                PatternOption(
-                    choice = PatternChoice(
-                        labelRes = R.string.custody_conflict_shared_label,
-                        actionRes = R.string.custody_conflict_use_shared,
-                        model = pending.conflict.theirs
-                    ),
-                    legend = legend,
-                    enabled = !isSaving,
-                    onChoose = viewModel::choose
-                )
-            }
+            conflictOptions(
+                conflict = pending.conflict,
+                legend = legend,
+                enabled = !isSaving,
+                onChoose = viewModel::choose
+            )
+        }
+    }
+}
+
+/**
+ * The explanation and the two options, in the order they are asked about: this phone's pattern
+ * first, because the accepter knows that one and is being asked whether to give it up.
+ *
+ * Neither option is preselected. A default here would be a decision made on the user's behalf on
+ * the one screen that exists because no client may make it.
+ */
+private fun LazyListScope.conflictOptions(
+    conflict: CustodyConflict.Conflict,
+    legend: List<LegendEntry>,
+    enabled: Boolean,
+    onChoose: (CustodyModel) -> Unit
+) {
+    item {
+        Text(
+            text = stringResource(R.string.custody_conflict_body),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+    item {
+        PatternOption(
+            choice = PatternChoice(
+                labelRes = R.string.custody_conflict_local_label,
+                actionRes = R.string.custody_conflict_keep_local,
+                model = conflict.mine
+            ),
+            legend = legend,
+            enabled = enabled,
+            onChoose = onChoose
+        )
+    }
+    item {
+        PatternOption(
+            choice = PatternChoice(
+                labelRes = R.string.custody_conflict_shared_label,
+                actionRes = R.string.custody_conflict_use_shared,
+                model = conflict.theirs
+            ),
+            legend = legend,
+            enabled = enabled,
+            onChoose = onChoose
+        )
+    }
+}
+
+/**
+ * The screen's effects: refusing Back, leaving once there is nothing left to decide, and saying
+ * so when a choice could not be written.
+ *
+ * [BackHandler] is registered here, above the screen's early return, so it also covers the frame
+ * in which the prompt has gone and the screen is on its way out — a gap in which Back would
+ * otherwise pop to whatever is beneath.
+ *
+ * @param shouldLeave True once a choice has been written, or when there is no prompt to show at
+ *   all — the process was restarted while this screen was open.
+ * @param saveFailed True when a choice could not be written; surfaced once, then consumed.
+ */
+@Composable
+private fun CustodyConflictEffects(
+    viewModel: CustodyConflictViewModel,
+    shouldLeave: Boolean,
+    saveFailed: Boolean,
+    snackbarHostState: SnackbarHostState,
+    onResolved: () -> Unit
+) {
+    // Back is not an exit here — see the screen's own comment. Enabled unconditionally so
+    // predictive back never previews a destination this screen does not offer.
+    BackHandler { }
+
+    LaunchedEffect(shouldLeave) {
+        if (shouldLeave) onResolved()
+    }
+
+    // A choice that could not be written must not look like one that was: the screen stays, both
+    // options come back enabled, and this says why.
+    val saveFailedMessage = stringResource(R.string.custody_conflict_save_failed)
+    LaunchedEffect(saveFailed) {
+        if (saveFailed) {
+            snackbarHostState.showSnackbar(saveFailedMessage)
+            viewModel.consumeSaveFailure()
         }
     }
 }
@@ -198,8 +263,8 @@ private fun PatternOption(
                     Text(stringResource(choice.actionRes))
                 } else {
                     CircularProgressIndicator(
-                        modifier = Modifier.size(dims.paddingMedium),
-                        strokeWidth = 2.dp
+                        modifier = Modifier.size(BUTTON_SPINNER_SIZE),
+                        strokeWidth = BUTTON_SPINNER_STROKE
                     )
                 }
             }
@@ -221,9 +286,9 @@ private fun PatternOption(
 @Composable
 private fun FortnightPreview(model: CustodyModel) {
     val today = LocalDate.now()
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(DAY_CELL_GAP)) {
         repeat(FORTNIGHT_DAYS / DAYS_PER_ROW) { week ->
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(DAY_CELL_GAP)) {
                 repeat(DAYS_PER_ROW) { dayInRow ->
                     val date = today.plusDays((week * DAYS_PER_ROW + dayInRow).toLong())
                     DayCell(date = date, slot = model.getCustodyFor(date), modifier = Modifier.weight(1f))
@@ -244,7 +309,7 @@ private fun DayCell(date: LocalDate, slot: String, modifier: Modifier = Modifier
     Box(
         modifier = modifier
             .height(DAY_CELL_HEIGHT)
-            .clip(RoundedCornerShape(6.dp))
+            .clip(MaterialTheme.shapes.extraSmall)
             .background(ParentColors.container(slot)),
         contentAlignment = Alignment.Center
     ) {
@@ -311,7 +376,7 @@ private fun rememberLegend(
 private fun PatternLegend(legend: List<LegendEntry>) {
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        horizontalArrangement = Arrangement.spacedBy(dimensions().paddingMedium),
         verticalAlignment = Alignment.CenterVertically
     ) {
         legend.forEach { entry -> LegendRow(entry = entry, modifier = Modifier.weight(1f)) }
@@ -322,12 +387,12 @@ private fun PatternLegend(legend: List<LegendEntry>) {
 private fun LegendRow(entry: LegendEntry, modifier: Modifier = Modifier) {
     Row(
         modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        horizontalArrangement = Arrangement.spacedBy(LEGEND_DOT_GAP),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
             modifier = Modifier
-                .size(10.dp)
+                .size(LEGEND_DOT_SIZE)
                 .background(ParentColors.fill(entry.slot), CircleShape)
         )
         Text(
@@ -354,3 +419,18 @@ private const val DAYS_PER_ROW = 7
 
 /** Height of one preview day cell. */
 private val DAY_CELL_HEIGHT = 40.dp
+
+/** Gap between preview day cells, horizontally and vertically. */
+private val DAY_CELL_GAP = 4.dp
+
+/** Diameter of a legend colour dot. */
+private val LEGEND_DOT_SIZE = 10.dp
+
+/** Gap between a legend dot and the name it stands for. */
+private val LEGEND_DOT_GAP = 6.dp
+
+/** Size of the in-button spinner shown while a choice is being written. */
+private val BUTTON_SPINNER_SIZE = 16.dp
+
+/** Stroke of that spinner. */
+private val BUTTON_SPINNER_STROKE = 2.dp

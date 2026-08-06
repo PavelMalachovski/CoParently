@@ -4,6 +4,7 @@ import com.coparently.app.data.local.dao.CustodyModelDao
 import com.coparently.app.data.local.entity.CustodyModelEntity
 import com.coparently.app.data.remote.firebase.FirestoreCustodyDataSource
 import com.coparently.app.domain.custody.SharedCustody
+import com.coparently.app.domain.custody.SharedCustodyRead
 import com.coparently.app.domain.model.CustodyModel
 import com.coparently.app.domain.model.CustodyModelType
 import com.coparently.app.domain.model.User
@@ -247,10 +248,13 @@ class CustodyModelRepositoryTest {
     // ---- reading ----------------------------------------------------------
 
     @Test
-    fun `an unpaired user has no shared document`() = runTest(dispatcher) {
+    fun `an unpaired user cannot answer whether a document exists`() = runTest(dispatcher) {
+        // Unavailable, not Absent. With no pair known locally there is nothing to look in, and
+        // a caller told "there is no document" would go on to create one over whatever is there
+        // once the pairing does land.
         pairedWith(partnerUid = null)
 
-        assertNull(repository.getShared())
+        assertEquals(SharedCustodyRead.Unavailable, repository.readShared())
         assertNull(repository.observeShared().first())
 
         coVerify(exactly = 0) { firestoreCustodyDataSource.getCustody(any()) }
@@ -262,17 +266,26 @@ class CustodyModelRepositoryTest {
         runTest(dispatcher) {
             coEvery { firestoreCustodyDataSource.getCustody(DOCUMENT_ID) } returns remoteCustody()
 
-            val shared = repository.getShared()
+            val shared = (repository.readShared() as SharedCustodyRead.Found).custody
 
-            assertEquals(REMOTE_MODEL_ID, shared?.model?.id)
-            assertEquals(PARTNER_UID, shared?.lastModifiedBy)
+            assertEquals(REMOTE_MODEL_ID, shared.model.id)
+            assertEquals(PARTNER_UID, shared.lastModifiedBy)
         }
 
     @Test
-    fun `a failed one-shot read degrades to null rather than propagating`() = runTest(dispatcher) {
+    fun `a failed one-shot read is Unavailable, never an absent document`() = runTest(dispatcher) {
+        // The distinction the pairing conflict screen rests on: a denied read must not read as
+        // "the co-parent has no schedule", or a device that merely could not look replaces one.
         coEvery { firestoreCustodyDataSource.getCustody(DOCUMENT_ID) } throws permissionDenied()
 
-        assertNull(repository.getShared())
+        assertEquals(SharedCustodyRead.Unavailable, repository.readShared())
+    }
+
+    @Test
+    fun `a successful read of a pair with no document is Absent`() = runTest(dispatcher) {
+        coEvery { firestoreCustodyDataSource.getCustody(DOCUMENT_ID) } returns null
+
+        assertEquals(SharedCustodyRead.Absent, repository.readShared())
     }
 
     @Test
