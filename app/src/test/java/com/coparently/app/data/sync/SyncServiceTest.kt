@@ -11,6 +11,7 @@ import com.coparently.app.data.remote.firebase.FirebaseAuthService
 import com.coparently.app.data.remote.firebase.FirestoreChildInfoDataSource
 import com.coparently.app.data.remote.firebase.FirestoreEventDataSource
 import com.coparently.app.data.remote.firebase.FirestoreUserDataSource
+import com.coparently.app.data.repository.ParentSlotMigrator
 import com.google.firebase.auth.FirebaseUser
 import com.google.gson.Gson
 import io.mockk.coEvery
@@ -57,6 +58,7 @@ class SyncServiceTest {
     private lateinit var firestoreUserDataSource: FirestoreUserDataSource
     private lateinit var firebaseAuthService: FirebaseAuthService
     private lateinit var fcmService: FcmService
+    private lateinit var parentSlotMigrator: ParentSlotMigrator
     private lateinit var syncService: SyncService
 
     @Before
@@ -69,6 +71,7 @@ class SyncServiceTest {
         firestoreUserDataSource = mockk(relaxed = true)
         firebaseAuthService = mockk(relaxed = true)
         fcmService = mockk(relaxed = true)
+        parentSlotMigrator = mockk(relaxed = true)
 
         val firebaseUser = mockk<FirebaseUser>(relaxed = true)
         every { firebaseUser.uid } returns ALICE
@@ -93,7 +96,8 @@ class SyncServiceTest {
             firebaseAuthService,
             fcmService,
             // The real resolver, so the branch under test is the one production picks.
-            ConflictResolver()
+            ConflictResolver(),
+            parentSlotMigrator
         )
     }
 
