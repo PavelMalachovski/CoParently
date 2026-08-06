@@ -9,8 +9,10 @@ import com.coparently.app.R
 import com.coparently.app.data.analytics.AnalyticsManager
 import com.coparently.app.data.remote.firebase.PairingException
 import com.coparently.app.data.remote.firebase.QRCodeService
+import com.coparently.app.data.repository.CustodyModelRepository
 import com.coparently.app.data.repository.ParentSlotMigrator
 import com.coparently.app.data.session.SignedInAccountSource
+import com.coparently.app.domain.custody.SharedCustodyRead
 import com.coparently.app.domain.model.AccountSummary
 import com.coparently.app.domain.model.PairingError
 import com.coparently.app.domain.model.PairingState
@@ -21,13 +23,18 @@ import com.coparently.app.domain.repository.UserRepository
 import com.coparently.app.utils.ValidationResult
 import com.coparently.app.utils.ValidationUtils
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
 
 /**
@@ -56,18 +63,49 @@ data class PairingFormState(
 )
 
 /**
+ * One-shot signals the pairing screen acts on once and does not keep.
+ *
+ * Distinct from [PairingFormState] on purpose: state is re-read on every recomposition, and a
+ * navigation instruction re-read on every recomposition navigates twice.
+ */
+sealed interface PairingEvent {
+    /**
+     * Both parents have an active custody pattern and the two disagree — the accepter has to
+     * choose which one the pair keeps. The two patterns themselves travel in
+     * [PendingCustodyConflict]; this only says the screen should open.
+     */
+    data object ChooseCustodySchedule : PairingEvent
+}
+
+/**
  * ViewModel for the pairing screen: exposes the realtime [PairingState] from
  * the repository plus the local form state, and forwards its actions.
  */
 @HiltViewModel
+// Eight collaborators, all injected: this is a Hilt graph edge list, not a call signature
+// anybody writes by hand, and grouping them behind a wrapper type would only hide which
+// dependencies this screen actually has.
+@Suppress("LongParameterList")
 class PairingViewModel @Inject constructor(
     private val pairingRepository: PairingRepository,
     private val qrCodeService: QRCodeService,
     private val analyticsManager: AnalyticsManager,
     private val userRepository: UserRepository,
     private val parentSlotMigrator: ParentSlotMigrator,
+    private val custodyModelRepository: CustodyModelRepository,
+    private val pendingCustodyConflict: PendingCustodyConflict,
     signedInAccountSource: SignedInAccountSource
 ) : ViewModel() {
+
+    /**
+     * Navigation instructions, delivered exactly once each.
+     *
+     * A [Channel] rather than a `StateFlow`, because "open the conflict screen" is an event, not
+     * a state to be in: buffered so emitting never blocks the accept path, and consumed by
+     * whichever collector is attached.
+     */
+    private val _events = Channel<PairingEvent>(Channel.BUFFERED)
+    val events: Flow<PairingEvent> = _events.receiveAsFlow()
 
     val state: StateFlow<PairingState> = pairingRepository.observePairingState()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), PairingState.Loading)
@@ -184,14 +222,28 @@ class PairingViewModel @Inject constructor(
      * can flip this device's slot — the same comparison has to run on both paths, or one of
      * them silently stops re-stamping.
      *
-     * The before-slot is read from Room, this device's own state, before the network call;
-     * the after-slot comes straight from [action]'s response, because
+     * The before-slot is [ParentSlotMigrator.knownSlot] — the marker recording which slot this
+     * device's records are actually stamped with — falling back to the profile's `role` only
+     * when there is no marker, which is the ordinary state of an account that has never moved
+     * slots. `role` alone is not usable as a "before" and that class documents why at length:
+     * the accept path never writes it, it is seeded with a placeholder, and it is written
+     * non-atomically with respect to the re-stamp. Everything else on this branch already treats
+     * the marker as the source of truth; this was the last place that did not.
+     *
+     * The after-slot comes straight from [action]'s response, because
      * [UserRepository.getCurrentUser] reads Room only and a second local read after the call
      * would still show the stale, pre-accept value.
+     *
+     * The custody reconciliation runs from the same guarded block, and in this order: the slot
+     * moves, then the local pattern is complemented for it, and only then are the two patterns
+     * compared — see [reconcileCustody]. It is skipped whenever the re-stamp is, and for the
+     * same reason: with no reported slot there is no way to know whether the pattern needs
+     * complementing, and comparing an un-complemented pattern is the one outcome worse than
+     * comparing none at all.
      */
     private suspend fun withSlotReslot(action: suspend () -> Result<String?>): Result<Unit> {
         val user = userRepository.getCurrentUser()
-        val before = user?.role
+        val before = user?.let { parentSlotMigrator.knownSlot(it.id) ?: it.role }
         val result = action()
         // `getOrNull()` is null both on a genuine failure and on a success carrying a null
         // role (server did not report one) — both are cases to skip the re-stamp, not just
@@ -199,8 +251,154 @@ class PairingViewModel @Inject constructor(
         val after = result.getOrNull()
         if (user != null && before != null && after != null) {
             reslotIfChanged(myUid = user.id, from = before, to = after)
+            // Detached, and launched *after* the re-stamp so the order of the two is still
+            // fixed. The reconciliation later waits for the pairing to be mirrored into Room, and
+            // the accept must not sit behind that wait with its button spinning: the pairing
+            // itself has already succeeded server-side, and saying so is not contingent on
+            // custody. What must survive this detachment — the complement — runs before that
+            // wait rather than after it; see [reconcileCustody].
+            viewModelScope.launch {
+                reconcileCustody(slotChanged = before != after, mySlot = after)
+            }
         }
         return result.map { }
+    }
+
+    /**
+     * Brings this device's custody pattern and the pair's shared one into one answer, asking the
+     * user only when the two genuinely disagree.
+     *
+     * The order is the sharpest thing on this branch. `CustodyModel.momDayIndices` means "the
+     * days slot 1 has custody", so an accepter moved from slot 1 to slot 2 owns a pattern that
+     * has silently started describing the *co-parent's* days. Complementing it is what keeps it
+     * meaning "my days" — and it has to happen **before** the comparison, or the screen offers
+     * the accepter their own schedule inverted, they reject it, and hand over exactly the days
+     * they meant to keep.
+     *
+     * **The complement is computed and persisted first — above the wait, above the read, above
+     * everything that can block, fail or be cancelled — and it is not a decision.** It
+     * re-expresses the same arrangement for this device's new slot, so it is written through
+     * [CustodyModelRepository.saveReslotted] — locally, keeping its dates — whether the two
+     * patterns then turn out to agree, disagree, or be unknowable. It depends on nothing the rest
+     * of this method produces: [slotChanged] comes from the callable and `mine` is a Room read.
+     *
+     * Ordering it after [awaitPairingVisibleLocally] and [CustodyModelRepository.readShared] —
+     * a five-second wait and an untimed Firestore `get()` — put the one write that must not be
+     * lost behind both, in a coroutine [withSlotReslot] detaches and `launchAction` has already
+     * stopped showing as busy. Popping the Pairing entry, the natural next tap once "Paired"
+     * appears, cancels that scope; and nothing retries, because [ParentSlotMigrator.reslot] has
+     * already advanced the slot marker, so `reslotIfSlotChanged` sees no change on any later
+     * sync. A skipped complement is not a deferred reconciliation: it is the accepter's own
+     * custody days assigned to their co-parent, on their own calendar, permanently, with nothing
+     * to say so.
+     *
+     * Running it first also puts it **before `partnerId` reaches Room**, which is what
+     * `CustodyModelRepository.observePair()` keys the shared listener on. The mirror re-pushes a
+     * local model it considers newer than the document, and a pre-pairing local model usually is
+     * newer — so with the old order the pattern it republished over the co-parent's was the
+     * *un-complemented* one, and the echo came back carrying the same preserved `lastModifiedAt`
+     * the complemented row holds, so `isNewer` was false and the mirror wrote it into Room. Both
+     * phones then settled on the inverted schedule, with no banner for the accepter because
+     * `lastModifiedBy` was their own uid.
+     *
+     * Deferring the complement to the conflict screen was wrong for a related reason: the pending
+     * prompt lives only in memory, so process death or leaving the screen before the event is
+     * collected would leave Room holding the un-complemented pattern, still active.
+     *
+     * The shared document is read once the complement is safe, and its pattern is then carried by
+     * value: the mirror may replace it seconds later. Whatever the user picks is written last,
+     * and last write wins.
+     *
+     * **Only one write from here reaches Firestore**, and only when the read *proved* the pair has
+     * no document. Everything else is left to the mirror, which settles Room and the document
+     * against each other by the last-write-wins rule the rest of custody sync already runs on.
+     * Re-stamping a pattern here would make this device win that comparison forever.
+     *
+     * A failure is logged and swallowed, exactly as in [reslotIfChanged]: the pairing has already
+     * committed server-side and cannot be retried, so a Room or Firestore error here must fail
+     * the reconciliation, not the pairing that did not fail.
+     *
+     * @param slotChanged Whether pairing actually moved this device to the other slot. False for
+     *   the rare accept that keeps the slot, where the stored pattern already means "my days".
+     * @param mySlot The slot pairing has just assigned to this device, as reported by the
+     *   callable. Carried to the conflict screen because Room's own copy of it lags — see
+     *   [CustodyConflictPrompt].
+     */
+    private suspend fun reconcileCustody(slotChanged: Boolean, mySlot: String) {
+        runCatching {
+            // First, and before anything that can wait, fail or be cancelled. See the KDoc.
+            val mine = custodyModelRepository.getActiveModelSync()
+            val mineAfterFlip = if (slotChanged) mine?.complemented() else mine
+            if (slotChanged && mineAfterFlip != null) {
+                custodyModelRepository.saveReslotted(mineAfterFlip)
+            }
+
+            awaitPairingVisibleLocally()
+            val read = custodyModelRepository.readShared()
+
+            val theirs = when (read) {
+                is SharedCustodyRead.Found -> read.custody.model
+                SharedCustodyRead.Absent -> null
+                // Not "they have no pattern" — "we could not ask". Publishing on the strength of
+                // this is exactly how a co-parent's schedule gets replaced by a device that
+                // merely failed to read it. The complement above has already landed, so the
+                // accepter's own calendar is right; the mirror reconciles the pair later.
+                SharedCustodyRead.Unavailable -> {
+                    Log.w(TAG, "The shared pattern could not be read; leaving it to the mirror")
+                    return@runCatching
+                }
+            }
+
+            val outcome = CustodyConflictResolver.resolve(mineAfterFlip, theirs)
+            if (outcome is CustodyConflict.Conflict) {
+                pendingCustodyConflict.set(CustodyConflictPrompt(outcome, mySlot))
+                _events.send(PairingEvent.ChooseCustodySchedule)
+                return@runCatching
+            }
+            // Not a question. The one case still needing a write is a pattern on this phone and
+            // a document the read proved absent: publishing creates the pair's document rather
+            // than replacing one, and without it pairing would leave the arrangement stranded on
+            // a single phone. When they simply agree, `theirs` is non-null and nothing is
+            // written — Room already holds the re-slotted pattern.
+            if (theirs == null) outcome.settled?.let { custodyModelRepository.saveAndActivate(it) }
+        }.onFailure { e ->
+            // Cancellation is not a failure — leaving the pairing screen mid-reconcile cancels
+            // this scope, and reporting that as an error would bury the ones that matter.
+            if (e is CancellationException) throw e
+            Log.e(TAG, "Failed to reconcile the custody pattern after pairing", e)
+        }
+    }
+
+    /**
+     * Waits, briefly, for the pairing to reach Room.
+     *
+     * `CustodyModelRepository` derives the pair — and therefore the shared document's id — from
+     * Room's `partnerId`, which is written by `PairingRepositoryImpl.onPairingStateObserved` off
+     * the pairing snapshot listener, *not* by the accept callable's response. Reading the shared
+     * document the instant the callable returns therefore finds no pair at all, which would leave
+     * the conflict screen unreachable in practice. The mirror hook is an `onEach` upstream of
+     * [state], so waiting for [PairingState.Paired] usually means the Room write has already run.
+     *
+     * **This narrows the window; it does not close it.** `onPairingStateObserved` dedupes on a
+     * single `AtomicReference` shared by every subscriber, and `observePairingState()` has four
+     * independent collectors, each with its own snapshot listener. If another collector wins the
+     * `getAndSet`, this chain forwards `Paired` downstream while the winner's `userDao.updateUser`
+     * is still in flight, and the pair lookup below still finds a stale `partnerId`.
+     *
+     * That residue, and the timeout, are both safe for one reason and it is not this wait:
+     * [CustodyModelRepository.readShared] reports an unknown pair as
+     * [SharedCustodyRead.Unavailable] rather than as an absent document, and
+     * [reconcileCustody] publishes nothing on that answer. So the worst outcome of this wait
+     * being wrong is a reconciliation deferred to the mirror — never a co-parent's pattern
+     * replaced by a device that could not read it.
+     *
+     * Bounded rather than indefinite: if the transition never arrives — a snapshot listener that
+     * has not recovered, a Room write that failed — the reconciliation must still finish.
+     */
+    private suspend fun awaitPairingVisibleLocally() {
+        withTimeoutOrNull(PAIRING_VISIBLE_TIMEOUT_MS) {
+            state.first { it is PairingState.Paired }
+        } ?: Log.w(TAG, "The pairing did not reach Room in time; reconciling on local data alone")
     }
 
     /**
@@ -290,5 +488,12 @@ class PairingViewModel @Inject constructor(
     private companion object {
         const val TAG = "PairingViewModel"
         const val STOP_TIMEOUT_MS = 5_000L
+
+        /**
+         * How long [awaitPairingVisibleLocally] waits for the pairing to be mirrored into Room.
+         * One Firestore snapshot round-trip in practice; the cap only matters when the listener
+         * is not delivering at all, and then the accept must not hang behind it.
+         */
+        const val PAIRING_VISIBLE_TIMEOUT_MS = 5_000L
     }
 }

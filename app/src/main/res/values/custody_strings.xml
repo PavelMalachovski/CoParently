@@ -47,4 +47,16 @@
     <string name="custody_preview_two_two_three">Mon–Tue: %1$s. Wed–Thu: %2$s. Fri–Sun alternates.</string>
     <string name="custody_preview_three_four_four_three">Mon–Wed (3 days): %1$s. Thu–Sun (4 days): %2$s. Then it reverses.</string>
     <string name="custody_preview_custom">Custom pattern: %1$d of %2$d days — %3$s.</string>
+
+    <!-- The pairing conflict screen. Every caption here is a noun label and a value, never a
+         sentence a name is the subject of: Czech, Russian and Ukrainian inflect verbs for
+         gender and a name cannot agree with one, and this screen names two people beside two
+         schedules. -->
+    <string name="custody_conflict_title">Two schedules</string>
+    <string name="custody_conflict_body">This phone and the shared calendar hold different custody patterns. Pick the one that applies. The other stays saved, no longer active.</string>
+    <string name="custody_conflict_local_label">On this phone</string>
+    <string name="custody_conflict_shared_label">Shared schedule</string>
+    <string name="custody_conflict_keep_local">Keep the schedule on this phone</string>
+    <string name="custody_conflict_use_shared">Use the shared schedule</string>
+    <string name="custody_conflict_save_failed">The schedule could not be saved. Try again.</string>
 </resources>

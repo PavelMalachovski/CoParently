@@ -17,9 +17,12 @@ import javax.inject.Singleton
 /**
  * The two parents of this family, as this device knows them.
  *
- * Either side may be null and the two nulls mean different things: a null [me] is a profile
- * that has not loaded yet, a null [coParent] is nobody paired *or* a co-parent whose slot is
- * not known. Neither is ever filled in by inference — see [parentLabel].
+ * Either side may be null and the two nulls mean different things: a null [me] can be an
+ * account with no Room profile row at all — [UserRepositoryImpl][com.coparently.app.data.repository.UserRepositoryImpl]
+ * never writes one for such an account, so [me] then stays null forever, not just until the
+ * next emission — and a null [coParent] is nobody paired *or* a co-parent whose slot is not
+ * known. Neither is ever filled in by inference — see [parentLabel]. Use [loaded] to tell "we
+ * have a real answer, and it happens to be null" from "we have not asked yet".
  *
  * [isPaired] exists because [coParent] alone cannot answer "is there someone to choose between":
  * a legacy pair (paired before slot assignment shipped) has a real co-parent and a null
@@ -33,11 +36,18 @@ import javax.inject.Singleton
  * @property isPaired Whether this account is linked to a co-parent at all, independent of
  *   whether that co-parent's slot is known yet. Read the pairing state directly for this —
  *   never infer it from `coParent != null`.
+ * @property loaded Whether this is a real answer rather than the synthetic starting value.
+ *
+ *   False only before [ParentsSource]'s upstream has emitted once. It is not "we know who both
+ *   parents are": [me] can be null in a loaded answer forever, for an account with no Room
+ *   profile row. A control that appears and then vanishes is worse than one that appears late,
+ *   so anything that *hides* itself once the answer arrives waits on this.
  */
 data class Parents(
     val me: NamedParent? = null,
     val coParent: NamedParent? = null,
-    val isPaired: Boolean = false
+    val isPaired: Boolean = false,
+    val loaded: Boolean = false
 ) {
     /**
      * uid to slot, for whichever parents are known.
@@ -131,7 +141,8 @@ class ParentsSource @Inject constructor(
             Parents(
                 me = uid?.let { id -> users.firstOrNull { it.id == id } }?.asNamedParent(),
                 coParent = (pairing as? PairingState.Paired)?.partner?.asNamedParent(),
-                isPaired = pairing is PairingState.Paired
+                isPaired = pairing is PairingState.Paired,
+                loaded = true
             )
         }
             // The pairing state re-emits whenever an invite list changes and Room re-emits the
@@ -151,7 +162,10 @@ class ParentsSource @Inject constructor(
     fun observe(): Flow<Parents> = shared
 
     /**
-     * This device's own slot, or null when the profile has not loaded.
+     * This device's own slot, or null when nobody is signed in, or when this account has no
+     * Room profile row — which, like [Parents.me], can be forever, not just until the next
+     * call: [UserRepositoryImpl][com.coparently.app.data.repository.UserRepositoryImpl] never
+     * writes one for an account it cannot name.
      *
      * The cheap question, deliberately kept separate from [observe]: it needs the signed-in uid
      * and one Room row, and touches neither the pairing listener nor the co-parent's document.

@@ -310,10 +310,37 @@ class EncryptedPreferences @Inject constructor(
     }
 
     /**
-     * Clears all stored preferences.
+     * Clears stored preferences — **except** the per-user parent-slot markers
+     * ([PreferenceKeys.PARENT_SLOT_MARKER_PREFIX]).
+     *
+     * This is no longer literally "all", and that is deliberate, not an oversight: this method
+     * is reached from the app's own Sign out (`SettingsScreen`'s confirm dialog runs
+     * `SyncViewModel.signOut` — which calls this via `CredentialManagerService`/
+     * `GoogleSignInService` — immediately before `AuthStateViewModel.signOut`) as well as from
+     * disconnecting Google Calendar alone (`onCalendarSignOut`). Neither of those touches Room,
+     * where `users`/`events` rows deliberately survive sign-out so a returning parent's history
+     * is still there. Before this exemption, signing out during the window between a
+     * server-side slot backfill and this device's next sync wiped the one record
+     * (`ParentSlotMigrator`'s marker) that tells the next sync a device has local history
+     * needing a re-stamp — so a device with a full local history stamped in the old slot would
+     * take the "nothing to do" branch on sign back in, permanently, the same damage this
+     * marker exists to prevent, reintroduced through where it lives.
+     *
+     * A Google Calendar disconnect has no business wiping a parent-slot marker in the first
+     * place — the two describe unrelated things — so this exemption is arguably correct on its
+     * own terms, not merely a patch. See [PreferenceKeys.PARENT_SLOT_MARKER_PREFIX]'s own KDoc
+     * for why the marker is keyed per-UID: it is what stops a second account that later signs
+     * in on this device from reading the first account's now-surviving marker as its own.
      */
     fun clear() {
-        encryptedPreferences.edit().clear().apply()
+        val preservedMarkers = encryptedPreferences.all
+            .filterKeys { it.startsWith(PreferenceKeys.PARENT_SLOT_MARKER_PREFIX) }
+            .mapNotNull { (key, value) -> (value as? String)?.let { key to it } }
+
+        encryptedPreferences.edit().apply {
+            clear()
+            preservedMarkers.forEach { (key, value) -> putString(key, value) }
+        }.apply()
     }
 
     companion object {

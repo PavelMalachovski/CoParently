@@ -43,4 +43,13 @@
     <string name="custody_preview_two_two_three">Mo–Di: %1$s. Mi–Do: %2$s. Fr–So wechseln sich ab.</string>
     <string name="custody_preview_three_four_four_three">Mo–Mi (3 Tage): %1$s. Do–So (4 Tage): %2$s. Danach umgekehrt.</string>
     <string name="custody_preview_custom">Eigenes Muster: %1$d von %2$d Tagen — %3$s.</string>
+
+    <!-- The pairing conflict screen — noun labels only, never a sentence with a name as subject. -->
+    <string name="custody_conflict_title">Zwei Zeitpläne</string>
+    <string name="custody_conflict_body">Auf diesem Telefon und im geteilten Kalender liegen unterschiedliche Betreuungsmuster. Wählen Sie das gültige aus. Das andere bleibt gespeichert, aber inaktiv.</string>
+    <string name="custody_conflict_local_label">Auf diesem Telefon</string>
+    <string name="custody_conflict_shared_label">Geteilter Zeitplan</string>
+    <string name="custody_conflict_keep_local">Zeitplan dieses Telefons behalten</string>
+    <string name="custody_conflict_use_shared">Geteilten Zeitplan verwenden</string>
+    <string name="custody_conflict_save_failed">Der Zeitplan konnte nicht gespeichert werden. Versuchen Sie es erneut.</string>
 </resources>

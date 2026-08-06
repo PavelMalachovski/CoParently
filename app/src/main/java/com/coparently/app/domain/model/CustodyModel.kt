@@ -34,6 +34,62 @@ data class CustodyModel(
         return if (momDayIndices.contains(adjustedDays)) "mom" else "dad"
     }
 
+    /**
+     * This pattern with the two slots swapped.
+     *
+     * [momDayIndices] means "the days slot 1 has custody". When pairing moves this device to
+     * the other slot, the same set would silently start describing the co-parent's days, so
+     * the set is complemented to keep meaning "my days".
+     *
+     * Getting this wrong is not a cosmetic bug: the pairing conflict screen would offer a
+     * parent their own schedule inverted, they would reject it, and hand over exactly the days
+     * they meant to keep.
+     *
+     * A non-positive [patternDays] has no cycle to complement: `(0 until patternDays).toSet() -
+     * momDayIndices` would be `emptySet()` regardless of what [momDayIndices] held, silently
+     * discarding it. This returns the model unchanged instead, the same way [isEquivalentTo]
+     * refuses rather than guesses when it cannot make sense of a cycle length.
+     *
+     * An index in [momDayIndices] outside `0 until patternDays` is dropped, not preserved: it
+     * can never match in [getCustodyFor], which reduces every offset into that range before
+     * testing membership, so a model with or without it produces identical custody outcomes.
+     */
+    fun complemented(): CustodyModel {
+        if (patternDays <= 0) return this
+        return copy(momDayIndices = (0 until patternDays).toSet() - momDayIndices)
+    }
+
+    /**
+     * Whether [other] assigns custody the same way this model does, on every day.
+     *
+     * Compared by outcome rather than by field: two models with start dates a whole number of
+     * cycles apart describe the same schedule, and two different [modelType]s can produce
+     * identical assignments. The window is the least common multiple of the two cycle lengths,
+     * because a shorter window can make a 14-day and a 21-day pattern look identical.
+     *
+     * A [patternDays] outside `1..MAX_SANE_PATTERN_DAYS` on either side is refused rather than
+     * compared: no real custody arrangement repeats on a cycle longer than a year, and the only
+     * path that can produce one is an unvalidated Firestore document synced from the other
+     * device, since [patternDays] never reaches this class un-clamped from the app's own UI.
+     * Without the bound, two large-enough cycle lengths push their least common multiple past
+     * [Int.MAX_VALUE]; unguarded `Int` arithmetic wraps that to a negative number, and
+     * `(0 until window)` on a negative window is an empty range, so `.all { }` returns `true`
+     * for two schedules that were never actually compared. The same bound keeps this a
+     * bounded, synchronous scan, since it can run on whatever thread calls it, including the
+     * pairing conflict screen.
+     */
+    fun isEquivalentTo(other: CustodyModel): Boolean {
+        if (patternDays !in 1..MAX_SANE_PATTERN_DAYS || other.patternDays !in 1..MAX_SANE_PATTERN_DAYS) {
+            return false
+        }
+        val window = lcm(patternDays, other.patternDays)
+        val from = minOf(startDate, other.startDate)
+        return (0 until window).all { offset ->
+            val date = from.plusDays(offset)
+            getCustodyFor(date) == other.getCustodyFor(date)
+        }
+    }
+
     companion object {
         /**
          * Creates a week-on-week-off pattern.
@@ -163,4 +219,38 @@ enum class CustodyModelType(val displayName: String) {
             }
         }
     }
+}
+
+/**
+ * Upper bound on a single custody cycle length, in days, accepted by [CustodyModel.isEquivalentTo].
+ * No real custody arrangement repeats on a cycle longer than a year; [CustodySetupViewModel]'s
+ * own custom-pattern input is clamped to 7..28, so a [CustodyModel.patternDays] past this bound
+ * can only have arrived unvalidated, from a Firestore document synced from the other device.
+ */
+private const val MAX_SANE_PATTERN_DAYS = 366
+
+/**
+ * Least common multiple, for sizing the comparison window in [CustodyModel.isEquivalentTo].
+ *
+ * Computed in [Long]: [isEquivalentTo] bounds both cycle lengths to [MAX_SANE_PATTERN_DAYS]
+ * before calling this, which already keeps the result far under [Int.MAX_VALUE], but the [Long]
+ * arithmetic is the actual guard against overflow - the bound is what keeps the scan fast, not
+ * what keeps this calculation correct.
+ */
+private fun lcm(a: Int, b: Int): Long {
+    val x = a.toLong()
+    val y = b.toLong()
+    return x / gcd(x, y) * y
+}
+
+/** Greatest common divisor, via the Euclidean algorithm, for [lcm]. */
+private fun gcd(a: Long, b: Long): Long {
+    var x = a
+    var y = b
+    while (y != 0L) {
+        val t = y
+        y = x % y
+        x = t
+    }
+    return x
 }

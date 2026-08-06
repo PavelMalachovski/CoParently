@@ -16,7 +16,7 @@ const CAROL = 'carol-uid';
 
 /**
  * The canonical conversation id for [ALICE, BOB], computed by hand the same way
- * `firestore.rules`' `canonicalConversationId` and Kotlin's `ConversationKey.of` both do:
+ * `firestore.rules`' `canonicalPairId` and Kotlin's `ConversationKey.of` both do:
  * sort the pair, join with `__`. 'alice-uid' < 'bob-uid', so this is 'alice-uid__bob-uid'.
  *
  * This literal is the drift pin: `ConversationKeyTest` (Kotlin) asserts
@@ -265,7 +265,7 @@ describe('Part 1d: messages', () => {
     it('computes the same canonical id Kotlin\'s ConversationKey.of does for the pair',
         async () => {
           // This is the drift pin's Rules-side half — see CANONICAL_ID's comment. If
-          // `canonicalConversationId` in firestore.rules ever stops matching
+          // `canonicalPairId` in firestore.rules ever stops matching
           // `ConversationKey.of`'s sorted-join formula, this literal string stops being the
           // conversation the rule actually computes, and this assertion fails.
           const db = env.authenticatedContext(ALICE).firestore();

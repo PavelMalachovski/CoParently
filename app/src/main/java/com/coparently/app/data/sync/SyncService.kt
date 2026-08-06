@@ -1,14 +1,17 @@
 package com.coparently.app.data.sync
 
-import com.coparently.app.data.local.dao.EventDao
+import android.util.Log
 import com.coparently.app.data.local.dao.ChildInfoDao
+import com.coparently.app.data.local.dao.EventDao
 import com.coparently.app.data.local.dao.UserDao
-import com.coparently.app.data.remote.firebase.FirebaseAuthService
 import com.coparently.app.data.remote.firebase.FcmService
-import com.coparently.app.data.remote.firebase.FirestoreEventDataSource
+import com.coparently.app.data.remote.firebase.FirebaseAuthService
 import com.coparently.app.data.remote.firebase.FirestoreChildInfoDataSource
+import com.coparently.app.data.remote.firebase.FirestoreEventDataSource
 import com.coparently.app.data.remote.firebase.FirestoreUserDataSource
+import com.coparently.app.data.repository.ParentSlotMigrator
 import com.google.gson.Gson
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -23,6 +26,10 @@ import javax.inject.Singleton
  * Provides real-time sync status updates.
  */
 @Singleton
+// Ten collaborators, all injected: a Hilt graph edge list, not a call signature anybody
+// writes by hand, and grouping them behind a wrapper type would only hide which sync
+// destinations this service actually has - the same reasoning `PairingViewModel` uses.
+@Suppress("LongParameterList")
 class SyncService @Inject constructor(
     private val eventDao: EventDao,
     private val childInfoDao: ChildInfoDao,
@@ -32,7 +39,8 @@ class SyncService @Inject constructor(
     private val firestoreUserDataSource: FirestoreUserDataSource,
     private val firebaseAuthService: FirebaseAuthService,
     private val fcmService: FcmService,
-    private val conflictResolver: ConflictResolver
+    private val conflictResolver: ConflictResolver,
+    private val parentSlotMigrator: ParentSlotMigrator
 ) {
     private val gson = Gson()
     private val formatter = DateTimeFormatter.ISO_LOCAL_DATE_TIME
@@ -326,7 +334,27 @@ class SyncService @Inject constructor(
     }
 
     /**
-     * Syncs user data including FCM token.
+     * Syncs user data including FCM token, `partnerId` and `role`.
+     *
+     * `role` is refreshed here, alongside the fields this already downloaded, because this is
+     * the only path in the app that periodically re-reads the signed-in user's own document —
+     * `UserRepositoryImpl.syncWithFirestore()` would also refresh it, but nothing calls that
+     * method. Before this, a slot flipped server-side (a `backfillParentSlots` run for a pair
+     * that accepted long ago — see `functions/index.js`) was never noticed by a running app:
+     * this device would keep stamping new records with the slot it already had, while Firestore
+     * held the new one, and every record it had ever created would start reading as its
+     * co-parent's the moment anyone compared the two.
+     *
+     * [updatedUser]'s role is handed to [ParentSlotMigrator.reslotIfSlotChanged] as the incoming
+     * value; the *previous* value it compares against is not read from Room at all — see that
+     * method's KDoc for why `role` cannot be the "before" side of this comparison (it is never
+     * written by the accept path, it is seeded with a placeholder on profile creation, and it is
+     * written non-atomically with respect to the re-stamp).
+     *
+     * A failure reacting to the change is logged and swallowed rather than left to fail
+     * [performFullSync]: the token, `partnerId` and `role` fields already written above are
+     * real progress, and a re-stamp failure must not undo it by aborting the events and
+     * child-info steps that run after this one for the same sync pass.
      */
     private suspend fun syncUserData(userId: String) {
         val localUser = userDao.getUserById(userId) ?: return
@@ -343,9 +371,24 @@ class SyncService @Inject constructor(
         if (remoteUserData != null) {
             val updatedUser = localUser.copy(
                 partnerId = remoteUserData["partnerId"] as? String,
-                fcmToken = remoteUserData["fcmToken"] as? String
+                fcmToken = remoteUserData["fcmToken"] as? String,
+                // A document that predates the `role` field, a failed partial read, or one
+                // that (should not, but did) carry a blank string must not blank out a role
+                // Room already has - `role` is non-nullable, unlike partnerId/fcmToken above,
+                // and there is no "unknown slot" to fall back to. Blank is rejected the same
+                // way `ParentSlotMigrator.reslotIfSlotChanged` rejects a blank incoming role,
+                // so a document with `role: ""` cannot get stamped onto new records and then
+                // permanently block a real re-stamp of them.
+                role = (remoteUserData["role"] as? String)?.takeIf { it.isNotBlank() } ?: localUser.role
             )
             userDao.updateUser(updatedUser)
+
+            runCatching {
+                parentSlotMigrator.reslotIfSlotChanged(myUid = userId, newRole = updatedUser.role)
+            }.onFailure { e ->
+                if (e is CancellationException) throw e
+                Log.e(TAG, "Failed to react to a remote slot change for $userId", e)
+            }
         }
     }
 
@@ -443,6 +486,10 @@ class SyncService @Inject constructor(
             lastModifiedBy = this["lastModifiedBy"] as? String,
             syncedToFirestore = true
         )
+    }
+
+    private companion object {
+        const val TAG = "SyncService"
     }
 }
 

@@ -169,16 +169,31 @@ interface EventDao {
      * Re-stamps the parent slot on events this user created. Used when pairing moves this
      * device from one slot to the other; without it, every event the accepter created before
      * pairing reads as the co-parent's.
+     *
+     * **`syncedToFirestore = 0` is part of the statement, not housekeeping.** The re-stamp
+     * writes Room directly, so without it `SyncService.syncEvents` would leave these rows out
+     * of its upload half (it uploads `getUnsyncedEvents()` only) and then overwrite them in its
+     * download half, which REPLACEs every row it receives with the document's still-stale
+     * `parentOwner`. Both halves run in the same `performFullSync` pass, one step after the
+     * re-stamp itself — so the whole re-stamp was undone seconds later, silently, and never
+     * retried, because `ParentSlotMigrator.reslot` had already advanced the slot marker.
+     * Clearing the flag in the same `UPDATE` matches exactly the rows that changed, republishes
+     * them under the new slot, and — because the upload recomputes the audience — is also what
+     * finally delivers pre-pairing events to the co-parent at all.
      */
     @Query(
-        "UPDATE events SET parentOwner = :to " +
+        "UPDATE events SET parentOwner = :to, syncedToFirestore = 0 " +
             "WHERE parentOwner = :from AND createdByFirebaseUid = :myUid"
     )
     suspend fun reslotOwner(from: String, to: String, myUid: String): Int
 
-    /** Re-stamps a recorded pickup confirmation for the same reason as [reslotOwner]. */
+    /**
+     * Re-stamps a recorded pickup confirmation for the same reason as [reslotOwner], and clears
+     * the sync flag for the same reason: `pickupConfirmedBy` is part of the event document, so
+     * a re-stamp the upload half never sees is a re-stamp the download half reverts.
+     */
     @Query(
-        "UPDATE events SET pickupConfirmedBy = :to " +
+        "UPDATE events SET pickupConfirmedBy = :to, syncedToFirestore = 0 " +
             "WHERE pickupConfirmedBy = :from AND createdByFirebaseUid = :myUid"
     )
     suspend fun reslotPickup(from: String, to: String, myUid: String): Int

@@ -74,6 +74,10 @@
     </plurals>
     <string name="calendar_change_requests_review">Переглянути</string>
     <string name="calendar_change_view_mode">Змінити вигляд</string>
+
+    <!-- Noun phrase, not "X змінив(ла)" — Ukrainian inflects that verb for gender and a name
+         cannot agree with one; the software would end up guessing or hedging with "(ла)". -->
+    <string name="calendar_custody_changed_by">Зміна графіка опіки від %1$s</string>
     <string name="calendar_agenda_header_with_custody">%1$s · день, коли дитина з %2$s</string>
     <string name="calendar_agenda_empty">Нічого не заплановано.</string>
     <string name="calendar_agenda_time_range">%1$s–%2$s</string>

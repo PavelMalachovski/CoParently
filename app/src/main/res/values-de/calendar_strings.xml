@@ -68,6 +68,8 @@
     </plurals>
     <string name="calendar_change_requests_review">Prüfen</string>
     <string name="calendar_change_view_mode">Ansicht wechseln</string>
+
+    <string name="calendar_custody_changed_by">Änderung des Betreuungsplans von %1$s</string>
     <string name="calendar_agenda_header_with_custody">%1$s · Tag von %2$s</string>
     <string name="calendar_agenda_empty">Nichts geplant.</string>
     <string name="calendar_agenda_time_range">%1$s–%2$s</string>

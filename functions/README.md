@@ -239,6 +239,52 @@ Cloud Functions для Firebase использует модель оплаты p
 
 Формат cron: `минута час день_месяца месяц день_недели`
 
+## Admin operations
+
+### backfillParentSlots
+
+`backfillParentSlots` is an operator-only `onCall` callable (in `index.js`) that re-slots
+co-parent pairs created before pairing started assigning distinct `"mom"`/`"dad"` slots. It
+is not a user-facing feature — every existing pair before this change has both parents in the
+same slot, and this migration is the one-time fix for that, invoked manually.
+
+**It refuses every caller by default.** The gate reads a comma-separated allow-list of
+Firebase Auth UIDs from the `BACKFILL_ADMIN_UIDS` environment variable
+(`backfillAdminUids()`/`isBackfillOperator()` in `index.js`); with nothing configured, the
+list is empty and the callable rejects every caller with `permission-denied`.
+
+**To open it for an operator:**
+
+1. Copy `functions/.env.example` to `functions/.env` (the latter is gitignored — never
+   commit it) and set `BACKFILL_ADMIN_UIDS` to the operator's Firebase Auth UID(s), comma
+   separated:
+   ```
+   BACKFILL_ADMIN_UIDS=uid-of-operator-1,uid-of-operator-2
+   ```
+2. Deploy the function so the CLI picks up the new value:
+   ```bash
+   firebase deploy --only functions:backfillParentSlots
+   ```
+   The Firebase CLI loads `functions/.env` into `process.env` for every deployed function —
+   1st gen and 2nd gen alike — with no extra code needed to bind it. This project
+   deliberately does **not** use a Secret Manager secret (`firebase functions:secrets:set`)
+   for this value: a secret additionally requires the function to declare
+   `functions.runWith({secrets: [...]})`, and without that binding the secret's value never
+   reaches `process.env` at runtime even though `firebase functions:secrets:set` reports
+   success — silently leaving the gate impossible to open by the route that looks like it
+   should open it. A plain `.env` variable has no such trap.
+3. Sign in to the app as one of the configured operator UIDs and invoke the callable with no
+   arguments (e.g. from `firebase functions:shell`, or any authenticated client SDK call to
+   `backfillParentSlots`). It returns a summary — `scanned`/`updated`/`skipped`/`failed`
+   counts, with `skipped` broken down by reason — rather than a bare success flag, so the
+   result can be checked afterwards.
+
+**Do not invoke it before the Task 12b client (the one that reacts to a slot changing outside
+the accept flow) has reached users.** Re-slotting a pair on the server before that client
+ships leaves the affected parent's app stamping new records with their *old* slot while the
+co-parent's app already sees the new one — the exact "history reads as my co-parent's"
+failure the accept-path re-stamp exists to prevent, delivered by this migration instead.
+
 ## Лицензия
 
 © 2025 CoPlanly. All rights reserved.

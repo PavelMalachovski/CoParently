@@ -43,4 +43,13 @@
     <string name="custody_preview_two_two_three">Po–Út: %1$s. St–Čt: %2$s. Pá–Ne se střídají.</string>
     <string name="custody_preview_three_four_four_three">Po–St (3 dny): %1$s. Čt–Ne (4 dny): %2$s. Poté opačně.</string>
     <string name="custody_preview_custom">Vlastní vzor: %1$d z %2$d dnů — %3$s.</string>
+
+    <!-- The pairing conflict screen — noun labels only, never a sentence with a name as subject. -->
+    <string name="custody_conflict_title">Dva rozvrhy</string>
+    <string name="custody_conflict_body">V tomto telefonu a ve sdíleném kalendáři jsou různé vzory péče. Vyberte ten platný. Druhý zůstane uložený, ale neaktivní.</string>
+    <string name="custody_conflict_local_label">V tomto telefonu</string>
+    <string name="custody_conflict_shared_label">Sdílený rozvrh</string>
+    <string name="custody_conflict_keep_local">Ponechat rozvrh z tohoto telefonu</string>
+    <string name="custody_conflict_use_shared">Použít sdílený rozvrh</string>
+    <string name="custody_conflict_save_failed">Rozvrh se nepodařilo uložit. Zkuste to znovu.</string>
 </resources>

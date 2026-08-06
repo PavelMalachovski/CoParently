@@ -13,8 +13,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -128,6 +130,65 @@ fun VacationBanner(label: String, modifier: Modifier = Modifier) {
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
+    }
+}
+
+/**
+ * Announces that the shared custody schedule changed under this device — last-write-wins with
+ * no consent step, so the one thing that must not happen is the change landing silently. Shown
+ * only for a change this device did not make itself; see
+ * `CalendarViewModel.custodyChangeAnnouncement` for that decision.
+ *
+ * The closest shape in this file is [VacationBanner] — a tinted `Row` with a coloured dash and a
+ * `Text` — copied here rather than invented anew. Unlike [VacationBanner] and
+ * [ChangeRequestBanner], this banner reports something that already happened rather than
+ * something waiting on the user, so it is the one banner in this file with something to
+ * acknowledge: a plain trailing `IconButton`, not a second visual language for dismissal.
+ *
+ * @param byName The name of whoever changed it, already resolved by the caller via
+ *   `ParentNames.labelForUid` — the uid
+ *   ([com.coparently.app.domain.custody.SharedCustody.lastModifiedBy]) resolved directly against
+ *   the known parents, never through a slot: a pair sharing one slot before migration would
+ *   otherwise have the co-parent's write reported as the signed-in parent's own. This parameter
+ *   is that already-safe result.
+ * @param onDismiss Persists the dismissal, keyed by the caller on the change's own
+ *   `lastModifiedAt` so a later change is announced again.
+ * @param modifier Modifier for the banner
+ */
+@Composable
+fun CustodyChangedBanner(byName: String, onDismiss: () -> Unit, modifier: Modifier = Modifier) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(MaterialTheme.colorScheme.secondaryContainer.copy(alpha = BANNER_TINT_ALPHA))
+            .padding(start = 11.dp, top = 5.dp, bottom = 5.dp, end = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .width(10.dp)
+                .height(3.dp)
+                .clip(RoundedCornerShape(2.dp))
+                .background(MaterialTheme.colorScheme.secondary)
+        )
+        Text(
+            text = stringResource(R.string.calendar_custody_changed_by, byName),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f)
+        )
+        IconButton(onClick = onDismiss, modifier = Modifier.size(32.dp)) {
+            Icon(
+                imageVector = Icons.Default.Close,
+                contentDescription = stringResource(R.string.common_dismiss),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(16.dp)
+            )
+        }
     }
 }
 

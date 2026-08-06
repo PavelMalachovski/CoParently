@@ -6,7 +6,7 @@ import com.coparently.app.data.remote.google.CredentialProvider
 import com.coparently.app.data.remote.google.CredentialProviderImpl
 import com.coparently.app.data.remote.google.GoogleCalendarApi
 import com.coparently.app.domain.model.Event
-import com.coparently.app.presentation.common.ParentsSource
+import com.coparently.app.domain.repository.UserRepository
 import com.google.api.client.auth.oauth2.Credential
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -27,7 +27,7 @@ class CalendarSyncRepository @Inject constructor(
     private val eventDao: EventDao,
     private val googleCalendarApi: GoogleCalendarApi,
     private val credentialProvider: CredentialProvider,
-    private val parentsSource: ParentsSource
+    private val userRepository: UserRepository
 ) {
     /**
      * Syncs events from Google Calendar to local database (pull).
@@ -44,10 +44,14 @@ class CalendarSyncRepository @Inject constructor(
             // Token refresh is now handled automatically in getCredential()
 
             // A Google Calendar import is created by whoever pulled it in - the same "yours by
-            // default" rule AddEditEventScreen applies, via the same cheap lookup ParentsSource
-            // exposes for exactly this (no pairing subscription, just this device's own Room
-            // row). Resolved once per sync, not once per event.
-            val ownerSlot = parentsSource.signedInSlot()
+            // default" rule AddEditEventScreen applies. UserRepository is the domain interface
+            // for exactly this lookup (no pairing subscription, just this device's own Room
+            // row); the equivalent UI-layer helper is `ParentsSource.signedInSlot()`, which this
+            // class used to reach for instead, across a layer boundary it had no business
+            // crossing. Resolved once per sync, not once per event.
+            val ownerSlot = userRepository.getCurrentUserId()
+                ?.let { uid -> userRepository.getUserById(uid) }
+                ?.role
                 ?: throw IllegalStateException("Not signed in. Please sign in to CoPlanly.")
 
             emit(SyncResult.Progress("Fetching events from Google Calendar..."))

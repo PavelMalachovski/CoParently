@@ -449,9 +449,30 @@ fun NavGraph(
                     onNavigateBack = {
                         navController.popBackStack()
                     },
+                    onCustodyConflict = {
+                        navController.navigate(Screen.CustodyConflict.route)
+                    },
                     prefilledCode = backStackEntry.arguments
                         ?.getString(Screen.Pairing.ARG_CODE)
                         ?.takeIf { it.isNotEmpty() }
+                )
+            }
+
+            composable(
+                route = Screen.CustodyConflict.route,
+                enterTransition = { slideInFromRight() },
+                exitTransition = { slideOutToLeft() },
+                popEnterTransition = { slideInFromLeft() },
+                popExitTransition = { slideOutToRight() }
+            ) {
+                // No `onNavigateBack`: the screen offers two actions and no third exit, and
+                // swallows the system back gesture itself. This lambda runs only once a choice
+                // has been written (or when there is no conflict left to show), so popping here
+                // never discards an unmade decision.
+                com.coparently.app.presentation.pairing.CustodyConflictScreen(
+                    onResolved = {
+                        navController.popBackStack()
+                    }
                 )
             }
 
@@ -849,6 +870,14 @@ sealed class Screen(val route: String) {
             if (code.isNullOrEmpty()) "pairing" else "pairing?code=$code"
     }
     data object CustodySetup : Screen("custody_setup")
+
+    /**
+     * The pairing conflict screen. Reached only from an accepted pairing that found two
+     * disagreeing custody patterns; the two patterns themselves travel in
+     * `PendingCustodyConflict`, not in the route — no route argument could carry them, and
+     * re-deriving them here would race the shared-custody mirror.
+     */
+    data object CustodyConflict : Screen("custody_conflict")
 
     data object EditEvent : Screen("edit_event/{eventId}") {
         const val ARG_EVENT_ID = "eventId"

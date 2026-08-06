@@ -157,7 +157,8 @@ fun CustodyRibbon(
 private val previewParentNames = ParentNames(
     parents = Parents(
         me = NamedParent(uid = "u1", slot = "mom", name = "Olya"),
-        coParent = NamedParent(uid = "u2", slot = "dad", name = "Pavel")
+        coParent = NamedParent(uid = "u2", slot = "dad", name = "Pavel"),
+        loaded = true
     ),
     youFallback = "You",
     coParentFallback = "Co-parent",

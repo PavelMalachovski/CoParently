@@ -93,6 +93,12 @@
     </plurals>
     <string name="calendar_change_requests_review">Review</string>
     <string name="calendar_change_view_mode">Change view</string>
+
+    <!-- Inline banner for a remote custody-schedule change; last-write-wins, so this is the
+         "not silently" part. %1$s is the changer's name, resolved by
+         presentation/common/ParentLabels.kt (uid → slot → label), falling back to the unknown
+         label for a uid that matches neither parent. Dismissal uses common_dismiss. -->
+    <string name="calendar_custody_changed_by">Custody schedule changed by %1$s</string>
     <string name="calendar_agenda_header_with_custody">%1$s · %2$s\'s day</string>
     <string name="calendar_agenda_empty">Nothing scheduled.</string>
     <string name="calendar_agenda_time_range">%1$s–%2$s</string>

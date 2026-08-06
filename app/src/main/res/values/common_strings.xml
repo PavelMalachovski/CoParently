@@ -35,4 +35,14 @@
     <string name="parent_label_you">You</string>
     <string name="parent_label_coparent">Co-parent</string>
     <string name="parent_label_unknown">Parent</string>
+
+    <!-- Slot-picker fallback captions (AddEditEventScreen's parent-owner cards, via
+         ParentNames.isKnown()): used per card, instead of parent_label_unknown, for whichever
+         card does not resolve to a named person - the other card, if it does resolve, still
+         shows that person's real name (or parent_label_you/parent_label_coparent). So a legacy
+         pair (paired, but the co-parent's slot not assigned yet) can correctly show a real name
+         beside "Second parent" for the same event: that mix is not a bug, it says what is known
+         and honestly numbers what is not. -->
+    <string name="parent_label_slot_first">First parent</string>
+    <string name="parent_label_slot_second">Second parent</string>
 </resources>
