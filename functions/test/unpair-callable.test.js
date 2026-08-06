@@ -102,7 +102,30 @@ function fakeDb(seed, options) {
       async update(update) {
         applyUpdate(collection, id, update);
       },
+      async delete() {
+        if (docs[collection]) {
+          delete docs[collection][id];
+        }
+      },
     };
+  }
+
+  /**
+   * Whether a stored field value matches a query clause.
+   *
+   * @param {*} fieldValue The document's value for the queried field.
+   * @param {string} op One of `'array-contains'` or `'=='` — the two this fake supports.
+   * @param {*} value The value the clause compares against.
+   * @return {boolean} Whether the document matches.
+   */
+  function matchesClause(fieldValue, op, value) {
+    if (op === 'array-contains') {
+      return Array.isArray(fieldValue) && fieldValue.includes(value);
+    }
+    if (op === '==') {
+      return fieldValue === value;
+    }
+    throw new Error(`fakeDb: unsupported query operator ${op}`);
   }
 
   return {
@@ -122,7 +145,7 @@ function fakeDb(seed, options) {
                 throw new Error('simulated sweep failure');
               }
               const matched = Object.values(docs[name] || {})
-                  .filter((doc) => (doc[field] || []).includes(value));
+                  .filter((doc) => matchesClause(doc[field], op, value));
               return {
                 docs: matched.map((doc) => ({
                   id: doc.id,
@@ -150,9 +173,18 @@ function fakeDb(seed, options) {
       const staged = [];
       const result = await fn({
         get: (ref) => ref.get(),
-        update: (ref, update) => staged.push({ref, update}),
+        update: (ref, update) => staged.push({type: 'update', ref, update}),
+        delete: (ref) => staged.push({type: 'delete', ref}),
       });
-      staged.forEach((op) => applyUpdate(op.ref.collection, op.ref.id, op.update));
+      staged.forEach((op) => {
+        if (op.type === 'delete') {
+          if (docs[op.ref.collection]) {
+            delete docs[op.ref.collection][op.ref.id];
+          }
+        } else {
+          applyUpdate(op.ref.collection, op.ref.id, op.update);
+        }
+      });
       return result;
     },
   };
@@ -346,6 +378,64 @@ describe('unpairCoParentImpl', () => {
           assert.deepStrictEqual(db._docs.events.e1.sharedWith, ['alice']);
         });
   });
+
+  describe('the shared custody_models document', () => {
+    const CUSTODY_KEY = ['alice', 'bob'].sort().join('__');
+
+    /**
+     * Seeds a pair with a shared custody document alongside the usual pairing fixture.
+     *
+     * @return {!Object} The seed map.
+     */
+    function seedWithCustodyModel() {
+      const seed = pairedSeed();
+      seed.custody_models = {
+        [CUSTODY_KEY]: {
+          participants: ['alice', 'bob'].sort(),
+          modelType: 'WEEK_ON_WEEK_OFF',
+        },
+      };
+      return seed;
+    }
+
+    it('deletes the shared custody document when unpairing', async () => {
+      const db = fakeDb(seedWithCustodyModel());
+
+      await unpairCoParentImpl(db, 'alice');
+
+      assert.ok(!(CUSTODY_KEY in (db._docs.custody_models || {})),
+          'the shared custody document should be gone');
+    });
+
+    it('leaves the co-parent local copies alone when unpairing', async () => {
+      // The custody_models document is the one *shared* Firestore document a pair has;
+      // each parent's own Room copy never leaves the device and this call has no way to
+      // touch it. What this test pins, at the Firestore layer this fake models, is that
+      // the deletion is scoped to that one shared document — neither parent's own `users`
+      // document is deleted, only detached from the other (partnerId cleared).
+      const db = fakeDb(seedWithCustodyModel());
+
+      await unpairCoParentImpl(db, 'alice');
+
+      assert.ok(db._docs.users.alice, 'alice\'s own document must still exist');
+      assert.ok(db._docs.users.bob, 'bob\'s own document must still exist');
+      assert.strictEqual(db._docs.users.alice.partnerId, '');
+      assert.strictEqual(db._docs.users.bob.partnerId, '');
+    });
+
+    it('is also deleted when the link was already half-torn', async () => {
+      // Bob re-paired with Carol before Alice pressed unpair. The document at Alice/Bob's
+      // old key is stale either way — the rule's live-pairing gate will never admit
+      // anyone to it again — so it goes even though this branch does not clear Bob's side.
+      const seed = seedWithCustodyModel();
+      seed.users.bob.partnerId = 'carol';
+      const db = fakeDb(seed);
+
+      await unpairCoParentImpl(db, 'alice');
+
+      assert.ok(!(CUSTODY_KEY in (db._docs.custody_models || {})));
+    });
+  });
 });
 
 describe('pendingRevocations', () => {
@@ -369,5 +459,199 @@ describe('pendingRevocations', () => {
     assert.deepStrictEqual(pendingRevocations(''), []);
     assert.deepStrictEqual(pendingRevocations(42), []);
     assert.deepStrictEqual(pendingRevocations([null, 'bob', 7]), ['bob']);
+  });
+});
+
+/**
+ * Seeds one accepted invitation from `alice` to `bob`, plus both user documents, with a
+ * given slot ("role") for each. Both default to `'mom'`, matching every pair created before
+ * pairing started assigning distinct slots.
+ *
+ * @param {{aliceRole: (string|undefined), bobRole: (string|undefined),
+ *   alicePartnerId: (string|undefined), bobPartnerId: (string|undefined)}=} overrides
+ *   Per-user overrides.
+ * @return {!Object} The seed map.
+ */
+function backfillSeed(overrides) {
+  const o = overrides || {};
+  return {
+    invitations: {
+      inv1: {
+        id: 'inv1',
+        status: 'accepted',
+        fromUserId: 'alice',
+        acceptedBy: 'bob',
+      },
+    },
+    users: {
+      alice: {
+        id: 'alice',
+        partnerId: 'alicePartnerId' in o ? o.alicePartnerId : 'bob',
+        role: 'aliceRole' in o ? o.aliceRole : 'mom',
+      },
+      bob: {
+        id: 'bob',
+        partnerId: 'bobPartnerId' in o ? o.bobPartnerId : 'alice',
+        role: 'bobRole' in o ? o.bobRole : 'mom',
+      },
+    },
+  };
+}
+
+describe('backfillParentSlotsImpl', () => {
+  let backfillParentSlotsImpl;
+
+  before(() => {
+    backfillParentSlotsImpl = require('../index').backfillParentSlotsImpl;
+  });
+
+  after(() => {
+    test.cleanup();
+  });
+
+  it('gives the accepter the other slot, reading acceptedBy from the invitation', async () => {
+    const db = fakeDb(backfillSeed());
+
+    const summary = await backfillParentSlotsImpl(db);
+
+    assert.strictEqual(db._docs.users.alice.role, 'mom', 'the inviter keeps their slot');
+    assert.strictEqual(db._docs.users.bob.role, 'dad', 'the accepter takes the other one');
+    assert.deepStrictEqual(summary, {
+      scanned: 1,
+      updated: 1,
+      skipped: 0,
+      skippedReasons: {notPaired: 0, alreadySeparated: 0},
+    });
+  });
+
+  it('leaves a pair with no surviving invitation alone', async () => {
+    const seed = backfillSeed();
+    seed.invitations = {};
+    const db = fakeDb(seed);
+
+    const summary = await backfillParentSlotsImpl(db);
+
+    assert.strictEqual(db._docs.users.alice.role, 'mom');
+    assert.strictEqual(db._docs.users.bob.role, 'mom');
+    assert.strictEqual(summary.scanned, 0);
+    assert.strictEqual(summary.updated, 0);
+  });
+
+  it('skips a pair whose parents already hold different slots', async () => {
+    const db = fakeDb(backfillSeed({bobRole: 'dad'}));
+
+    const summary = await backfillParentSlotsImpl(db);
+
+    assert.strictEqual(db._docs.users.alice.role, 'mom');
+    assert.strictEqual(db._docs.users.bob.role, 'dad');
+    assert.strictEqual(summary.updated, 0);
+    assert.strictEqual(summary.skipped, 1);
+    assert.strictEqual(summary.skippedReasons.alreadySeparated, 1);
+  });
+
+  it('running it twice is indistinguishable from running it once', async () => {
+    const db = fakeDb(backfillSeed());
+
+    await backfillParentSlotsImpl(db);
+    const second = await backfillParentSlotsImpl(db);
+
+    assert.strictEqual(db._docs.users.alice.role, 'mom');
+    assert.strictEqual(db._docs.users.bob.role, 'dad');
+    assert.deepStrictEqual(second, {
+      scanned: 1,
+      updated: 0,
+      skipped: 1,
+      skippedReasons: {notPaired: 0, alreadySeparated: 1},
+    });
+  });
+
+  it('skips an invitation whose pair has since unpaired', async () => {
+    const db = fakeDb(backfillSeed({alicePartnerId: '', bobPartnerId: ''}));
+
+    const summary = await backfillParentSlotsImpl(db);
+
+    assert.strictEqual(db._docs.users.alice.role, 'mom');
+    assert.strictEqual(db._docs.users.bob.role, 'mom');
+    assert.strictEqual(summary.updated, 0);
+    assert.strictEqual(summary.skipped, 1);
+    assert.strictEqual(summary.skippedReasons.notPaired, 1);
+  });
+
+  it('skips an invitation whose accepter has since re-paired with someone else', async () => {
+    const db = fakeDb(backfillSeed({bobPartnerId: 'carol'}));
+
+    const summary = await backfillParentSlotsImpl(db);
+
+    assert.strictEqual(db._docs.users.alice.role, 'mom');
+    assert.strictEqual(db._docs.users.bob.role, 'mom');
+    assert.strictEqual(summary.skippedReasons.notPaired, 1);
+  });
+
+  it('does not read an invitation with no recorded accepter', async () => {
+    // Never accepted, or accepted before `acceptedBy` existed. Either way it must not be
+    // counted as scanned, let alone acted on.
+    const seed = backfillSeed();
+    seed.invitations.inv1.acceptedBy = null;
+    const db = fakeDb(seed);
+
+    const summary = await backfillParentSlotsImpl(db);
+
+    assert.strictEqual(db._docs.users.alice.role, 'mom');
+    assert.strictEqual(db._docs.users.bob.role, 'mom');
+    assert.strictEqual(summary.scanned, 0);
+  });
+
+  it('ignores an invitation that is still pending', async () => {
+    const seed = backfillSeed();
+    seed.invitations.inv1.status = 'pending';
+    const db = fakeDb(seed);
+
+    const summary = await backfillParentSlotsImpl(db);
+
+    assert.strictEqual(db._docs.users.bob.role, 'mom');
+    assert.strictEqual(summary.scanned, 0);
+  });
+});
+
+describe('backfillParentSlots operator gate', () => {
+  const ORIGINAL_ADMIN_UIDS = process.env.BACKFILL_ADMIN_UIDS;
+  let myFunctions;
+
+  before(() => {
+    myFunctions = require('../index');
+  });
+
+  afterEach(() => {
+    if (ORIGINAL_ADMIN_UIDS === undefined) {
+      delete process.env.BACKFILL_ADMIN_UIDS;
+    } else {
+      process.env.BACKFILL_ADMIN_UIDS = ORIGINAL_ADMIN_UIDS;
+    }
+  });
+
+  after(() => {
+    test.cleanup();
+  });
+
+  it('refuses a caller who is not an operator', async () => {
+    process.env.BACKFILL_ADMIN_UIDS = 'op-uid, other-op';
+    const wrapped = test.wrap(myFunctions.backfillParentSlots);
+
+    await assert.rejects(
+        () => wrapped({}, {auth: {uid: 'someone-else'}}),
+        (err) => err.code === 'permission-denied');
+    await assert.rejects(
+        () => wrapped({}, {}),
+        (err) => err.code === 'permission-denied');
+  });
+
+  it('reads a comma-separated allow-list and trims whitespace around each uid', () => {
+    process.env.BACKFILL_ADMIN_UIDS = ' op-uid , other-op ,,';
+    assert.deepStrictEqual(myFunctions.backfillAdminUids(), ['op-uid', 'other-op']);
+  });
+
+  it('is empty when no allow-list is configured', () => {
+    delete process.env.BACKFILL_ADMIN_UIDS;
+    assert.deepStrictEqual(myFunctions.backfillAdminUids(), []);
   });
 });

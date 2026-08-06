@@ -618,6 +618,21 @@ function pendingRevocations(raw) {
 exports.pendingRevocations = pendingRevocations;
 
 /**
+ * The id of the one custody document a pair shares: the two UIDs sorted and joined with
+ * `__`. Matches `firestore-tests/rules/custody-models.test.js` and the Android
+ * `FirestoreCustodyDataSource`/`CustodyKey`, which derive the same id from the same rule.
+ *
+ * @param {string} uidA One participant.
+ * @param {string} uidB The other participant.
+ * @return {string} The shared document id.
+ */
+function custodyModelKey(uidA, uidB) {
+  return [uidA, uidB].sort().join('__');
+}
+
+exports.custodyModelKey = custodyModelKey;
+
+/**
  * Removes the link between the caller and their co-parent, and revokes the access that
  * link handed out.
  *
@@ -647,6 +662,14 @@ exports.pendingRevocations = pendingRevocations;
  * discarded the first ex-partner's marker — and since `partnerId` was long since cleared,
  * nothing anywhere remembered whose access still had to be revoked, leaving those
  * documents exposed permanently.
+ *
+ * The pair's shared `custody_models/{uidA}__{uidB}` document is deleted inside the same
+ * transaction that clears `partnerId`. Both parents keep their own local Room copy of the
+ * schedule — only the one Firestore document they shared goes, mirroring the delete
+ * `firestore-tests/rules/custody-models.test.js` already lets a participant perform. The
+ * delete runs whichever branch below fires, including the half-torn-link one: if the other
+ * side has already re-paired with someone new, the document at this pair's old key is stale
+ * either way and nothing will ever read it through the rule's live-pairing gate again.
  *
  * The `pairing_removed` notification is queued *before* the sweep, not after. Queued
  * afterwards it was lost on exactly the path that needs it: the sweep threw, and on the
@@ -687,6 +710,10 @@ async function unpairCoParentImpl(db, callerUid) {
 
     const partnerRef = db.collection('users').doc(partnerId);
     const partnerSnap = await tx.get(partnerRef);
+
+    // The shared custody document belongs to this pair specifically; it goes regardless
+    // of which branch below runs.
+    tx.delete(db.collection('custody_models').doc(custodyModelKey(callerUid, partnerId)));
 
     // Re-verify the link is still mutually intact before clearing it. If the
     // partner has already unpaired or re-paired with someone else, the link
@@ -832,6 +859,151 @@ function assignSlots(inviterRole) {
   return {inviterRole: inviter, accepterRole: inviter === 'mom' ? 'dad' : 'mom'};
 }
 exports.assignSlots = assignSlots;
+
+/**
+ * The UIDs allowed to invoke `backfillParentSlots`.
+ *
+ * Read fresh from `process.env.BACKFILL_ADMIN_UIDS` on every call rather than cached at
+ * module load, so tests can set it per-case. A re-slotting migration is not a user-facing
+ * feature — "is authenticated" is not a strong enough gate for a callable that rewrites
+ * someone else's `role` field — so the caller's uid must appear on this list.
+ *
+ * @return {!Array<string>} The operator UIDs, or an empty list if none are configured.
+ */
+function backfillAdminUids() {
+  const raw = process.env.BACKFILL_ADMIN_UIDS || '';
+  return raw.split(',').map((uid) => uid.trim()).filter((uid) => uid.length > 0);
+}
+
+exports.backfillAdminUids = backfillAdminUids;
+
+/**
+ * Body of the `backfillParentSlots` callable — re-slots pairs that were created before
+ * pairing started assigning distinct slots.
+ *
+ * Every pair created before this feature has both parents stamped `"mom"`, because
+ * `DEFAULT_ROLE` gave everyone that value and pairing never changed it. Afterwards the two
+ * user documents are symmetric — nothing on either one says who actually accepted — so this
+ * reads `acceptedBy` off the invitation that created the pair, which is the one record that
+ * still remembers.
+ *
+ * Skipped, not guessed at, when:
+ * - the invitation carries no `acceptedBy` (never accepted, or accepted before that field
+ *   existed) — such an invitation simply is not read by the query below;
+ * - either user document is missing;
+ * - the two users are not *currently* mutually paired with each other. An invitation
+ *   accepted and later unpaired (or re-paired with someone else) must not re-slot two
+ *   people who are no longer, or never were, each other's live co-parent;
+ * - the inviter and accepter already hold different slots. Running this twice must look
+ *   like running it once, and a pair a previous run (or a manual fix) already separated
+ *   must not be flipped back.
+ *
+ * A pair with no surviving invitation at all is never seen by this function in the first
+ * place, which is the correct outcome: guessing which parent to move would risk re-stamping
+ * the wrong person's events, so those pairs are left indistinct until one of them re-saves.
+ *
+ * Reuses `assignSlots(inviterRole)` rather than re-deriving the two slots, so this and the
+ * accept path can never disagree about what "separated" means.
+ *
+ * @param {FirebaseFirestore.Firestore} db Firestore instance.
+ * @return {Promise<{scanned: number, updated: number, skipped: number,
+ *   skippedReasons: {notPaired: number, alreadySeparated: number}}>} What the migration did:
+ *   how many accepted invitations with a known accepter were examined, how many pairs were
+ *   re-slotted, and how many were skipped, broken down by reason.
+ */
+async function backfillParentSlotsImpl(db) {
+  const summary = {
+    scanned: 0,
+    updated: 0,
+    skipped: 0,
+    skippedReasons: {notPaired: 0, alreadySeparated: 0},
+  };
+
+  const acceptedInvitations = await db.collection('invitations')
+      .where('status', '==', 'accepted')
+      .get();
+
+  for (const doc of acceptedInvitations.docs) {
+    const invite = doc.data();
+    if (!invite.acceptedBy) {
+      // Query reads status == 'accepted'; the acceptedBy != null half of "reads invitations
+      // where status == 'accepted' and acceptedBy != null" is applied here rather than as a
+      // second Firestore inequality filter, to avoid a composite-index requirement for a
+      // one-off migration.
+      continue;
+    }
+
+    summary.scanned++;
+
+    const inviterId = invite.fromUserId;
+    const accepterId = invite.acceptedBy;
+    const inviterRef = db.collection('users').doc(inviterId);
+    const accepterRef = db.collection('users').doc(accepterId);
+    const [inviterSnap, accepterSnap] = await Promise.all([
+      inviterRef.get(), accepterRef.get(),
+    ]);
+
+    if (!inviterSnap.exists || !accepterSnap.exists) {
+      summary.skipped++;
+      summary.skippedReasons.notPaired++;
+      continue;
+    }
+
+    const inviterData = inviterSnap.data();
+    const accepterData = accepterSnap.data();
+    const stillPaired = inviterData.partnerId === accepterId &&
+      accepterData.partnerId === inviterId;
+
+    if (!stillPaired) {
+      summary.skipped++;
+      summary.skippedReasons.notPaired++;
+      continue;
+    }
+
+    if (inviterData.role !== accepterData.role) {
+      summary.skipped++;
+      summary.skippedReasons.alreadySeparated++;
+      continue;
+    }
+
+    const slots = assignSlots(inviterData.role);
+    await inviterRef.update({role: slots.inviterRole});
+    await accepterRef.update({role: slots.accepterRole});
+    summary.updated++;
+  }
+
+  return summary;
+}
+
+exports.backfillParentSlotsImpl = backfillParentSlotsImpl;
+
+/**
+ * Re-slots pairs created before pairing started assigning distinct parent slots.
+ *
+ * Operator-only: gated on an allow-list (`backfillAdminUids`), not on `context.auth` alone.
+ * This rewrites another user's `role` field from the server, which is exactly the kind of
+ * write `firestore.rules` deliberately does not let a client make on its own behalf — the
+ * same reason slot assignment lives server-side at all — so it must not be reachable by an
+ * arbitrary signed-in caller.
+ *
+ * Must not be invoked before the client that watches for a slot changing outside the accept
+ * flow (Task 12b) has shipped to users. Flipping a slot here while no device is watching for
+ * it leaves that parent's app still stamping their old slot on new records, while the
+ * co-parent's app reads the change immediately — exactly the "history reads as the other
+ * parent's" damage the accept-path re-stamp exists to prevent, delivered by this migration
+ * instead.
+ *
+ * @return {Promise<{scanned: number, updated: number, skipped: number,
+ *   skippedReasons: {notPaired: number, alreadySeparated: number}}>} See
+ *   [backfillParentSlotsImpl].
+ */
+exports.backfillParentSlots = functions.https.onCall(async (data, context) => {
+  if (!context.auth || !backfillAdminUids().includes(context.auth.uid)) {
+    throw new functions.https.HttpsError(
+        'permission-denied', 'Operator access only', {reason: 'not-operator'});
+  }
+  return backfillParentSlotsImpl(admin.firestore());
+});
 
 /**
  * How many characters of a chat message body are carried into the push notification preview.
