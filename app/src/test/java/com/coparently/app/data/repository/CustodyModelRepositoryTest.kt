@@ -28,6 +28,8 @@ import kotlinx.coroutines.test.TestCoroutineScheduler
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -173,6 +175,57 @@ class CustodyModelRepositoryTest {
         // Editing the pattern must not re-date the pair's arrangement.
         assertEquals(REMOTE_CREATED_AT, custody.captured.createdAt)
     }
+
+    // ---- re-expressing a pattern, rather than changing one ------------------
+
+    @Test
+    fun `re-slotting keeps the stored row's dates and pushes nothing`() = runTest(dispatcher) {
+        // The property the pairing reconciliation rests on, and the one `PairingViewModelTest`
+        // structurally cannot see: it mocks this repository, so it pins that the *argument* is
+        // complemented and would pass unchanged if this method re-dated the row.
+        //
+        // Re-dating would make this device win every later staleness comparison in
+        // `mirrorIntoRoom`, turning a re-expression of the same arrangement — the accepter's
+        // pattern rewritten for their new slot — into an unattributed overwrite of the
+        // co-parent's schedule. Not pushing matters for the same reason from the other side: the
+        // shared document may hold a pattern the user is at that moment being asked about.
+        val stored = localEntity(lastModifiedAt = LONG_AGO).copy(createdAt = PRE_EXISTING_CREATED_AT)
+        coEvery { custodyModelDao.getModelById(LOCAL_MODEL_ID) } returns stored
+        val entity = slot<CustodyModelEntity>()
+
+        repository.saveReslotted(localModel().copy(momDayIndices = (7..13).toSet()))
+
+        coVerify(exactly = 1) { custodyModelDao.insertModel(capture(entity)) }
+        assertEquals(stored.createdAt, entity.captured.createdAt)
+        assertEquals(stored.lastModifiedAt, entity.captured.lastModifiedAt)
+        // The complement itself did land, so this is not passing by writing nothing at all.
+        assertEquals("[7,8,9,10,11,12,13]", entity.captured.momDaysPattern)
+        assertTrue(entity.captured.isActive)
+        coVerify(exactly = 0) { firestoreCustodyDataSource.setCustody(any(), any(), any()) }
+    }
+
+    @Test
+    fun `archiving a rejected pattern keeps its dates under a fresh, inactive id`() =
+        runTest(dispatcher) {
+            // Room's insert REPLACEs on the primary key, so archiving under the original id would
+            // delete the pattern that just won rather than keep the one that lost. The dates are
+            // kept for the same reason as above: an inactive row is never pushed, but it can be
+            // re-activated from `getAllModels()`, and it must not come back claiming to be newer.
+            val stored = localEntity(lastModifiedAt = LONG_AGO)
+                .copy(createdAt = PRE_EXISTING_CREATED_AT)
+            coEvery { custodyModelDao.getModelById(LOCAL_MODEL_ID) } returns stored
+            val entity = slot<CustodyModelEntity>()
+
+            repository.archiveRejected(localModel())
+
+            coVerify(exactly = 1) { custodyModelDao.insertModel(capture(entity)) }
+            assertNotEquals(LOCAL_MODEL_ID, entity.captured.id)
+            assertFalse(entity.captured.isActive)
+            assertEquals(stored.createdAt, entity.captured.createdAt)
+            assertEquals(stored.lastModifiedAt, entity.captured.lastModifiedAt)
+            coVerify(exactly = 0) { custodyModelDao.deactivateAllModels() }
+            coVerify(exactly = 0) { firestoreCustodyDataSource.setCustody(any(), any(), any()) }
+        }
 
     // ---- a swallowed write must not become a silent revert -----------------
 
@@ -434,6 +487,9 @@ class CustodyModelRepositoryTest {
         const val REMOTE_MODEL_ID = "remote-model-1"
         const val REMOTE_CREATED_AT = "2026-07-01T09:00:00"
         const val REMOTE_MODIFIED_AT = "2026-08-04T18:30:00"
+
+        /** Distinct from [REMOTE_CREATED_AT], so "kept the row's dates" cannot pass by accident. */
+        const val PRE_EXISTING_CREATED_AT = "2026-06-15T07:45:00"
 
         /**
          * Ordering fixtures for the staleness guard. Absolute rather than relative to `now()`, so
