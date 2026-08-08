@@ -95,9 +95,12 @@ object CoPlanlyColors {
     val CustodyIndicatorActive = Color(0xFFF59E0B) // Amber 500 - 2.15:1 on white / 7.98:1 on DarkSurface
     val CustodyIndicatorInactive = Color(0xFF616161) // Gray 700 - 6.19:1 on white / 2.77:1 on DarkSurface
 
-    // Weekend background colors - subtle distinction for Saturday/Sunday. Fill-only.
-    val WeekendBackgroundLight = Color(0xFFFFF8E1) // Warm cream/amber tint
-    val WeekendBackgroundDark = Color(0xFF2D2D1E) // Dark warm tone
+    // Weekend background colors - Saturday/Sunday, applied to every cell in the grid as the
+    // base a custody, holiday or today tint is then drawn over. Fill-only: never used as text.
+    // Neutral rather than the warm cream/olive they used to be, and one value per theme rather
+    // than a per-call-site alpha, so the month and week grids read as one system.
+    val WeekendBackgroundLight = Color(0xFFECECEF) // Neutral light grey, one step off white
+    val WeekendBackgroundDark = Color(0xFF2A2A31) // Neutral dark grey, one step off DarkSurface
 
     // Holiday colors - public holidays and school vacations (Czech calendar).
     // Both are used as day-number TEXT, so each needs a theme-aware partner: no single red
