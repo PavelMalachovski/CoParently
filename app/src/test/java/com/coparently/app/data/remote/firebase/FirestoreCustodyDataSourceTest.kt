@@ -1,5 +1,8 @@
 package com.coparently.app.data.remote.firebase
 
+import com.coparently.app.domain.custody.CustodyDecision
+import com.coparently.app.domain.custody.CustodyDecisionOutcome
+import com.coparently.app.domain.custody.CustodyProposal
 import com.coparently.app.domain.custody.SharedCustody
 import com.coparently.app.domain.model.CustodyModel
 import com.coparently.app.domain.model.CustodyModelType
@@ -14,6 +17,7 @@ import io.mockk.slot
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -124,6 +128,126 @@ class FirestoreCustodyDataSourceTest {
         assertNull(dataSource.getCustody(DOCUMENT_ID))
     }
 
+    @Test
+    fun `a document with no proposal reads back with none, not with an empty one`() = runTest {
+        every { documentRef.get() } returns Tasks.forResult(snapshotOf(document()))
+
+        val parsed = dataSource.getCustody(DOCUMENT_ID)
+
+        assertNull(parsed?.proposal)
+        assertNull(parsed?.lastDecision)
+    }
+
+    @Test
+    fun `a written document with no proposal carries no proposal key at all`() = runTest {
+        // `set()` replaces the whole document, so omitting the key is what actually clears a
+        // withdrawn or answered proposal. A stored null would read back as a field that exists
+        // and says nothing.
+        val written = writeAndCapture(custody())
+
+        assertFalse(written.containsKey("proposal"))
+        assertFalse(written.containsKey("lastDecision"))
+    }
+
+    @Test
+    fun `a proposal round-trips`() = runTest {
+        val written = writeAndCapture(custody().copy(proposal = proposal()))
+
+        every { documentRef.get() } returns Tasks.forResult(snapshotOf(written))
+
+        assertEquals(proposal(), dataSource.getCustody(DOCUMENT_ID)?.proposal)
+    }
+
+    @Test
+    fun `a proposal's numbers arriving as Long are narrowed, not cast`() = runTest {
+        every { documentRef.get() } returns Tasks.forResult(
+            snapshotOf(
+                document(
+                    "proposal" to mapOf(
+                        "modelType" to "week_on_week_off",
+                        "patternDays" to 14L,
+                        "momDayIndices" to listOf(7L, 8L, 9L),
+                        "startDate" to "2026-08-03",
+                        "repeatYearly" to true,
+                        "proposedBy" to EARLIER_UID,
+                        "proposedAt" to "2026-08-09T08:00:00"
+                    )
+                )
+            )
+        )
+
+        val parsed = dataSource.getCustody(DOCUMENT_ID)?.proposal
+
+        assertEquals(14, parsed?.model?.patternDays)
+        assertEquals(setOf(7, 8, 9), parsed?.model?.momDayIndices)
+    }
+
+    @Test
+    fun `a proposed pattern is never marked active`() = runTest {
+        val written = writeAndCapture(custody().copy(proposal = proposal()))
+        every { documentRef.get() } returns Tasks.forResult(snapshotOf(written))
+
+        // A caller reading isActive to decide what the calendar colours must never be handed a
+        // pattern nobody has agreed to.
+        assertEquals(false, dataSource.getCustody(DOCUMENT_ID)?.proposal?.model?.isActive)
+    }
+
+    @Test
+    fun `a proposal missing the fields a pattern needs is dropped, not half-parsed`() = runTest {
+        val incomplete = proposalMap().minus("startDate")
+        every { documentRef.get() } returns
+            Tasks.forResult(snapshotOf(document("proposal" to incomplete)))
+
+        assertNull(dataSource.getCustody(DOCUMENT_ID)?.proposal)
+    }
+
+    @Test
+    fun `a proposal naming nobody is dropped, so neither parent can decide it`() = runTest {
+        // CustodyProposalTransition refuses a decision from the proposer; a blank author would
+        // let either parent accept their own request.
+        val anonymous = proposalMap().minus("proposedBy")
+        every { documentRef.get() } returns
+            Tasks.forResult(snapshotOf(document("proposal" to anonymous)))
+
+        assertNull(dataSource.getCustody(DOCUMENT_ID)?.proposal)
+    }
+
+    @Test
+    fun `a declined decision round-trips with its note`() = runTest {
+        val declined = CustodyDecision(
+            outcome = CustodyDecisionOutcome.DECLINED,
+            by = LATER_UID,
+            at = "2026-08-09T09:00:00",
+            proposalAt = "2026-08-09T08:00:00",
+            note = "School run"
+        )
+        val written = writeAndCapture(custody().copy(lastDecision = declined))
+
+        every { documentRef.get() } returns Tasks.forResult(snapshotOf(written))
+
+        assertEquals(declined, dataSource.getCustody(DOCUMENT_ID)?.lastDecision)
+    }
+
+    @Test
+    fun `an outcome this build does not know is dropped, never defaulted`() = runTest {
+        // A co-parent on a newer build inventing a third outcome must not have it read as
+        // ACCEPTED, which would tell this parent their schedule changed when it did not.
+        every { documentRef.get() } returns Tasks.forResult(
+            snapshotOf(
+                document(
+                    "lastDecision" to mapOf(
+                        "outcome" to "COUNTERED",
+                        "by" to LATER_UID,
+                        "at" to "2026-08-09T09:00:00",
+                        "proposalAt" to "2026-08-09T08:00:00"
+                    )
+                )
+            )
+        )
+
+        assertNull(dataSource.getCustody(DOCUMENT_ID)?.lastDecision)
+    }
+
     // ---- fixtures -----------------------------------------------------------
 
     /** Runs [FirestoreCustodyDataSource.setCustody] and returns the document it wrote. */
@@ -150,6 +274,36 @@ class FirestoreCustodyDataSourceTest {
         lastModifiedBy = LATER_UID,
         lastModifiedAt = "2026-08-04T18:30:00",
         createdAt = "2026-07-01T09:00:00"
+    )
+
+    /**
+     * A pending proposal. Its model id is [DOCUMENT_ID] rather than [MODEL_ID] because the
+     * sub-map carries no id of its own — the pair's document is the only identity a pending
+     * proposal has — so this is what a round-trip must produce.
+     */
+    private fun proposal() = CustodyProposal(
+        model = CustodyModel(
+            id = DOCUMENT_ID,
+            modelType = CustodyModelType.WEEK_ON_WEEK_OFF,
+            patternDays = 14,
+            momDayIndices = (7..13).toSet(),
+            startDate = LocalDate.of(2026, 8, 3),
+            isActive = false
+        ),
+        repeatYearly = true,
+        proposedBy = EARLIER_UID,
+        proposedAt = "2026-08-09T08:00:00"
+    )
+
+    /** The proposal sub-map as it arrives from Firestore, with numbers as Longs. */
+    private fun proposalMap(): Map<String, Any> = mapOf(
+        "modelType" to "week_on_week_off",
+        "patternDays" to 14L,
+        "momDayIndices" to listOf(7L, 8L, 9L, 10L, 11L, 12L, 13L),
+        "startDate" to "2026-08-03",
+        "repeatYearly" to true,
+        "proposedBy" to EARLIER_UID,
+        "proposedAt" to "2026-08-09T08:00:00"
     )
 
     /** A complete document, as this app writes it, with [overrides] applied. */

@@ -1,5 +1,8 @@
 package com.coparently.app.data.remote.firebase
 
+import com.coparently.app.domain.custody.CustodyDecision
+import com.coparently.app.domain.custody.CustodyDecisionOutcome
+import com.coparently.app.domain.custody.CustodyProposal
 import com.coparently.app.domain.custody.SharedCustody
 import com.coparently.app.domain.model.CustodyModel
 import com.coparently.app.domain.model.CustodyModelType
@@ -105,18 +108,44 @@ class FirestoreCustodyDataSource @Inject constructor(
      * schema; `momDayIndices` is a real array (see the class KDoc).
      */
     private fun SharedCustody.toDocument(sortedParticipants: List<String>): Map<String, Any> =
-        mapOf(
-            "id" to model.id,
-            "participants" to sortedParticipants,
-            "lastModifiedBy" to lastModifiedBy,
-            "modelType" to CustodyModelType.toString(model.modelType),
-            "patternDays" to model.patternDays,
-            "momDayIndices" to model.momDayIndices.sorted(),
-            "startDate" to model.startDate.format(DateTimeFormatter.ISO_LOCAL_DATE),
-            "repeatYearly" to repeatYearly,
-            "createdAt" to createdAt,
-            "lastModifiedAt" to lastModifiedAt
-        )
+        buildMap {
+            put("id", model.id)
+            put("participants", sortedParticipants)
+            put("lastModifiedBy", lastModifiedBy)
+            put("modelType", CustodyModelType.toString(model.modelType))
+            put("patternDays", model.patternDays)
+            put("momDayIndices", model.momDayIndices.sorted())
+            put("startDate", model.startDate.format(DateTimeFormatter.ISO_LOCAL_DATE))
+            put("repeatYearly", repeatYearly)
+            put("createdAt", createdAt)
+            put("lastModifiedAt", lastModifiedAt)
+            // Omitted rather than written as an explicit null: `set()` replaces the whole
+            // document, so leaving the key out is what actually clears a withdrawn or answered
+            // proposal, and a stored null would read back as a field that exists but says
+            // nothing.
+            proposal?.let { put("proposal", it.toMap()) }
+            lastDecision?.let { put("lastDecision", it.toMap()) }
+        }
+
+    /** The proposal as a sub-map; `momDayIndices` is a real array, like the pattern's. */
+    private fun CustodyProposal.toMap(): Map<String, Any> = mapOf(
+        "modelType" to CustodyModelType.toString(model.modelType),
+        "patternDays" to model.patternDays,
+        "momDayIndices" to model.momDayIndices.sorted(),
+        "startDate" to model.startDate.format(DateTimeFormatter.ISO_LOCAL_DATE),
+        "repeatYearly" to repeatYearly,
+        "proposedBy" to proposedBy,
+        "proposedAt" to proposedAt
+    )
+
+    /** The decision as a sub-map. `note` is omitted when absent rather than written as null. */
+    private fun CustodyDecision.toMap(): Map<String, Any> = buildMap {
+        put("outcome", outcome.name)
+        put("by", by)
+        put("at", at)
+        put("proposalAt", proposalAt)
+        note?.let { put("note", it) }
+    }
 
     /**
      * The document as it comes back, or `null` when it cannot describe a pattern at all.
@@ -154,7 +183,75 @@ class FirestoreCustodyDataSource @Inject constructor(
             lastModifiedBy = (this["lastModifiedBy"] as? String).orEmpty(),
             lastModifiedAt = (this["lastModifiedAt"] as? String).orEmpty(),
             createdAt = (this["createdAt"] as? String).orEmpty(),
-            repeatYearly = this["repeatYearly"] as? Boolean ?: true
+            repeatYearly = this["repeatYearly"] as? Boolean ?: true,
+            proposal = (this["proposal"] as? Map<*, *>)?.toProposal(documentId),
+            lastDecision = (this["lastDecision"] as? Map<*, *>)?.toDecision()
+        )
+    }
+
+    /**
+     * The proposal sub-map, or null when it cannot describe a pattern.
+     *
+     * Same rule as the agreed pattern above: a sub-map missing `startDate` or `patternDays` is
+     * treated as no proposal rather than half-parsed into a schedule that would put the child
+     * with the wrong parent — and unlike the agreed pattern, this one is about to be shown to a
+     * parent as something to say yes to. `proposedBy` joins them because a proposal nobody is
+     * named on cannot be decided: `CustodyProposalTransition` refuses a decision from the
+     * proposer, and a blank author would let either parent accept their own request.
+     *
+     * Numbers are narrowed through [Number], never cast: Firestore's wire format has one integer
+     * type, and a `ClassCastException` raised inside a snapshot listener is not a failure the
+     * caller's `retryWhen` can see, it is a crash.
+     *
+     * @param documentId Used as the proposed model's id — the sub-map carries no id of its own,
+     *   and the pair's document is the only identity a pending proposal has.
+     */
+    private fun Map<*, *>.toProposal(documentId: String): CustodyProposal? {
+        val startDate = (this["startDate"] as? String)?.let { iso ->
+            runCatching { LocalDate.parse(iso) }.getOrNull()
+        }
+        val patternDays = (this["patternDays"] as? Number)?.toInt()
+        val proposedBy = (this["proposedBy"] as? String)?.takeIf { it.isNotBlank() }
+        if (startDate == null || patternDays == null || proposedBy == null) return null
+
+        return CustodyProposal(
+            model = CustodyModel(
+                id = documentId,
+                modelType = CustodyModelType.fromString((this["modelType"] as? String).orEmpty()),
+                patternDays = patternDays,
+                momDayIndices = (this["momDayIndices"] as? List<*>)
+                    .orEmpty()
+                    .mapNotNull { (it as? Number)?.toInt() }
+                    .toSet(),
+                startDate = startDate,
+                // Not the active pattern, and must never be mistaken for one by a caller that
+                // reads the field to decide what the calendar should colour.
+                isActive = false
+            ),
+            repeatYearly = this["repeatYearly"] as? Boolean ?: true,
+            proposedBy = proposedBy,
+            proposedAt = (this["proposedAt"] as? String).orEmpty()
+        )
+    }
+
+    /**
+     * The decision sub-map, or null when its outcome is not one this build knows.
+     *
+     * An unrecognised outcome is dropped rather than defaulted: a co-parent on a newer build
+     * inventing a third outcome must not have it silently read as ACCEPTED, which would tell
+     * this parent their schedule changed when it did not.
+     */
+    private fun Map<*, *>.toDecision(): CustodyDecision? {
+        val outcome = (this["outcome"] as? String)
+            ?.let { name -> CustodyDecisionOutcome.entries.firstOrNull { it.name == name } }
+            ?: return null
+
+        return CustodyDecision(
+            outcome = outcome,
+            by = (this["by"] as? String).orEmpty(),
+            at = (this["at"] as? String).orEmpty(),
+            proposalAt = (this["proposalAt"] as? String).orEmpty(),
+            note = (this["note"] as? String)?.takeIf { it.isNotBlank() }
         )
     }
 
