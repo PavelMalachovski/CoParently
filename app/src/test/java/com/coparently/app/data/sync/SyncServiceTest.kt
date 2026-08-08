@@ -6,6 +6,8 @@ import com.coparently.app.data.local.dao.UserDao
 import com.coparently.app.data.local.entity.ChildInfoEntity
 import com.coparently.app.data.local.entity.EventEntity
 import com.coparently.app.data.local.entity.UserEntity
+import com.coparently.app.data.local.preferences.EncryptedPreferences
+import com.coparently.app.data.local.preferences.PreferenceKeys
 import com.coparently.app.data.remote.firebase.FcmService
 import com.coparently.app.data.remote.firebase.FirebaseAuthService
 import com.coparently.app.data.remote.firebase.FirestoreChildInfoDataSource
@@ -19,6 +21,7 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
+import io.mockk.verify
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
@@ -29,6 +32,7 @@ import java.io.File
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 /**
  * Unit tests for [SyncService]'s upload paths, and for [SyncService.syncUserData]'s `role`
@@ -72,6 +76,7 @@ class SyncServiceTest {
     private lateinit var firebaseAuthService: FirebaseAuthService
     private lateinit var fcmService: FcmService
     private lateinit var parentSlotMigrator: ParentSlotMigrator
+    private lateinit var encryptedPreferences: EncryptedPreferences
     private lateinit var syncService: SyncService
 
     @Before
@@ -85,10 +90,17 @@ class SyncServiceTest {
         firebaseAuthService = mockk(relaxed = true)
         fcmService = mockk(relaxed = true)
         parentSlotMigrator = mockk(relaxed = true)
+        encryptedPreferences = mockk(relaxed = true)
 
         val firebaseUser = mockk<FirebaseUser>(relaxed = true)
         every { firebaseUser.uid } returns ALICE
         every { firebaseAuthService.getCurrentUser() } returns firebaseUser
+
+        // "This device has never re-published for anybody." Both overload forms are stubbed
+        // because `getString`'s second parameter has a default value; `ParentSlotMigratorTest`
+        // stubs both for the same reason.
+        every { encryptedPreferences.getString(any()) } returns null
+        every { encryptedPreferences.getString(any(), any()) } returns null
 
         coEvery { fcmService.getCurrentToken() } returns null
         coEvery { firestoreUserDataSource.getUserById(any()) } returns null
@@ -110,7 +122,85 @@ class SyncServiceTest {
             fcmService,
             // The real resolver, so the branch under test is the one production picks.
             ConflictResolver(),
-            parentSlotMigrator
+            parentSlotMigrator,
+            encryptedPreferences
+        )
+    }
+
+    @Test
+    fun `the audience backfill re-queues this user's events the first time a partner appears`() =
+        runTest {
+            // The defect this closes: `sharedWith` is computed at upload time and never again,
+            // and only the *accepter's* rows are re-flagged (as a side effect of the slot
+            // re-stamp). The inviter keeps their slot, so every event they created before
+            // pairing stayed marked synced with an audience of one and never reached anybody.
+            pairWith(partnerId = BOB)
+
+            syncService.performFullSync()
+
+            coVerify(exactly = 1) { eventDao.markOwnEventsUnsynced(ALICE) }
+        }
+
+    @Test
+    fun `the audience backfill does not run twice for the same partner`() = runTest {
+        pairWith(partnerId = BOB)
+        every {
+            encryptedPreferences.getString(
+                "${PreferenceKeys.EVENT_AUDIENCE_BACKFILL_PREFIX}$ALICE"
+            )
+        } returns BOB
+
+        syncService.performFullSync()
+
+        coVerify(exactly = 0) { eventDao.markOwnEventsUnsynced(any()) }
+    }
+
+    @Test
+    fun `the audience backfill runs again for a different partner`() = runTest {
+        // Alice unpaired from Bob and re-paired with Carol: Carol has never received any of
+        // Alice's history, so the marker must re-arm rather than read as "already done".
+        pairWith(partnerId = CAROL)
+        every {
+            encryptedPreferences.getString(
+                "${PreferenceKeys.EVENT_AUDIENCE_BACKFILL_PREFIX}$ALICE"
+            )
+        } returns BOB
+
+        syncService.performFullSync()
+
+        coVerify(exactly = 1) { eventDao.markOwnEventsUnsynced(ALICE) }
+        verify {
+            encryptedPreferences.putString(
+                "${PreferenceKeys.EVENT_AUDIENCE_BACKFILL_PREFIX}$ALICE",
+                CAROL
+            )
+        }
+    }
+
+    @Test
+    fun `the audience backfill does not run while unpaired`() = runTest {
+        pairWith(partnerId = null)
+
+        syncService.performFullSync()
+
+        coVerify(exactly = 0) { eventDao.markOwnEventsUnsynced(any()) }
+    }
+
+    @Test
+    fun `the backfill statement never re-queues a private event`() {
+        // Private events must not leave the device, so they are excluded in the statement
+        // rather than downstream — a row flagged unsynced is a row queued for upload. Read
+        // from the declared SQL for the same reason `applyReslot` does: a copy of the
+        // statement in the test would pass while the statement said otherwise.
+        val sql = declaredSql("markOwnEventsUnsynced").filterNot { it.isWhitespace() }
+
+        assertTrue(
+            sql.contains("isPrivate=0"),
+            "markOwnEventsUnsynced must exclude private events"
+        )
+        assertTrue(
+            sql.contains("createdByFirebaseUid=:myUid"),
+            "markOwnEventsUnsynced must be scoped to this user's own rows"
         )
     }
 

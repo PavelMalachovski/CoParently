@@ -4,6 +4,8 @@ import android.util.Log
 import com.coparently.app.data.local.dao.ChildInfoDao
 import com.coparently.app.data.local.dao.EventDao
 import com.coparently.app.data.local.dao.UserDao
+import com.coparently.app.data.local.preferences.EncryptedPreferences
+import com.coparently.app.data.local.preferences.PreferenceKeys
 import com.coparently.app.data.remote.firebase.FcmService
 import com.coparently.app.data.remote.firebase.FirebaseAuthService
 import com.coparently.app.data.remote.firebase.FirestoreChildInfoDataSource
@@ -40,7 +42,8 @@ class SyncService @Inject constructor(
     private val firebaseAuthService: FirebaseAuthService,
     private val fcmService: FcmService,
     private val conflictResolver: ConflictResolver,
-    private val parentSlotMigrator: ParentSlotMigrator
+    private val parentSlotMigrator: ParentSlotMigrator,
+    private val encryptedPreferences: EncryptedPreferences
 ) {
     private val gson = Gson()
     private val formatter = DateTimeFormatter.ISO_LOCAL_DATE_TIME
@@ -84,9 +87,13 @@ class SyncService @Inject constructor(
      * Syncs events between local database and Firestore.
      */
     private suspend fun syncEvents(userId: String) {
+        val partnerId = userDao.getUserById(userId)?.partnerId?.takeIf { it.isNotBlank() }
+        // Before the read below, not after: the backfill's whole effect is to clear the flag
+        // `getUnsyncedEvents` selects on, so a read taken first would not see it.
+        backfillAudienceForPartner(userId, partnerId)
+
         // Upload unsynced local events; private events never leave the device
         val unsyncedEvents = eventDao.getUnsyncedEvents().filterNot { it.isPrivate }
-        val partnerId = userDao.getUserById(userId)?.partnerId?.takeIf { it.isNotBlank() }
 
         for (entity in unsyncedEvents) {
             val audience = shareTargets(
@@ -188,6 +195,36 @@ class SyncService @Inject constructor(
                 }
             }
         }
+    }
+
+    /**
+     * Re-publishes this user's own events once per co-parent, so a pair formed after those
+     * events were created can actually read them.
+     *
+     * `sharedWith` is computed at upload time and never recomputed for a row already marked
+     * synced, so every event created while unpaired kept an audience of one. The accepter's
+     * rows were re-flagged as a side effect of the parent-slot re-stamp
+     * ([EventDao.reslotOwner]); the inviter's never were, because the inviter keeps their slot.
+     *
+     * Keyed on the partner's uid rather than a boolean, so re-pairing with somebody else
+     * re-arms it: the new co-parent has received nothing.
+     *
+     * The marker advances after the Room `UPDATE` commits and before the uploads it queues have
+     * finished. A process death in that window is harmless — the rows stay flagged and the next
+     * pass uploads them, because the marker guards the flagging and not the upload. Advancing it
+     * only after the uploads would instead re-flag every event on every sync.
+     */
+    private suspend fun backfillAudienceForPartner(userId: String, partnerId: String?) {
+        if (partnerId == null) return
+        val key = "${PreferenceKeys.EVENT_AUDIENCE_BACKFILL_PREFIX}$userId"
+        if (encryptedPreferences.getString(key) == partnerId) return
+
+        val requeued = eventDao.markOwnEventsUnsynced(userId)
+        encryptedPreferences.putString(key, partnerId)
+        Log.i(
+            TAG,
+            "Audience backfill for $userId with partner $partnerId: re-queued $requeued event(s)"
+        )
     }
 
     /**
