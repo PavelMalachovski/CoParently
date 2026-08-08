@@ -104,6 +104,9 @@ private val TWO_LINE_MIN_HEIGHT = 44.dp
 /** Opacity of the hour-grid outline. Enough to read on DarkSurface without becoming a cage. */
 private const val GRIDLINE_ALPHA = 0.55f
 
+/** Today's tint strength in the week grid, drawn over the cell's base fill. */
+private const val TODAY_TINT_ALPHA = 0.05f
+
 /**
  * Width of the hour-label gutter.
  *
@@ -521,23 +524,38 @@ private fun DayWeekPage(
                                     val isToday = date == LocalDate.now()
                                     val custody = getCustody(date)
                                     val isWeekend = CustodyHelper.isWeekend(date)
-                                    val weekendColor = if (isDarkTheme) {
-                                        CoPlanlyColors.WeekendBackgroundDark.copy(alpha = 0.5f)
-                                    } else {
-                                        CoPlanlyColors.WeekendBackgroundLight.copy(alpha = 0.3f)
-                                    }
                                     // Custody wins over the today tint, matching MonthView:
                                     // it is the product's core signal, and today already
                                     // reads as today from its coloured header above. The old
                                     // order hid custody on the one column parents check first.
-                                    val backgroundColor = when {
-                                        custody == "mom" ->
-                                            CoPlanlyColors.MomPink.copy(alpha = CoPlanlyColors.CUSTODY_TINT_ALPHA)
-                                        custody == "dad" ->
-                                            CoPlanlyColors.DadBlue.copy(alpha = CoPlanlyColors.CUSTODY_TINT_ALPHA)
-                                        isToday -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.05f)
-                                        isWeekend -> weekendColor
-                                        else -> MaterialTheme.colorScheme.surface
+                                    // The weekend is no longer part of that race — it is the
+                                    // base both are drawn over. See DayCellFills.
+                                    val fill = DayCellFills.weekHourCell(
+                                        isWeekend = isWeekend,
+                                        isToday = isToday,
+                                        custody = custody
+                                    )
+                                    val baseColor = when (fill.base) {
+                                        DayCellBase.WEEKEND ->
+                                            if (isDarkTheme) {
+                                                CoPlanlyColors.WeekendBackgroundDark
+                                            } else {
+                                                CoPlanlyColors.WeekendBackgroundLight
+                                            }
+                                        DayCellBase.SURFACE -> MaterialTheme.colorScheme.surface
+                                    }
+                                    val overlayColor = when (fill.overlay) {
+                                        DayCellOverlay.CUSTODY_MOM ->
+                                            CoPlanlyColors.MomPink
+                                                .copy(alpha = CoPlanlyColors.CUSTODY_TINT_ALPHA)
+                                        DayCellOverlay.CUSTODY_DAD ->
+                                            CoPlanlyColors.DadBlue
+                                                .copy(alpha = CoPlanlyColors.CUSTODY_TINT_ALPHA)
+                                        DayCellOverlay.TODAY ->
+                                            MaterialTheme.colorScheme.primaryContainer
+                                                .copy(alpha = TODAY_TINT_ALPHA)
+                                        DayCellOverlay.PUBLIC_HOLIDAY,
+                                        DayCellOverlay.NONE -> Color.Transparent
                                     }
 
                                     // Resolved here: the semantics lambda is not a composable context.
@@ -552,7 +570,11 @@ private fun DayWeekPage(
                                             .weight(1f)
                                             .height(hourCellHeight)
                                             .background(
-                                                color = backgroundColor,
+                                                color = baseColor,
+                                                shape = RoundedCornerShape(dims.paddingSmall)
+                                            )
+                                            .background(
+                                                color = overlayColor,
                                                 shape = RoundedCornerShape(dims.paddingSmall)
                                             )
                                             // Hour cells had no outline at all, so on a dark
