@@ -330,10 +330,31 @@ service cloud.firestore {
     // document must remain deletable by either named participant even once the pairing behind
     // it is gone, or a stale/orphaned document becomes permanent by a different route.
     match /custody_models/{modelId} {
-      allow get: if isAuthenticated() &&
-                   request.auth.uid in resource.data.participants &&
-                   (isPartnerOf(resource.data.participants[0]) ||
-                    isPartnerOf(resource.data.participants[1]));
+      // Two cases, and the missing-document one is not a nicety.
+      //
+      // `resource` is **null for a document that does not exist**, so
+      // `resource.data.participants` raises a Null value error there — and a rule that errors
+      // is a rule that denies. `CustodyModelRepository` subscribes its shared listener at
+      // startup, before either parent has ever saved a schedule, so the first read of every
+      // new pair is a read of a document that is not there. Under the single-clause version
+      // that read was denied, the listener failed permanently, and the stream's retry loop
+      // spun forever: custody sync could never start for a pair that had not already, somehow,
+      // written the document. Both handsets were observed doing exactly this.
+      //
+      // For the missing case the caller must still be one of the two uids the document id is
+      // built from, so this is not an existence oracle for strangers — `canonicalPairId` is
+      // derivable from any two uids, and without this clause anyone could probe whether a
+      // given pair has a schedule. `isPartnerOf` is deliberately *not* required here: there is
+      // no document to protect yet, and demanding a live pairing would deny the empty snapshot
+      // to a device whose own pairing write has not landed, which is the same startup race in
+      // a different disguise.
+      allow get: if isAuthenticated() && (
+                   resource == null
+                     ? request.auth.uid in modelId.split('__')
+                     : (request.auth.uid in resource.data.participants &&
+                        (isPartnerOf(resource.data.participants[0]) ||
+                         isPartnerOf(resource.data.participants[1])))
+                 );
 
       // The id must be the canonical id of the document's own participants. Without this, any
       // authenticated account could create custody_models/{momUid}__{dadUid} with unrelated
