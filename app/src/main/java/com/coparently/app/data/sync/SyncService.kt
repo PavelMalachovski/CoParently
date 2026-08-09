@@ -439,6 +439,18 @@ class SyncService @Inject constructor(
             )
             userDao.updateUser(updatedUser)
 
+            // The parent slot as the server actually states it, next to what this device held.
+            // Without this the two are indistinguishable in the field: a slot that never got
+            // assigned, one the client overwrote, and one this sync simply has not reached yet
+            // all present identically as "Room says mom". `ParentSlotMigrator` logs its
+            // re-stamp count for the same reason — a silent value nobody can read is how the
+            // both-parents-in-slot-1 defect stayed invisible through three pairing rounds.
+            Log.i(
+                TAG,
+                "Profile sync for $userId: remote role=${remoteUserData["role"]}, " +
+                    "local=${localUser.role}, applied=${updatedUser.role}"
+            )
+
             runCatching {
                 parentSlotMigrator.reslotIfSlotChanged(myUid = userId, newRole = updatedUser.role)
             }.onFailure { e ->

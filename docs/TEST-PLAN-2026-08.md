@@ -642,8 +642,8 @@ the owner (`[H]`, §4.2 only)
 | §11 | Item 8 closed by the §4.2 run. Items 1a, 1b, 2, 3 still untouched; 4–7 and 9 were closed in the 4 August batch. |
 | §12 | 12.1 not reproducible this round (Parent A was not a fresh install). 12.5 superseded: detekt is still red on `main`, and the branches merged this round added nothing to it. |
 
-Nine findings below. Three are already fixed on `main` (F-01, F-09, and the client half of F-08);
-F-08 itself is still open.
+Nine findings below. Four are fixed (F-01, F-08, F-09 and the client half of F-08's cause); five
+remain open, none of them blocking.
 
 | ID | § | Area | Severity | What happened | Expected | Device | Evidence |
 |---|---|---|---|---|---|---|---|
@@ -654,7 +654,7 @@ F-08 itself is still open.
 | F-05 | 2.7 | Pairing | Low | In "Мой код" the trust panel sits below the fold, under the QR — a parent deciding whether to trust the app with a custody schedule must scroll past the code to find the answer. In "Ввести код" it is visible without scrolling. | The trust statement is visible where the decision is made | B | `b-pairing-1.png` vs `b-pairing-bottom.png` |
 | F-06 | 2.4 | Pairing | Polish | "Отправить ссылку" wraps mid-word — "Отправит / ь ссылку" — on the Samsung's narrower layout, in Russian. §10.6 anticipates this for German; it already happens in the run locale. | Button labels wrap on word boundaries or shrink to fit | A | `a-pairing.png` |
 | F-07 | 2.12 | Pairing | Plan bug | The plan expects a mail app to open. The app instead expands an inline address field and sends server-side via `sendEmailInvitation`. The implementation is the deliberate one; the plan's expected column is wrong. | — | B | `b-email.png` |
-| F-08 | 2.9 | Pairing / slots | **Blocker — still open**, see the two notes below | **Both parents ended up in slot 1.** After pairing, A (inviter) and B (accepter) both read `role = mom`, and B stayed `mom` through a force-stop, a cold start and a completed sync. This is *not* the documented 15-minute `role` lag: `SyncWorker` logged `SUCCESS` and `FirestoreUserDataSource` logged `Got user from server: F7wE4…`, and `SyncService.syncUserData` writes `role` from exactly that document — so B's Firestore document does not hold `dad`. `acceptPairingInvitationImpl` does write `role: slots.accepterRole` inside its transaction (`assignSlots('mom')` → `dad`), so something after the transaction is putting `mom` back; the untested hypothesis is a client profile write re-stamping `UserRepositoryImpl.DEFAULT_ROLE`. Consequence: both parents render in the same colour, and `momDayIndices` — defined as "the days slot 1 has custody" — no longer distinguishes anybody, which makes the custody pattern meaningless for the pair. | Accepter is moved to slot 2 (`dad`) and stays there | Both | `post-A.db`, `post-B.db`, `cold-B.db` (all `role=mom`); B logcat showing `SyncWorker` SUCCESS + server read with no `Reacted to a remote slot change` line |
+| F-08 | 2.9 | Pairing / slots | **Blocker → fixed** (functions deploy + `12642a34`) | **Both parents ended up in slot 1.** After pairing, A (inviter) and B (accepter) both read `role = mom`, and B stayed `mom` through a force-stop, a cold start and a completed sync. This is *not* the documented 15-minute `role` lag: `SyncWorker` logged `SUCCESS` and `FirestoreUserDataSource` logged `Got user from server: F7wE4…`, and `SyncService.syncUserData` writes `role` from exactly that document — so B's Firestore document does not hold `dad`. `acceptPairingInvitationImpl` does write `role: slots.accepterRole` inside its transaction (`assignSlots('mom')` → `dad`), so something after the transaction is putting `mom` back; the untested hypothesis is a client profile write re-stamping `UserRepositoryImpl.DEFAULT_ROLE`. Consequence: both parents render in the same colour, and `momDayIndices` — defined as "the days slot 1 has custody" — no longer distinguishes anybody, which makes the custody pattern meaningless for the pair. | Accepter is moved to slot 2 (`dad`) and stays there | Both | `post-A.db`, `post-B.db`, `cold-B.db` (all `role=mom`); B logcat showing `SyncWorker` SUCCESS + server read with no `Reacted to a remote slot change` line |
 
 | F-09 | 4.2.1 | Calendar | Medium → **fixed** | The school-vacation banner rendered only in months containing one, so the month grid was a banner's height shorter there and taller elsewhere, and paging between them resized the calendar mid-swipe. This was the whole of the residual "month swipe feels wrong" complaint once the pager itself was cleared. | The grid keeps one height across pages | A | §4.2 hands-on run; fixed in `373046a5` by removing the banner. **Removing it loses the school-vacation signal entirely** — when it returns it must reserve its height in every month |
 
@@ -673,7 +673,33 @@ Measured cause: `require('./index.js')` takes **35.5 s** on this machine while t
 for discovery; module-level code is only `admin.initializeApp()` and three constants, so the time
 is SDK loading. Workaround: `FUNCTIONS_DISCOVERY_TIMEOUT=120 firebase deploy --only functions`.
 
-**After the functions deploy — F-08 is improved but not closed.** `firebase functions:list` now
+**F-08 is closed.** After `firebase deploy --only functions` and one more re-pair, a manual sync on
+each handset reports:
+
+```
+A (inviter):  Profile sync for azJHH…: remote role=mom, local=mom, applied=mom
+B (accepter): Profile sync for F7wE4…: remote role=dad, local=dad, applied=dad
+```
+
+The two parents are in different slots, and Firestore is the source of that answer. It took the
+functions deploy (which made `acceptPairingInvitation` assign a slot at all) **and** the client fix
+in `12642a34` (which stopped `updateFcmToken` pushing Room's stale `role` back over it).
+
+**A correction to the two paragraphs below, which were written before that evidence existed.** They
+claim a full sync had run and left B on `mom`. That was wrong, and the error is worth recording
+because it is easy to repeat: `Got user from server` is logged by `FirestoreUserDataSource`, which
+`UserRepositoryImpl.ensureProfile` also calls at startup — and `ensureProfile` deliberately
+*preserves* the local `role`. Only `SyncService.syncUserData` overwrites it. Every Room read in
+those paragraphs was therefore taken after a startup profile read but before any
+`performFullSync`, so it showed the stale mirror rather than the server's answer. `syncUserData`
+now logs the remote, local and applied slot on every pass (`727877be`…), which is what makes the
+two distinguishable at all.
+
+**Residual, smaller and still open.** A and B disagree about one event's `parentOwner` — B
+re-stamped both of its events to `dad`, A still shows one as `mom`. The re-stamp clears
+`syncedToFirestore` so the re-upload should converge them; re-check before starting §3.
+
+**Superseded — kept for the record.** `firebase functions:list` now
 shows `backfillParentSlots`, so the slot-aware bundle is live, and re-pairing finally assigns a
 slot: `PairingViewModel: Re-stamped 1 record(s) from mom to dad`. The old bundle never returned a
 role, so that re-stamp had never once run. Two things still do not settle, both re-read after a
