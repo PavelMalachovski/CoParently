@@ -189,12 +189,22 @@ co-parent? Which tile did your eye go to first?
 
 | # | Step | Expected | Mark | Result |
 |---|---|---|---|---|
-| 4.2.1 | Swipe **left to right** repeatedly, slowly counting | Every month transition takes the same time | `[H]` | |
-| 4.2.2 | Swipe **right to left** repeatedly | Same duration as 4.2.1 | `[H]` | |
-| 4.2.3 | Compare the two directions back to back | Reported defect: first right-swipe is slow, the next is fast; left swipes are all fast. Confirm and describe precisely | `[H]` | |
-| 4.2.4 | Fling hard vs. drag slowly and release | Both settle on one month; no double-jump | `[H]` | |
-| 4.2.5 | Swipe during the settle animation | No месяц skipped, no stuck state | `[H]` | |
-| 4.2.6 | Week and Day view paging | Same physics as month | `[H]` | |
+| 4.2.1 | Swipe **left to right** repeatedly, slowly counting | Every month transition takes the same time | `[H]` | **Pass on the swipe.** Even. But the green school-vacation banner appears only in months that have one, so the grid height changes between pages — see F-09 |
+| 4.2.2 | Swipe **right to left** repeatedly | Same duration as 4.2.1 | `[H]` | **Pass.** Same as 4.2.1 |
+| 4.2.3 | Compare the two directions back to back | Reported defect: first right-swipe is slow, the next is fast; left swipes are all fast. Confirm and describe precisely | `[H]` | **Not reproducible.** The "sticky first swipe back" is gone. This closes the `[H]` half of §11 item 8 |
+| 4.2.4 | Fling hard vs. drag slowly and release | Both settle on one month; no double-jump | `[H]` | **Pass** |
+| 4.2.5 | Swipe during the settle animation | No месяц skipped, no stuck state | `[H]` | **Pass.** No skipped month, no stuck state |
+| 4.2.6 | Week and Day view paging | Same physics as month | `[H]` | **Better than month.** Reported as the smoothest of the three, attributed to the banner staying in one place there so the height never changes — the observation that isolated F-09 |
+
+**§4.2 run — 9 August 2026, Samsung SM-A176B, build `12642a34`.** Hands-on by the owner; the
+scripted half of this section was already measured on 3–4 August (§11 item 8).
+
+**§11 item 8 can now be closed.** The spec's own rule was that the item could not be marked done
+without the hands-on characterisation, and that characterisation now says the asymmetry is not
+there: both directions feel even, a fling and a slow drag both settle on one month, and swiping
+mid-settle neither skips nor sticks. What remained of "the swipe feels wrong" was not the pager at
+all — it was the grid changing height between pages (F-09), which is why week and day view, where
+nothing changes height, were reported as smoother than month.
 
 ### 4.3 Events
 
@@ -627,8 +637,25 @@ Build: `df593234` · Date: 9 August 2026 · Tester: Claude (scripted, `[A]`/`[2]
 | F-07 | 2.12 | Pairing | Plan bug | The plan expects a mail app to open. The app instead expands an inline address field and sends server-side via `sendEmailInvitation`. The implementation is the deliberate one; the plan's expected column is wrong. | — | B | `b-email.png` |
 | F-08 | 2.9 | Pairing / slots | **Blocker** | **Both parents ended up in slot 1.** After pairing, A (inviter) and B (accepter) both read `role = mom`, and B stayed `mom` through a force-stop, a cold start and a completed sync. This is *not* the documented 15-minute `role` lag: `SyncWorker` logged `SUCCESS` and `FirestoreUserDataSource` logged `Got user from server: F7wE4…`, and `SyncService.syncUserData` writes `role` from exactly that document — so B's Firestore document does not hold `dad`. `acceptPairingInvitationImpl` does write `role: slots.accepterRole` inside its transaction (`assignSlots('mom')` → `dad`), so something after the transaction is putting `mom` back; the untested hypothesis is a client profile write re-stamping `UserRepositoryImpl.DEFAULT_ROLE`. Consequence: both parents render in the same colour, and `momDayIndices` — defined as "the days slot 1 has custody" — no longer distinguishes anybody, which makes the custody pattern meaningless for the pair. | Accepter is moved to slot 2 (`dad`) and stays there | Both | `post-A.db`, `post-B.db`, `cold-B.db` (all `role=mom`); B logcat showing `SyncWorker` SUCCESS + server read with no `Reacted to a remote slot change` line |
 
-**Not run, and why.** 2.8 (QR scan) needs a camera physically aimed at the other handset. Every
-`[H]` row is untouched by instruction. §3 onward was not started in this session.
+| F-09 | 4.2.1 | Calendar | Medium → **fixed** | The school-vacation banner rendered only in months containing one, so the month grid was a banner's height shorter there and taller elsewhere, and paging between them resized the calendar mid-swipe. This was the whole of the residual "month swipe feels wrong" complaint once the pager itself was cleared. | The grid keeps one height across pages | A | §4.2 hands-on run; fixed in `373046a5` by removing the banner. **Removing it loses the school-vacation signal entirely** — when it returns it must reserve its height in every month |
+
+**Root cause of F-08, found after the fix.** The client half was real and is fixed
+(`updateFcmToken` → `updateUser` was pushing Room's stale `role` back over the server's), but it
+was not the whole story: after re-pairing with the corrected client, B was **still** `mom`.
+`firebase functions:list` shows eight deployed functions and **no `backfillParentSlots`** — a
+function added by the same PR as `assignSlots`. Production is therefore running a Cloud Functions
+bundle from *before* the slot work: `acceptPairingInvitation` is deployed, but the old version,
+which writes `partnerId` and `pairedAt` (hence the correct "paired since" date) and never assigns
+`role` at all. Only `firestore:rules` had been deployed. **F-08 closes on `firebase deploy --only
+functions`**, not on any client change.
+
+That deploy then failed with `Cannot determine backend specification. Timeout after 10000`.
+Measured cause: `require('./index.js')` takes **35.5 s** on this machine while the CLI allows 10 s
+for discovery; module-level code is only `admin.initializeApp()` and three constants, so the time
+is SDK loading. Workaround: `FUNCTIONS_DISCOVERY_TIMEOUT=120 firebase deploy --only functions`.
+
+**Not run, and why.** 2.8 (QR scan) needs a camera physically aimed at the other handset. §3 onward
+was not started. `[H]` rows outside §4.2 are still open.
 
 **Process note.** One scripted tap in this run landed outside CoPlanly: two `KEYCODE_BACK` presses
 exited the app and the next tap opened an unrelated launcher icon. Nothing was recorded from it,
