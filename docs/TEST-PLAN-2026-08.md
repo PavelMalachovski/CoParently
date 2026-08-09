@@ -104,6 +104,42 @@ for the whole process and looks perfectly healthy while receiving nothing.
 **Impressions prompt.** Pairing is the moment a parent decides whether to trust the app with a
 custody schedule. Did the trust panel answer the question you actually had?
 
+### §2 run — 9 August 2026
+
+**Build** `df593234` (`main`, after PR #46 merged), `app-debug.apk` built 09:03 CEST and installed
+on both handsets. Firestore rules deployed by the owner before this run. **Parent A** = Samsung
+SM-A176B (`pavel.malakhouski@gmail.com`, uid `azJHH…`), **Parent B** = Pixel 9 Pro XL
+(`p.malakhouski@gmail.com`, uid `F7wE4…`). Both were reconnected over wireless ADB via mDNS
+mid-run — the Samsung refused its advertised port for ~40 minutes and only returned when it began
+advertising a second one.
+
+Scope: `[A]` and `[2]` only, as instructed. `[H]` rows are untouched and stay open. **2.1 was
+performed by the owner outside this run**, so the unpaired screen was already the starting state.
+Parent A was *not* a fresh install, so the §12.1 chat-listener reproduction window did not apply.
+
+| # | Result |
+|---|---|
+| 2.1 | **Done by owner, not observed.** Parent A's Room still held `partnerId` pointing at B when this run started — the unpair was issued from B and A had not synced since. It cleared on A's next sync, so this is lag, not loss; noted as F-04. |
+| 2.2 | **Pass**, on both. Two explicit modes as a segmented toggle: "Мой код" / "Ввести код". |
+| 2.3 | `[H]` — not run. But see F-02: typing your own code back in is refused with a specific, localised message, which is the failure mode this row worries about. |
+| 2.4 | **Pass.** Dashed-border container, tap-to-copy caption and a live countdown ("Действителен ещё 23 ч 49 мин") in one line under the code. |
+| 2.5 | **Pass.** Tapping copies. The confirmation observed is Android 13+'s own clipboard chip, which usefully shows the copied value (`RKBECJ`) — see F-05 for what this means below Android 13. |
+| 2.6 | **Pass.** QR renders inline under the code, no extra tap. |
+| 2.7 | **Pass.** "Что становится общим" states the shared surfaces, that private events never leave the device, and that the link can be broken at any time. In "Мой код" it sits **below the fold**, under the QR (F-06); in "Ввести код" it is visible without scrolling. |
+| 2.8 | **Not runnable headless.** Scanning needs one handset's camera physically aimed at the other's screen. Still open. |
+| 2.9 | **Pass.** A generated `UWEVMK`; B typed it and paired. Both phones moved to the paired state within ~14 s. |
+| 2.10 | **Pass.** `ZZZZZZ` → "Приглашение с таким кодом не найдено", field outlined in the error colour. Not a silent no-op. |
+| 2.11 | **Pass, and provable on one device.** Regenerating replaced `RKBECJ` with `FRUVF7`, reset the countdown to 23 ч 59 мин and redrew the QR. Re-entering the superseded code then returned "**не найдено**" rather than "это ваше собственное приглашение" — since the self-check is what fires for an invitation that exists and is yours, lookup failing first proves the old code was genuinely revoked, not merely superseded. This row does not need the second phone. |
+| 2.12 | **Expectation does not match the implementation.** "По эл. почте" does not hand off to a mail app; it expands an inline "Эл. почта партнёра" field plus a "Пригласить по email" button, and the mail is sent server-side by the `sendEmailInvitation` trigger. The affordance was verified; **sending was deliberately not exercised** — it would email a real person. The plan's expected column should be rewritten, not the app. |
+| 2.13 | **Pass**, on both. A shows "Pavel · p.malakhouski@gmail.com · Связаны с 9 авг. 2026 г."; B shows the same for A. Unpair is a red row, per the destructive-action anatomy. |
+| 2.14 | **Partial pass.** B's Home left the unpaired state and filled its activity list with the co-parent's changes. **Nothing new could arrive**, because both accounts already held identical local data from before the unpair — Room survives unpairing — so this run cannot distinguish "sync delivered it" from "it was never gone". See F-01: the mechanism that should have re-shared it did not run. |
+| 2.15 | `[H]` — not run. |
+
+**Known-issue probe (§12.1).** Not applicable: Parent A was not a fresh install. No
+`PERMISSION_DENIED` appeared on either handset during pairing — the first run in which that is
+true, because the `custody_models` `allow get` defect (fixed in PR #46) had been denying every
+custody read until this build.
+
 ---
 
 ## §3 Home
@@ -578,13 +614,26 @@ noted so nobody reports it as a regression.
 
 ## §13 Findings
 
-Build: `ebb45390` · Date: ____ · Tester: ____
+Build: `df593234` · Date: 9 August 2026 · Tester: Claude (scripted, `[A]`/`[2]` only)
 
 | ID | § | Area | Severity | What happened | Expected | Device | Evidence |
 |---|---|---|---|---|---|---|---|
-| F-01 | | | | | | | |
-| F-02 | | | | | | | |
-| F-03 | | | | | | | |
+| F-01 | 2.14 | Sync / pairing | **High** | Re-pairing with the **same** co-parent does not re-share the events unpairing revoked. `unpairCoParent`'s sweep narrows every shared document's `sharedWith`; on re-pair, `SyncService.backfillAudienceForPartner` skips because its marker already equals that partner's uid, and the accepter's `reslotOwner` also does nothing because the slot did not change (A stayed inviter, B stayed accepter). Neither `Audience backfill` nor a re-stamp line appeared in either log. | Re-pairing restores the co-parent's access to what they could read before | Both | Logcat on both after 2.9 (no backfill/re-stamp line); mechanism in `SyncService.backfillAudienceForPartner` + `ParentSlotMigrator.reslot`'s `from == to` early return |
+| F-02 | 4.1 / 3.1 | Home / Calendar | Medium | An unpaired account still shows the custody handover hero, and the co-parent's name degrades to the literal word: "Передача **(Родитель)** через 2 дня". The pattern describes two people, one of whom no longer exists for this account. | Either hide the handover hero while unpaired, or say the schedule needs a co-parent | Both | `a-home.png`, `b-home.png` — reproduced independently on each handset |
+| F-03 | 2.13 | Pairing | Low | After the owner unpaired from B, Parent A's Room still held `partnerId` pointing at B until A's next sync. A's UI would have shown a co-parent who no longer exists. | Local pairing state reflects the unpair promptly, or the UI says it is stale | A | `pre-A.db` (`partnerId=F7wE4…` post-unpair); cleared after A launched and synced |
+| F-04 | 2.5 | Pairing | Low | The only confirmation seen after tapping the invite code is Android 13+'s system clipboard chip. `minSdk` is 26, so on Android 12 and below the same tap plausibly looks like nothing happened. | The app confirms the copy itself, independent of OS version | B (Android 15) | `b-copy.png`; no in-app snackbar survived the chip |
+| F-05 | 2.7 | Pairing | Low | In "Мой код" the trust panel sits below the fold, under the QR — a parent deciding whether to trust the app with a custody schedule must scroll past the code to find the answer. In "Ввести код" it is visible without scrolling. | The trust statement is visible where the decision is made | B | `b-pairing-1.png` vs `b-pairing-bottom.png` |
+| F-06 | 2.4 | Pairing | Polish | "Отправить ссылку" wraps mid-word — "Отправит / ь ссылку" — on the Samsung's narrower layout, in Russian. §10.6 anticipates this for German; it already happens in the run locale. | Button labels wrap on word boundaries or shrink to fit | A | `a-pairing.png` |
+| F-07 | 2.12 | Pairing | Plan bug | The plan expects a mail app to open. The app instead expands an inline address field and sends server-side via `sendEmailInvitation`. The implementation is the deliberate one; the plan's expected column is wrong. | — | B | `b-email.png` |
+| F-08 | 2.9 | Pairing / slots | **Under observation** | Immediately after pairing, **both** accounts' Room `role` read `mom`. `CLAUDE.md` documents that the accept path never writes `role`, so this is expected to be stale until a sync lands; if it settles with both on `mom`, both parents render in the same colour and custody becomes meaningless. A poll was left running to see which way it resolves. | Accepter settles on slot 2 (`dad`) | Both | `post-A.db`, `post-B.db` |
+
+**Not run, and why.** 2.8 (QR scan) needs a camera physically aimed at the other handset. Every
+`[H]` row is untouched by instruction. §3 onward was not started in this session.
+
+**Process note.** One scripted tap in this run landed outside CoPlanly: two `KEYCODE_BACK` presses
+exited the app and the next tap opened an unrelated launcher icon. Nothing was recorded from it,
+and focus is now asserted before each tap — the guard this plan already states in "Devices and
+roles" and which this run confirms is not optional.
 
 ### Impressions summary
 
