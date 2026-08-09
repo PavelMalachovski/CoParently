@@ -484,6 +484,35 @@ class UserRepositoryEnsureProfileTest {
         return info
     }
 
+    @Test
+    fun `a token refresh must not push the locally-held parent slot back to Firestore`() =
+        runTest {
+            // Found on two handsets: after pairing, both parents sat in slot 1 permanently.
+            // The server's `assignSlots` had correctly written `dad` to the accepter, then an
+            // ordinary FCM token refresh called `updateFcmToken`, which reads Room — where the
+            // accept path never writes `role` — and pushed the whole profile back with the
+            // stale `mom`. The next sync read that value, Room agreed, and nothing ever
+            // corrected it. `momDayIndices` means "the days slot 1 has custody", so a pair in
+            // that state has a custody pattern that distinguishes nobody.
+            val firebaseUser = mockk<FirebaseUser>(relaxed = true)
+            every { firebaseUser.uid } returns UID
+            every { authService.getCurrentUser() } returns firebaseUser
+            coEvery { userDao.getUserById(UID) } returns localRow("Alice")
+
+            val written = slot<Map<String, Any?>>()
+            coEvery {
+                firestoreUserDataSource.updateUser(UID, capture(written))
+            } returns Result.success(Unit)
+
+            repository.updateFcmToken("token-v2")
+
+            assertFalse(
+                "The client must never author its own parent slot",
+                written.captured.containsKey("role")
+            )
+            assertEquals("token-v2", written.captured["fcmToken"])
+        }
+
     private fun localRow(name: String) = UserEntity(
         id = UID,
         email = "alice@example.com",

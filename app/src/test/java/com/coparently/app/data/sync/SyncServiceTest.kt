@@ -187,6 +187,63 @@ class SyncServiceTest {
     }
 
     @Test
+    fun `unpairing disarms the marker, so re-pairing the same co-parent backfills again`() =
+        runTest {
+            // The defect this closes, found on two handsets: `unpairCoParent`'s sweep revokes
+            // the ex-partner from every shared document, but the marker still named them, so
+            // re-pairing skipped the backfill. The accepter's re-stamp did not cover it either
+            // — the slots come out the same way round the second time, and `reslot` returns 0
+            // on `from == to`. The pair looked correctly paired while everything from before
+            // the unpair stayed unreadable to one of them.
+            pairWith(partnerId = null)
+            every {
+                encryptedPreferences.getString(
+                    "${PreferenceKeys.EVENT_AUDIENCE_BACKFILL_PREFIX}$ALICE"
+                )
+            } returns BOB
+
+            syncService.performFullSync()
+
+            verify {
+                encryptedPreferences.putString(
+                    "${PreferenceKeys.EVENT_AUDIENCE_BACKFILL_PREFIX}$ALICE",
+                    ""
+                )
+            }
+            // Nothing is re-queued while unpaired — there is nobody to publish to.
+            coVerify(exactly = 0) { eventDao.markOwnEventsUnsynced(any()) }
+        }
+
+    @Test
+    fun `a disarmed marker lets the same co-parent be backfilled on re-pairing`() = runTest {
+        // The other half of the transition: once disarmed, the very same uid is a change again.
+        pairWith(partnerId = BOB)
+        every {
+            encryptedPreferences.getString(
+                "${PreferenceKeys.EVENT_AUDIENCE_BACKFILL_PREFIX}$ALICE"
+            )
+        } returns ""
+
+        syncService.performFullSync()
+
+        coVerify(exactly = 1) { eventDao.markOwnEventsUnsynced(ALICE) }
+    }
+
+    @Test
+    fun `an already-disarmed marker is not rewritten on every unpaired sync`() = runTest {
+        pairWith(partnerId = null)
+        every {
+            encryptedPreferences.getString(
+                "${PreferenceKeys.EVENT_AUDIENCE_BACKFILL_PREFIX}$ALICE"
+            )
+        } returns ""
+
+        syncService.performFullSync()
+
+        verify(exactly = 0) { encryptedPreferences.putString(any(), any()) }
+    }
+
+    @Test
     fun `the backfill statement never re-queues a private event`() {
         // Private events must not leave the device, so they are excluded in the statement
         // rather than downstream — a row flagged unsynced is a row queued for upload. Read

@@ -345,12 +345,31 @@ class UserRepositoryImpl @Inject constructor(
         val firebaseUser = firebaseAuthService.getCurrentUser()
         if (firebaseUser != null) {
             try {
+                // `role` is deliberately absent, and this is load-bearing rather than tidy.
+                //
+                // The parent slot is assigned by the server — `assignSlots` in
+                // `functions/index.js`, inside the `acceptPairingInvitation` transaction — and
+                // no client ever chooses one. Room's copy is a *mirror* that the accept path
+                // does not write (see `ParentSlotMigrator.reslotIfSlotChanged`, which documents
+                // why `User.role` cannot be trusted as a change detector), so it stays at the
+                // pre-pairing value until a sync happens to refresh it.
+                //
+                // Sending it back was therefore an overwrite of the server's answer with a
+                // stale guess. `updateFcmToken` below reads Room, copies one field and calls
+                // this method, so an ordinary token refresh shortly after pairing pushed the
+                // accepter's *old* slot over the `dad` the transaction had just written. The
+                // next sync read that value back, Room agreed with it, and the pair was left
+                // with both parents in slot 1 — permanently, self-consistently, and silently.
+                // `momDayIndices` means "the days slot 1 has custody", so a pair in that state
+                // has a custody pattern that distinguishes nobody.
+                //
+                // This is a `set(..., merge)` (see `FirestoreUserDataSource.updateUser`), so
+                // omitting the key leaves the stored slot untouched rather than clearing it.
                 val userData = mapOf(
                     "id" to user.id,
                     "firebaseUid" to firebaseUser.uid, // Required by Firestore security rules
                     "email" to user.email,
                     "name" to user.name,
-                    "role" to user.role,
                     "colorCode" to user.colorCode,
                     "profilePhotoUrl" to (user.profilePhotoUrl ?: ""),
                     "googleCalendarSyncEnabled" to user.googleCalendarSyncEnabled,

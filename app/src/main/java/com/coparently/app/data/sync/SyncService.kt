@@ -215,8 +215,27 @@ class SyncService @Inject constructor(
      * only after the uploads would instead re-flag every event on every sync.
      */
     private suspend fun backfillAudienceForPartner(userId: String, partnerId: String?) {
-        if (partnerId == null) return
         val key = "${PreferenceKeys.EVENT_AUDIENCE_BACKFILL_PREFIX}$userId"
+
+        // Unpaired: disarm the marker rather than simply doing nothing.
+        //
+        // `unpairCoParent`'s server-side sweep narrows every shared document's `sharedWith`,
+        // so the ex-partner loses access to everything. If the marker were left naming them,
+        // re-pairing with the *same* co-parent would find it already equal to their uid and
+        // skip the backfill — and the accepter's re-stamp would not cover it either, because
+        // the slots come out the same way round the second time and `ParentSlotMigrator.reslot`
+        // returns 0 on `from == to`. The pair would look correctly paired while everything
+        // created before the unpair stayed unreadable to one of them, with nothing said.
+        //
+        // Blank rather than a removed key: `EncryptedPreferences` has no generic remove, and
+        // blank can never equal a real uid, so it re-arms exactly the same way an absent
+        // marker does.
+        if (partnerId == null) {
+            if (!encryptedPreferences.getString(key).isNullOrBlank()) {
+                encryptedPreferences.putString(key, "")
+            }
+            return
+        }
         if (encryptedPreferences.getString(key) == partnerId) return
 
         val requeued = eventDao.markOwnEventsUnsynced(userId)
