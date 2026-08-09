@@ -78,6 +78,24 @@ describe('custody_models', () => {
     await assertSucceeds(env.authenticatedContext(DAD).firestore().doc(PATH).get());
   });
 
+  it('lets a participant listen before the document exists', async () => {
+    // What every client actually does first. `CustodyModelRepository` subscribes the shared
+    // listener on startup, long before either parent has saved a schedule, so the very first
+    // read of a brand-new pair is a read of a document that is not there yet. `resource` is
+    // null for a missing document, so a rule that dereferences `resource.data.participants`
+    // errors — and a rule error is a denial. The listener then fails permanently and the
+    // stream's retry loop spins forever, which is what both handsets were observed doing.
+    await assertSucceeds(env.authenticatedContext(MOM).firestore().doc(PATH).get());
+  });
+
+  it('refuses a third account the empty snapshot too', async () => {
+    // The missing-document clause keys on the document id rather than on `participants`,
+    // which do not exist yet. It must still name the caller, or the rule becomes an
+    // existence oracle: `canonicalPairId` is derivable from any two uids, so anyone could
+    // otherwise probe whether a given pair has a schedule.
+    await assertFails(env.authenticatedContext(STRANGER).firestore().doc(PATH).get());
+  });
+
   it('lets the other participant overwrite it, which is last-write-wins', async () => {
     await seed(env, {[PATH]: custodyDoc({})});
     const db = env.authenticatedContext(DAD).firestore();

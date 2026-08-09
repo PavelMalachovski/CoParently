@@ -45,4 +45,20 @@ object PreferenceKeys {
      * why a value that can lag or be a guess cannot be the "before" side of a change detector.
      */
     const val PARENT_SLOT_MARKER_PREFIX = "parent_slot_marker_"
+
+    /**
+     * Prefix for the per-user key recording which co-parent this device has already re-published
+     * its own events for — the actual key is this prefix plus the Firebase UID, and the value is
+     * the partner's UID.
+     *
+     * Scoped per user for the same reason [PARENT_SLOT_MARKER_PREFIX] is: Room's `users` and
+     * `events` rows survive sign-out, so a second account signing in on the same device must not
+     * read the first account's history as its own.
+     *
+     * Unlike [PARENT_SLOT_MARKER_PREFIX] this key is **not** exempt from
+     * `EncryptedPreferences.clear()`, and does not need to be. Losing it costs one extra
+     * re-publish of documents that already carry the right audience; losing the slot marker
+     * would re-stamp records into the wrong parent's slot.
+     */
+    const val EVENT_AUDIENCE_BACKFILL_PREFIX = "event_audience_backfill_"
 }

@@ -197,5 +197,37 @@ interface EventDao {
             "WHERE pickupConfirmedBy = :from AND createdByFirebaseUid = :myUid"
     )
     suspend fun reslotPickup(from: String, to: String, myUid: String): Int
+
+    /**
+     * Re-queues every non-private event this user created for upload, by clearing the flag
+     * `SyncService.syncEvents` selects on.
+     *
+     * The upload half recomputes `sharedWith` from live state for every row it uploads, so
+     * clearing the flag is what republishes an event under the audience the account has *now*.
+     * Without it, an event created while unpaired keeps the one-uid audience it was uploaded
+     * with forever: `sharedWith` is never recomputed for a row already marked synced.
+     *
+     * Only [reslotOwner] used to have this effect, and only as a side effect, so it reached
+     * only the parent whose slot moved — the accepter. The inviter keeps their slot
+     * (`PairingViewModel.withSlotReslot`), so their whole pre-pairing history, Google imports
+     * included, stayed invisible to the co-parent.
+     *
+     * `isPrivate = 0` is part of the statement rather than a filter applied to its result: a
+     * row with the flag cleared is a row queued for upload, and a private event must never be
+     * queued at all, not even for one pass that later drops it.
+     *
+     * Rows with a null `createdByFirebaseUid` — old enough to predate the column being stamped
+     * — are not matched by `= :myUid` and are deliberately left alone: nothing distinguishes
+     * this user's un-stamped event from anybody else's, and a statement that guessed would
+     * publish the wrong person's history.
+     *
+     * @param myUid Firebase UID of the signed-in user.
+     * @return How many rows were re-queued.
+     */
+    @Query(
+        "UPDATE events SET syncedToFirestore = 0 " +
+            "WHERE createdByFirebaseUid = :myUid AND isPrivate = 0"
+    )
+    suspend fun markOwnEventsUnsynced(myUid: String): Int
 }
 

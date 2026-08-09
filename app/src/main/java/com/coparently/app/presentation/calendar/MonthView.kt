@@ -64,6 +64,9 @@ private const val MONTH_PAGER_RANGE = 24L
 /** Days per week for the weekday header. */
 private const val DAYS_PER_WEEK = 7L
 
+/** Public-holiday tint strength, drawn over the cell's base fill. */
+private const val HOLIDAY_TINT_ALPHA = 0.10f
+
 /** Full-hue edge marking the first day of a custody run. */
 private val CUSTODY_EDGE_WIDTH = 2.dp
 
@@ -268,24 +271,35 @@ private fun DayCell(
     val isDarkTheme =
         MaterialTheme.colorScheme.surface.luminance() < CoPlanlyColors.DARK_LUMINANCE_THRESHOLD
 
-    val weekendColor = if (isDarkTheme) {
-        CoPlanlyColors.WeekendBackgroundDark
-    } else {
-        CoPlanlyColors.WeekendBackgroundLight.copy(alpha = 0.5f)
-    }
-
     val isPublicHoliday = holiday != null && !holiday.isSchoolVacation
 
-    // Custody is the product's core signal — it wins over holiday/weekend tints.
-    // School vacation is intentionally NOT a full-cell fill (it used to drown
-    // custody colors); it renders as a thin strip at the bottom instead.
-    val backgroundColor = when {
-        !isCurrentMonth -> MaterialTheme.colorScheme.surface
-        custody == "mom" -> CoPlanlyColors.MomPink.copy(alpha = CoPlanlyColors.CUSTODY_TINT_ALPHA)
-        custody == "dad" -> CoPlanlyColors.DadBlue.copy(alpha = CoPlanlyColors.CUSTODY_TINT_ALPHA)
-        isPublicHoliday -> CoPlanlyColors.HolidayRed.copy(alpha = 0.10f)
-        isWeekend -> weekendColor
-        else -> MaterialTheme.colorScheme.surface
+    // Two layers, not one pick: see DayCellFills for why a single `when` made the weekend
+    // unreachable on every account with a custody model. Custody is still the product's core
+    // signal and still wins over the holiday tint. School vacation is intentionally NOT a
+    // full-cell fill at all (it used to drown custody colors); it renders as a thin strip at
+    // the bottom instead.
+    val fill = DayCellFills.monthCell(
+        isWeekend = isWeekend,
+        isCurrentMonth = isCurrentMonth,
+        custody = custody,
+        isPublicHoliday = isPublicHoliday
+    )
+    val baseColor = when (fill.base) {
+        DayCellBase.WEEKEND ->
+            if (isDarkTheme) {
+                CoPlanlyColors.WeekendBackgroundDark
+            } else {
+                CoPlanlyColors.WeekendBackgroundLight
+            }
+        DayCellBase.SURFACE -> MaterialTheme.colorScheme.surface
+    }
+    val overlayColor = when (fill.overlay) {
+        DayCellOverlay.CUSTODY_MOM ->
+            CoPlanlyColors.MomPink.copy(alpha = CoPlanlyColors.CUSTODY_TINT_ALPHA)
+        DayCellOverlay.CUSTODY_DAD ->
+            CoPlanlyColors.DadBlue.copy(alpha = CoPlanlyColors.CUSTODY_TINT_ALPHA)
+        DayCellOverlay.PUBLIC_HOLIDAY -> CoPlanlyColors.HolidayRed.copy(alpha = HOLIDAY_TINT_ALPHA)
+        DayCellOverlay.TODAY, DayCellOverlay.NONE -> Color.Transparent
     }
 
     // All localized pieces are resolved in composable scope; buildString itself is not one.
@@ -343,7 +357,11 @@ private fun DayCell(
             }
             .padding(dims.paddingSmall / 8)
             .background(
-                color = backgroundColor,
+                color = baseColor,
+                shape = RoundedCornerShape(dims.cornerRadius / 2)
+            )
+            .background(
+                color = overlayColor,
                 shape = RoundedCornerShape(dims.cornerRadius / 2)
             )
             .clickable(onClick = { onDayClick(date) }, onClickLabel = clickLabel)

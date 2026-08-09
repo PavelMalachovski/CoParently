@@ -55,6 +55,17 @@ replace) the July 2026 overhaul below — those invariants still hold except whe
    confirms, not a filled error button (Settings sign-out, Pairing unpair).
 9. **New user-facing strings go into all five locales** (`values`, `values-cs`, `values-de`,
    `values-ru`, `values-uk`) in the same commit — see "Localization" below.
+10. **The weekend is a base layer, never a competing fill.** `presentation/calendar/DayCellFills.kt`
+    decides a cell's `base` (neutral grey on Saturday/Sunday, in every grid row *including* the
+    days borrowed from the neighbouring months) and its `overlay` (custody, public holiday,
+    today) separately; `MonthView` and `DayWeekView` draw both as two chained
+    `Modifier.background` calls. A single `when` picking one background is what made the weekend
+    unreachable: `CustodyModel.getCustodyFor` never returns null, so on any account with an
+    active custody model every in-month cell matched a custody branch and only the neighbouring
+    months' days kept a tint. `WeekendBackgroundLight`/`Dark` are neutral greys applied at full
+    strength — the old per-call-site 0.3/0.5 alphas are gone, so month and week read as one
+    system. Don't "fix" a weekend that looks too subtle by putting it back ahead of custody:
+    weekends are the days a separated parent checks first.
 
 ## UX/UI overhaul (July 2026 design review) — implemented, keep consistent
 
@@ -240,6 +251,20 @@ Data flow: UI → ViewModel → UseCase → Repository → Room (source of truth
     does not belong with those four**: it is not merely displayed, it decides which phone's
     schedule survives. See the custody entry in "Known issues" below before adding to this
     list.
+14. **`sharedWith` is computed at upload time and never recomputed for a row already marked
+    synced.** An event created while the account was unpaired is uploaded with an audience of
+    one uid, and nothing revisits it — so it stays unreadable by a co-parent who arrives later.
+    Pairing repaired this only for the *accepter*, and only by accident: `EventDao.reslotOwner`
+    clears `syncedToFirestore` as part of the slot re-stamp. The inviter keeps their slot
+    (`PairingViewModel.withSlotReslot`), `ParentSlotMigrator.reslot` returns 0 on `from == to`,
+    and their whole pre-pairing history — Google Calendar imports included — stayed private
+    forever. `SyncService.backfillAudienceForPartner` now re-queues this user's own non-private
+    events once per co-parent uid, from the sync path rather than from pairing, so it also
+    repairs pairs that already exist without them unpairing. Two rules for anything similar:
+    key the marker on the **partner uid**, not a boolean, or it never re-arms on re-pairing; and
+    exclude private rows **in the statement**, because a row with the flag cleared is a row
+    queued for upload. Rows whose `createdByFirebaseUid` is null are deliberately not matched —
+    nothing distinguishes this user's un-stamped event from anybody else's.
 
 ## Known issues / do not "fix" silently
 
