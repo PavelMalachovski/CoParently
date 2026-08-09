@@ -64,7 +64,6 @@ import com.coparently.app.presentation.calendar.components.CustodyChangedBanner
 import com.coparently.app.presentation.calendar.components.CustodyRibbon
 import com.coparently.app.presentation.calendar.components.DayAgendaCard
 import com.coparently.app.presentation.calendar.components.EventTypeFilterSheet
-import com.coparently.app.presentation.calendar.components.VacationBanner
 import com.coparently.app.presentation.common.rememberParentNames
 import com.coparently.app.presentation.event.EventUiState
 import com.coparently.app.presentation.event.EventViewModel
@@ -183,31 +182,6 @@ internal fun eventsByDay(events: List<Event>): Map<LocalDate, List<Event>> {
     // sortedBy is stable, so events sharing a start time keep the incoming order, exactly as the
     // filter-then-sort in eventsOn did.
     return buckets.mapValues { (_, dayEvents) -> dayEvents.sortedBy { it.startDateTime } }
-}
-
-/**
- * The month's school vacation as one label, or null when the month has none.
- *
- * Picks the vacation covering the most days of [month] — a month straddling two of them (late
- * August into September, say) gets the one it is mostly in rather than an arbitrary first.
- *
- * @param holidays Holidays for the visible range, keyed by date
- * @param month The month on screen
- */
-@Composable
-private fun rememberVacationLabel(
-    holidays: Map<LocalDate, Holiday>,
-    month: YearMonth
-): String? {
-    val czech = Locale.getDefault().language == "cs"
-    return remember(holidays, month, czech) {
-        holidays.values
-            .filter { it.isSchoolVacation && YearMonth.from(it.date) == month }
-            .groupingBy { if (czech) it.nameCs else it.nameEn }
-            .eachCount()
-            .maxByOrNull { it.value }
-            ?.key
-    }
 }
 
 /**
@@ -491,20 +465,24 @@ fun CalendarScreen(
             Column(
                 modifier = Modifier.fillMaxSize()
             ) {
-                // School vacation, stated once for the month instead of a teal strip under
-                // every single cell — in July and August that was all 31 of them.
-                if (viewMode == CalendarViewMode.MONTH) {
-                    val vacationLabel = rememberVacationLabel(holidays, displayedMonth)
-                    if (vacationLabel != null) {
-                        VacationBanner(
-                            label = vacationLabel,
-                            modifier = Modifier.padding(
-                                horizontal = dims.paddingMedium,
-                                vertical = dims.paddingSmall / 2
-                            )
-                        )
-                    }
-                }
+                // The school-vacation banner is deliberately not rendered.
+                //
+                // It appeared only in months that actually contain a vacation, so the grid
+                // below it was a banner's height shorter in those months and taller in the
+                // rest. Paging between them resized the calendar mid-swipe, which is what was
+                // left of the long-running "the month swipe feels wrong" complaint once the
+                // pager itself was measured and cleared (§11 item 8): the hands-on pass on
+                // 9 August found the swipe itself even, and named this as the remaining
+                // roughness — and reported week and day view as the smoothest precisely
+                // because nothing there changes height between pages.
+                //
+                // Removed rather than hidden because that is what was asked for now. **This
+                // loses the school-vacation signal entirely** — the July 2026 design replaced
+                // a per-day teal strip with this banner, so there is no longer any other
+                // marker for it. When it comes back, it must reserve its height in every
+                // month, vacation or not, or it will reintroduce exactly this defect.
+                // `VacationBanner` itself is left in `CalendarBanners.kt`; the label helper
+                // that fed it is recoverable from this commit's parent.
 
                 // Change requests as a labelled banner rather than a badged glyph in the bar.
                 if (pendingChangeRequests > 0 && onChangeRequestsClick != null) {
