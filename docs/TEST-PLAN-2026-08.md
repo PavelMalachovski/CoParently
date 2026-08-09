@@ -624,18 +624,37 @@ noted so nobody reports it as a regression.
 
 ## §13 Findings
 
-Build: `df593234` · Date: 9 August 2026 · Tester: Claude (scripted, `[A]`/`[2]` only)
+Build: `df593234` → `373046a5` · Date: 9 August 2026 · Tester: Claude (scripted `[A]`/`[2]`) and
+the owner (`[H]`, §4.2 only)
+
+### What has been covered so far
+
+| Section | State |
+|---|---|
+| §0 Setup | Done implicitly: build recorded, same APK on both handsets, both on wireless ADB. Parent A was **not** wiped, so §0.3's fresh install never happened and §1 was never run. |
+| §1 Onboarding | **Not run.** Needs a fresh install on Parent A. |
+| §2 Pairing | **12 of 15 rows have a result.** 2.8 (QR scan) is not runnable headless; 2.3 and 2.15 are `[H]` and open. Section run three times over — once to characterise it, twice more while re-pairing to chase F-08. |
+| §3 Home | **Not started.** |
+| §4.1 Month view | **Not started** as a section, though 4.1.14 (weekend tint) was verified numerically during the PR #46 work: the grey base reads in both themes across all six grid rows. |
+| §4.2 Gestures | **All six rows done** (`[H]`, by the owner). §11 item 8 can be closed — see the note under that table. |
+| §4.3 Events | **Not started.** |
+| §5–§10 | **Not started.** |
+| §11 | Item 8 closed by the §4.2 run. Items 1a, 1b, 2, 3 still untouched; 4–7 and 9 were closed in the 4 August batch. |
+| §12 | 12.1 not reproducible this round (Parent A was not a fresh install). 12.5 superseded: detekt is still red on `main`, and the branches merged this round added nothing to it. |
+
+Nine findings below. Three are already fixed on `main` (F-01, F-09, and the client half of F-08);
+F-08 itself is still open.
 
 | ID | § | Area | Severity | What happened | Expected | Device | Evidence |
 |---|---|---|---|---|---|---|---|
-| F-01 | 2.14 | Sync / pairing | **High** | Re-pairing with the **same** co-parent does not re-share the events unpairing revoked. `unpairCoParent`'s sweep narrows every shared document's `sharedWith`; on re-pair, `SyncService.backfillAudienceForPartner` skips because its marker already equals that partner's uid, and the accepter's `reslotOwner` also does nothing because the slot did not change (A stayed inviter, B stayed accepter). Neither `Audience backfill` nor a re-stamp line appeared in either log. | Re-pairing restores the co-parent's access to what they could read before | Both | Logcat on both after 2.9 (no backfill/re-stamp line); mechanism in `SyncService.backfillAudienceForPartner` + `ParentSlotMigrator.reslot`'s `from == to` early return |
+| F-01 | 2.14 | Sync / pairing | **High → fixed** (`12642a34`) | Re-pairing with the **same** co-parent does not re-share the events unpairing revoked. `unpairCoParent`'s sweep narrows every shared document's `sharedWith`; on re-pair, `SyncService.backfillAudienceForPartner` skips because its marker already equals that partner's uid, and the accepter's `reslotOwner` also does nothing because the slot did not change (A stayed inviter, B stayed accepter). Neither `Audience backfill` nor a re-stamp line appeared in either log. | Re-pairing restores the co-parent's access to what they could read before | Both | Logcat on both after 2.9 (no backfill/re-stamp line); mechanism in `SyncService.backfillAudienceForPartner` + `ParentSlotMigrator.reslot`'s `from == to` early return |
 | F-02 | 4.1 / 3.1 | Home / Calendar | Medium | An unpaired account still shows the custody handover hero, and the co-parent's name degrades to the literal word: "Передача **(Родитель)** через 2 дня". The pattern describes two people, one of whom no longer exists for this account. | Either hide the handover hero while unpaired, or say the schedule needs a co-parent | Both | `a-home.png`, `b-home.png` — reproduced independently on each handset |
 | F-03 | 2.13 | Pairing | Low | After the owner unpaired from B, Parent A's Room still held `partnerId` pointing at B until A's next sync. A's UI would have shown a co-parent who no longer exists. | Local pairing state reflects the unpair promptly, or the UI says it is stale | A | `pre-A.db` (`partnerId=F7wE4…` post-unpair); cleared after A launched and synced |
 | F-04 | 2.5 | Pairing | Low | The only confirmation seen after tapping the invite code is Android 13+'s system clipboard chip. `minSdk` is 26, so on Android 12 and below the same tap plausibly looks like nothing happened. | The app confirms the copy itself, independent of OS version | B (Android 15) | `b-copy.png`; no in-app snackbar survived the chip |
 | F-05 | 2.7 | Pairing | Low | In "Мой код" the trust panel sits below the fold, under the QR — a parent deciding whether to trust the app with a custody schedule must scroll past the code to find the answer. In "Ввести код" it is visible without scrolling. | The trust statement is visible where the decision is made | B | `b-pairing-1.png` vs `b-pairing-bottom.png` |
 | F-06 | 2.4 | Pairing | Polish | "Отправить ссылку" wraps mid-word — "Отправит / ь ссылку" — on the Samsung's narrower layout, in Russian. §10.6 anticipates this for German; it already happens in the run locale. | Button labels wrap on word boundaries or shrink to fit | A | `a-pairing.png` |
 | F-07 | 2.12 | Pairing | Plan bug | The plan expects a mail app to open. The app instead expands an inline address field and sends server-side via `sendEmailInvitation`. The implementation is the deliberate one; the plan's expected column is wrong. | — | B | `b-email.png` |
-| F-08 | 2.9 | Pairing / slots | **Blocker** | **Both parents ended up in slot 1.** After pairing, A (inviter) and B (accepter) both read `role = mom`, and B stayed `mom` through a force-stop, a cold start and a completed sync. This is *not* the documented 15-minute `role` lag: `SyncWorker` logged `SUCCESS` and `FirestoreUserDataSource` logged `Got user from server: F7wE4…`, and `SyncService.syncUserData` writes `role` from exactly that document — so B's Firestore document does not hold `dad`. `acceptPairingInvitationImpl` does write `role: slots.accepterRole` inside its transaction (`assignSlots('mom')` → `dad`), so something after the transaction is putting `mom` back; the untested hypothesis is a client profile write re-stamping `UserRepositoryImpl.DEFAULT_ROLE`. Consequence: both parents render in the same colour, and `momDayIndices` — defined as "the days slot 1 has custody" — no longer distinguishes anybody, which makes the custody pattern meaningless for the pair. | Accepter is moved to slot 2 (`dad`) and stays there | Both | `post-A.db`, `post-B.db`, `cold-B.db` (all `role=mom`); B logcat showing `SyncWorker` SUCCESS + server read with no `Reacted to a remote slot change` line |
+| F-08 | 2.9 | Pairing / slots | **Blocker — still open**, see the two notes below | **Both parents ended up in slot 1.** After pairing, A (inviter) and B (accepter) both read `role = mom`, and B stayed `mom` through a force-stop, a cold start and a completed sync. This is *not* the documented 15-minute `role` lag: `SyncWorker` logged `SUCCESS` and `FirestoreUserDataSource` logged `Got user from server: F7wE4…`, and `SyncService.syncUserData` writes `role` from exactly that document — so B's Firestore document does not hold `dad`. `acceptPairingInvitationImpl` does write `role: slots.accepterRole` inside its transaction (`assignSlots('mom')` → `dad`), so something after the transaction is putting `mom` back; the untested hypothesis is a client profile write re-stamping `UserRepositoryImpl.DEFAULT_ROLE`. Consequence: both parents render in the same colour, and `momDayIndices` — defined as "the days slot 1 has custody" — no longer distinguishes anybody, which makes the custody pattern meaningless for the pair. | Accepter is moved to slot 2 (`dad`) and stays there | Both | `post-A.db`, `post-B.db`, `cold-B.db` (all `role=mom`); B logcat showing `SyncWorker` SUCCESS + server read with no `Reacted to a remote slot change` line |
 
 | F-09 | 4.2.1 | Calendar | Medium → **fixed** | The school-vacation banner rendered only in months containing one, so the month grid was a banner's height shorter there and taller elsewhere, and paging between them resized the calendar mid-swipe. This was the whole of the residual "month swipe feels wrong" complaint once the pager itself was cleared. | The grid keeps one height across pages | A | §4.2 hands-on run; fixed in `373046a5` by removing the banner. **Removing it loses the school-vacation signal entirely** — when it returns it must reserve its height in every month |
 
@@ -653,6 +672,24 @@ That deploy then failed with `Cannot determine backend specification. Timeout af
 Measured cause: `require('./index.js')` takes **35.5 s** on this machine while the CLI allows 10 s
 for discovery; module-level code is only `admin.initializeApp()` and three constants, so the time
 is SDK loading. Workaround: `FUNCTIONS_DISCOVERY_TIMEOUT=120 firebase deploy --only functions`.
+
+**After the functions deploy — F-08 is improved but not closed.** `firebase functions:list` now
+shows `backfillParentSlots`, so the slot-aware bundle is live, and re-pairing finally assigns a
+slot: `PairingViewModel: Re-stamped 1 record(s) from mom to dad`. The old bundle never returned a
+role, so that re-stamp had never once run. Two things still do not settle, both re-read after a
+force-stop, a cold start and a sync that logged `Got user from server`:
+
+| | Room `role` | events by `parentOwner` |
+|---|---|---|
+| A (inviter) | `mom` — correct | dad 1, mom 1 |
+| B (accepter) | **`mom`** — wrong; its slot marker and all its records moved to `dad` | dad 2 |
+
+So B's *effective* slot is `dad` (marker plus re-stamped records) while the `role` mirror stays
+`mom`, and the two handsets **disagree about the owner of one event** — the user-visible symptom is
+that the same day can be coloured differently on the two phones. Next diagnostic, one command and
+not run because it reads production data: `firebase firestore:get users/<B-uid>` — if `role` is
+`dad` the fault is in `SyncService.syncUserData`; if it is `mom`, something still rewrites the
+field after the transaction and the client fix in `12642a34` closed only one such path.
 
 **Not run, and why.** 2.8 (QR scan) needs a camera physically aimed at the other handset. §3 onward
 was not started. `[H]` rows outside §4.2 are still open.
