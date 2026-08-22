@@ -146,15 +146,23 @@ that list is not extended.
 Three changes, each mirroring what `events` already does.
 
 **The upload computes an entitled set.** `syncChildInfo` stops listing creator and last-modifier
-and adopts the `shareTargets` shape: the entitled set is the uploader, the document's creator and
-the uploader's **current** co-parent, and the stored `sharedWith` is **intersected** with it.
+and instead publishes the uploader, the document's creator and the uploader's **current**
+co-parent — non-blank, de-duplicated.
 
-Intersecting rather than widening is the part that is easy to get wrong and expensive to get
-wrong. The server's unpair sweep narrows the remote document but never the local Room copy, and
-the upload runs before the down-sync that would heal it — so a widen-only rule re-grants an
-ex-partner access to every row still sitting `syncedToFirestore = false` at unpair time, on the
-very next sync. `SyncService.shareTargets`' KDoc documents this for events; the same reasoning
-binds here.
+**It does not need the `shareTargets` intersection, and the reason matters.** For events, the
+entitled set is intersected with the audience stored in `EventEntity.sharedWithJson`, because the
+server's unpair sweep narrows the remote document but never the local Room copy: a widen-only rule
+re-grants an ex-partner access to every row still sitting `syncedToFirestore = false` at unpair
+time, on the very next sync.
+
+`ChildInfoEntity` **has no `sharedWith` column at all**. The audience has always been derived
+fresh at upload time from live fields, so there is no stored list to carry a stale uid forward and
+nothing for an intersection to remove. Deriving from live state is the same protection the
+intersection buys events, arrived at for free. No column is added to store one — adding it would
+create the very staleness the events path has to defend against.
+
+The consequence to keep in mind: because the audience is recomputed on every upload, a row only
+gets the co-parent when it is uploaded again. That is exactly what the backfill below is for.
 
 **A DAO method to re-queue.** `ChildInfoDao.markOwnChildInfoUnsynced(userId)`, mirroring
 `EventDao.markOwnEventsUnsynced`. Rows whose `createdByFirebaseUid` is null are deliberately not
@@ -225,6 +233,27 @@ references and is deleted. `childinfo_section_school` is the live key, used by
 pencil goes. This is the last screen still on the card-per-row shape the August 2026 refresh calls
 "double surfaces"; leaving it would make it the only one of seven that disagrees.
 
+## 8.5 Where a parent edits their own profile — a screen that does not exist yet
+
+Found while planning, and worth stating plainly because an earlier draft of this spec was wrong
+about it: there is **no** parent profile screen. Settings' Account group holds `SignedInAsRow`
+(the signed-in email) and a sign-out row, nothing more. "Make the data editable from the existing
+screens" is true for the child and false for the parent.
+
+B1 adds one screen, used twice:
+
+- **`ProfileScreen(editable = true)`** — my own profile: name, date of birth, phone, allergies,
+  medical profile. Opens from a new row in Settings' **Family** group, which is where the co-parent
+  and the child already live.
+- **`ProfileScreen(editable = false)`** — the co-parent's, read-only. Same composable, same
+  layout, no editors. Read-only is not a courtesy here: `firestore.rules` refuses the write
+  anyway (§7), so an editable co-parent screen would be an affordance that promises a feature the
+  server rejects — the exact defect the August 2026 refresh's rule 8 forbids.
+
+One screen with a flag rather than two screens, because the read-only variant is the same
+information in the same order. When B2 builds the wizard, its "about you" step reuses the same
+section composables a third time.
+
 ## 9. Deliberately not in B1
 
 - **The first-run wizard and its disclaimer** (items 3 and 4). B2. B1 makes the data editable
@@ -247,6 +276,13 @@ pencil goes. This is the last screen still on the card-per-row shape the August 
 | Locales | `git grep -c 'name="<key>"' -- app/src/main/res/values*/*.xml` returns five files per new or renamed key. |
 | Build | `./gradlew assembleDebug testDebugUnitTest lint detekt` |
 
-A device run is **not** required to accept B1 — every behaviour above is covered offline. The
-two-device check that item 5 really lands (fill in child info on phone A, pair, see it on phone B)
-belongs with B2's run, when there is a wizard to fill it in from.
+**One of those checks needs hardware.** Room's `MigrationTestHelper` is instrumented — the
+migration test lives in `app/src/androidTest/` beside `CoPlanlyDatabaseMigrationTest`, and
+`connectedDebugAndroidTest` needs a device or emulator. There is no Robolectric in this project to
+run it on the JVM. So the migration is the one part of B1 that cannot be signed off from a plain
+`./gradlew` run, and the plan must say so rather than let a green JVM suite imply coverage it does
+not have.
+
+Everything else is covered offline. The two-device check that item 5 really lands (fill in child
+info on phone A, pair, see it on phone B) belongs with B2's run, when there is a wizard to fill it
+in from.
