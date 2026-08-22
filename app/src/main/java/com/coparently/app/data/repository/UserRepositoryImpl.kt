@@ -454,8 +454,9 @@ class UserRepositoryImpl @Inject constructor(
             dateOfBirth = parseProfileDate(dateOfBirth),
             phone = phone,
             allergies = gson.fromJson(allergiesJson, Array<String>::class.java)?.toList().orEmpty(),
-            medicalProfile = gson.fromJson(medicalProfileJson, MedicalProfile::class.java)
-                ?: MedicalProfile()
+            medicalProfile = (
+                gson.fromJson(medicalProfileJson, MedicalProfile::class.java) ?: MedicalProfile()
+                ).withSanitizedVaccinationNames()
         )
     }
 
@@ -499,9 +500,11 @@ class UserRepositoryImpl @Inject constructor(
             dateOfBirth = parseProfileDate(this["dateOfBirth"] as? String),
             phone = (this["phone"] as? String)?.takeIf { it.isNotBlank() },
             allergies = (this["allergies"] as? List<*>)?.mapNotNull { it as? String }.orEmpty(),
-            medicalProfile = (this["medicalProfile"] as? Map<*, *>)?.let {
-                gson.fromJson(gson.toJson(it), MedicalProfile::class.java)
-            } ?: MedicalProfile()
+            medicalProfile = (
+                (this["medicalProfile"] as? Map<*, *>)?.let {
+                    gson.fromJson(gson.toJson(it), MedicalProfile::class.java)
+                } ?: MedicalProfile()
+                ).withSanitizedVaccinationNames()
         )
     }
 

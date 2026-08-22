@@ -116,8 +116,9 @@ class ChildInfoRepositoryImpl @Inject constructor(
             medicalNotes = medicalNotes,
             emergencyContacts = gson.fromJson(emergencyContactsJson, Array<com.coparently.app.domain.model.EmergencyContact>::class.java).toList(),
             schoolInfo = schoolInfoJson?.let { gson.fromJson(it, com.coparently.app.domain.model.SchoolInfo::class.java) },
-            medicalProfile = gson.fromJson(medicalProfileJson, MedicalProfile::class.java)
-                ?: MedicalProfile(),
+            medicalProfile = (
+                gson.fromJson(medicalProfileJson, MedicalProfile::class.java) ?: MedicalProfile()
+                ).withSanitizedVaccinationNames(),
             createdAt = createdAt,
             updatedAt = updatedAt,
             createdByFirebaseUid = createdByFirebaseUid,
@@ -241,9 +242,11 @@ class ChildInfoRepositoryImpl @Inject constructor(
                     grade = it["grade"] as? String
                 )
             },
-            medicalProfile = (this["medicalProfile"] as? Map<*, *>)?.let {
-                gson.fromJson(gson.toJson(it), MedicalProfile::class.java)
-            } ?: MedicalProfile(),
+            medicalProfile = (
+                (this["medicalProfile"] as? Map<*, *>)?.let {
+                    gson.fromJson(gson.toJson(it), MedicalProfile::class.java)
+                } ?: MedicalProfile()
+                ).withSanitizedVaccinationNames(),
             createdAt = LocalDateTime.parse(this["createdAt"] as String, formatter),
             updatedAt = LocalDateTime.parse(this["updatedAt"] as String, formatter),
             createdByFirebaseUid = this["createdByFirebaseUid"] as? String,
