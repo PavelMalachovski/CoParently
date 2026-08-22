@@ -24,7 +24,7 @@
     <string name="childinfo_section_allergies">Allergies</string>
     <string name="childinfo_section_medical_notes">Medical Notes</string>
     <string name="childinfo_section_emergency_contacts">Emergency Contacts</string>
-    <string name="childinfo_section_school">Place of study</string>
+    <string name="childinfo_section_school">Education</string>
     <string name="childinfo_section_teacher">Teacher Information</string>
 
     <!-- Child info: basic form -->
@@ -94,8 +94,8 @@
     <string name="childinfo_contact_phone_marker">📞 %1$s</string>
     <string name="childinfo_contact_alt_phone_marker">📱 %1$s</string>
 
-    <!-- Child info: school editor -->
-    <string name="childinfo_add_school_info">Add place of study</string>
+    <!-- Child info: education editor -->
+    <string name="childinfo_add_school_info">Add education details</string>
     <string name="childinfo_school_name_label">Institution name</string>
     <string name="childinfo_address_optional_label">Address (optional)</string>
     <string name="childinfo_school_phone_optional_label">Institution phone (optional)</string>

@@ -94,7 +94,7 @@
     <string name="childinfo_contact_phone_marker">📞 %1$s</string>
     <string name="childinfo_contact_alt_phone_marker">📱 %1$s</string>
 
-    <!-- Child info: school editor -->
+    <!-- Child info: education editor -->
     <string name="childinfo_add_school_info">Добавить учебное заведение</string>
     <string name="childinfo_school_name_label">Название учебного заведения</string>
     <string name="childinfo_address_optional_label">Адрес (необязательно)</string>
