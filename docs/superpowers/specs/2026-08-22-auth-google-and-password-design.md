@@ -171,9 +171,11 @@ AuthError
 `AuthError.from(Throwable)` maps `FirebaseAuthException` error codes and `GetCredentialException`
 subtypes. It is pure Kotlin with no Android dependency, so it is covered by an ordinary JVM test.
 
-`AuthErrorText.kt` holds `@Composable fun AuthError.text(): String` — the type becomes a string
-in the composable, where `stringResource` is legal. This is the shape CLAUDE.md's follow-up note
-asks for, applied to one screen rather than to every ViewModel at once.
+`AuthErrorText.kt` holds `@StringRes fun AuthError.messageRes(): Int` — the composable resolves it
+with `stringResource`, where that is legal. Returning the id rather than the resolved string keeps
+the function out of `@Composable`, which matters inside `AnimatedVisibility`: its content lambda
+still runs while the error card animates out, when the error is already null. This is the shape
+CLAUDE.md's follow-up note asks for, applied to one screen rather than to every ViewModel at once.
 
 The double-write defect from §1 disappears with the type change: `AuthScreen` no longer has a
 raw message to overwrite the mapped one with.
