@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="medical_section_title">Медицинские данные</string>
+    <string name="medical_blood_type_label">Группа крови</string>
+    <string name="medical_blood_type_not_set">Не указана</string>
+    <string name="medical_blood_type_a_positive">A(II) Rh+</string>
+    <string name="medical_blood_type_a_negative">A(II) Rh−</string>
+    <string name="medical_blood_type_b_positive">B(III) Rh+</string>
+    <string name="medical_blood_type_b_negative">B(III) Rh−</string>
+    <string name="medical_blood_type_ab_positive">AB(IV) Rh+</string>
+    <string name="medical_blood_type_ab_negative">AB(IV) Rh−</string>
+    <string name="medical_blood_type_o_positive">0(I) Rh+</string>
+    <string name="medical_blood_type_o_negative">0(I) Rh−</string>
+    <string name="medical_intolerances_label">Непереносимости</string>
+    <string name="medical_intolerances_hint">Лактоза, глютен, лекарство…</string>
+    <string name="medical_hereditary_label">Наследственные заболевания</string>
+    <string name="medical_hereditary_hint">Заболевания, которые есть в семье</string>
+    <string name="medical_vaccinations_label">Прививки</string>
+    <string name="medical_vaccination_name_label">Вакцина</string>
+    <string name="medical_vaccination_date_label">Дата (необязательно)</string>
+    <string name="medical_vaccination_no_date">Дата не указана</string>
+    <string name="medical_vaccination_add">Добавить прививку</string>
+    <string name="medical_vaccination_remove">Удалить прививку</string>
+    <string name="medical_item_add">Добавить</string>
+    <string name="medical_item_remove">Удалить</string>
+    <string name="medical_empty">Пока ничего не указано</string>
+</resources>
