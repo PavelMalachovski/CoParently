@@ -376,6 +376,99 @@ class SyncServiceTest {
     }
 
     @Test
+    fun `the child-info audience backfill re-queues this user's rows the first time a partner appears`() =
+        runTest {
+            // Mirrors the event backfill's own first-time test: a round-1 review found the
+            // wiring for child info had no coverage of its own, only the extracted
+            // `ChildInfoAudience.entitled` policy — so a slip inside `syncChildInfo` (wrong
+            // argument order, or the backfill called after `getUnsyncedChildInfo()` instead
+            // of before) would not have been caught.
+            pairWith(partnerId = BOB)
+
+            syncService.performFullSync()
+
+            coVerify(exactly = 1) { childInfoDao.markOwnChildInfoUnsynced(ALICE) }
+        }
+
+    @Test
+    fun `the child-info audience backfill runs again for a different partner`() = runTest {
+        // Alice unpaired from Bob and re-paired with Carol: Carol has never received any of
+        // Alice's child-info history, so the marker must re-arm rather than read as "done".
+        pairWith(partnerId = CAROL)
+        every {
+            encryptedPreferences.getString(
+                "${PreferenceKeys.CHILD_INFO_AUDIENCE_BACKFILL_PREFIX}$ALICE"
+            )
+        } returns BOB
+
+        syncService.performFullSync()
+
+        coVerify(exactly = 1) { childInfoDao.markOwnChildInfoUnsynced(ALICE) }
+        verify {
+            encryptedPreferences.putString(
+                "${PreferenceKeys.CHILD_INFO_AUDIENCE_BACKFILL_PREFIX}$ALICE",
+                CAROL
+            )
+        }
+    }
+
+    @Test
+    fun `unpairing blanks the child-info marker instead of leaving it, so a re-pair backfills again`() =
+        runTest {
+            pairWith(partnerId = null)
+            every {
+                encryptedPreferences.getString(
+                    "${PreferenceKeys.CHILD_INFO_AUDIENCE_BACKFILL_PREFIX}$ALICE"
+                )
+            } returns BOB
+
+            syncService.performFullSync()
+
+            verify {
+                encryptedPreferences.putString(
+                    "${PreferenceKeys.CHILD_INFO_AUDIENCE_BACKFILL_PREFIX}$ALICE",
+                    ""
+                )
+            }
+            // Nothing is re-queued while unpaired - there is nobody to publish to.
+            coVerify(exactly = 0) { childInfoDao.markOwnChildInfoUnsynced(any()) }
+        }
+
+    @Test
+    fun `re-pairing with the same co-parent after an unpair re-runs the child-info backfill`() =
+        runTest {
+            // The other half of the transition: once disarmed (see the test above), the very
+            // same uid must read as a change again rather than as "already done for Bob".
+            pairWith(partnerId = BOB)
+            every {
+                encryptedPreferences.getString(
+                    "${PreferenceKeys.CHILD_INFO_AUDIENCE_BACKFILL_PREFIX}$ALICE"
+                )
+            } returns ""
+
+            syncService.performFullSync()
+
+            coVerify(exactly = 1) { childInfoDao.markOwnChildInfoUnsynced(ALICE) }
+        }
+
+    @Test
+    fun `uploading unsynced child info shares it with the current co-parent`() = runTest {
+        // The wiring test: the co-parent must actually reach the uploaded document, not just
+        // the extracted policy function in isolation.
+        pairWith(partnerId = BOB)
+        coEvery { childInfoDao.getUnsyncedChildInfo() } returns listOf(
+            childInfoEntity(updatedAt = now, synced = false)
+        )
+        val uploaded = slot<Map<String, Any?>>()
+        coEvery { firestoreChildInfoDataSource.upsertChildInfo(any(), capture(uploaded)) } returns
+            Result.success(Unit)
+
+        syncService.performFullSync()
+
+        assertEquals(listOf(ALICE, BOB), uploaded.captured["sharedWith"])
+    }
+
+    @Test
     fun `syncUserData persists the role a remote document carries`() = runTest {
         pairWith(partnerId = BOB)
         coEvery { firestoreUserDataSource.getUserById(ALICE) } returns mapOf("role" to "dad")

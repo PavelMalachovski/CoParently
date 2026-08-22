@@ -1,9 +1,11 @@
 package com.coparently.app.data.repository
 
 import com.coparently.app.data.local.dao.ChildInfoDao
+import com.coparently.app.data.local.dao.UserDao
 import com.coparently.app.data.local.entity.ChildInfoEntity
 import com.coparently.app.data.remote.firebase.FirebaseAuthService
 import com.coparently.app.data.remote.firebase.FirestoreChildInfoDataSource
+import com.coparently.app.data.sync.ChildInfoAudience
 import com.coparently.app.domain.model.ChildInfo
 import com.coparently.app.domain.model.MedicalProfile
 import com.coparently.app.domain.repository.ChildInfoRepository
@@ -24,6 +26,7 @@ import javax.inject.Singleton
 @Singleton
 class ChildInfoRepositoryImpl @Inject constructor(
     private val childInfoDao: ChildInfoDao,
+    private val userDao: UserDao,
     private val firebaseAuthService: FirebaseAuthService,
     private val firestoreChildInfoDataSource: FirestoreChildInfoDataSource
 ) : ChildInfoRepository {
@@ -54,14 +57,33 @@ class ChildInfoRepositoryImpl @Inject constructor(
         // Sync to Firestore if authenticated
         val firebaseUser = firebaseAuthService.getCurrentUser()
         if (firebaseUser != null) {
-            val childInfoData = childInfo.toFirestoreMap()
-            firestoreChildInfoDataSource.upsertChildInfo(childInfo.id, childInfoData)
+            val audience = ChildInfoAudience.entitled(
+                userId = firebaseUser.uid,
+                creatorUid = childInfo.createdByFirebaseUid,
+                partnerId = currentPartnerId(firebaseUser.uid)
+            )
+            val childInfoData = childInfo.toFirestoreMap(audience)
+            val result = firestoreChildInfoDataSource.upsertChildInfo(childInfo.id, childInfoData)
 
-            // Mark as synced
-            val syncedEntity = entity.copy(syncedToFirestore = true)
-            childInfoDao.updateChildInfo(syncedEntity)
+            // Mark as synced only when the remote write actually succeeded. Marking it
+            // unconditionally (the previous behaviour) stranded a failed write out of
+            // `getUnsyncedChildInfo()`'s retry path forever, with nothing left to say the
+            // document never reached Firestore.
+            if (result.isSuccess) {
+                val syncedEntity = entity.copy(syncedToFirestore = true)
+                childInfoDao.updateChildInfo(syncedEntity)
+            }
         }
     }
+
+    /**
+     * The signed-in user's current co-parent, or null when unpaired.
+     *
+     * Shared by [upsertChildInfo] and [syncWithFirestore] so both writers ask the same
+     * question the same way before handing the answer to [ChildInfoAudience.entitled].
+     */
+    private suspend fun currentPartnerId(userId: String): String? =
+        userDao.getUserById(userId)?.partnerId?.takeIf { it.isNotBlank() }
 
     override suspend fun deleteChildInfo(childInfo: ChildInfo) {
         childInfoDao.deleteChildInfoById(childInfo.id)
@@ -75,6 +97,7 @@ class ChildInfoRepositoryImpl @Inject constructor(
 
     override suspend fun syncWithFirestore() {
         val firebaseUser = firebaseAuthService.getCurrentUser() ?: return
+        val partnerId = currentPartnerId(firebaseUser.uid)
 
         // Get unsynced local child info
         val unsyncedChildInfo = childInfoDao.getUnsyncedChildInfo()
@@ -82,7 +105,12 @@ class ChildInfoRepositoryImpl @Inject constructor(
         // Upload to Firestore
         for (entity in unsyncedChildInfo) {
             val childInfo = entity.toDomain()
-            val childInfoData = childInfo.toFirestoreMap()
+            val audience = ChildInfoAudience.entitled(
+                userId = firebaseUser.uid,
+                creatorUid = entity.createdByFirebaseUid,
+                partnerId = partnerId
+            )
+            val childInfoData = childInfo.toFirestoreMap(audience)
             val result = firestoreChildInfoDataSource.upsertChildInfo(entity.id, childInfoData)
 
             if (result.isSuccess) {
@@ -151,9 +179,14 @@ class ChildInfoRepositoryImpl @Inject constructor(
     }
 
     /**
-     * Converts ChildInfo to Firestore map.
+     * Converts ChildInfo to a Firestore map.
+     *
+     * @param audience The `sharedWith` UIDs this write should publish to, from
+     *   [ChildInfoAudience.entitled]. Taken as a parameter rather than derived in here so
+     *   both callers ([upsertChildInfo] and [syncWithFirestore]) go through the single
+     *   policy instead of each computing their own.
      */
-    private fun ChildInfo.toFirestoreMap(): Map<String, Any?> {
+    private fun ChildInfo.toFirestoreMap(audience: List<String>): Map<String, Any?> {
         return mapOf(
             "id" to id,
             "childName" to childName,
@@ -192,7 +225,7 @@ class ChildInfoRepositoryImpl @Inject constructor(
             "updatedAt" to updatedAt.format(formatter),
             "createdByFirebaseUid" to createdByFirebaseUid,
             "lastModifiedBy" to lastModifiedBy,
-            "sharedWith" to listOfNotNull(createdByFirebaseUid, lastModifiedBy).distinct()
+            "sharedWith" to audience
         )
     }
 
