@@ -69,13 +69,22 @@ class AuthViewModel @Inject constructor(
         _uiState.update { it.copy(isLoading = true, error = null) }
 
         viewModelScope.launch {
-            firebaseAuthService.signInWithEmail(state.email, state.password).fold(
-                onSuccess = {
-                    analyticsManager.logLogin("email")
-                    completeSignIn(activity, state.email, state.password, onSuccess)
-                },
-                onFailure = { error -> reportEmailFailure(error, "sign_in", state.email) }
-            )
+            // FirebaseAuthService disguises a coroutine cancellation as a Result.failure, and
+            // reportEmailFailure rethrows it (see rethrowIfCancellation) so structured
+            // cancellation keeps working. That rethrow skips the rest of this block, so without
+            // this finally a ViewModel torn down mid-call would strand isLoading == true and
+            // leave every control on AuthScreen disabled forever.
+            try {
+                firebaseAuthService.signInWithEmail(state.email, state.password).fold(
+                    onSuccess = {
+                        analyticsManager.logLogin("email")
+                        completeSignIn(activity, state.email, state.password, onSuccess)
+                    },
+                    onFailure = { error -> reportEmailFailure(error, "sign_in", state.email) }
+                )
+            } finally {
+                _uiState.update { it.copy(isLoading = false) }
+            }
         }
     }
 
@@ -94,13 +103,19 @@ class AuthViewModel @Inject constructor(
         _uiState.update { it.copy(isLoading = true, error = null) }
 
         viewModelScope.launch {
-            firebaseAuthService.createAccountWithEmail(state.email, state.password).fold(
-                onSuccess = {
-                    analyticsManager.logSignUp("email")
-                    completeSignIn(activity, state.email, state.password, onSuccess)
-                },
-                onFailure = { error -> reportEmailFailure(error, "sign_up", state.email) }
-            )
+            // See the matching finally in signIn(): a rethrown cancellation from
+            // reportEmailFailure must not strand isLoading == true and lock the screen.
+            try {
+                firebaseAuthService.createAccountWithEmail(state.email, state.password).fold(
+                    onSuccess = {
+                        analyticsManager.logSignUp("email")
+                        completeSignIn(activity, state.email, state.password, onSuccess)
+                    },
+                    onFailure = { error -> reportEmailFailure(error, "sign_up", state.email) }
+                )
+            } finally {
+                _uiState.update { it.copy(isLoading = false) }
+            }
         }
     }
 
@@ -206,7 +221,9 @@ class AuthViewModel @Inject constructor(
             error,
             mapOf("action" to action, "email" to email)
         )
-        _uiState.update { it.copy(isLoading = false, error = AuthError.fromEmailPassword(error)) }
+        // isLoading is cleared by the caller's `finally` (signIn/signUp), not here — a single
+        // clearing point per path means nobody has to reason about which reset wins.
+        _uiState.update { it.copy(error = AuthError.fromEmailPassword(error)) }
     }
 
     private fun reportCredentialFailure(error: Throwable, action: String) {

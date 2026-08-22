@@ -251,6 +251,7 @@ class AuthViewModelTest {
 
         assertFalse(navigated, "must not navigate on a cancellation")
         assertNull(viewModel.uiState.value.error, "a cancellation must never surface as an AuthError")
+        assertFalse(viewModel.uiState.value.isLoading)
         verify(exactly = 0) { crashlyticsManager.recordExceptionWithContext(any(), any()) }
     }
 
