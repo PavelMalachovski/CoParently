@@ -1726,9 +1726,16 @@ fun ProfileScreen(
 
 `editable = true` renders the signed-in user's own record with fields and a save button;
 `editable = false` renders the co-parent's, read-only, with
-`stringResource(R.string.profile_readonly_note, coParentName)` explaining why. Both use
-`SectionGroup` / `SectionRow` from `presentation/common/DesignSystem.kt`, and both delegate the
+`stringResource(R.string.profile_readonly_note, coParentName)` explaining why. Both delegate the
 medical block to `MedicalProfileEditor(profile, onChange, enabled = editable)`.
+
+The two modes deliberately do **not** share a row idiom. The read-only mode uses `SectionGroup` /
+`SectionRow` from `presentation/common/DesignSystem.kt`, because it is a list of facts and that is
+what those components are for. The editable mode uses ordinary `OutlinedTextField`s, because
+`SectionRow` is a 56dp row carrying at most one trailing control and a full-width text field does
+not fit in one — and because every other editable form in this app (`AddEditChildInfoScreen`, the
+editable branch of `MedicalProfileEditor`) already looks that way. Making them match would put the
+profile form out of step with the rest of the app's editing, not into step with it.
 
 Empty states: `profile_coparent_empty` when the co-parent exists but has filled nothing;
 `profile_not_paired` when there is no co-parent at all.
