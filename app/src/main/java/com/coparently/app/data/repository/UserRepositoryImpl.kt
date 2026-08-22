@@ -24,7 +24,14 @@ import javax.inject.Singleton
  * Implementation of UserRepository.
  * Maps between domain models (User) and data layer entities (UserEntity).
  * Integrates Firebase Authentication and Firestore for multi-user support.
+ *
+ * At detekt's `TooManyFunctions` threshold: it must implement every [UserRepository] member —
+ * itself over that same threshold, deliberately, per its own class doc — plus the private
+ * mapping helpers ([toDomain], [toEntity], [toUser]) that keep Room, Firestore and the domain
+ * model in sync. Splitting those helpers out would not reduce the real complexity, only hide it
+ * behind another file.
  */
+@Suppress("TooManyFunctions")
 @Singleton
 class UserRepositoryImpl @Inject constructor(
     private val userDao: UserDao,
@@ -428,6 +435,19 @@ class UserRepositoryImpl @Inject constructor(
 
         val updatedUser = currentUser.copy(fcmToken = token)
         updateUser(updatedUser)
+    }
+
+    override suspend fun getRemoteUserProfile(uid: String): User? {
+        return try {
+            firestoreUserDataSource.getUserById(uid)?.toUser()
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (
+            @Suppress("TooGenericExceptionCaught") e: Exception
+        ) {
+            android.util.Log.e(TAG, "Failed to read the remote profile for $uid", e)
+            null
+        }
     }
 
     /** This string unless it is blank, in which case null. */

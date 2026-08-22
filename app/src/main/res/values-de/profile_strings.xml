@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- German translations of profile_strings.xml. -->
+<resources>
+    <string name="profile_my_title">Meine Angaben</string>
+    <string name="profile_coparent_title">Co-Elternteil</string>
+    <string name="profile_name_label">Name</string>
+    <string name="profile_dob_label">Geburtsdatum</string>
+    <string name="profile_phone_label">Telefon</string>
+    <string name="profile_allergies_label">Allergien</string>
+    <string name="profile_save">Speichern</string>
+    <string name="profile_saved">Gespeichert</string>
+    <string name="profile_readonly_note">Nur %1$s kann diese Angaben ändern</string>
+    <string name="profile_coparent_empty">Dein Co-Elternteil hat das noch nicht ausgefüllt</string>
+    <string name="profile_not_paired">Verknüpfe einen Co-Elternteil, um seine Angaben zu sehen</string>
+    <string name="settings_my_profile_title">Meine Angaben</string>
+    <string name="settings_my_profile_description">Deine Kontakt- und Gesundheitsdaten</string>
+    <string name="settings_coparent_profile_title">Angaben des Co-Elternteils</string>
+    <string name="settings_coparent_profile_description">Was dein Co-Elternteil geteilt hat</string>
+</resources>

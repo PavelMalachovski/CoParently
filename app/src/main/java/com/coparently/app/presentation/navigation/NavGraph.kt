@@ -384,6 +384,12 @@ fun NavGraph(
                     onNavigateToCustodySetup = {
                         navController.navigate(Screen.CustodySetup.route)
                     },
+                    onNavigateToMyProfile = {
+                        navController.navigate(Screen.MyProfile.route)
+                    },
+                    onNavigateToCoParentProfile = {
+                        navController.navigate(Screen.CoParentProfile.route)
+                    },
                     onStartGoogleSignIn = googleSignInCallback,
                     onSignOut = {
                         navController.navigate(Screen.Auth.route) {
@@ -487,6 +493,34 @@ fun NavGraph(
                     onNavigateBack = {
                         navController.popBackStack()
                     }
+                )
+            }
+
+            // Both are detail screens: neither route is in BottomNavDestination.topLevelRoutes,
+            // so the bottom bar hides itself automatically, same as Settings/ChildInfo above.
+            composable(
+                route = Screen.MyProfile.route,
+                enterTransition = { slideInFromRight() },
+                exitTransition = { slideOutToLeft() },
+                popEnterTransition = { slideInFromLeft() },
+                popExitTransition = { slideOutToRight() }
+            ) {
+                com.coparently.app.presentation.profile.ProfileScreen(
+                    editable = true,
+                    onNavigateUp = navController::popBackStack
+                )
+            }
+
+            composable(
+                route = Screen.CoParentProfile.route,
+                enterTransition = { slideInFromRight() },
+                exitTransition = { slideOutToLeft() },
+                popEnterTransition = { slideInFromLeft() },
+                popExitTransition = { slideOutToRight() }
+            ) {
+                com.coparently.app.presentation.profile.ProfileScreen(
+                    editable = false,
+                    onNavigateUp = navController::popBackStack
                 )
             }
 
@@ -870,6 +904,12 @@ sealed class Screen(val route: String) {
             if (code.isNullOrEmpty()) "pairing" else "pairing?code=$code"
     }
     data object CustodySetup : Screen("custody_setup")
+
+    /** The signed-in user's own profile — editable. */
+    data object MyProfile : Screen("my_profile")
+
+    /** The co-parent's profile — read-only, `firestore.rules` refuses the write anyway. */
+    data object CoParentProfile : Screen("coparent_profile")
 
     /**
      * The pairing conflict screen. Reached only from an accepted pairing that found two
