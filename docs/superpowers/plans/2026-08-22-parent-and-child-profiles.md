@@ -623,7 +623,7 @@ If the file defines its test-database name under a different constant than `TEST
 `MigrationTestHelper` is instrumented. Run it if a device or emulator is attached:
 
 ```bash
-JAVA_HOME="C:\Program Files\Android\Android Studio1\jbr" ./gradlew connectedDebugAndroidTest --tests "com.coparently.app.data.local.CoPlanlyDatabaseMigrationTest"
+JAVA_HOME="C:\Program Files\Android\Android Studio1\jbr" ./gradlew connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.coparently.app.data.local.CoPlanlyDatabaseMigrationTest
 ```
 
 If `adb devices` lists none, **say so in your report** — do not claim the migration is verified.
@@ -1990,7 +1990,7 @@ adb devices
 If a device or emulator is listed:
 
 ```bash
-JAVA_HOME="C:\Program Files\Android\Android Studio1\jbr" ./gradlew connectedDebugAndroidTest --tests "com.coparently.app.data.local.CoPlanlyDatabaseMigrationTest"
+JAVA_HOME="C:\Program Files\Android\Android Studio1\jbr" ./gradlew connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.coparently.app.data.local.CoPlanlyDatabaseMigrationTest
 ```
 
 If none is listed, **state plainly in your report that the migration is unverified.** There is no
