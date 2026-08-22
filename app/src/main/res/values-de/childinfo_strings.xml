@@ -24,7 +24,7 @@
     <string name="childinfo_section_allergies">Allergien</string>
     <string name="childinfo_section_medical_notes">Medizinische Notizen</string>
     <string name="childinfo_section_emergency_contacts">Notfallkontakte</string>
-    <string name="childinfo_section_school">Schulinformationen</string>
+    <string name="childinfo_section_school">Bildungseinrichtung</string>
     <string name="childinfo_section_teacher">Informationen zur Lehrkraft</string>
 
     <!-- Child info: basic form -->
@@ -95,10 +95,10 @@
     <string name="childinfo_contact_alt_phone_marker">📱 %1$s</string>
 
     <!-- Child info: school editor -->
-    <string name="childinfo_add_school_info">Schulinformationen hinzufügen</string>
-    <string name="childinfo_school_name_label">Name der Schule</string>
+    <string name="childinfo_add_school_info">Bildungseinrichtung hinzufügen</string>
+    <string name="childinfo_school_name_label">Name der Einrichtung</string>
     <string name="childinfo_address_optional_label">Adresse (optional)</string>
-    <string name="childinfo_school_phone_optional_label">Telefon der Schule (optional)</string>
+    <string name="childinfo_school_phone_optional_label">Telefon der Einrichtung (optional)</string>
     <string name="childinfo_grade_optional_label">Klasse (optional)</string>
     <string name="childinfo_grade_placeholder">z. B. 3. Klasse</string>
     <string name="childinfo_teacher_name_optional_label">Name der Lehrkraft (optional)</string>

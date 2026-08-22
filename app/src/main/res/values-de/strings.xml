@@ -99,7 +99,6 @@
     <string name="child_info_activities">Aktivitäten</string>
     <string name="child_info_allergies">Allergien</string>
     <string name="child_info_emergency_contacts">Notfallkontakte</string>
-    <string name="child_info_school">Schulinformationen</string>
     <string name="child_info_empty">Noch keine Kinder hinzugefügt</string>
 
     <!-- Medication Editor -->

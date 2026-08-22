@@ -24,7 +24,7 @@
     <string name="childinfo_section_allergies">Аллергии</string>
     <string name="childinfo_section_medical_notes">Медицинские заметки</string>
     <string name="childinfo_section_emergency_contacts">Экстренные контакты</string>
-    <string name="childinfo_section_school">Информация о школе</string>
+    <string name="childinfo_section_school">Учебное заведение</string>
     <string name="childinfo_section_teacher">Информация об учителе</string>
 
     <!-- Child info: basic form -->
@@ -95,10 +95,10 @@
     <string name="childinfo_contact_alt_phone_marker">📱 %1$s</string>
 
     <!-- Child info: school editor -->
-    <string name="childinfo_add_school_info">Добавить информацию о школе</string>
-    <string name="childinfo_school_name_label">Название школы</string>
+    <string name="childinfo_add_school_info">Добавить учебное заведение</string>
+    <string name="childinfo_school_name_label">Название учебного заведения</string>
     <string name="childinfo_address_optional_label">Адрес (необязательно)</string>
-    <string name="childinfo_school_phone_optional_label">Телефон школы (необязательно)</string>
+    <string name="childinfo_school_phone_optional_label">Телефон заведения (необязательно)</string>
     <string name="childinfo_grade_optional_label">Класс (необязательно)</string>
     <string name="childinfo_grade_placeholder">напр., 3-й класс</string>
     <string name="childinfo_teacher_name_optional_label">Имя учителя (необязательно)</string>

@@ -99,7 +99,6 @@
     <string name="child_info_activities">Занятия</string>
     <string name="child_info_allergies">Аллергии</string>
     <string name="child_info_emergency_contacts">Экстренные контакты</string>
-    <string name="child_info_school">Информация о школе</string>
     <string name="child_info_empty">Пока нет добавленных детей</string>
 
     <!-- Medication Editor -->
