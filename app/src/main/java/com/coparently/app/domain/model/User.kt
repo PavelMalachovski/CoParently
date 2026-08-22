@@ -1,5 +1,7 @@
 package com.coparently.app.domain.model
 
+import java.time.LocalDate
+
 /**
  * Domain model representing a user (parent).
  * This is the clean architecture model used in the domain layer.
@@ -14,6 +16,10 @@ package com.coparently.app.domain.model
  * @property googleCalendarId Optional ID of the Google Calendar for sync
  * @property partnerId Optional ID of the co-parent partner (Firebase UID)
  * @property fcmToken Firebase Cloud Messaging token for push notifications
+ * @property dateOfBirth The parent's own date of birth, or null until recorded
+ * @property phone The parent's own phone number, free text, or null until recorded
+ * @property allergies Allergy strings for the parent, in the same shape as `ChildInfo.allergies`
+ * @property medicalProfile The parent's own emergency medical profile
  */
 data class User(
     val id: String,
@@ -25,6 +31,10 @@ data class User(
     val googleCalendarSyncEnabled: Boolean = false,
     val googleCalendarId: String? = null,
     val partnerId: String? = null,
-    val fcmToken: String? = null
+    val fcmToken: String? = null,
+    val dateOfBirth: LocalDate? = null,
+    val phone: String? = null,
+    val allergies: List<String> = emptyList(),
+    val medicalProfile: MedicalProfile = MedicalProfile()
 )
 

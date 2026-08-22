@@ -6,13 +6,16 @@ import com.coparently.app.data.remote.firebase.FcmService
 import com.coparently.app.data.remote.firebase.FirebaseAuthService
 import com.coparently.app.data.remote.firebase.FirestoreUserDataSource
 import com.coparently.app.data.session.ProfileIdentity
+import com.coparently.app.domain.model.MedicalProfile
 import com.coparently.app.domain.model.User
 import com.coparently.app.domain.repository.UserRepository
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.UserInfo
+import com.google.gson.GsonBuilder
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import java.time.LocalDate
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -29,6 +32,10 @@ class UserRepositoryImpl @Inject constructor(
     private val firestoreUserDataSource: FirestoreUserDataSource,
     private val fcmService: FcmService
 ) : UserRepository {
+
+    private val gson = GsonBuilder()
+        .registerTypeAdapter(LocalDate::class.java, LocalDateJsonAdapter())
+        .create()
 
     override fun getAllUsers(): Flow<List<User>> {
         return userDao.getAllUsers().map { entities ->
@@ -375,7 +382,13 @@ class UserRepositoryImpl @Inject constructor(
                     "googleCalendarSyncEnabled" to user.googleCalendarSyncEnabled,
                     "googleCalendarId" to (user.googleCalendarId ?: ""),
                     "partnerId" to (user.partnerId ?: ""),
-                    "fcmToken" to (user.fcmToken ?: "")
+                    "fcmToken" to (user.fcmToken ?: ""),
+                    "dateOfBirth" to (user.dateOfBirth?.toString() ?: ""),
+                    "phone" to (user.phone ?: ""),
+                    "allergies" to user.allergies,
+                    "medicalProfile" to gson.fromJson(
+                        gson.toJson(user.medicalProfile), Map::class.java
+                    )
                 )
                 firestoreUserDataSource.updateUser(firebaseUser.uid, userData).getOrThrow()
             } catch (e: Exception) {
@@ -437,7 +450,12 @@ class UserRepositoryImpl @Inject constructor(
             googleCalendarSyncEnabled = googleCalendarSyncEnabled,
             googleCalendarId = googleCalendarId,
             partnerId = partnerId,
-            fcmToken = fcmToken
+            fcmToken = fcmToken,
+            dateOfBirth = parseProfileDate(dateOfBirth),
+            phone = phone,
+            allergies = gson.fromJson(allergiesJson, Array<String>::class.java)?.toList().orEmpty(),
+            medicalProfile = gson.fromJson(medicalProfileJson, MedicalProfile::class.java)
+                ?: MedicalProfile()
         )
     }
 
@@ -455,7 +473,11 @@ class UserRepositoryImpl @Inject constructor(
             googleCalendarSyncEnabled = googleCalendarSyncEnabled,
             googleCalendarId = googleCalendarId,
             partnerId = partnerId,
-            fcmToken = fcmToken
+            fcmToken = fcmToken,
+            dateOfBirth = dateOfBirth?.toString(),
+            phone = phone,
+            allergiesJson = gson.toJson(allergies),
+            medicalProfileJson = gson.toJson(medicalProfile)
         )
     }
 
@@ -473,7 +495,13 @@ class UserRepositoryImpl @Inject constructor(
             googleCalendarSyncEnabled = this["googleCalendarSyncEnabled"] as? Boolean ?: false,
             googleCalendarId = this["googleCalendarId"] as? String,
             partnerId = this["partnerId"] as? String,
-            fcmToken = this["fcmToken"] as? String
+            fcmToken = this["fcmToken"] as? String,
+            dateOfBirth = parseProfileDate(this["dateOfBirth"] as? String),
+            phone = (this["phone"] as? String)?.takeIf { it.isNotBlank() },
+            allergies = (this["allergies"] as? List<*>)?.mapNotNull { it as? String }.orEmpty(),
+            medicalProfile = (this["medicalProfile"] as? Map<*, *>)?.let {
+                gson.fromJson(gson.toJson(it), MedicalProfile::class.java)
+            } ?: MedicalProfile()
         )
     }
 
