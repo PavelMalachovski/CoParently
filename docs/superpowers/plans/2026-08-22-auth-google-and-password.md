@@ -16,6 +16,11 @@ kotlinx-coroutines-test.
 
 **Spec:** `docs/superpowers/specs/2026-08-22-auth-google-and-password-design.md`
 
+**Execution order: 1 → 2 → 3 → 5 → (4 + 6 together) → 7.** Task 5's strings and `messageRes()` are
+what Task 6 consumes, so it moves ahead of Task 4. Tasks 4 and 6 are the two halves of one API
+change — neither compiles without the other — so they are implemented in one pass and land as a
+single commit (Task 4 Step 5, Task 6 Step 11).
+
 ## Global Constraints
 
 - **Jetpack Compose only.** Never add an XML layout.
@@ -1074,15 +1079,18 @@ data class AuthUiState(
 ./gradlew testDebugUnitTest --tests "com.coparently.app.presentation.auth.AuthViewModelTest"
 ```
 
-Expected: 8 tests PASS. The build still fails to assemble at this point — `AuthScreen.kt` reads
-`uiState.errorMessage` and calls `signIn(onSuccess)`. Task 6 fixes it.
+Expected: 8 tests PASS. `./gradlew assembleDebug` will **not** succeed yet — `AuthScreen.kt` still
+reads `uiState.errorMessage` and calls `signIn(onSuccess)`. That is expected at this point.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Continue straight into Task 6, then commit both together**
 
-```bash
-git add app/src/main/java/com/coparently/app/presentation/auth/AuthViewModel.kt app/src/test/java/com/coparently/app/presentation/auth/AuthViewModelTest.kt
-git commit -m "feat(auth): offer to remember the password, and stop reporting failures twice"
-```
+**This task does not commit on its own.** `AuthViewModel` and `AuthScreen` are two halves of one
+API change: a commit carrying only the first does not compile, and the repository merges pull
+requests with merge commits, so it would sit in `main`'s history permanently and break `git
+bisect` across the range.
+
+Do Task 6 now, in the same working tree, and make the single commit at Task 6's final step.
+Task 6's brief accompanies this one.
 
 ---
 
@@ -1455,11 +1463,14 @@ leave it.
 
 Expected: BUILD SUCCESSFUL; all tests pass, including Tasks 1, 2 and 4.
 
-- [ ] **Step 11: Commit**
+- [ ] **Step 11: Commit — both halves of the API change together**
+
+Task 4's files go in this commit too. Neither half compiles without the other, so they are one
+commit; see Task 4 Step 5.
 
 ```bash
-git add app/src/main/java/com/coparently/app/presentation/auth/AuthScreen.kt
-git commit -m "feat(auth): speak the user's language on the login screen, and drop the dead reset link"
+git add app/src/main/java/com/coparently/app/presentation/auth/AuthViewModel.kt app/src/test/java/com/coparently/app/presentation/auth/AuthViewModelTest.kt app/src/main/java/com/coparently/app/presentation/auth/AuthScreen.kt
+git commit -m "feat(auth): remember the password, speak the user's language, report failures once"
 ```
 
 ---
