@@ -28,6 +28,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import java.util.Locale
 
 /**
  * Shared building blocks introduced by the August 2026 design refresh.
@@ -51,7 +52,13 @@ private val PILL_CORNER = 16.dp
 /**
  * An uppercase label above a [SectionGroup], e.g. "FAMILY".
  *
- * @param text Label text; rendered as given, so pass an already-uppercased resource
+ * Uppercasing happens here, not in the string resource: a resource is sometimes legitimately
+ * shared with a screen that needs it in sentence case (`childinfo_section_*` is also a form
+ * header in `AddEditChildInfoScreen`), so baking the casing into the value would leak into that
+ * other caller. Centralizing it here means every caller can pass its string as authored and get
+ * the same label styling regardless of how that string is cased or reused elsewhere.
+ *
+ * @param text Label text, in whatever case it is authored; uppercased for display
  * @param modifier Modifier applied to the label
  */
 @Composable
@@ -60,7 +67,7 @@ fun GroupLabel(
     modifier: Modifier = Modifier
 ) {
     Text(
-        text = text,
+        text = text.uppercase(Locale.getDefault()),
         style = MaterialTheme.typography.labelMedium,
         fontWeight = FontWeight.SemiBold,
         color = MaterialTheme.colorScheme.primary,
