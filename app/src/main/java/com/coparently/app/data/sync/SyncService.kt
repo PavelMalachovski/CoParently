@@ -247,6 +247,44 @@ class SyncService @Inject constructor(
     }
 
     /**
+     * Re-publishes this user's own child info once per co-parent, so rows written before pairing
+     * become readable by that co-parent.
+     *
+     * Without this, item 5 fails silently in the one case that matters most: a parent fills in
+     * everything about their child, *then* invites the other parent, and the other parent sees an
+     * empty screen with no error.
+     *
+     * Two rules are copied deliberately from [backfillAudienceForPartner] rather than simplified:
+     *
+     * - The marker stores the **partner's UID**, not a flag. A flag never re-arms when the same
+     *   two people pair again after an unpair, and the pair then looks correctly linked while
+     *   everything from before stays invisible to one of them.
+     * - When unpaired the marker is **blanked**, not left alone. Leaving it naming an ex-partner
+     *   means re-pairing with that same person finds it already equal and skips the backfill.
+     *   `EncryptedPreferences` has no generic remove, and a blank value can never equal a real
+     *   UID, so it re-arms exactly as an absent marker does.
+     */
+    private suspend fun backfillChildInfoAudienceForPartner(userId: String, partnerId: String?) {
+        val key = "${PreferenceKeys.CHILD_INFO_AUDIENCE_BACKFILL_PREFIX}$userId"
+
+        if (partnerId == null) {
+            if (!encryptedPreferences.getString(key).isNullOrBlank()) {
+                encryptedPreferences.putString(key, "")
+            }
+            return
+        }
+        if (encryptedPreferences.getString(key) == partnerId) return
+
+        val requeued = childInfoDao.markOwnChildInfoUnsynced(userId)
+        encryptedPreferences.putString(key, partnerId)
+        Log.i(
+            TAG,
+            "Child-info audience backfill for $userId with partner $partnerId: " +
+                "re-queued $requeued row(s)"
+        )
+    }
+
+    /**
      * Resolves the `sharedWith` audience for an event upload.
      *
      * The audience is the entitled set derived from live state — the uploader, the
@@ -289,6 +327,9 @@ class SyncService @Inject constructor(
      * Syncs child information between local database and Firestore.
      */
     private suspend fun syncChildInfo(userId: String) {
+        val partnerId = userDao.getUserById(userId)?.partnerId?.takeIf { it.isNotBlank() }
+        backfillChildInfoAudienceForPartner(userId, partnerId)
+
         // Upload unsynced local child info
         val unsyncedChildInfo = childInfoDao.getUnsyncedChildInfo()
 
@@ -307,13 +348,11 @@ class SyncService @Inject constructor(
                 "updatedAt" to entity.updatedAt.format(formatter),
                 "createdByFirebaseUid" to entity.createdByFirebaseUid,
                 "lastModifiedBy" to entity.lastModifiedBy,
-                // SEPARATE CONCERN, deliberately not changed here: the co-parent is never
-                // added, so a paired parent cannot see child info the other created. That is
-                // a missing-visibility feature needing an audience policy of its own (the
-                // entitled-set `shareTargets` above is the shape it would take), not the
-                // data-corruption bug the UseLocal branch below fixes. Widening it silently
-                // would also change what the unpair sweep has to undo.
-                "sharedWith" to listOfNotNull(entity.createdByFirebaseUid, entity.lastModifiedBy).distinct()
+                "sharedWith" to ChildInfoAudience.entitled(
+                    userId = userId,
+                    creatorUid = entity.createdByFirebaseUid,
+                    partnerId = partnerId
+                )
             )
 
             val result = firestoreChildInfoDataSource.upsertChildInfo(entity.id, childInfoData)
@@ -321,8 +360,6 @@ class SyncService @Inject constructor(
                 childInfoDao.markAsSynced(entity.id)
 
                 // Notify partner
-                val localUser = userDao.getUserById(userId)
-                val partnerId = localUser?.partnerId
                 if (partnerId != null && partnerId != userId) {
                     notifyChildInfoUpdate(partnerId, entity.id, entity.childName)
                 }
