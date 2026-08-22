@@ -21,7 +21,14 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /** An email and password handed back by the system's password manager. */
-data class SavedPassword(val email: String, val password: String)
+data class SavedPassword(val email: String, val password: String) {
+
+    /**
+     * Overrides the generated `toString()` so a real password can never leak into a log line, an
+     * exception message, or a MockK verification failure printed to a build log.
+     */
+    override fun toString(): String = "SavedPassword(email=$email)"
+}
 
 /**
  * The three Credential Manager operations that get a parent into the app.

@@ -95,9 +95,11 @@ context on many devices; a full-screen sign-in flow is exactly the case that doe
 
 `androidx.activity:activity-compose` is at 1.9.3, which predates `LocalActivity` (added in
 1.10.0). Rather than bump it for one accessor, a `Context.findActivity()` extension unwraps
-`ContextWrapper` until it reaches an `Activity`. The project already casts `LocalContext.current`
-to `Activity` in `AdaptiveDimensions.kt` and `Theme.kt`, so this formalises an existing move
-instead of introducing one.
+`ContextWrapper` until it reaches an `Activity`. This is a new idiom for the project, not a
+formalisation of an existing one: `AdaptiveDimensions.kt:31` still does `context as? Activity`
+and `Theme.kt:145` still does `(view.context as Activity)`. Both are left as they are — this
+package touches the auth screen only — but they are exactly the two call sites `findActivity()`
+was written to replace, and are tracked as a follow-up (§7).
 
 The `Activity` is passed **per call**, never stored: a ViewModel outlives the Activity and
 holding a reference leaks it.
@@ -112,8 +114,13 @@ holding a reference leaks it.
 | Operation | Credential Manager call | Returns |
 |---|---|---|
 | `signInWithGoogle(activity)` | `getCredential` + `GetSignInWithGoogleOption` | Google id token |
-| `savePassword(activity, email, password)` | `createCredential` + `CreatePasswordRequest` | whether the user accepted |
+| `savePassword(activity, email, password)` | `createCredential` + `CreatePasswordRequest` | `Unit` |
 | `getSavedPassword(activity)` | `getCredential` + `GetPasswordOption` | email + password, or absent |
+
+`savePassword` returns `Unit`, not whether the save succeeded. It swallows every
+`CreateCredentialException` internally (§4.3) precisely so that a declined save has no signal to
+report — the alternative, a `Boolean`, would let a caller mistake "user tapped Never" for "sign-in
+failed" and act on that distinction, which is exactly the outcome §4.3 rules out.
 
 Why a new class rather than an addition to `CredentialManagerService`: that class is 340 lines
 about a different problem — OAuth access/refresh tokens for the Google **Calendar** API, obtained
@@ -162,14 +169,32 @@ silence.
 ```
 AuthError
   EmptyFields | InvalidCredentials | EmailAlreadyInUse | WeakPassword | InvalidEmail
-  Network | TooManyRequests
-  GoogleCancelled | GoogleInterrupted | GoogleNoAccount | GoogleFailed
-  NoSavedPassword
+  UserDisabled | Network | TooManyRequests
+  Interrupted | NoGoogleAccount | NoSavedPassword
   Unknown
 ```
 
-`AuthError.from(Throwable)` maps `FirebaseAuthException` error codes and `GetCredentialException`
-subtypes. It is pure Kotlin with no Android dependency, so it is covered by an ordinary JVM test.
+There is no single `AuthError.from(Throwable)`. `NoCredentialException` is the same exception
+type on both credential paths but means opposite things — "no Google account chosen" on one,
+"nothing saved yet" on the other — so one mapping function cannot serve both without a flag
+saying which path it came from, which is a worse shape than two functions. `AuthError.kt` has
+three entry points instead:
+
+- `fromEmailPassword(cause)` — the typed-form path. Never returns null: typing an email and a
+  password has no "user changed their mind" outcome, so every failure here is worth reporting.
+- `fromGoogle(cause)` — the Google path. Returns null for `GetCredentialCancellationException`
+  (the user dismissed the sheet), `Interrupted` for `GetCredentialInterruptedException`,
+  `NoGoogleAccount` for `NoCredentialException`, otherwise falls back to the same Firebase-code
+  mapping `fromEmailPassword` uses.
+- `fromSavedPassword(cause)` — the saved-password path. Same shape as `fromGoogle`, except
+  `NoCredentialException` maps to `NoSavedPassword`.
+
+A `null` return is the contract for "the user deliberately cancelled" on both credential-backed
+entry points: the caller (`AuthViewModel`) must clear the displayed error rather than substitute
+`Unknown`, and must not report it to Crashlytics — a stream of deliberate cancellations would
+bury the real failures. `fromEmailPassword` has no such case because there is nothing to
+dismiss. All three functions are pure Kotlin with no Android dependency, so all three are
+covered by an ordinary JVM test.
 
 `AuthErrorText.kt` holds `@StringRes fun AuthError.messageRes(): Int` — the composable resolves it
 with `stringResource`, where that is legal. Returning the id rather than the resolved string keeps
@@ -232,3 +257,9 @@ Credential Manager itself cannot be unit-tested. It needs a device run:
 - **`androidx.credentials` resolves to `1.3.0-beta01`, not the declared `1.2.2`.** `googleid:1.1.1`
   pulls it up. A beta ships in production while the build file names a stable version. Decide
   whether to declare the beta explicitly or hold `googleid` back.
+- **`AdaptiveDimensions.kt:31` and `Theme.kt:145` still use the pre-`findActivity()` idiom** (§3).
+  `AdaptiveDimensions.kt:31`'s `context as? Activity` silently yields null through whatever
+  `ContextWrapper` the context actually is, so a real Activity behind a wrapper is missed without
+  any signal; `Theme.kt:145`'s unchecked `(view.context as Activity)` throws instead of returning
+  null in the same situation. Route both through `findActivity()` (`utils/Extensions.kt`) — it
+  is used by `AuthScreen.kt` only today, so this would be its first use beyond that one screen.

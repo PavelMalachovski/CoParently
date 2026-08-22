@@ -2,6 +2,7 @@ package com.coparently.app.presentation.auth
 
 import android.app.Activity
 import androidx.credentials.exceptions.GetCredentialCancellationException
+import androidx.credentials.exceptions.GetCredentialUnknownException
 import androidx.credentials.exceptions.NoCredentialException
 import com.coparently.app.data.crashlytics.CrashlyticsManager
 import com.coparently.app.data.remote.firebase.FirebaseAuthService
@@ -13,8 +14,12 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
 import io.mockk.verify
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -172,5 +177,97 @@ class AuthViewModelTest {
         advanceUntilIdle()
 
         coVerify(exactly = 0) { credentialAuthenticator.savePassword(any(), any(), any()) }
+    }
+
+    /**
+     * Regression coverage for the isLoading-stuck-forever defect: both [AuthViewModel.signInWithGoogle]
+     * and [AuthViewModel.signInWithSavedPassword] run from a `rememberCoroutineScope()` in
+     * `AuthScreen` that a configuration change cancels mid-flight, and the narrowed exception
+     * catch in `CredentialAuthenticator` (correct for detekt) no longer clears `isLoading` by
+     * accident the way a blanket `catch (e: Exception)` used to.
+     */
+    @Test
+    fun `cancelling signInWithGoogle mid-flight leaves isLoading false`() = runTest(dispatcher) {
+        coEvery { credentialAuthenticator.signInWithGoogle(any()) } coAnswers { awaitCancellation() }
+
+        val job = launch { viewModel.signInWithGoogle(activity) }
+        advanceUntilIdle()
+        assertTrue(viewModel.uiState.value.isLoading, "should be loading while getCredential is suspended")
+
+        job.cancelAndJoin()
+
+        assertFalse(
+            viewModel.uiState.value.isLoading,
+            "cancelling the hosting coroutine must not leave every control on screen disabled"
+        )
+    }
+
+    @Test
+    fun `cancelling signInWithSavedPassword mid-flight leaves isLoading false`() = runTest(dispatcher) {
+        coEvery { credentialAuthenticator.getSavedPassword(any()) } coAnswers { awaitCancellation() }
+
+        val job = launch { viewModel.signInWithSavedPassword(activity) }
+        advanceUntilIdle()
+        assertTrue(viewModel.uiState.value.isLoading, "should be loading while getCredential is suspended")
+
+        job.cancelAndJoin()
+
+        assertFalse(
+            viewModel.uiState.value.isLoading,
+            "cancelling the hosting coroutine must not leave every control on screen disabled"
+        )
+    }
+
+    @Test
+    fun `a cancellation surfacing from FirebaseAuthService is not treated as a sign-in failure`() =
+        runTest(dispatcher) {
+            // FirebaseAuthService catches Exception broadly, so a coroutine cancellation crosses
+            // it disguised as an ordinary Result.failure - this is what that looks like arriving.
+            coEvery { credentialAuthenticator.getSavedPassword(any()) } returns
+                Result.success(SavedPassword("saved@example.com", "s3cret"))
+            coEvery { firebaseAuthService.signInWithEmail(any(), any()) } returns
+                Result.failure(CancellationException("scope cancelled"))
+
+            val job = launch { viewModel.signInWithSavedPassword(activity) }
+            advanceUntilIdle()
+
+            assertTrue(job.isCancelled, "rethrowing must cancel this coroutine rather than crash it")
+            assertNull(viewModel.uiState.value.error, "a cancellation must never surface as an AuthError")
+            assertFalse(viewModel.uiState.value.isLoading)
+            verify(exactly = 0) { crashlyticsManager.recordExceptionWithContext(any(), any()) }
+        }
+
+    @Test
+    fun `the same cancellation guard protects the typed sign-in path`() = runTest(dispatcher) {
+        // signIn() is not itself suspend - it launches on viewModelScope internally - but that
+        // scope is torn down along with the ViewModel if the backstack entry is popped mid-call,
+        // which produces the same cancel-disguised-as-Result.failure shape from FirebaseAuthService.
+        coEvery { firebaseAuthService.signInWithEmail(any(), any()) } returns
+            Result.failure(CancellationException("view model cleared"))
+
+        var navigated = false
+        viewModel.signIn(activity) { navigated = true }
+        advanceUntilIdle()
+
+        assertFalse(navigated, "must not navigate on a cancellation")
+        assertNull(viewModel.uiState.value.error, "a cancellation must never surface as an AuthError")
+        verify(exactly = 0) { crashlyticsManager.recordExceptionWithContext(any(), any()) }
+    }
+
+    @Test
+    fun `a genuine saved-password credential failure reaches Crashlytics`() = runTest(dispatcher) {
+        val failure = GetCredentialUnknownException()
+        coEvery { credentialAuthenticator.getSavedPassword(any()) } returns Result.failure(failure)
+
+        viewModel.signInWithSavedPassword(activity)
+        advanceUntilIdle()
+
+        verify {
+            crashlyticsManager.recordExceptionWithContext(
+                failure,
+                mapOf("action" to "saved_password_credential")
+            )
+        }
+        assertFalse(viewModel.uiState.value.isLoading)
     }
 }
