@@ -5,11 +5,13 @@ import com.coparently.app.data.local.entity.ChildInfoEntity
 import com.coparently.app.data.remote.firebase.FirebaseAuthService
 import com.coparently.app.data.remote.firebase.FirestoreChildInfoDataSource
 import com.coparently.app.domain.model.ChildInfo
+import com.coparently.app.domain.model.MedicalProfile
 import com.coparently.app.domain.repository.ChildInfoRepository
-import com.google.gson.Gson
+import com.google.gson.GsonBuilder
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
+import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import javax.inject.Inject
@@ -26,7 +28,9 @@ class ChildInfoRepositoryImpl @Inject constructor(
     private val firestoreChildInfoDataSource: FirestoreChildInfoDataSource
 ) : ChildInfoRepository {
 
-    private val gson = Gson()
+    private val gson = GsonBuilder()
+        .registerTypeAdapter(LocalDate::class.java, LocalDateJsonAdapter())
+        .create()
     private val formatter = DateTimeFormatter.ISO_LOCAL_DATE_TIME
 
     override fun getAllChildInfo(): Flow<List<ChildInfo>> {
@@ -112,6 +116,8 @@ class ChildInfoRepositoryImpl @Inject constructor(
             medicalNotes = medicalNotes,
             emergencyContacts = gson.fromJson(emergencyContactsJson, Array<com.coparently.app.domain.model.EmergencyContact>::class.java).toList(),
             schoolInfo = schoolInfoJson?.let { gson.fromJson(it, com.coparently.app.domain.model.SchoolInfo::class.java) },
+            medicalProfile = gson.fromJson(medicalProfileJson, MedicalProfile::class.java)
+                ?: MedicalProfile(),
             createdAt = createdAt,
             updatedAt = updatedAt,
             createdByFirebaseUid = createdByFirebaseUid,
@@ -134,6 +140,7 @@ class ChildInfoRepositoryImpl @Inject constructor(
             medicalNotes = medicalNotes,
             emergencyContactsJson = gson.toJson(emergencyContacts),
             schoolInfoJson = schoolInfo?.let { gson.toJson(it) },
+            medicalProfileJson = gson.toJson(medicalProfile),
             createdAt = createdAt,
             updatedAt = updatedAt,
             createdByFirebaseUid = createdByFirebaseUid,
@@ -179,6 +186,7 @@ class ChildInfoRepositoryImpl @Inject constructor(
                 "teacherEmail" to it.teacherEmail,
                 "grade" to it.grade
             )},
+            "medicalProfile" to gson.fromJson(gson.toJson(medicalProfile), Map::class.java),
             "createdAt" to createdAt.format(formatter),
             "updatedAt" to updatedAt.format(formatter),
             "createdByFirebaseUid" to createdByFirebaseUid,
@@ -233,6 +241,9 @@ class ChildInfoRepositoryImpl @Inject constructor(
                     grade = it["grade"] as? String
                 )
             },
+            medicalProfile = (this["medicalProfile"] as? Map<*, *>)?.let {
+                gson.fromJson(gson.toJson(it), MedicalProfile::class.java)
+            } ?: MedicalProfile(),
             createdAt = LocalDateTime.parse(this["createdAt"] as String, formatter),
             updatedAt = LocalDateTime.parse(this["updatedAt"] as String, formatter),
             createdByFirebaseUid = this["createdByFirebaseUid"] as? String,

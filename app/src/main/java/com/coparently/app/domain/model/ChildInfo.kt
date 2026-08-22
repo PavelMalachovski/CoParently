@@ -15,6 +15,8 @@ import java.time.LocalDateTime
  * @property medicalNotes Additional medical notes
  * @property emergencyContacts List of emergency contact information
  * @property schoolInfo Information about the child's school
+ * @property medicalProfile Emergency-relevant medical facts: blood type, intolerances,
+ *   hereditary conditions and vaccinations. Defaults to an empty profile, not null.
  * @property createdAt Timestamp when the info was created
  * @property updatedAt Timestamp when the info was last updated
  * @property createdByFirebaseUid Firebase UID of the user who created this info
@@ -31,6 +33,7 @@ data class ChildInfo(
     val medicalNotes: String? = null,
     val emergencyContacts: List<EmergencyContact> = emptyList(),
     val schoolInfo: SchoolInfo? = null,
+    val medicalProfile: MedicalProfile = MedicalProfile(),
     val createdAt: LocalDateTime,
     val updatedAt: LocalDateTime,
     val createdByFirebaseUid: String? = null,
