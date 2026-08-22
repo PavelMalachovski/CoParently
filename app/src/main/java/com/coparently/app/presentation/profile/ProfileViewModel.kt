@@ -15,9 +15,11 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import java.time.LocalDate
 import javax.inject.Inject
 
@@ -25,12 +27,18 @@ import javax.inject.Inject
  * State of a profile screen — the signed-in parent's own, and the co-parent's.
  *
  * @property me The signed-in user, or null before the first load
+ * @property meUnavailable True once waiting for [me]'s Room row has timed out — either the
+ *   [com.coparently.app.domain.repository.UserRepository.ensureProfile] write is taking
+ *   unusually long, or (the name-less identity path) it is never going to arrive at all. The
+ *   screen should offer a retry instead of spinning forever. Always false while [me] is set,
+ *   and reset to false as soon as a new load attempt starts.
  * @property coParent The co-parent's profile, or null when unpaired or not yet loaded
  * @property isSaving Whether a save is in flight
  * @property savedAt Epoch millis of the last successful save, for a transient confirmation
  */
 data class ProfileUiState(
     val me: User? = null,
+    val meUnavailable: Boolean = false,
     val coParent: User? = null,
     val isSaving: Boolean = false,
     val savedAt: Long? = null
@@ -44,11 +52,20 @@ data class ProfileUiState(
  * same split [com.coparently.app.presentation.common.ParentsSource] documents for its own
  * `Parents` type:
  * - **[me]** comes from Room, keyed by [UserRepository.observeCurrentUserId] so a sign-in,
- *   sign-out or account switch reloads it. It is deliberately **not** re-read on every Room
- *   emission of that row — only on an identity change — so a save this ViewModel itself just
- *   made, or an unrelated background sync, can never clobber an in-progress edit. That is the
- *   exact shape of the `ChildInfoViewModel` bug CLAUDE.md's "Known issues" records: a
- *   screen-lifetime subscription overwriting a draft the user is mid-edit on.
+ *   sign-out or account switch reloads it. For each identity, [observeMe] waits on
+ *   [UserRepository.observeUserById] only until its **first** non-null row, then stops
+ *   collecting — it does not stay subscribed for the rest of the screen's lifetime. That one
+ *   difference matters both ways: waiting (rather than a single [UserRepository.getUserById]
+ *   read) is what lets a screen opened in the window between sign-in and
+ *   [UserRepository.ensureProfile]'s asynchronous write still receive the row once it lands,
+ *   instead of leaving [me] null forever; stopping after that first row is what stops a save
+ *   this ViewModel itself just made, or an unrelated background sync, from clobbering an
+ *   in-progress edit — the exact shape of the `ChildInfoViewModel` bug CLAUDE.md's "Known
+ *   issues" records, a screen-lifetime subscription overwriting a draft the user is mid-edit
+ *   on. A row that still has not appeared after [ME_LOAD_TIMEOUT_MILLIS] sets
+ *   [ProfileUiState.meUnavailable] instead of waiting forever, for the one case waiting can
+ *   never resolve on its own: the name-less identity path in `ensureProfile` creates no local
+ *   row at all.
  * - **[coParent]** comes from [UserRepository.getRemoteUserProfile], a direct
  *   `users/{uid}` read, once per co-parent uid reported by [PairingRepository.observePairingState] —
  *   never from [UserRepository.getAllUsers], which only ever holds a row for the signed-in
@@ -78,15 +95,46 @@ class ProfileViewModel @Inject constructor(
 
     /**
      * Loads the signed-in user's own record on every identity change (sign-in, sign-out,
-     * account switch) — not on every Room emission of that row, which would also fire on this
-     * ViewModel's own [save] and clobber whatever the user is mid-edit on.
+     * account switch). See this class's doc for why waiting on the first row and then letting
+     * go of the subscription — rather than either a single read or a lifetime-long one — is
+     * the shape that fixes both the cold-start race and the mid-edit clobber at once.
      */
     private fun observeMe() {
         viewModelScope.launch {
             userRepository.observeCurrentUserId().collectLatest { uid ->
-                val me = uid?.let { userRepository.getUserById(it) }
-                _uiState.update { it.copy(me = me) }
+                if (uid == null) {
+                    _uiState.update { it.copy(me = null, meUnavailable = false) }
+                    return@collectLatest
+                }
+                loadMe(uid)
             }
+        }
+    }
+
+    /**
+     * Waits for [uid]'s Room row to exist, bounded by [ME_LOAD_TIMEOUT_MILLIS], and publishes
+     * the outcome either way. Shared by [observeMe] and [retryLoadingMe] so a retry after a
+     * timeout goes through the exact same wait, not a copy of it.
+     */
+    private suspend fun loadMe(uid: String) {
+        _uiState.update { it.copy(meUnavailable = false) }
+        val me = withTimeoutOrNull(ME_LOAD_TIMEOUT_MILLIS) {
+            userRepository.observeUserById(uid).first { it != null }
+        }
+        _uiState.update { it.copy(me = me, meUnavailable = me == null) }
+    }
+
+    /**
+     * Retries after [ProfileUiState.meUnavailable]. Re-runs [UserRepository.ensureProfile] —
+     * best-effort and idempotent, the same call [com.coparently.app.data.session.SessionProfileSynchronizer]
+     * already makes on every sign-in — in case the write that never finished is exactly what
+     * this is waiting on, then waits again for the row.
+     */
+    fun retryLoadingMe() {
+        viewModelScope.launch {
+            val uid = userRepository.getCurrentUserId() ?: return@launch
+            userRepository.ensureProfile()
+            loadMe(uid)
         }
     }
 
@@ -133,26 +181,53 @@ class ProfileViewModel @Inject constructor(
     }
 
     /**
-     * Persists the current draft of [ProfileUiState.me] — to Room and, best-effort, to
-     * Firestore (see [UserRepository.updateUser]). A failure is logged and swallowed rather
-     * than surfaced: the local write already succeeded, and there is nothing destructive left
-     * to undo.
+     * Persists the fields this screen owns — name, date of birth, phone, allergies, medical
+     * profile — to Room and, best-effort, to Firestore (see [UserRepository.updateUser]). A
+     * failure is logged and swallowed rather than surfaced: the local write already succeeded,
+     * and there is nothing destructive left to undo.
+     *
+     * Deliberately does **not** send [ProfileUiState.me] itself: that draft was loaded once,
+     * on the last identity change, and is as stale as the time the user spent on this form.
+     * `User` also carries `partnerId` and `fcmToken`, and [UserRepository.updateUser] writes
+     * both straight through — so a stale draft resurrects whatever `partnerId` this screen
+     * happened to load with. Concretely: A opens their profile while paired with B; B unpairs;
+     * the server clears both sides and `SyncWorker` writes `partnerId = null` into A's Room row;
+     * A, still on the open screen, edits a field and saves. Sending the stale draft would put
+     * `partnerId: "bob"` straight back into Room and Firestore, handing B back read access to
+     * A's phone, date of birth, medical profile, expenses and budgets — undoing an unpair the
+     * user never asked to reverse.
+     *
+     * So this re-reads the user's row immediately before saving and copies only the fields the
+     * form actually edited onto that fresh copy; everything else — `partnerId`, `fcmToken`,
+     * `role`, `colorCode`, and so on — comes from whatever is current right now, the same way
+     * every other writer in this codebase touches one field via a fresh Room read rather than
+     * a held snapshot (see `updateFcmToken`, or the `role` comment in `updateUser` itself).
      */
     fun save() {
-        val me = _uiState.value.me ?: return
+        val draft = _uiState.value.me ?: return
         if (_uiState.value.isSaving) return
 
         viewModelScope.launch {
             _uiState.update { it.copy(isSaving = true) }
             try {
-                userRepository.updateUser(me)
-                _uiState.update { it.copy(isSaving = false, savedAt = System.currentTimeMillis()) }
+                val fresh = userRepository.getUserById(draft.id) ?: draft
+                val toSave = fresh.copy(
+                    name = draft.name,
+                    dateOfBirth = draft.dateOfBirth,
+                    phone = draft.phone,
+                    allergies = draft.allergies,
+                    medicalProfile = draft.medicalProfile
+                )
+                userRepository.updateUser(toSave)
+                _uiState.update {
+                    it.copy(me = toSave, isSaving = false, savedAt = System.currentTimeMillis())
+                }
             } catch (e: CancellationException) {
                 throw e
             } catch (
                 @Suppress("TooGenericExceptionCaught") e: Exception
             ) {
-                Log.e(TAG, "Failed to save the profile for ${me.id}", e)
+                Log.e(TAG, "Failed to save the profile for ${draft.id}", e)
                 _uiState.update { it.copy(isSaving = false) }
             }
         }
@@ -160,5 +235,8 @@ class ProfileViewModel @Inject constructor(
 
     private companion object {
         const val TAG = "ProfileViewModel"
+
+        /** Same value [ChatViewModel]'s own pairing-resolve wait uses. */
+        const val ME_LOAD_TIMEOUT_MILLIS = 5000L
     }
 }

@@ -13,6 +13,7 @@
     <string name="profile_readonly_note">Only %1$s can change these details</string>
     <string name="profile_coparent_empty">Your co-parent has not filled this in yet</string>
     <string name="profile_not_paired">Link a co-parent to see their details</string>
+    <string name="profile_load_failed">Couldn\'t load your profile</string>
     <string name="settings_my_profile_title">My details</string>
     <string name="settings_my_profile_description">Your contact and medical details</string>
     <string name="settings_coparent_profile_title">Co-parent details</string>

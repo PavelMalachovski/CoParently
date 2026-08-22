@@ -119,6 +119,7 @@ fun ProfileScreen(
         ProfileContent(
             editable = editable,
             person = person,
+            meUnavailable = uiState.meUnavailable,
             paddingValues = paddingValues,
             viewModel = viewModel
         )
@@ -149,6 +150,7 @@ private fun ProfileTopBar(editable: Boolean, onNavigateUp: () -> Unit) {
 private fun ProfileContent(
     editable: Boolean,
     person: User?,
+    meUnavailable: Boolean,
     paddingValues: PaddingValues,
     viewModel: ProfileViewModel
 ) {
@@ -161,10 +163,10 @@ private fun ProfileContent(
         verticalArrangement = Arrangement.spacedBy(20.dp)
     ) {
         if (editable) {
-            if (person == null) {
-                ProfileLoadingIndicator()
-            } else {
-                MyProfileContent(
+            when {
+                meUnavailable -> ProfileLoadFailed(onRetry = viewModel::retryLoadingMe)
+                person == null -> ProfileLoadingIndicator()
+                else -> MyProfileContent(
                     person = person,
                     onNameChange = viewModel::updateName,
                     onDateOfBirthChange = viewModel::updateDateOfBirth,
@@ -221,6 +223,34 @@ private fun ProfileLoadingIndicator(modifier: Modifier = Modifier) {
         contentAlignment = Alignment.Center
     ) {
         CircularProgressIndicator()
+    }
+}
+
+/**
+ * Shown instead of [ProfileLoadingIndicator] once [ProfileViewModel] gives up waiting for the
+ * signed-in user's Room row — either [com.coparently.app.domain.repository.UserRepository.ensureProfile]
+ * is taking unusually long, or the name-less identity path never created a row at all. Either
+ * way an endless spinner gave the user nothing to do; this gives them a retry.
+ */
+@Composable
+private fun ProfileLoadFailed(onRetry: () -> Unit, modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 48.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        Text(
+            text = stringResource(R.string.profile_load_failed),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth()
+        )
+        OutlinedButton(onClick = onRetry) {
+            Text(stringResource(R.string.common_action_retry))
+        }
     }
 }
 

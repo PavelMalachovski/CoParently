@@ -12,6 +12,7 @@
     <string name="profile_readonly_note">Nur %1$s kann diese Angaben ändern</string>
     <string name="profile_coparent_empty">Dein Co-Elternteil hat das noch nicht ausgefüllt</string>
     <string name="profile_not_paired">Verknüpfe einen Co-Elternteil, um seine Angaben zu sehen</string>
+    <string name="profile_load_failed">Dein Profil konnte nicht geladen werden</string>
     <string name="settings_my_profile_title">Meine Angaben</string>
     <string name="settings_my_profile_description">Deine Kontakt- und Gesundheitsdaten</string>
     <string name="settings_coparent_profile_title">Angaben des Co-Elternteils</string>

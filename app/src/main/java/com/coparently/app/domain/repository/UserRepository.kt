@@ -30,6 +30,18 @@ interface UserRepository {
     suspend fun getUserById(id: String): User?
 
     /**
+     * Observes a user by ID, re-emitting whenever the row changes.
+     *
+     * Emits null while no row exists yet: the profile row is written by [ensureProfile]
+     * shortly after sign-in, so a fresh session legitimately observes nothing for a moment.
+     * A one-shot [getUserById] read taken inside that window returns null and never
+     * refreshes — this is what [ProfileViewModel][com.coparently.app.presentation.profile.ProfileViewModel]
+     * waits on instead, so a screen opened during the race still receives the row once
+     * [ensureProfile] finishes writing it.
+     */
+    fun observeUserById(id: String): Flow<User?>
+
+    /**
      * Gets a user by email.
      */
     suspend fun getUserByEmail(email: String): User?

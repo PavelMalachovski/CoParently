@@ -12,6 +12,7 @@
     <string name="profile_readonly_note">Tyto údaje může měnit pouze %1$s</string>
     <string name="profile_coparent_empty">Druhý rodič to zatím nevyplnil</string>
     <string name="profile_not_paired">Propojte se s druhým rodičem, abyste viděli jeho údaje</string>
+    <string name="profile_load_failed">Váš profil se nepodařilo načíst</string>
     <string name="settings_my_profile_title">Moje údaje</string>
     <string name="settings_my_profile_description">Vaše kontaktní a zdravotní údaje</string>
     <string name="settings_coparent_profile_title">Údaje druhého rodiče</string>

@@ -2,6 +2,8 @@ package com.coparently.app.presentation.childinfo.components
 
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.res.stringResource
+import com.coparently.app.R
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneId
@@ -40,12 +42,12 @@ fun DatePickerDialog(
                     onDismiss()
                 }
             ) {
-                Text("OK")
+                Text(stringResource(R.string.childinfo_ok))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text(stringResource(R.string.childinfo_cancel))
             }
         }
     ) {

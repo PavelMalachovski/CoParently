@@ -54,6 +54,9 @@ class UserRepositoryImpl @Inject constructor(
         return userDao.getUserById(id)?.toDomain()
     }
 
+    override fun observeUserById(id: String): Flow<User?> =
+        userDao.observeUserById(id).map { it?.toDomain() }
+
     override suspend fun getUserByEmail(email: String): User? {
         return userDao.getUserByEmail(email)?.toDomain()
     }
@@ -318,9 +321,19 @@ class UserRepositoryImpl @Inject constructor(
      * Mirrors the same identity into Room, so the local picture agrees with the remote one.
      *
      * An existing row is `copy()`-ed rather than rebuilt, so role, colour, calendar
-     * settings, `partnerId` and the FCM token survive the REPLACE insert. The photo is
-     * only overwritten when one was resolved, for the same no-downgrade reason as the
-     * remote patch.
+     * settings, `partnerId`, the FCM token, and this same fresh-row branch's own
+     * `dateOfBirth`/`phone`/`allergiesJson`/`medicalProfileJson` survive the REPLACE insert.
+     * The photo is only overwritten when one was resolved, for the same no-downgrade reason
+     * as the remote patch.
+     *
+     * The fresh-row branch seeds `dateOfBirth`, `phone`, `allergies` and `medicalProfile` from
+     * [remote] for the same reason it already seeds `partnerId`: a reinstall calls this before
+     * anything else has a chance to populate Room, and [toUser] — the mapper that *does* read
+     * these fields — is only ever used for [getRemoteUserProfile]'s read-only co-parent view,
+     * never to persist. Leaving them at the entity defaults here meant a reinstalled device
+     * created an empty local row, and the next unrelated field edit pushed that emptiness back
+     * over the real values in Firestore via `updateUser`'s `set(merge)` — permanent data loss
+     * for a field nothing else ever writes on its own.
      */
     private suspend fun writeLocalProfile(
         uid: String,
@@ -342,7 +355,16 @@ class UserRepositoryImpl @Inject constructor(
             googleCalendarSyncEnabled = remote?.get("googleCalendarSyncEnabled") as? Boolean ?: false,
             googleCalendarId = remote?.string("googleCalendarId"),
             partnerId = remote?.string("partnerId"),
-            fcmToken = remote?.string("fcmToken")
+            fcmToken = remote?.string("fcmToken"),
+            dateOfBirth = remote?.string("dateOfBirth"),
+            phone = remote?.string("phone"),
+            allergiesJson = (remote?.get("allergies") as? List<*>)
+                ?.mapNotNull { it as? String }
+                ?.let { gson.toJson(it) }
+                ?: DEFAULT_ALLERGIES_JSON,
+            medicalProfileJson = (remote?.get("medicalProfile") as? Map<*, *>)
+                ?.let { gson.toJson(it) }
+                ?: DEFAULT_MEDICAL_PROFILE_JSON
         )
         if (updated != local) userDao.insertUser(updated)
     }
@@ -534,6 +556,10 @@ class UserRepositoryImpl @Inject constructor(
         /** Same defaults [toUser] applies to a Firestore document that omits them. */
         const val DEFAULT_ROLE = "mom"
         const val DEFAULT_COLOR_CODE = "#FF4081"
+
+        /** Same defaults [UserEntity]'s own declaration applies; named here for [writeLocalProfile]. */
+        const val DEFAULT_ALLERGIES_JSON = "[]"
+        const val DEFAULT_MEDICAL_PROFILE_JSON = "{}"
     }
 }
 

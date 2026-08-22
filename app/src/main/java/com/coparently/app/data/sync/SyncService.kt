@@ -11,12 +11,14 @@ import com.coparently.app.data.remote.firebase.FirebaseAuthService
 import com.coparently.app.data.remote.firebase.FirestoreChildInfoDataSource
 import com.coparently.app.data.remote.firebase.FirestoreEventDataSource
 import com.coparently.app.data.remote.firebase.FirestoreUserDataSource
+import com.coparently.app.data.repository.LocalDateJsonAdapter
 import com.coparently.app.data.repository.ParentSlotMigrator
-import com.google.gson.Gson
+import com.google.gson.GsonBuilder
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import javax.inject.Inject
@@ -45,7 +47,13 @@ class SyncService @Inject constructor(
     private val parentSlotMigrator: ParentSlotMigrator,
     private val encryptedPreferences: EncryptedPreferences
 ) {
-    private val gson = Gson()
+    // `LocalDate::class.java` needs the same adapter `ChildInfoRepositoryImpl` and
+    // `UserRepositoryImpl` register: `Vaccination.date` is a `LocalDate`, and a document read
+    // back through a Gson without this adapter would fail to parse it back out of the ISO
+    // string the repositories already write - see `medicalProfile` handling below.
+    private val gson = GsonBuilder()
+        .registerTypeAdapter(LocalDate::class.java, LocalDateJsonAdapter())
+        .create()
     private val formatter = DateTimeFormatter.ISO_LOCAL_DATE_TIME
 
     private val _syncStatus = MutableStateFlow<SyncStatus>(SyncStatus.Idle)
@@ -344,6 +352,7 @@ class SyncService @Inject constructor(
                 "medicalNotes" to entity.medicalNotes,
                 "emergencyContacts" to gson.fromJson(entity.emergencyContactsJson, List::class.java),
                 "schoolInfo" to entity.schoolInfoJson?.let { gson.fromJson(it, Map::class.java) },
+                "medicalProfile" to gson.fromJson(entity.medicalProfileJson, Map::class.java),
                 "createdAt" to entity.createdAt.format(formatter),
                 "updatedAt" to entity.updatedAt.format(formatter),
                 "createdByFirebaseUid" to entity.createdByFirebaseUid,
@@ -401,6 +410,7 @@ class SyncService @Inject constructor(
                                 "medicalNotes" to localEntity.medicalNotes,
                                 "emergencyContacts" to gson.fromJson(localEntity.emergencyContactsJson, List::class.java),
                                 "schoolInfo" to localEntity.schoolInfoJson?.let { gson.fromJson(it, Map::class.java) },
+                                "medicalProfile" to gson.fromJson(localEntity.medicalProfileJson, Map::class.java),
                                 "createdAt" to localEntity.createdAt.format(formatter),
                                 "updatedAt" to LocalDateTime.now().format(formatter),
                                 "createdByFirebaseUid" to localEntity.createdByFirebaseUid,
@@ -585,6 +595,7 @@ class SyncService @Inject constructor(
             medicalNotes = this["medicalNotes"] as? String,
             emergencyContactsJson = gson.toJson(this["emergencyContacts"] ?: emptyList<Any>()),
             schoolInfoJson = (this["schoolInfo"] as? Map<*, *>)?.let { gson.toJson(it) },
+            medicalProfileJson = gson.toJson(this["medicalProfile"] ?: emptyMap<String, Any?>()),
             createdAt = LocalDateTime.parse(this["createdAt"] as String, formatter),
             updatedAt = LocalDateTime.parse(this["updatedAt"] as String, formatter),
             createdByFirebaseUid = this["createdByFirebaseUid"] as? String,

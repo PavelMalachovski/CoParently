@@ -4,7 +4,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.coparently.app.R
 import com.coparently.app.domain.model.SchoolInfo
 
 /**
@@ -46,14 +48,14 @@ fun SchoolInfoEditor(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text(
-                        text = "School Information",
+                        text = stringResource(R.string.childinfo_section_school),
                         style = MaterialTheme.typography.titleSmall
                     )
 
                     OutlinedTextField(
                         value = name,
                         onValueChange = { name = it },
-                        label = { Text("School Name") },
+                        label = { Text(stringResource(R.string.childinfo_school_name_label)) },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true
                     )
@@ -61,7 +63,7 @@ fun SchoolInfoEditor(
                     OutlinedTextField(
                         value = address,
                         onValueChange = { address = it },
-                        label = { Text("Address (optional)") },
+                        label = { Text(stringResource(R.string.childinfo_address_optional_label)) },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true
                     )
@@ -69,7 +71,7 @@ fun SchoolInfoEditor(
                     OutlinedTextField(
                         value = phone,
                         onValueChange = { phone = it },
-                        label = { Text("School Phone (optional)") },
+                        label = { Text(stringResource(R.string.childinfo_school_phone_optional_label)) },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true
                     )
@@ -77,8 +79,8 @@ fun SchoolInfoEditor(
                     OutlinedTextField(
                         value = grade,
                         onValueChange = { grade = it },
-                        label = { Text("Grade (optional)") },
-                        placeholder = { Text("e.g., 3rd Grade") },
+                        label = { Text(stringResource(R.string.childinfo_grade_optional_label)) },
+                        placeholder = { Text(stringResource(R.string.childinfo_grade_placeholder)) },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true
                     )
@@ -86,14 +88,14 @@ fun SchoolInfoEditor(
                     HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
                     Text(
-                        text = "Teacher Information",
+                        text = stringResource(R.string.childinfo_section_teacher),
                         style = MaterialTheme.typography.titleSmall
                     )
 
                     OutlinedTextField(
                         value = teacherName,
                         onValueChange = { teacherName = it },
-                        label = { Text("Teacher Name (optional)") },
+                        label = { Text(stringResource(R.string.childinfo_teacher_name_optional_label)) },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true
                     )
@@ -101,7 +103,7 @@ fun SchoolInfoEditor(
                     OutlinedTextField(
                         value = teacherEmail,
                         onValueChange = { teacherEmail = it },
-                        label = { Text("Teacher Email (optional)") },
+                        label = { Text(stringResource(R.string.childinfo_teacher_email_optional_label)) },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true
                     )
@@ -123,7 +125,7 @@ fun SchoolInfoEditor(
                             },
                             modifier = Modifier.weight(1f)
                         ) {
-                            Text("Clear")
+                            Text(stringResource(R.string.childinfo_clear))
                         }
 
                         Button(
@@ -144,7 +146,7 @@ fun SchoolInfoEditor(
                             modifier = Modifier.weight(1f),
                             enabled = name.isNotBlank()
                         ) {
-                            Text("Save")
+                            Text(stringResource(R.string.childinfo_save))
                         }
                     }
                 }
@@ -154,7 +156,7 @@ fun SchoolInfoEditor(
                 onClick = { isEditing = true },
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text("Add School Information")
+                Text(stringResource(R.string.childinfo_add_school_info))
             }
         }
     }

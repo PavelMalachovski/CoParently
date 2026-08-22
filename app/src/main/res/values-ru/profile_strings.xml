@@ -12,6 +12,7 @@
     <string name="profile_readonly_note">Эти данные может менять только %1$s</string>
     <string name="profile_coparent_empty">Второй родитель пока ничего не заполнил</string>
     <string name="profile_not_paired">Свяжитесь со вторым родителем, чтобы увидеть его данные</string>
+    <string name="profile_load_failed">Не удалось загрузить ваш профиль</string>
     <string name="settings_my_profile_title">Мои данные</string>
     <string name="settings_my_profile_description">Ваши контакты и медицинские данные</string>
     <string name="settings_coparent_profile_title">Данные второго родителя</string>
