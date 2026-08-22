@@ -30,8 +30,14 @@ class BloodTypeLabelTest {
     fun `there are exactly the eight real blood types`() {
         assertEquals(
             listOf(
-                "A_POSITIVE", "A_NEGATIVE", "B_POSITIVE", "B_NEGATIVE",
-                "AB_POSITIVE", "AB_NEGATIVE", "O_POSITIVE", "O_NEGATIVE"
+                "A_POSITIVE",
+                "A_NEGATIVE",
+                "B_POSITIVE",
+                "B_NEGATIVE",
+                "AB_POSITIVE",
+                "AB_NEGATIVE",
+                "O_POSITIVE",
+                "O_NEGATIVE"
             ),
             BloodType.entries.map { it.name }
         )

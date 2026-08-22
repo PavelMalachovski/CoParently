@@ -54,17 +54,17 @@ import java.time.format.FormatStyle
  *
  * @param profile Current values
  * @param onChange Called with the whole updated profile on every edit
+ * @param modifier Modifier for the container
  * @param enabled False renders values with **no** editing affordance at all — used for the
  *   co-parent's profile, where `firestore.rules` refuses the write anyway
- * @param modifier Modifier for the container
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun MedicalProfileEditor(
     profile: MedicalProfile,
     onChange: (MedicalProfile) -> Unit,
-    enabled: Boolean = true,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true
 ) {
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(16.dp)) {
         BloodTypeSection(

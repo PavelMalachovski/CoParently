@@ -64,6 +64,11 @@ import kotlinx.coroutines.flow.StateFlow
  *   threshold of 6.
  */
 @Composable
+// A NavHost's body is one flat list of route declarations, not branching logic — splitting it
+// would only relocate the length into a second file without reducing what a reader has to scan
+// to find a given route. Same reasoning HomeScreen.kt applies to its own linear column of
+// dashboard sections.
+@Suppress("LongMethod")
 fun NavGraph(
     navController: NavHostController,
     syncViewModel: SyncViewModel,
