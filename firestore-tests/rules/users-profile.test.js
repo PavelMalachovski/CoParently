@@ -25,6 +25,7 @@ const {
 const PROJECT = 'demo-coplanly-user-profile';
 const ALICE = 'alice-uid';
 const BOB = 'bob-uid';
+const STRANGER = 'stranger-uid';
 
 /** The exact map `ensureProfile` merges when the stored document carries no identity. */
 const IDENTITY_PATCH = {
@@ -176,5 +177,57 @@ describe('users profile: the identity write ensureProfile performs', () => {
     await assertFails(
         env.authenticatedContext(BOB).firestore()
             .doc(`users/${ALICE}`).set({name: 'Hacked'}, {merge: true}));
+  });
+
+  it('lets a co-parent read the other parent\'s medical profile and phone', async () => {
+    // Deliberate: if something happens to one parent, the other can tell a paramedic the blood
+    // group. The questionnaire exists for exactly this.
+    await seed(env, {
+      [`users/${ALICE}`]: {
+        name: 'Alice Novak',
+        partnerId: BOB,
+        phone: '+420123456789',
+        medicalProfile: {bloodType: 'O_NEGATIVE', intolerances: ['lactose']},
+      },
+      [`users/${BOB}`]: {name: 'Bob Novak', partnerId: ALICE},
+    });
+
+    const snap = await assertSucceeds(
+        env.authenticatedContext(BOB).firestore().doc(`users/${ALICE}`).get());
+    const data = snap.data();
+    if (data.phone !== '+420123456789') throw new Error('phone did not come back with the document');
+    if (data.medicalProfile.bloodType !== 'O_NEGATIVE') {
+      throw new Error('medicalProfile did not come back with the document');
+    }
+  });
+
+  it('refuses to let a co-parent write the other parent\'s medical profile', async () => {
+    // Load-bearing. Client writes to another user's document are what forced the permissive
+    // firestore.rules.simple to be deployed once already.
+    await seed(env, {
+      [`users/${ALICE}`]: {
+        name: 'Alice Novak',
+        partnerId: BOB,
+        medicalProfile: {bloodType: 'O_NEGATIVE'},
+      },
+      [`users/${BOB}`]: {name: 'Bob Novak', partnerId: ALICE},
+    });
+
+    await assertFails(
+        env.authenticatedContext(BOB).firestore()
+            .doc(`users/${ALICE}`).set({medicalProfile: {bloodType: 'A_POSITIVE'}}, {merge: true}));
+  });
+
+  it('refuses a stranger who is nobody\'s co-parent', async () => {
+    await seed(env, {
+      [`users/${ALICE}`]: {
+        name: 'Alice Novak',
+        partnerId: BOB,
+        medicalProfile: {bloodType: 'O_NEGATIVE'},
+      },
+    });
+
+    await assertFails(
+        env.authenticatedContext(STRANGER).firestore().doc(`users/${ALICE}`).get());
   });
 });

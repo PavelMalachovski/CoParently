@@ -114,6 +114,38 @@ describe('Part 1d: child_info', () => {
         env.authenticatedContext(ALICE).firestore().doc('child_info/child-1').delete());
   });
 
+  it('lets a co-parent read once sharedWith names them (the audience backfill outcome)', async () => {
+    // The state SyncService.backfillAudienceForPartner produces: a row created before pairing,
+    // re-uploaded afterwards with the co-parent added to sharedWith.
+    await seed(env, {'child_info/child-1': childInfoDoc({sharedWith: [ALICE, BOB]})});
+    await assertSucceeds(
+        env.authenticatedContext(BOB).firestore().doc('child_info/child-1').get());
+  });
+
+  it('keeps a child_info document private while sharedWith names only its creator', async () => {
+    // The state every document was in before this branch: the pre-pairing upload, never
+    // revisited because the backfill only re-queues once the pairing exists.
+    await seed(env, {'child_info/child-1': childInfoDoc({sharedWith: [ALICE]})});
+    await assertFails(
+        env.authenticatedContext(BOB).firestore().doc('child_info/child-1').get());
+  });
+
+  it('lets a co-parent in sharedWith add an emergency contact', async () => {
+    // Item 5 says the second parent may add to the contacts. This is the document where that
+    // is allowed - the parent's own users/{uid} is not, and must not become so.
+    await seed(env, {'child_info/child-1': childInfoDoc({sharedWith: [ALICE, BOB]})});
+    await assertSucceeds(env.authenticatedContext(BOB).firestore()
+        .doc('child_info/child-1').update({
+          emergencyContacts: [{name: 'Grandma', relationship: 'grandmother', phone: '+420...'}],
+        }));
+  });
+
+  it('refuses to let a co-parent rewrite who created the document', async () => {
+    await seed(env, {'child_info/child-1': childInfoDoc({sharedWith: [ALICE, BOB]})});
+    await assertFails(env.authenticatedContext(BOB).firestore()
+        .doc('child_info/child-1').update({createdByFirebaseUid: BOB}));
+  });
+
   describe('Part 3: a document whose sharedWith has been stripped', () => {
     beforeEach(async () => {
       const stripped = childInfoDoc({});
