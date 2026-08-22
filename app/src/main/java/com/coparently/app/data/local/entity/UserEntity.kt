@@ -16,6 +16,11 @@ import androidx.room.PrimaryKey
  * @property googleCalendarId Optional ID of the Google Calendar for sync
  * @property partnerId Optional ID of the co-parent partner (Firebase UID)
  * @property fcmToken Firebase Cloud Messaging token for push notifications
+ * @property dateOfBirth ISO `LocalDate` string, e.g. `1988-04-17`; null until the parent records it
+ * @property phone Free-text phone number as the parent typed it; no format is imposed
+ * @property allergiesJson JSON array of allergy strings; `[]` when none
+ * @property medicalProfileJson JSON object of [com.coparently.app.domain.model.MedicalProfile];
+ * `{}` when never filled
  */
 @Entity(tableName = "users")
 data class UserEntity(
@@ -29,6 +34,14 @@ data class UserEntity(
     val googleCalendarSyncEnabled: Boolean = false,
     val googleCalendarId: String? = null,
     val partnerId: String? = null,
-    val fcmToken: String? = null
+    val fcmToken: String? = null,
+    /** ISO `LocalDate` string, e.g. `1988-04-17`. Null until the parent records it. */
+    val dateOfBirth: String? = null,
+    /** Free-text phone number as the parent typed it; no format is imposed. */
+    val phone: String? = null,
+    /** JSON array of allergy strings; `[]` when none. Mirrors `ChildInfoEntity.allergiesJson`. */
+    val allergiesJson: String = "[]",
+    /** JSON object of [com.coparently.app.domain.model.MedicalProfile]; `{}` when never filled. */
+    val medicalProfileJson: String = "{}"
 )
 

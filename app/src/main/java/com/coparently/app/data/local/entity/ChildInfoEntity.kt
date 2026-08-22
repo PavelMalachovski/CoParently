@@ -16,6 +16,8 @@ import java.time.LocalDateTime
  * @property medicalNotes Additional medical notes
  * @property emergencyContactsJson JSON string of emergency contacts list
  * @property schoolInfoJson JSON string of school information
+ * @property medicalProfileJson JSON object of [com.coparently.app.domain.model.MedicalProfile];
+ * `{}` when never filled
  * @property createdAt Timestamp when the info was created
  * @property updatedAt Timestamp when the info was last updated
  * @property createdByFirebaseUid Firebase UID of the user who created this info
@@ -34,6 +36,8 @@ data class ChildInfoEntity(
     val medicalNotes: String?,
     val emergencyContactsJson: String, // JSON array
     val schoolInfoJson: String?, // JSON object or null
+    /** JSON object of [com.coparently.app.domain.model.MedicalProfile]; `{}` when never filled. */
+    val medicalProfileJson: String = "{}",
     val createdAt: LocalDateTime,
     val updatedAt: LocalDateTime,
     val createdByFirebaseUid: String?,
