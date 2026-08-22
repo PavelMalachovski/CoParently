@@ -5,19 +5,13 @@ import androidx.lifecycle.viewModelScope
 import com.coparently.app.data.analytics.AnalyticsManager
 import com.coparently.app.data.crashlytics.CrashlyticsManager
 import com.coparently.app.data.remote.firebase.FirebaseAuthService
-import com.coparently.app.domain.model.Activity
 import com.coparently.app.domain.model.ChildInfo
-import com.coparently.app.domain.model.EmergencyContact
-import com.coparently.app.domain.model.Medication
-import com.coparently.app.domain.model.SchoolInfo
 import com.coparently.app.domain.repository.ChildInfoRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import java.time.LocalDateTime
-import java.util.UUID
 import javax.inject.Inject
 
 /**
@@ -74,43 +68,29 @@ class ChildInfoViewModel @Inject constructor(
 
     /**
      * Creates or updates child information.
+     *
+     * Takes the whole [ChildInfo] rather than one parameter per field: the caller builds it by
+     * copying the loaded snapshot ([currentChildInfo]), the same rule `AddEditEventScreen` follows
+     * for events, so fields the form does not surface (sync/ownership stamps, and
+     * [ChildInfo.medicalProfile] before this editor existed) are never silently reset to their
+     * defaults on save.
+     *
+     * @param childInfo The child info to persist, with all form fields already applied via `copy()`
+     * @param isNewChild Whether this call creates a brand-new child, for analytics only
      */
-    fun upsertChildInfo(
-        id: String?,
-        childName: String,
-        dateOfBirth: LocalDateTime?,
-        medications: List<Medication>,
-        activities: List<Activity>,
-        allergies: List<String>,
-        medicalNotes: String?,
-        emergencyContacts: List<EmergencyContact>,
-        schoolInfo: SchoolInfo?
-    ) {
+    fun upsertChildInfo(childInfo: ChildInfo, isNewChild: Boolean) {
         viewModelScope.launch {
             try {
                 val currentUser = firebaseAuthService.getCurrentUser()
                     ?: throw IllegalStateException("User not authenticated")
 
-                val now = LocalDateTime.now()
-                val isNewChild = id == null
-                val childInfo = ChildInfo(
-                    id = id ?: UUID.randomUUID().toString(),
-                    childName = childName,
-                    dateOfBirth = dateOfBirth,
-                    medications = medications,
-                    activities = activities,
-                    allergies = allergies,
-                    medicalNotes = medicalNotes,
-                    emergencyContacts = emergencyContacts,
-                    schoolInfo = schoolInfo,
-                    createdAt = _currentChildInfo.value?.createdAt ?: now,
-                    updatedAt = now,
-                    createdByFirebaseUid = _currentChildInfo.value?.createdByFirebaseUid ?: currentUser.uid,
+                val finalChildInfo = childInfo.copy(
+                    createdByFirebaseUid = childInfo.createdByFirebaseUid ?: currentUser.uid,
                     lastModifiedBy = currentUser.uid,
                     syncedToFirestore = false
                 )
 
-                childInfoRepository.upsertChildInfo(childInfo)
+                childInfoRepository.upsertChildInfo(finalChildInfo)
 
                 // Log analytics event
                 if (isNewChild) {
@@ -121,7 +101,7 @@ class ChildInfoViewModel @Inject constructor(
             } catch (e: Exception) {
                 crashlyticsManager.recordExceptionWithContext(
                     e,
-                    mapOf("action" to "upsert_child_info", "child_name" to childName)
+                    mapOf("action" to "upsert_child_info", "child_name" to childInfo.childName)
                 )
                 _uiState.value = ChildInfoUiState.Error(e.message ?: "Failed to save child info")
             }
