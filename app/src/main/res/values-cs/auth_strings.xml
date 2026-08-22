@@ -21,4 +21,17 @@
     <string name="auth_no_account_question">Nemáte účet?</string>
     <string name="auth_have_account_question">Už máte účet?</string>
     <string name="auth_forgot_password_link">Zapomněli jste heslo?</string>
+    <string name="auth_saved_password_sign_in">Přihlásit se uloženým heslem</string>
+    <string name="auth_error_empty_fields">Vyplňte prosím obě pole</string>
+    <string name="auth_error_invalid_credentials">Nesprávný e-mail nebo heslo</string>
+    <string name="auth_error_email_already_in_use">K tomuto e-mailu už účet existuje</string>
+    <string name="auth_error_weak_password">Heslo je příliš slabé — použijte alespoň 6 znaků</string>
+    <string name="auth_error_invalid_email">Toto není platná e-mailová adresa</string>
+    <string name="auth_error_user_disabled">Tento účet byl zablokován</string>
+    <string name="auth_error_network">Bez připojení. Zkontrolujte síť a zkuste to znovu.</string>
+    <string name="auth_error_too_many_requests">Příliš mnoho pokusů. Zkuste to za pár minut.</string>
+    <string name="auth_error_interrupted">Přihlášení bylo přerušeno. Zkuste to prosím znovu.</string>
+    <string name="auth_error_no_google_account">Nebyl vybrán žádný účet Google</string>
+    <string name="auth_error_no_saved_password">Pro CoPlanly zatím není uloženo žádné heslo</string>
+    <string name="auth_error_unknown">Něco se pokazilo. Zkuste to prosím znovu.</string>
 </resources>
