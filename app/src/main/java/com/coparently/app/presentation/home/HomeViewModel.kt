@@ -110,6 +110,49 @@ data class HomeIdentityDependencies @Inject constructor(
 )
 
 /**
+ * What the home page should draw.
+ *
+ * A sealed state rather than the scatter of independent flows the screen used to recombine
+ * itself: "is there a co-parent" decided whether *one* card appeared, and every other section
+ * rendered regardless — so an unpaired account got a handover hero with nothing to hand over,
+ * two stat tiles reading zero, an empty week and an empty changes feed, arranged around the
+ * small card that says the thing that would fill them. The screen is now told what to draw.
+ */
+sealed interface HomeUiState {
+
+    /**
+     * There is no co-parent yet — or this device does not know whether there is one.
+     *
+     * The page's *content* is then a short explanation and one button. The gear and the bottom
+     * bar stay: removing navigation would strand the user, because the calendar and the child's
+     * details are worth having alone and Settings is where the pairing screen lives.
+     */
+    data object AskForCoParent : HomeUiState
+
+    /**
+     * The paired dashboard, in the order spec §3 fixes: the next handover, the child's week,
+     * the co-parent's recent changes, contacts, and this month's spend last.
+     *
+     * @property partner The linked co-parent, used to name the changes feed.
+     * @property nextHandover When the child next changes hands, or null with no custody model.
+     * @property upcomingEvents The child's week.
+     * @property recentChanges What the co-parent changed, newest first.
+     * @property monthSpend This month's spending, one subtotal per currency.
+     * @property monthBalances This month's settle-up position, per currency.
+     * @property unreadCount Unread messages from the co-parent.
+     */
+    data class Dashboard(
+        val partner: PartnerSummary?,
+        val nextHandover: HandoverInfo?,
+        val upcomingEvents: List<Event>,
+        val recentChanges: List<ActivityItem>,
+        val monthSpend: MonthSpend,
+        val monthBalances: List<CurrencyBalance>,
+        val unreadCount: Int
+    ) : HomeUiState
+}
+
+/**
  * ViewModel for the home dashboard. Surfaces the at-a-glance co-parenting state:
  * the next custody handover, the next few events, this month's spend, unread
  * messages, and the recent changes the *other* parent made.
@@ -152,14 +195,14 @@ class HomeViewModel @Inject constructor(
      * The linked co-parent, or null while unpaired. Names the activity feed ("Alex changed")
      * and the chat tile, so the dashboard talks about a person rather than "the co-parent".
      */
-    val partner: StateFlow<PartnerSummary?> = pairingState
+    private val partner: StateFlow<PartnerSummary?> = pairingState
         .map { (it as? PairingState.Paired)?.partner }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), null)
 
     /**
      * Whether a co-parent is linked. Driven by the pairing repository's realtime state, so
      * the CTA disappears the moment the other parent accepts — without the user reopening
-     * the screen.
+     * the screen. It now gates the whole page rather than one card; see [uiState].
      *
      * [PairingState.Loading] (the initial state, and what the repository falls back to if its
      * Firestore listener fails permanently) is treated as "not paired" here, i.e. this card
@@ -173,8 +216,13 @@ class HomeViewModel @Inject constructor(
      * wrong or that they should look in Settings instead. Between an occasional redundant
      * card and a silently missing primary CTA, the former is the smaller cost, so "not
      * paired" is what this flow defaults to while the real answer is unknown.
+     *
+     * That reasoning got *stronger* when this began gating the page: the cost of being wrong
+     * one way is a paired user seeing the pairing card for a frame, and the cost of being wrong
+     * the other way is an unpaired user seeing a handover with nothing to hand over, two tiles
+     * reading zero and two empty feeds — the hollow screen this package exists to remove.
      */
-    val paired: StateFlow<Boolean> = pairingState
+    private val paired: StateFlow<Boolean> = pairingState
         .map { it is PairingState.Paired }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), false)
 
@@ -191,7 +239,7 @@ class HomeViewModel @Inject constructor(
      * is no handover time anywhere in the schema — `CustodyModel` carries days, never hours — so
      * an hour here would be invented, and a separated parent would plan around it.
      */
-    val nextHandover: StateFlow<HandoverInfo?> = combine(
+    private val nextHandover: StateFlow<HandoverInfo?> = combine(
         custodyModelRepository.getActiveModel(),
         custodyModelRepository.observeDayOverrides()
     ) { model, overrides ->
@@ -204,7 +252,7 @@ class HomeViewModel @Inject constructor(
      * window is a week rather than the two months the old flat "Upcoming" list looked over —
      * a dentist appointment seven weeks out is not what "this week" promises.
      */
-    val upcomingEvents: StateFlow<List<Event>> = eventRepository
+    private val upcomingEvents: StateFlow<List<Event>> = eventRepository
         .getEventsByDateRange(LocalDateTime.now(), LocalDateTime.now().plusDays(LOOKAHEAD_DAYS))
         .map { events ->
             val now = LocalDateTime.now()
@@ -244,7 +292,7 @@ class HomeViewModel @Inject constructor(
     private val roleByUid = parents.map { it.roleByUid }
 
     /** This calendar month's spend, one subtotal per currency (no cross-currency summing). */
-    val monthSpend: StateFlow<MonthSpend> = combine(
+    private val monthSpend: StateFlow<MonthSpend> = combine(
         monthExpenses,
         defaultCurrency
     ) { expenses, fallbackCurrency ->
@@ -268,7 +316,7 @@ class HomeViewModel @Inject constructor(
      * Reuses the pure [calculateExpenseBalancesByCurrency] rather than recomputing, so the two
      * screens cannot disagree about the same month.
      */
-    val monthBalances: StateFlow<List<CurrencyBalance>> = combine(
+    private val monthBalances: StateFlow<List<CurrencyBalance>> = combine(
         monthExpenses,
         _userId,
         roleByUid
@@ -289,7 +337,7 @@ class HomeViewModel @Inject constructor(
      * repository is already contained there; the [catch] here is the last resort that keeps
      * a Room-level failure from taking down `viewModelScope` and, with it, the process.
      */
-    val unreadCount: StateFlow<Int> = combine(_userId, _partnerId) { userId, partnerId ->
+    private val unreadCount: StateFlow<Int> = combine(_userId, _partnerId) { userId, partnerId ->
         userId to partnerId
     }
         .flatMapLatest { (userId, partnerId) ->
@@ -314,7 +362,7 @@ class HomeViewModel @Inject constructor(
     /**
      * Up to [MAX_ITEMS] most recent changes made by the co-parent, newest first.
      */
-    val recentChanges: StateFlow<List<ActivityItem>> = combine(
+    private val recentChanges: StateFlow<List<ActivityItem>> = combine(
         eventRepository.getAllEvents(),
         changeRequestRepository.getAllChangeRequests(),
         _partnerId
@@ -348,6 +396,51 @@ class HomeViewModel @Inject constructor(
     )
 
     /**
+     * The paired dashboard's own content, kept whole so [uiState] has one thing to wrap.
+     *
+     * Combined from flows that each carry their own initial value rather than from bare
+     * repository flows: `combine` emits nothing until every source has, so bare sources would
+     * hold the whole page back until the slowest Room query answered — and what the user would
+     * be looking at meanwhile is [HomeUiState.AskForCoParent], i.e. a paired parent being asked
+     * to pair. Each source seeding itself keeps that from happening.
+     */
+    private val dashboard: StateFlow<HomeUiState.Dashboard> = combine(
+        combine(partner, nextHandover, upcomingEvents) { coParent, handover, events ->
+            Triple(coParent, handover, events)
+        },
+        combine(monthSpend, monthBalances, unreadCount) { spend, balances, unread ->
+            Triple(spend, balances, unread)
+        },
+        recentChanges
+    ) { (coParent, handover, events), (spend, balances, unread), changes ->
+        HomeUiState.Dashboard(
+            partner = coParent,
+            nextHandover = handover,
+            upcomingEvents = events,
+            recentChanges = changes,
+            monthSpend = spend,
+            monthBalances = balances,
+            unreadCount = unread
+        )
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), EMPTY_DASHBOARD)
+
+    /**
+     * What the home page draws: the pairing invitation, or the dashboard.
+     *
+     * One value rather than eight flows the composable recombined. The screen used to decide
+     * for itself that "unpaired" meant "add a card", which is why every other section kept
+     * rendering — the hero, the tiles, the week and the changes feed were all still there,
+     * all empty, because nothing had told them not to be.
+     */
+    val uiState: StateFlow<HomeUiState> = combine(paired, dashboard) { isPaired, content ->
+        if (isPaired) content else HomeUiState.AskForCoParent
+    }.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS),
+        HomeUiState.AskForCoParent
+    )
+
+    /**
      * The deterministic conversation id for [userId] and [partnerId], or `null` when the
      * pair cannot form one — an unresolved session (blank uid), or a partner id that
      * somehow equals this user's.
@@ -375,6 +468,20 @@ class HomeViewModel @Inject constructor(
     }
 
     private companion object {
+        /**
+         * What the dashboard holds before any repository has answered. Only ever visible to a
+         * paired account, and only for the frame or two the Room queries take.
+         */
+        val EMPTY_DASHBOARD = HomeUiState.Dashboard(
+            partner = null,
+            nextHandover = null,
+            upcomingEvents = emptyList(),
+            recentChanges = emptyList(),
+            monthSpend = MonthSpend(listOf(CurrencyAmount(SupportedCurrency.DEFAULT.code, 0.0))),
+            monthBalances = emptyList(),
+            unreadCount = 0
+        )
+
         const val MAX_ITEMS = 5
         const val MAX_UPCOMING = 3
         const val LOOKAHEAD_DAYS = 7L

@@ -54,6 +54,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -118,14 +119,7 @@ fun HomeScreen(
     onOpenChat: () -> Unit,
     viewModel: HomeViewModel = hiltViewModel()
 ) {
-    val recentChanges by viewModel.recentChanges.collectAsState()
-    val paired by viewModel.paired.collectAsState()
-    val partner by viewModel.partner.collectAsState()
-    val nextHandover by viewModel.nextHandover.collectAsState()
-    val upcomingEvents by viewModel.upcomingEvents.collectAsState()
-    val monthSpend by viewModel.monthSpend.collectAsState()
-    val monthBalances by viewModel.monthBalances.collectAsState()
-    val unreadCount by viewModel.unreadCount.collectAsState()
+    val uiState by viewModel.uiState.collectAsState()
     val parentNames = rememberParentNames(viewModel.parents.collectAsState().value)
 
     Scaffold(
@@ -152,113 +146,189 @@ fun HomeScreen(
             )
         }
     ) { padding ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
-        ) {
-            // Pairing is where most value comes from — lead with a CTA when unpaired.
-            if (!paired) {
-                item { PairingCta(onNavigateToPairing) }
-            }
+        when (val state = uiState) {
+            HomeUiState.AskForCoParent -> PairingInvitation(
+                onNavigateToPairing = onNavigateToPairing,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+            )
 
-            nextHandover?.let { handover ->
-                item {
-                    HandoverHero(
-                        info = handover,
-                        parentNames = parentNames,
-                        onConfirm = onOpenChangeRequests
-                    )
-                }
-            }
+            is HomeUiState.Dashboard -> Dashboard(
+                state = state,
+                parentNames = parentNames,
+                contentPadding = padding,
+                onOpenEvent = onOpenEvent,
+                onOpenChangeRequests = onOpenChangeRequests,
+                onOpenWeeklySummary = onOpenWeeklySummary,
+                onOpenExpenses = onOpenExpenses,
+                onOpenChat = onOpenChat
+            )
+        }
+    }
+}
 
+/**
+ * The whole unpaired page: a short explanation and one button.
+ *
+ * Everything else the dashboard shows depends on there being a second parent — there is no
+ * handover without one, no balance to settle, and no changes for them to have made — so the
+ * page says the one thing that would fill the rest instead of arranging hollow shells around it.
+ *
+ * @param onNavigateToPairing Opens the pairing screen
+ * @param modifier Modifier applied to the page
+ */
+@Composable
+private fun PairingInvitation(
+    onNavigateToPairing: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier.padding(24.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = stringResource(R.string.home_pairing_title),
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center
+        )
+        Text(
+            text = stringResource(R.string.home_pairing_prompt),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
+        )
+        Button(onClick = onNavigateToPairing, modifier = Modifier.fillMaxWidth()) {
+            Text(stringResource(R.string.home_pairing_cta))
+        }
+    }
+}
+
+/**
+ * The paired dashboard, in spec §3's order.
+ *
+ * @param state Everything the page draws
+ * @param parentNames Resolves a slot to that parent's name
+ * @param contentPadding The scaffold's own insets
+ * @param onOpenEvent Opens an event by id
+ * @param onOpenChangeRequests Opens the change-request inbox
+ * @param onOpenWeeklySummary Opens the weekly summary dashboard
+ * @param onOpenExpenses Switches to the Expenses tab
+ * @param onOpenChat Switches to the Chat tab
+ */
+@Composable
+// One callback per navigation target; the body is one linear column of sections, so splitting
+// it would only move the length into a second file.
+@Suppress("LongParameterList", "LongMethod")
+private fun Dashboard(
+    state: HomeUiState.Dashboard,
+    parentNames: ParentNames,
+    contentPadding: PaddingValues,
+    onOpenEvent: (String) -> Unit,
+    onOpenChangeRequests: () -> Unit,
+    onOpenWeeklySummary: () -> Unit,
+    onOpenExpenses: () -> Unit,
+    onOpenChat: () -> Unit
+) {
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(contentPadding),
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        state.nextHandover?.let { handover ->
             item {
-                StatTiles(
-                    spend = monthSpend,
-                    balances = monthBalances,
-                    unreadCount = unreadCount,
-                    onOpenExpenses = onOpenExpenses,
-                    onOpenChat = onOpenChat
+                HandoverHero(
+                    info = handover,
+                    parentNames = parentNames,
+                    onConfirm = onOpenChangeRequests
                 )
             }
+        }
 
-            if (upcomingEvents.isNotEmpty()) {
-                item { SectionHeader(stringResource(R.string.home_section_this_week)) }
-                itemsIndexed(
-                    items = upcomingEvents,
-                    // Recurring occurrences share the master event's id, so the start time has
-                    // to be part of the key or two occurrences collide.
-                    key = { _, event -> "up_${event.id}_${event.startDateTime}" }
-                ) { index, event ->
-                    TimelineRow(
-                        event = event,
-                        parentNames = parentNames,
-                        isLast = index == upcomingEvents.lastIndex,
-                        onClick = { onOpenEvent(event.id) }
-                    )
-                }
-            }
+        item {
+            StatTiles(
+                spend = state.monthSpend,
+                balances = state.monthBalances,
+                unreadCount = state.unreadCount,
+                onOpenExpenses = onOpenExpenses,
+                onOpenChat = onOpenChat
+            )
+        }
 
-            item {
-                // Deliberately `partner?.name` and not `parentNames`, which is what the hero and
-                // the timeline above use. The two answer different questions. This header names
-                // a *person* - the account this one is paired with - and that identity is known
-                // as soon as pairing resolves. The hero names whoever holds a *slot*, and on a
-                // pair whose two parents still share slot 1 nobody holds the other one, so it
-                // says "Parent" until the backfill separates them.
-                //
-                // So a legacy pair reads "Olya changed" here and "Today with Parent" above, and
-                // that is correct rather than an inconsistency to iron out: degrading this to
-                // "Parent" would throw away a fact we hold, and resolving the hero from the
-                // partner's name would assert a slot nobody has stored - the guess this whole
-                // branch exists to remove.
-                SectionHeader(
-                    partner?.name?.takeIf { it.isNotBlank() }
-                        ?.let { stringResource(R.string.home_section_partner_changed, it) }
-                        ?: stringResource(R.string.home_section_recent_changes)
+        if (state.upcomingEvents.isNotEmpty()) {
+            item { SectionHeader(stringResource(R.string.home_section_this_week)) }
+            itemsIndexed(
+                items = state.upcomingEvents,
+                // Recurring occurrences share the master event's id, so the start time has
+                // to be part of the key or two occurrences collide.
+                key = { _, event -> "up_${event.id}_${event.startDateTime}" }
+            ) { index, event ->
+                TimelineRow(
+                    event = event,
+                    parentNames = parentNames,
+                    isLast = index == state.upcomingEvents.lastIndex,
+                    onClick = { onOpenEvent(event.id) }
                 )
             }
+        }
 
-            if (recentChanges.isEmpty()) {
-                item {
-                    Card(modifier = Modifier.fillMaxWidth()) {
-                        Text(
-                            text = if (paired) {
-                                stringResource(R.string.home_recent_empty_paired)
-                            } else {
-                                stringResource(R.string.home_recent_empty_unpaired)
-                            },
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(16.dp)
-                        )
-                    }
-                }
-            } else {
-                item {
-                    ActivityGroup(
-                        items = recentChanges,
-                        onOpenChangeRequests = onOpenChangeRequests,
-                        onOpenEvent = onOpenEvent
+        item {
+            // Deliberately `partner?.name` and not `parentNames`, which is what the hero and
+            // the timeline above use. The two answer different questions. This header names
+            // a *person* - the account this one is paired with - and that identity is known
+            // as soon as pairing resolves. The hero names whoever holds a *slot*, and on a
+            // pair whose two parents still share slot 1 nobody holds the other one, so it
+            // says "Parent" until the backfill separates them.
+            //
+            // So a legacy pair reads "Olya changed" here and "Today with Parent" above, and
+            // that is correct rather than an inconsistency to iron out: degrading this to
+            // "Parent" would throw away a fact we hold, and resolving the hero from the
+            // partner's name would assert a slot nobody has stored - the guess this whole
+            // branch exists to remove.
+            SectionHeader(
+                state.partner?.name?.takeIf { it.isNotBlank() }
+                    ?.let { stringResource(R.string.home_section_partner_changed, it) }
+                    ?: stringResource(R.string.home_section_recent_changes)
+            )
+        }
+
+        if (state.recentChanges.isEmpty()) {
+            item {
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        text = stringResource(R.string.home_recent_empty_paired),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(16.dp)
                     )
                 }
             }
-
+        } else {
             item {
-                // Kept here deliberately. The refresh removed the unlabelled `view_list`
-                // action from the calendar header, so this is now the weekly summary's single
-                // entry point rather than one of two competing ones.
-                Spacer(modifier = Modifier.size(4.dp))
-                OutlinedButton(
-                    onClick = onOpenWeeklySummary,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Icon(Icons.AutoMirrored.Filled.ViewList, contentDescription = null)
-                    Spacer(modifier = Modifier.size(8.dp))
-                    Text(stringResource(R.string.home_weekly_summary))
-                }
+                ActivityGroup(
+                    items = state.recentChanges,
+                    onOpenChangeRequests = onOpenChangeRequests,
+                    onOpenEvent = onOpenEvent
+                )
+            }
+        }
+
+        item {
+            // Kept here deliberately. The refresh removed the unlabelled `view_list`
+            // action from the calendar header, so this is now the weekly summary's single
+            // entry point rather than one of two competing ones.
+            Spacer(modifier = Modifier.size(4.dp))
+            OutlinedButton(
+                onClick = onOpenWeeklySummary,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(Icons.AutoMirrored.Filled.ViewList, contentDescription = null)
+                Spacer(modifier = Modifier.size(8.dp))
+                Text(stringResource(R.string.home_weekly_summary))
             }
         }
     }
@@ -271,25 +341,6 @@ private fun SectionHeader(text: String) {
         style = MaterialTheme.typography.titleSmall,
         fontWeight = FontWeight.SemiBold
     )
-}
-
-@Composable
-private fun PairingCta(onNavigateToPairing: () -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Text(
-                text = stringResource(R.string.home_pairing_prompt),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Button(onClick = onNavigateToPairing, modifier = Modifier.fillMaxWidth()) {
-                Text(stringResource(R.string.home_pairing_cta))
-            }
-        }
-    }
 }
 
 /**

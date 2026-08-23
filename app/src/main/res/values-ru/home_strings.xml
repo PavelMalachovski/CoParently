@@ -3,6 +3,7 @@
 <resources>
     <string name="home_title">Главная</string>
 
+    <string name="home_pairing_title">Разделите это со вторым родителем</string>
     <string name="home_pairing_prompt">Свяжитесь со вторым родителем, чтобы делить календарь, расходы и сообщения.</string>
     <string name="home_pairing_cta">Связаться со вторым родителем</string>
 
@@ -35,7 +36,6 @@
     <string name="home_timeline_meta">%1$s · день родителя %2$s</string>
 
     <string name="home_recent_empty_paired">Пока ничего нового от второго родителя. Их изменения появятся здесь.</string>
-    <string name="home_recent_empty_unpaired">После связывания изменения второго родителя появятся здесь.</string>
 
     <string name="home_weekly_summary">Сводка за неделю</string>
 

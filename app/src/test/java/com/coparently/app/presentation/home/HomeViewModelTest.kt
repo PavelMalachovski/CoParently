@@ -26,14 +26,17 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
 /**
- * [HomeViewModel.paired] is the one flow in this class fed by a realtime repository
- * (the rest are Room-backed), so it is the one worth pinning: it must track
+ * [HomeViewModel.uiState] is fed by the one realtime repository in this class (the rest are
+ * Room-backed), so it is the one worth pinning: it must track
  * [PairingRepository.observePairingState] exactly, treating [PairingState.Loading] as
- * "not paired" both on cold start and if the underlying listener recovers into it later.
+ * "not paired" both on cold start and if the underlying listener recovers into it later —
+ * and, while not paired, it must expose the invitation and *nothing else*.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class HomeViewModelTest {
@@ -96,27 +99,47 @@ class HomeViewModelTest {
     }
 
     @Test
-    fun `paired follows the repository and treats Loading as not paired`() = runTest(dispatcher) {
-        viewModel.paired.test {
-            // stateIn's own initial value (false) and the repository's Loading state both
-            // map to false, so this is a single conflated item, not two.
-            assertEquals(false, awaitItem())
+    fun `the page is the invitation alone until a co-parent is linked`() = runTest(dispatcher) {
+        viewModel.uiState.test {
+            // stateIn's own initial value and the repository's Loading state both map to
+            // AskForCoParent, so this is a single conflated item, not two. Loading deliberately
+            // reads as "not paired": a page that flashes tiles and then removes them is worse
+            // than one that waits.
+            assertEquals(HomeUiState.AskForCoParent, awaitItem())
 
             pairingState.value = PairingState.Paired(
                 PartnerSummary(id = "partner-1", name = "Alex", email = "alex@example.com", pairedSinceMillis = null)
             )
-            assertEquals(true, awaitItem())
+            // Everything comes back at once, because the page is one value rather than eight
+            // the composable recombines.
+            val dashboard = awaitItem()
+            assertTrue(dashboard is HomeUiState.Dashboard)
 
             // A permanent listener failure recovers to Loading (per observePairingState's
-            // contract) — the CTA must come back rather than staying hidden behind a stale
-            // "paired" reading.
+            // contract) — the invitation must come back rather than staying hidden behind a
+            // stale "paired" reading.
             pairingState.value = PairingState.Loading
-            assertEquals(false, awaitItem())
+            assertEquals(HomeUiState.AskForCoParent, awaitItem())
 
-            // NotPaired is a second, distinct "not paired" reason but maps to the same
-            // boolean, so StateFlow conflates it and there is nothing new to await.
+            // NotPaired is a second, distinct "not paired" reason but maps to the same state,
+            // so StateFlow conflates it and there is nothing new to await.
             pairingState.value = PairingState.NotPaired()
             expectNoEvents()
+
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `an unpaired page carries no handover, tiles, week or changes`() = runTest(dispatcher) {
+        viewModel.uiState.test {
+            val state = awaitItem()
+            // Not "the dashboard's fields are empty" — the dashboard is not there at all.
+            // Emptiness was the old bug: a hero with nothing to hand over, two tiles reading
+            // zero and two empty feeds, arranged around the card that says the thing that
+            // would fill them.
+            assertEquals(HomeUiState.AskForCoParent, state)
+            assertFalse(state is HomeUiState.Dashboard)
 
             cancelAndIgnoreRemainingEvents()
         }

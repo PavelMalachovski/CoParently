@@ -3,6 +3,7 @@
 <resources>
     <string name="home_title">Domů</string>
 
+    <string name="home_pairing_title">Sdílejte to s druhým rodičem</string>
     <string name="home_pairing_prompt">Propojte se s druhým rodičem a sdílejte kalendář, výdaje a zprávy.</string>
     <string name="home_pairing_cta">Propojit s druhým rodičem</string>
 
@@ -35,7 +36,6 @@
     <string name="home_timeline_meta">%1$s · den rodiče %2$s</string>
 
     <string name="home_recent_empty_paired">Zatím nic nového od druhého rodiče. Jeho změny se zobrazí zde.</string>
-    <string name="home_recent_empty_unpaired">Po propojení se zde zobrazí změny druhého rodiče.</string>
 
     <string name="home_weekly_summary">Zobrazit týdenní přehled</string>
 
