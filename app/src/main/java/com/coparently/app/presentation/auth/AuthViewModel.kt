@@ -41,7 +41,7 @@ class AuthViewModel @Inject constructor(
 
     /** @param email New email field value */
     fun updateEmail(email: String) {
-        _uiState.update { it.copy(email = email, error = null) }
+        _uiState.update { it.copy(email = email, error = null, resetEmailSentTo = null) }
     }
 
     /** @param password New password field value */
@@ -51,7 +51,39 @@ class AuthViewModel @Inject constructor(
 
     /** Flips between the sign-in and sign-up presentations of the same form. */
     fun toggleSignInMode() {
-        _uiState.update { it.copy(isSignInMode = !it.isSignInMode, error = null) }
+        _uiState.update { it.copy(isSignInMode = !it.isSignInMode, error = null, resetEmailSentTo = null) }
+    }
+
+    /**
+     * Emails a password-reset link to the typed address.
+     *
+     * Requires only the email field — asking for the forgotten password to reset it would be
+     * absurd. A blank field is caught before any network call, like [signIn] does for both
+     * fields. Success is carried in [AuthUiState.resetEmailSentTo] rather than by navigating:
+     * the user's next step is their inbox, not this app, so the screen stays put and says so.
+     */
+    fun sendPasswordReset() {
+        val email = _uiState.value.email
+        if (email.isBlank()) {
+            _uiState.update { it.copy(error = AuthError.EmptyEmail) }
+            return
+        }
+        _uiState.update { it.copy(isLoading = true, error = null, resetEmailSentTo = null) }
+
+        viewModelScope.launch {
+            // Same finally as signIn(): reportEmailFailure rethrows cancellations, and the
+            // loading flag must clear on that path too.
+            try {
+                firebaseAuthService.sendPasswordResetEmail(email).fold(
+                    onSuccess = {
+                        _uiState.update { it.copy(resetEmailSentTo = email) }
+                    },
+                    onFailure = { error -> reportEmailFailure(error, "password_reset", email) }
+                )
+            } finally {
+                _uiState.update { it.copy(isLoading = false) }
+            }
+        }
     }
 
     /**
@@ -300,11 +332,14 @@ class AuthViewModel @Inject constructor(
  * @property error Why the last attempt failed, or null. A *typed* reason rather than a sentence:
  *   the string is resolved in the composable, because a ViewModel has no `Context` and must not
  *   be given one.
+ * @property resetEmailSentTo Address a password-reset link was just sent to, or null. Cleared the
+ *   moment the email field changes, so the confirmation never describes a stale address.
  */
 data class AuthUiState(
     val email: String = "",
     val password: String = "",
     val isSignInMode: Boolean = true,
     val isLoading: Boolean = false,
-    val error: AuthError? = null
+    val error: AuthError? = null,
+    val resetEmailSentTo: String? = null
 )

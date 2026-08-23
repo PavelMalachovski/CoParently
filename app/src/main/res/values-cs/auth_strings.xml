@@ -34,4 +34,6 @@
     <string name="auth_error_no_google_account">Nebyl vybrán žádný účet Google</string>
     <string name="auth_error_no_saved_password">Pro CoPlanly zatím není uloženo žádné heslo</string>
     <string name="auth_error_unknown">Něco se pokazilo. Zkuste to prosím znovu.</string>
+    <string name="auth_error_empty_email">Zadejte e-mail pro obnovení hesla</string>
+    <string name="auth_reset_email_sent">Odkaz pro obnovení hesla jsme poslali na %1$s. Zkontrolujte poštu.</string>
 </resources>

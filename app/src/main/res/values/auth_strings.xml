@@ -36,4 +36,6 @@
     <string name="auth_error_no_google_account">No Google account was chosen</string>
     <string name="auth_error_no_saved_password">No saved password for CoPlanly yet</string>
     <string name="auth_error_unknown">Something went wrong. Please try again.</string>
+    <string name="auth_error_empty_email">Enter your email to reset the password</string>
+    <string name="auth_reset_email_sent">We sent a password-reset link to %1$s. Check your inbox.</string>
 </resources>

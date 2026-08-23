@@ -34,4 +34,6 @@
     <string name="auth_error_no_google_account">Акаунт Google не вибрано</string>
     <string name="auth_error_no_saved_password">Для CoPlanly ще немає збережених паролів</string>
     <string name="auth_error_unknown">Щось пішло не так. Спробуйте ще раз.</string>
+    <string name="auth_error_empty_email">Введіть пошту, щоб скинути пароль</string>
+    <string name="auth_reset_email_sent">Ми надіслали посилання для скидання пароля на %1$s. Перевірте пошту.</string>
 </resources>
