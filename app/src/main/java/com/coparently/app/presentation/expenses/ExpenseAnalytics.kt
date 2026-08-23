@@ -26,13 +26,16 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.coparently.app.R
 import com.coparently.app.domain.expenses.CategorySlice
 import com.coparently.app.domain.expenses.CurrencyBreakdown
+import com.coparently.app.domain.model.Expense
 import com.coparently.app.presentation.common.ParentNames
 import com.coparently.app.presentation.common.PillChip
 import com.coparently.app.presentation.common.SectionGroup
+import com.coparently.app.presentation.theme.ParentColors
 import java.text.NumberFormat
 import java.util.Locale
 
@@ -44,6 +47,13 @@ private val SHARE_COLUMN_WIDTH = 52.dp
 
 /** The colour swatch that ties a table row to its arc. */
 private val SWATCH_SIZE = 12.dp
+
+/** The dot that ties a ledger row to its category's arc — smaller than [SWATCH_SIZE], it is a
+ *  marker on a text row, not a legend entry. */
+private val LEDGER_DOT_SIZE = 8.dp
+
+/** How much of the column the pie takes. Half the screen, per the owner's walkthrough. */
+private const val PIE_WIDTH_FRACTION = 0.55f
 
 /**
  * Where the month's money went: a pie by category, and beneath it the same figures as a table
@@ -66,6 +76,9 @@ private val SWATCH_SIZE = 12.dp
  * @param payers The two uids the payer filter offers, or empty when the filter must be hidden.
  * @param selectedPayer The uid currently filtered to, or null for everyone.
  * @param parentNames Resolves a uid to that parent's own name.
+ * @param expenses The whole selected month, unfiltered — this view narrows to the drawn currency
+ *   and the payer filter itself, so the ledger can never disagree with the chart above it.
+ * @param roleByUid Resolves a payer uid to its slot, for the parent-column order and colours.
  * @param onSelectCurrency Picks a currency to draw.
  * @param onSelectPayer Filters to one parent's spending, or to everyone's with null.
  * @param modifier Modifier applied to the view.
@@ -78,6 +91,8 @@ fun ExpenseAnalytics(
     payers: List<String>,
     selectedPayer: String?,
     parentNames: ParentNames,
+    expenses: List<Expense>,
+    roleByUid: Map<String, String>,
     onSelectCurrency: (String) -> Unit,
     onSelectPayer: (String?) -> Unit,
     modifier: Modifier = Modifier
@@ -126,12 +141,26 @@ fun ExpenseAnalytics(
             return@Column
         }
 
+        // Half the column, centred — full-width the pie pushed its own table off screen, and a
+        // pie encodes shares in angles, which survive shrinking; the figures live in the rows.
         CategoryPieChart(
             slices = breakdown.slices,
-            modifier = Modifier.padding(horizontal = 32.dp, vertical = 8.dp)
+            modifier = Modifier
+                .fillMaxWidth(PIE_WIDTH_FRACTION)
+                .align(Alignment.CenterHorizontally)
+                .padding(vertical = 8.dp)
         )
 
         BreakdownTable(breakdown = breakdown)
+
+        ParentLedger(
+            expenses = expenses.filter { it.currency == breakdown.currency },
+            payers = payers,
+            selectedPayer = selectedPayer,
+            roleByUid = roleByUid,
+            parentNames = parentNames,
+            currency = breakdown.currency
+        )
     }
 }
 
@@ -341,4 +370,148 @@ private fun formatShare(share: Double): String {
     val format = NumberFormat.getPercentInstance(Locale.getDefault())
     format.maximumFractionDigits = 0
     return format.format(share)
+}
+
+/**
+ * The month's expenses as one column per parent — who spent what, side by side, each row marked
+ * with its category's colour (owner ask, Aug 2026 walkthrough).
+ *
+ * Column order follows the slots — slot 1 ("mom", pink) left, slot 2 right — so the columns sit
+ * where the calendar's colours already taught the eye to look. With the payer filter on, only
+ * that parent's column renders: the chart above shows one parent's shares, and a second column
+ * proven empty by construction would just say "the filter works". Unpaired (or before both
+ * profiles resolve) the ledger is a single unheaded column. Expenses whose payer matches neither
+ * uid — legacy rows — keep a full-width row at the bottom rather than being silently dropped.
+ *
+ * Read-only on purpose: editing and swipe-to-delete live on the List tab, which is one switch
+ * away and built for it.
+ */
+@Composable
+@Suppress("LongParameterList") // stateless view: its inputs are its whole API
+private fun ParentLedger(
+    expenses: List<Expense>,
+    payers: List<String>,
+    selectedPayer: String?,
+    roleByUid: Map<String, String>,
+    parentNames: ParentNames,
+    currency: String
+) {
+    if (expenses.isEmpty()) return
+    val ordered = remember(expenses) { expenses.sortedByDescending { it.date } }
+
+    val shownPayers = when {
+        payers.size != 2 -> emptyList()
+        selectedPayer != null -> listOf(selectedPayer)
+        // Slot 1 left, slot 2 right; roleByUid can miss a legacy uid, so fall back to given order.
+        else -> payers.sortedBy { if (roleByUid[it] == "mom") 0 else 1 }
+    }
+
+    if (shownPayers.isEmpty()) {
+        SectionGroup {
+            ordered.forEachIndexed { index, expense ->
+                LedgerRow(expense = expense, currency = currency)
+                if (index != ordered.lastIndex) Divider()
+            }
+        }
+        return
+    }
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        shownPayers.forEach { uid ->
+            LedgerColumn(
+                title = parentNames.labelForUid(uid),
+                titleColor = ParentColors.text(roleByUid[uid].orEmpty()),
+                expenses = ordered.filter { it.paidBy == uid },
+                currency = currency,
+                modifier = Modifier.weight(1f)
+            )
+        }
+    }
+
+    val unattributed = ordered.filter { it.paidBy !in shownPayers && selectedPayer == null }
+    if (unattributed.isNotEmpty() && shownPayers.size == 2) {
+        SectionGroup {
+            unattributed.forEachIndexed { index, expense ->
+                LedgerRow(expense = expense, currency = currency)
+                if (index != unattributed.lastIndex) Divider()
+            }
+        }
+    }
+}
+
+/** One parent's half of the ledger: their name in their colour, then their rows. */
+@Composable
+private fun LedgerColumn(
+    title: String,
+    titleColor: androidx.compose.ui.graphics.Color,
+    expenses: List<Expense>,
+    currency: String,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
+            color = titleColor,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(start = 4.dp)
+        )
+        if (expenses.isEmpty()) {
+            Text(
+                text = stringResource(R.string.expense_analytics_column_empty),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 4.dp, top = 2.dp)
+            )
+        } else {
+            SectionGroup {
+                expenses.forEachIndexed { index, expense ->
+                    LedgerRow(expense = expense, currency = currency)
+                    if (index != expenses.lastIndex) Divider()
+                }
+            }
+        }
+    }
+}
+
+/** One expense: its category's dot, its title, its amount. */
+@Composable
+private fun LedgerRow(expense: Expense, currency: String) {
+    val name = stringResource(expense.category.labelRes)
+    val amount = currencyFormat(currency).format(expense.amount)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 10.dp, vertical = 8.dp)
+            .semantics(mergeDescendants = true) {
+                contentDescription = "${expense.title}, $name, $amount"
+            },
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(LEDGER_DOT_SIZE)
+                .clip(CircleShape)
+                .background(expense.category.sliceColor())
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = expense.title,
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = amount,
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
+    }
 }

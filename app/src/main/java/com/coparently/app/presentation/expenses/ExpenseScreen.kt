@@ -241,6 +241,8 @@ fun ExpenseScreen(
                             payers = analyticsPayers,
                             selectedPayer = analyticsPayer,
                             parentNames = parentNames,
+                            expenses = monthExpenses,
+                            roleByUid = roleByUid,
                             onSelectCurrency = viewModel::selectAnalyticsCurrency,
                             onSelectPayer = viewModel::selectAnalyticsPayer,
                             modifier = Modifier.weight(1f)

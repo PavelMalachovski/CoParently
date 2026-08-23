@@ -23,4 +23,5 @@
 
     <string name="expense_analytics_empty">Nothing spent this month.</string>
     <string name="expense_analytics_empty_filtered">Nothing spent by this parent this month.</string>
+    <string name="expense_analytics_column_empty">No expenses</string>
 </resources>

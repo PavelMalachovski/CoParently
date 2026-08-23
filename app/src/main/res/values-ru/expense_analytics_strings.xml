@@ -23,4 +23,5 @@
 
     <string name="expense_analytics_empty">В этом месяце ничего не потрачено.</string>
     <string name="expense_analytics_empty_filtered">Этот родитель в этом месяце ничего не потратил.</string>
+    <string name="expense_analytics_column_empty">Расходов нет</string>
 </resources>

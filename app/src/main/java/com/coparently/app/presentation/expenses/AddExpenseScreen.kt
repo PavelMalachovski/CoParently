@@ -9,6 +9,7 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -21,6 +22,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -459,6 +461,9 @@ private fun ExpenseCategoryDropdown(
             onValueChange = {},
             readOnly = true,
             label = { Text(stringResource(R.string.expense_field_category)) },
+            // The selected category's dot, in the same colour its slice wears on the analytics
+            // chart — one palette, every surface (owner ask, Aug 2026 walkthrough).
+            leadingIcon = { CategoryDot(category) },
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
             colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
             modifier = Modifier.menuAnchor().fillMaxWidth()
@@ -471,11 +476,23 @@ private fun ExpenseCategoryDropdown(
             ExpenseCategory.values().forEach { cat ->
                 DropdownMenuItem(
                     text = { Text(stringResource(cat.labelRes)) },
+                    leadingIcon = { CategoryDot(cat) },
                     onClick = { onCategorySelected(cat) }
                 )
             }
         }
     }
+}
+
+/** The category's colour, as the chart's own slice hue — a dot, not an icon tint. */
+@Composable
+private fun CategoryDot(category: ExpenseCategory) {
+    Box(
+        modifier = Modifier
+            .size(12.dp)
+            .clip(CircleShape)
+            .background(category.sliceColor())
+    )
 }
 
 /**
