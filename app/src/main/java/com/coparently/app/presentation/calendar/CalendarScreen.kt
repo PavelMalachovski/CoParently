@@ -447,11 +447,13 @@ fun CalendarScreen(
                     }
                 }
 
-                // Regular "+" button
+                // Regular "+" button. Pre-fills the day on screen: the selected day when there
+                // is one, otherwise the anchor of the current view — a null date made the form
+                // default to today even with another day highlighted.
                 FloatingActionButton(
                     onClick = {
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        onAddEventClick(null, null)
+                        onAddEventClick(selectedDate ?: anchorDate, null)
                     },
                     containerColor = MaterialTheme.colorScheme.primaryContainer,
                     contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
@@ -610,12 +612,15 @@ fun CalendarScreen(
                                     onDayLongClick = parents.coParent?.let {
                                         { date: LocalDate -> swapDate = date }
                                     },
-                                    // Selects the day (highlight ring). Tapping used to jump
-                                    // straight into Day view; Day remains a deliberate choice
-                                    // from the title menu, and the day's titles live on the
-                                    // home screen's today card and in the event preview.
+                                    // Selects the day and opens Day view, where an empty hour
+                                    // slot creates an event — the owner's walkthrough found the
+                                    // select-only tap a dead end: two redesign passes removed
+                                    // first the jump, then the agenda card that replaced it,
+                                    // leaving a tap with no visible outcome and no tap route to
+                                    // creating an event on a chosen day.
                                     onDayClick = { clickedDate ->
                                         calendarViewModel.setSelectedDate(clickedDate)
+                                        calendarViewModel.setViewMode(CalendarViewMode.DAY)
                                     },
                                     // Paging is not choosing: the new month gets today if it
                                     // holds today, and no selection at all otherwise.
