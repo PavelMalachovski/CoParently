@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Ausgabenanalyse: wohin das Geld des Monats ging. -->
+<resources>
+    <!-- The segmented control on the Expenses screen. Both views share one month control. -->
+    <string name="expense_analytics_tab_list">Liste</string>
+    <string name="expense_analytics_tab_analytics">Analyse</string>
+    <string name="expense_analytics_view_label">Ansicht</string>
+
+    <!-- Payer filter. The two parent options are named with each parent's own name, never
+         "Mom" or "Dad"; only the "everyone" option needs a string. -->
+    <string name="expense_analytics_payer_everyone">Alle</string>
+    <string name="expense_analytics_payer_label">Wessen Ausgaben</string>
+
+    <!-- Currency chip row, shown only when the month holds more than one currency. -->
+    <string name="expense_analytics_currency_label">Angezeigte Währung</string>
+
+    <!-- The table under the chart. It is also the chart's legend: each row carries the
+         category's colour, so identity is never colour alone. -->
+    <string name="expense_analytics_column_category">Kategorie</string>
+    <string name="expense_analytics_column_amount">Betrag</string>
+    <string name="expense_analytics_column_share">Anteil</string>
+    <string name="expense_analytics_total">Gesamt</string>
+
+    <string name="expense_analytics_empty">In diesem Monat wurde nichts ausgegeben.</string>
+    <string name="expense_analytics_empty_filtered">Dieser Elternteil hat in diesem Monat nichts ausgegeben.</string>
+</resources>

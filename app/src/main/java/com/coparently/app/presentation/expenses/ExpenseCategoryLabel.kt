@@ -11,9 +11,15 @@ import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.SportsSoccer
 import androidx.compose.material.icons.filled.Toys
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.coparently.app.R
 import com.coparently.app.domain.model.ExpenseCategory
+import com.coparently.app.presentation.theme.CoPlanlyColors
 
 /**
  * Localized label resource for an [ExpenseCategory].
@@ -57,3 +63,21 @@ internal val ExpenseCategory.iconVector: ImageVector
         ExpenseCategory.HOUSEHOLD -> Icons.Default.Home
         ExpenseCategory.OTHER -> Icons.Default.ReceiptLong
     }
+
+/**
+ * The colour this category is drawn in on the spending chart, its legend and its table.
+ *
+ * One line thick on purpose: the derivation, and the reasoning behind every number in it, lives
+ * in [CategoryPalette], which is kept free of Compose so it can be unit tested. Kept here beside
+ * [labelRes] and [iconVector] so a new category is obviously missing all three.
+ *
+ * Reads the rendered theme rather than `isSystemInDarkTheme()` — the app can force light while
+ * the system is dark, and the palette must follow what is actually painted. The dark steps are
+ * separately chosen, not a flip of the light ones.
+ */
+@Composable
+internal fun ExpenseCategory.sliceColor(): Color {
+    val scheme = MaterialTheme.colorScheme
+    val dark = scheme.surface.luminance() < CoPlanlyColors.DARK_LUMINANCE_THRESHOLD
+    return Color(CategoryPalette.sliceArgb(this, scheme.primary.toArgb(), dark))
+}

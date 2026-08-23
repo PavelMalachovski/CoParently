@@ -15,6 +15,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -24,11 +27,16 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.coparently.app.R
@@ -44,7 +52,12 @@ import java.util.Locale
  * Expense list screen — a top-level bottom-navigation destination.
  *
  * Leads with one card carrying the month, the who-paid-what split and the settle-up balance,
- * then a strip of budget chips, then this month's expenses.
+ * then a segmented control choosing between two views of that month: the **list** (budget chips
+ * and this month's expenses) or the **analytics** (a pie by category and a sorted table).
+ *
+ * Both views share the one month control in the summary card. Analytics is deliberately not a
+ * route of its own: it would need a second month control, and the two could drift — a parent
+ * looking at August's chart and September's list, with nothing on screen saying so.
  *
  * The August 2026 refresh merged the standalone month navigator into the summary card (the
  * screen used to spend three stacked headers before the first row) and surfaced budgets here
@@ -77,6 +90,14 @@ fun ExpenseScreen(
     val roleByUid by viewModel.roleByUid.collectAsState()
     val parentNames = rememberParentNames(viewModel.parents.collectAsState().value)
     val budgets by budgetViewModel.budgets.collectAsState()
+    val breakdowns by viewModel.breakdowns.collectAsState()
+    val selectedBreakdown by viewModel.selectedBreakdown.collectAsState()
+    val analyticsPayers by viewModel.analyticsPayers.collectAsState()
+    val analyticsPayer by viewModel.analyticsPayer.collectAsState()
+
+    // Which of the two views the month is shown in. `rememberSaveable`, so a rotation does not
+    // silently drop a parent back to the list they had switched away from.
+    var showAnalytics by rememberSaveable { mutableStateOf(false) }
 
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -204,23 +225,86 @@ fun ExpenseScreen(
                         )
                     }
 
-                    onOpenBudgets?.let { openBudgets ->
-                        val progress = remember(budgets, monthExpenses) {
-                            budgetProgress(budgets, monthExpenses)
-                        }
-                        BudgetChips(progress = progress, onOpenBudgets = openBudgets)
-                    }
-
-                    ExpenseList(
-                        expenses = monthExpenses,
-                        roleByUid = roleByUid,
-                        parentNames = parentNames,
-                        onDelete = deleteWithUndo,
-                        onExpenseClick = { onEditExpense(it.id) },
-                        modifier = Modifier.weight(1f)
+                    // One month control, two views of it. A separate analytics route would need
+                    // its own month control, and the two could drift — a parent looking at
+                    // August's chart and September's list with nothing on screen saying so.
+                    ViewSwitcher(
+                        showAnalytics = showAnalytics,
+                        onSelect = { showAnalytics = it },
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp)
                     )
+
+                    if (showAnalytics) {
+                        ExpenseAnalytics(
+                            breakdown = selectedBreakdown,
+                            currencies = breakdowns.map { it.currency },
+                            payers = analyticsPayers,
+                            selectedPayer = analyticsPayer,
+                            parentNames = parentNames,
+                            onSelectCurrency = viewModel::selectAnalyticsCurrency,
+                            onSelectPayer = viewModel::selectAnalyticsPayer,
+                            modifier = Modifier.weight(1f)
+                        )
+                    } else {
+                        // Budgets belong to the list: they are about what is left to spend, not
+                        // about what was spent.
+                        onOpenBudgets?.let { openBudgets ->
+                            val progress = remember(budgets, monthExpenses) {
+                                budgetProgress(budgets, monthExpenses)
+                            }
+                            BudgetChips(progress = progress, onOpenBudgets = openBudgets)
+                        }
+
+                        ExpenseList(
+                            expenses = monthExpenses,
+                            roleByUid = roleByUid,
+                            parentNames = parentNames,
+                            onDelete = deleteWithUndo,
+                            onExpenseClick = { onEditExpense(it.id) },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
                 }
             }
+        }
+    }
+}
+
+/**
+ * List or Analytics, over the same month.
+ *
+ * @param showAnalytics Whether the analytics view is the one showing
+ * @param onSelect Switches view
+ * @param modifier Modifier applied to the control
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ViewSwitcher(
+    showAnalytics: Boolean,
+    onSelect: (Boolean) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    // The row itself is labelled: two unlabelled-in-context buttons announce "List" and
+    // "Analytics" with nothing saying what they switch.
+    val label = stringResource(R.string.expense_analytics_view_label)
+    SingleChoiceSegmentedButtonRow(
+        modifier = modifier
+            .fillMaxWidth()
+            .semantics { contentDescription = label }
+    ) {
+        SegmentedButton(
+            selected = !showAnalytics,
+            onClick = { onSelect(false) },
+            shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
+        ) {
+            Text(stringResource(R.string.expense_analytics_tab_list))
+        }
+        SegmentedButton(
+            selected = showAnalytics,
+            onClick = { onSelect(true) },
+            shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
+        ) {
+            Text(stringResource(R.string.expense_analytics_tab_analytics))
         }
     }
 }
