@@ -365,18 +365,13 @@ fun NavGraph(
                 )
             }
 
-            // Propose a new time for an event (MVP 2). Optional conversationId means the
-            // request was started from a chat, so a message is posted back to that thread.
+            // Propose a new time for an event (MVP 2). The thread the proposal is announced in
+            // is resolved from the two uids by `ActivityAnnouncer`, not carried in the route.
             composable(
                 route = Screen.RequestChange.route,
                 arguments = listOf(
                     navArgument(Screen.RequestChange.ARG_EVENT_ID) {
                         type = NavType.StringType
-                    },
-                    navArgument(Screen.RequestChange.ARG_CONVERSATION_ID) {
-                        type = NavType.StringType
-                        nullable = true
-                        defaultValue = null
                     }
                 ),
                 enterTransition = { fadeInScaleUp() },
@@ -385,15 +380,11 @@ fun NavGraph(
                 popExitTransition = { fadeOutScaleDown() }
             ) { backStackEntry ->
                 val eventId = backStackEntry.arguments?.getString(Screen.RequestChange.ARG_EVENT_ID) ?: return@composable
-                val conversationId = backStackEntry.arguments
-                    ?.getString(Screen.RequestChange.ARG_CONVERSATION_ID)
-                    ?.takeIf { it != "null" }
                 com.coparently.app.presentation.changerequests.RequestChangeScreen(
                     eventId = eventId,
                     onBack = {
                         navController.popBackStack()
-                    },
-                    conversationId = conversationId
+                    }
                 )
             }
 
@@ -590,10 +581,8 @@ fun NavGraph(
                     // thread in place — so the draft and the change-request route have to
                     // reach it here too, not only via the Chat detail route below.
                     draft = draft,
-                    onRequestChangeForEvent = { eventId, threadId ->
-                        navController.navigate(
-                            Screen.RequestChange.createRoute(eventId, threadId)
-                        )
+                    onRequestChangeForEvent = { eventId ->
+                        navController.navigate(Screen.RequestChange.createRoute(eventId))
                     },
                     onOpenChangeRequest = { eventId ->
                         navController.navigate(Screen.ChangeRequests.createRoute(eventId))
@@ -626,7 +615,7 @@ fun NavGraph(
                     },
                     onRequestChangeForEvent = { eventId ->
                         navController.navigate(
-                            Screen.RequestChange.createRoute(eventId, conversationId)
+                            Screen.RequestChange.createRoute(eventId)
                         )
                     },
                     onOpenChangeRequest = { eventId ->
@@ -1015,13 +1004,17 @@ sealed class Screen(val route: String) {
         fun createRoute(eventId: String? = null): String =
             "change_requests?eventId=${eventId ?: "null"}"
     }
-    data object RequestChange : Screen("request_change/{eventId}?conversationId={conversationId}") {
+    /**
+     * The change-request form.
+     *
+     * It used to carry the conversation it was opened from, because the chat card was posted only
+     * when one was supplied — so a change proposed from the calendar reached the thread not at
+     * all. `ActivityAnnouncer` resolves the pair's thread from the two uids itself, so the
+     * argument had nothing left to do and is gone rather than left as dead weight.
+     */
+    data object RequestChange : Screen("request_change/{eventId}") {
         const val ARG_EVENT_ID = "eventId"
-        const val ARG_CONVERSATION_ID = "conversationId"
 
-        fun createRoute(eventId: String, conversationId: String? = null): String {
-            val convParam = conversationId ?: "null"
-            return "request_change/$eventId?conversationId=$convParam"
-        }
+        fun createRoute(eventId: String): String = "request_change/$eventId"
     }
 }

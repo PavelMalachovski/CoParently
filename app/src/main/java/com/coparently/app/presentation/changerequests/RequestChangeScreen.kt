@@ -50,6 +50,11 @@ import java.time.format.DateTimeFormatter
 
 /**
  * Form for proposing a new date/time for [eventId] to the co-parent.
+ *
+ * It no longer takes a conversation id. The chat card used to be posted only when one was passed
+ * — that is, only when the request was started from the chat screen — so a change proposed from
+ * the calendar reached the thread not at all. `ActivityAnnouncer` resolves the pair's thread from
+ * the two uids itself, so there is nothing left for a caller to supply or to forget.
  */
 @Suppress("LongMethod") // Compose screen: state wiring + Scaffold in one place
 @OptIn(ExperimentalMaterial3Api::class)
@@ -57,7 +62,6 @@ import java.time.format.DateTimeFormatter
 fun RequestChangeScreen(
     eventId: String,
     onBack: () -> Unit,
-    conversationId: String? = null,
     viewModel: RequestChangeViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -120,7 +124,7 @@ fun RequestChangeScreen(
                     event = event,
                     isSending = state is RequestChangeUiState.Sending,
                     onSubmit = { start, end, note ->
-                        viewModel.submit(event, start, end, note, conversationId)
+                        viewModel.submit(event, start, end, note)
                     },
                     modifier = Modifier.padding(padding)
                 )
