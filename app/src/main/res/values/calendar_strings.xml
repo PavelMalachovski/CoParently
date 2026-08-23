@@ -54,6 +54,8 @@
     <string name="calendar_day_desc_outside_month">Outside current month</string>
     <!-- %1$s = that parent's name, resolved by presentation/common/ParentLabels.kt -->
     <string name="calendar_day_desc_with_parent">With %1$s</string>
+    <string name="calendar_day_desc_handover">Changes hands from %1$s to %2$s</string>
+    <string name="calendar_day_desc_swap_pending">A day swap is waiting for an answer</string>
     <plurals name="calendar_day_desc_events">
         <item quantity="one">%1$d event</item>
         <item quantity="other">%1$d events</item>

@@ -8,6 +8,8 @@ import com.coparently.app.data.local.preferences.EncryptedPreferences
 import com.coparently.app.data.local.preferences.PreferenceKeys
 import com.coparently.app.data.repository.CustodyModelRepository
 import com.coparently.app.domain.custody.CustodyChangeAnnouncement
+import com.coparently.app.domain.custody.CustodyResolver
+import com.coparently.app.domain.custody.DayOverride
 import com.coparently.app.domain.custody.SharedCustody
 import com.coparently.app.domain.model.CustodyModel
 import com.coparently.app.presentation.common.Parents
@@ -64,6 +66,22 @@ class CalendarViewModel @Inject constructor(
 
     private val _custodyModel = MutableStateFlow<CustodyModel?>(null)
     val custodyModel: StateFlow<CustodyModel?> = _custodyModel.asStateFlow()
+
+    /**
+     * One-off day swaps, keyed by ISO date.
+     *
+     * Kept beside [custodyModel] rather than folded into it because they are different things:
+     * the model is the agreed *pattern*, a swap is a fact about the shared document. The two are
+     * joined by [com.coparently.app.domain.custody.CustodyResolver], which is the single place
+     * the precedence between them lives — an accepted swap wins, a pending or declined one
+     * changes nothing.
+     *
+     * `Eagerly`, matching [custodySchedules]: [getCustodyForDate] reads `.value` outside any
+     * collection, and a lazily-started flow would answer with the pattern alone on the first call.
+     */
+    val dayOverrides: StateFlow<Map<String, DayOverride>> =
+        custodyModelRepository.observeDayOverrides()
+            .stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
 
     /**
      * The `lastModifiedAt` of the shared-custody change the user last dismissed the banner for,
@@ -194,20 +212,23 @@ class CalendarViewModel @Inject constructor(
     }
 
     /**
-     * Gets custody for a specific date.
-     * Uses CustodyModel if available, falls back to legacy schedules.
+     * Whose day [date] is: an accepted one-off swap, then the active model, then the legacy
+     * schedules.
+     *
+     * Resolved through [CustodyResolver] rather than by reading the model directly, so this
+     * cannot drift from the grid's own lookup. CLAUDE.md already required one custody lookup —
+     * reading the legacy rows directly is what once made model-based custody invisible — and a
+     * second copy of the precedence would reintroduce the same class of bug with swaps.
      *
      * @param date The date to check
      * @return "mom", "dad", or null
      */
-    fun getCustodyForDate(date: LocalDate): String? {
-        _custodyModel.value?.let { model ->
-            return model.getCustodyFor(date)
-        }
-
-        val schedules = custodySchedules.value
-        return CustodyHelper.getCustodyForDate(date, schedules)
-    }
+    fun getCustodyForDate(date: LocalDate): String? = CustodyResolver.custodyFor(
+        model = _custodyModel.value,
+        overrides = dayOverrides.value,
+        legacy = { day -> CustodyHelper.getCustodyForDate(day, custodySchedules.value) },
+        date = date
+    )
 
     /**
      * Sets the calendar view mode.

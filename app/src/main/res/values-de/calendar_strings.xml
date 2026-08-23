@@ -35,6 +35,8 @@
     <string name="calendar_day_desc_today">Heute</string>
     <string name="calendar_day_desc_outside_month">Außerhalb des aktuellen Monats</string>
     <string name="calendar_day_desc_with_parent">Bei: %1$s</string>
+    <string name="calendar_day_desc_handover">Übergabe von %1$s an %2$s</string>
+    <string name="calendar_day_desc_swap_pending">Ein Tagestausch wartet auf eine Antwort</string>
     <plurals name="calendar_day_desc_events">
         <item quantity="one">%1$d Termin</item>
         <item quantity="other">%1$d Termine</item>

@@ -14,9 +14,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -28,7 +31,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -68,7 +74,6 @@ private const val DAYS_PER_WEEK = 7L
 private const val HOLIDAY_TINT_ALPHA = 0.10f
 
 /** Full-hue edge marking the first day of a custody run. */
-private val CUSTODY_EDGE_WIDTH = 2.dp
 
 /**
  * Classic month grid: always starts at the 1st of the month, pages horizontally
@@ -84,6 +89,9 @@ private val CUSTODY_EDGE_WIDTH = 2.dp
  *   index rather than the flat list is deliberate: `dayContent` runs for all 42 cells on every
  *   recomposition, so filtering the whole list per cell cost O(42·N) each time. The agenda card
  *   under the grid reads the same map, so the two cannot disagree.
+ * @param pendingSwapDates Dates a one-off swap is being negotiated on. Deliberately separate from
+ *   [getCustody]: a pending swap has changed nothing about whose day it is, and saying otherwise
+ *   in the cell's colour would be a lie both parents act on.
  */
 @Suppress("LongParameterList") // screen-level composable: callbacks are its API surface
 @Composable
@@ -95,7 +103,8 @@ fun MonthView(
     parentNames: ParentNames,
     onDayClick: (LocalDate) -> Unit,
     onMonthChange: (YearMonth) -> Unit,
-    holidays: Map<LocalDate, Holiday> = emptyMap()
+    holidays: Map<LocalDate, Holiday> = emptyMap(),
+    pendingSwapDates: Set<LocalDate> = emptySet()
 ) {
     val firstDayOfWeek = remember { DayOfWeek.MONDAY }
 
@@ -178,7 +187,8 @@ fun MonthView(
                         getCustody = getCustody,
                         parentNames = parentNames,
                         onDayClick = onDayClick,
-                        holiday = holidays[day.date]
+                        holiday = holidays[day.date],
+                        isSwapPending = day.date in pendingSwapDates
                     )
                 }
             )
@@ -258,7 +268,8 @@ private fun DayCell(
     getCustody: (LocalDate) -> String?,
     parentNames: ParentNames,
     onDayClick: (LocalDate) -> Unit,
-    holiday: Holiday? = null
+    holiday: Holiday? = null,
+    isSwapPending: Boolean = false
 ) {
     val dims = dimensions()
     val date = day.date
@@ -278,10 +289,12 @@ private fun DayCell(
     // signal and still wins over the holiday tint. School vacation is intentionally NOT a
     // full-cell fill at all (it used to drown custody colors); it renders as a thin strip at
     // the bottom instead.
+    val previousCustody = getCustody(date.minusDays(1))
     val fill = DayCellFills.monthCell(
         isWeekend = isWeekend,
         isCurrentMonth = isCurrentMonth,
         custody = custody,
+        previousCustody = previousCustody,
         isPublicHoliday = isPublicHoliday
     )
     val baseColor = when (fill.base) {
@@ -302,11 +315,33 @@ private fun DayCell(
         DayCellOverlay.TODAY, DayCellOverlay.NONE -> Color.Transparent
     }
 
+    // The parent the child is coming *from* on a handover day, at the same custody alpha as the
+    // overlay: the two triangles must read as one system, not as a tint and a competing block.
+    val handoverColor = when (fill.handoverFrom) {
+        DayCellOverlay.CUSTODY_MOM ->
+            CoPlanlyColors.MomPink.copy(alpha = CoPlanlyColors.CUSTODY_TINT_ALPHA)
+        DayCellOverlay.CUSTODY_DAD ->
+            CoPlanlyColors.DadBlue.copy(alpha = CoPlanlyColors.CUSTODY_TINT_ALPHA)
+        else -> null
+    }
+
     // All localized pieces are resolved in composable scope; buildString itself is not one.
     val todayLabel = stringResource(R.string.calendar_day_desc_today)
     val outsideMonthLabel = stringResource(R.string.calendar_day_desc_outside_month)
     val custodyLabel = custody?.let {
         stringResource(R.string.calendar_day_desc_with_parent, parentNames.labelFor(it))
+    }
+    val swapLabel = if (isSwapPending) {
+        stringResource(R.string.calendar_day_desc_swap_pending)
+    } else {
+        null
+    }
+    val handoverLabel = fill.handoverFrom?.let {
+        stringResource(
+            R.string.calendar_day_desc_handover,
+            parentNames.labelFor(previousCustody.orEmpty()),
+            parentNames.labelFor(custody.orEmpty())
+        )
     }
     val eventsLabel = if (events.isNotEmpty()) {
         pluralStringResource(R.plurals.calendar_day_desc_events, events.size, events.size)
@@ -328,6 +363,14 @@ private fun DayCell(
             append(if (Locale.getDefault().language == "cs") it.nameCs else it.nameEn)
         }
         custodyLabel?.let {
+            append(", ")
+            append(it)
+        }
+        handoverLabel?.let {
+            append(", ")
+            append(it)
+        }
+        swapLabel?.let {
             append(", ")
             append(it)
         }
@@ -364,27 +407,60 @@ private fun DayCell(
                 color = overlayColor,
                 shape = RoundedCornerShape(dims.cornerRadius / 2)
             )
+            // A handover day is split on a diagonal: the parent who had the child yesterday in
+            // the top-left triangle, today's parent in the bottom-right, reading the way time
+            // does. This replaces the full-hue left edge that used to mark the first day of a
+            // custody run — both answered "the child changes hands here", and two answers to one
+            // question is what the design refresh removed elsewhere. The diagonal answers more:
+            // it names *both* parents, which the edge could not.
+            //
+            // Two `drawPath` calls rather than one diagonal gradient: a gradient would smear the
+            // boundary across the cell, and the point is that the day belongs to one parent until
+            // the handover and the other after it. The first repaints the triangle with the
+            // opaque base so the overlay's tint underneath is replaced rather than blended with —
+            // two translucent parent hues stacked would read as a muddy third colour — and the
+            // second lays yesterday's parent over it at the same custody alpha. The weekend base
+            // still shows through both halves, so this file's invariant survives.
+            .clip(RoundedCornerShape(dims.cornerRadius / 2))
+            .drawBehind {
+                handoverColor?.let { color ->
+                    val triangle = Path().apply {
+                        moveTo(0f, 0f)
+                        lineTo(size.width, 0f)
+                        lineTo(0f, size.height)
+                        close()
+                    }
+                    drawPath(triangle, baseColor)
+                    drawPath(triangle, color)
+                }
+            }
             .clickable(onClick = { onDayClick(date) }, onClickLabel = clickLabel)
             .padding(dims.paddingSmall / 2),
         contentAlignment = Alignment.TopCenter
     ) {
-        // First day of a custody run gets a full-hue edge, so the pattern is legible without
-        // relying on a 14% fill alone — where a run starts is the thing parents actually scan for.
-        if (isCurrentMonth && custody != null && custody != getCustody(date.minusDays(1))) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.CenterStart)
-                    .fillMaxHeight()
-                    .width(CUSTODY_EDGE_WIDTH)
-                    .background(
-                        color = if (custody == "mom") {
-                            CoPlanlyColors.MomPink
-                        } else {
-                            CoPlanlyColors.DadBlue
-                        },
-                        shape = RoundedCornerShape(1.dp)
-                    )
-            )
+        // Two arrows on a date a swap is being negotiated on. Not a colour: the cell's colour
+        // still means whose day it is *now*, and a pending swap has not changed that. The arrows
+        // say "this is being discussed", which is a different fact and deserves its own channel.
+        // They carry no content description of their own — the cell has one description and it
+        // already names the pending swap; two would announce it twice.
+        if (isSwapPending) {
+            Column(
+                modifier = Modifier.align(Alignment.TopEnd),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(SWAP_ARROW_SIZE)
+                )
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(SWAP_ARROW_SIZE)
+                )
+            }
         }
 
         Column(
@@ -481,6 +557,12 @@ private const val MAX_EVENT_DOTS = 3
 
 /** Diameter of an event dot in a month cell. */
 private val EVENT_DOT_SIZE = 6.dp
+
+/**
+ * The pending-swap arrows. Small enough not to compete with the day number or the event dots —
+ * a swap under discussion is a footnote on the cell, not its headline.
+ */
+private val SWAP_ARROW_SIZE = 10.dp
 
 /** Dot opacity on leading/trailing days from the neighbouring months. */
 private const val OUTSIDE_MONTH_DOT_ALPHA = 0.4f

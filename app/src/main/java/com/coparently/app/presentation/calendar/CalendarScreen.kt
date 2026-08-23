@@ -49,6 +49,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.coparently.app.R
+import com.coparently.app.domain.custody.CustodyResolver
 import com.coparently.app.domain.holidays.CzechHolidays
 import com.coparently.app.domain.holidays.Holiday
 import com.coparently.app.domain.model.Event
@@ -206,6 +207,7 @@ fun CalendarScreen(
     val events by eventViewModel.events.collectAsState()
     val custodySchedules by calendarViewModel.custodySchedules.collectAsState()
     val custodyModel by calendarViewModel.custodyModel.collectAsState()
+    val dayOverrides by calendarViewModel.dayOverrides.collectAsState()
     val viewMode by calendarViewModel.viewMode.collectAsState()
     val selectedDate by calendarViewModel.selectedDate.collectAsState()
     val displayedMonth by calendarViewModel.displayedMonth.collectAsState()
@@ -266,15 +268,27 @@ fun CalendarScreen(
     // Event preview sheet: a tap opens the read-only preview, Edit goes to the editor
     var previewEventId by remember { mutableStateOf<String?>(null) }
 
-    // Unified custody lookup: prefers the active CustodyModel (Custody Setup),
-    // falls back to legacy CustodyScheduleEntity rows. Views must use this —
-    // reading only the legacy schedules left model-based custody invisible.
-    val getCustody: (LocalDate) -> String? = remember(custodyModel, custodySchedules) {
-        {
-                date ->
-            custodyModel?.getCustodyFor(date)
-                ?: CustodyHelper.getCustodyForDate(date, custodySchedules)
+    // Unified custody lookup: an accepted one-off swap, then the active CustodyModel (Custody
+    // Setup), then the legacy CustodyScheduleEntity rows. Views must use this — reading only the
+    // legacy schedules left model-based custody invisible, and the precedence between a swap and
+    // the pattern lives in exactly one place, `CustodyResolver`, for the same reason.
+    val getCustody: (LocalDate) -> String? =
+        remember(custodyModel, dayOverrides, custodySchedules) {
+            CustodyResolver.resolver(
+                model = custodyModel,
+                overrides = dayOverrides,
+                legacy = { date -> CustodyHelper.getCustodyForDate(date, custodySchedules) }
+            )
         }
+
+    // The dates a swap is being negotiated on. A pending swap has changed nothing about whose
+    // day it is, so it is deliberately not part of `getCustody` — the grid marks it separately.
+    val pendingSwapDates: Set<LocalDate> = remember(dayOverrides) {
+        dayOverrides
+            .filterValues { it.isPending }
+            .keys
+            .mapNotNull { iso -> runCatching { LocalDate.parse(iso) }.getOrNull() }
+            .toSet()
     }
 
     // Events filtered by parent view and hidden event types
@@ -564,6 +578,7 @@ fun CalendarScreen(
                                     eventsByDay = eventsByDay,
                                     getCustody = getCustody,
                                     parentNames = parentNames,
+                                    pendingSwapDates = pendingSwapDates,
                                     // Selects the day so the agenda card below fills in.
                                     // Tapping used to jump straight into Day view, which was
                                     // the only way to read a cell's events at all — now the
