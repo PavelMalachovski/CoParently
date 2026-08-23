@@ -5,6 +5,8 @@ import com.coparently.app.data.local.dao.UserDao
 import com.coparently.app.data.local.entity.EventEntity
 import com.coparently.app.data.remote.firebase.FirebaseAuthService
 import com.coparently.app.data.remote.firebase.FirestoreEventDataSource
+import com.coparently.app.domain.events.CalendarVisibility
+import com.coparently.app.domain.events.EventAcceptance
 import com.coparently.app.domain.model.Event
 import com.coparently.app.domain.repository.EventRepository
 import com.google.gson.Gson
@@ -42,6 +44,19 @@ class EventRepositoryImpl @Inject constructor(
         }
     }
 
+    /**
+     * Every event in the range, recurring ones expanded into their occurrences — minus the ones
+     * no calendar view may draw.
+     *
+     * The filter lives here because this is the query the month grid, the week view and the day
+     * view all read from, so one rule covers every view rather than three that can disagree.
+     * CLAUDE.md already requires range queries to go through this function; [CalendarVisibility]
+     * is what it now enforces.
+     *
+     * Recurring masters are filtered **before** expansion. Occurrences share their master's id
+     * and carry nothing of their own, so a series waiting on the co-parent produces no
+     * occurrences at all rather than a set that has to be filtered again afterwards.
+     */
     override fun getEventsByDateRange(start: LocalDateTime, end: LocalDateTime): Flow<List<Event>> {
         // Non-recurring events matched by the query + recurring events expanded
         // into their occurrences within the range.
@@ -49,9 +64,9 @@ class EventRepositoryImpl @Inject constructor(
             eventDao.getSingleEventsByDateRange(start, end),
             eventDao.getRecurringEventsStartedBefore(end)
         ) { single, recurring ->
-            val singleEvents = single.map { it.toDomain() }
+            val singleEvents = CalendarVisibility.visible(single.map { it.toDomain() })
             val occurrences = com.coparently.app.domain.usecase.RecurrenceExpander.expandAll(
-                recurring.map { it.toDomain() },
+                CalendarVisibility.visible(recurring.map { it.toDomain() }),
                 start,
                 end
             )
@@ -59,9 +74,10 @@ class EventRepositoryImpl @Inject constructor(
         }
     }
 
+    /** One day's events, filtered by the same rule as the range query. */
     override fun getEventsByDate(date: LocalDateTime): Flow<List<Event>> {
         return eventDao.getEventsByDate(date).map { entities ->
-            entities.map { it.toDomain() }
+            CalendarVisibility.visible(entities.map { it.toDomain() })
         }
     }
 
@@ -227,7 +243,10 @@ class EventRepositoryImpl @Inject constructor(
             "sharedWith" to audience,
             "lastModifiedBy" to (lastModifiedBy ?: creatorUid),
             "permissions" to permissions,
-            "imageUrl" to (imageUrl ?: "")
+            "imageUrl" to (imageUrl ?: ""),
+            "acceptance" to acceptance.name,
+            "acceptedBy" to (acceptedBy ?: ""),
+            "acceptedAt" to (acceptedAt?.format(dateFormatter) ?: "")
         )
     }
 
@@ -259,7 +278,14 @@ class EventRepositoryImpl @Inject constructor(
             pickupConfirmedBy = pickupConfirmedBy,
             pickupConfirmedAt = pickupConfirmedAt,
             reminderMinutes = reminderMinutes,
-            imageUrl = imageUrl
+            imageUrl = imageUrl,
+            // An unrecognised status from a newer build reads as NOT_REQUIRED rather than
+            // throwing. That is the safe direction: the worst case is an event that shows when a
+            // newer build would have hidden it, against a crash on the path that draws the grid.
+            acceptance = runCatching { EventAcceptance.valueOf(acceptance) }
+                .getOrDefault(EventAcceptance.NOT_REQUIRED),
+            acceptedBy = acceptedBy,
+            acceptedAt = acceptedAt
         )
     }
 
@@ -289,7 +315,10 @@ class EventRepositoryImpl @Inject constructor(
             pickupConfirmedBy = pickupConfirmedBy,
             pickupConfirmedAt = pickupConfirmedAt,
             reminderMinutes = reminderMinutes,
-            imageUrl = imageUrl
+            imageUrl = imageUrl,
+            acceptance = acceptance.name,
+            acceptedBy = acceptedBy,
+            acceptedAt = acceptedAt
         )
     }
 }

@@ -53,6 +53,17 @@ data class EventEntity(
     val pickupConfirmedBy: String? = null,
     val pickupConfirmedAt: LocalDateTime? = null,
     val reminderMinutes: Int? = null,
-    val imageUrl: String? = null
+    val imageUrl: String? = null,
+    /**
+     * Whether the other parent still has to agree to this event, as
+     * [com.coparently.app.domain.events.EventAcceptance]'s name. Stored as a string rather than a
+     * converted type, the same way every other status crosses this schema, and defaulted to
+     * `NOT_REQUIRED` so every row that predates the column is correct without being rewritten.
+     */
+    val acceptance: String = "NOT_REQUIRED",
+    /** Firebase UID of whoever answered, or null while unanswered. */
+    val acceptedBy: String? = null,
+    /** When they answered, or null while unanswered. */
+    val acceptedAt: LocalDateTime? = null
 )
 

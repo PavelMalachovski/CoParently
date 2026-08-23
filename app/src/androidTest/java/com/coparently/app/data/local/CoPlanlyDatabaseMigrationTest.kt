@@ -397,6 +397,46 @@ class CoPlanlyDatabaseMigrationTest {
         }
     }
 
+    /**
+     * 16-to-17 records whether an event is waiting on the other parent, and rewrites nothing.
+     *
+     * The default is asserted rather than the column's mere existence. `NOT_REQUIRED` on every
+     * existing row is the whole backward story: every event written before this column was
+     * created without an acceptance step, and anything marked pending is removed from every
+     * calendar view with nobody able to give it back — a migration that defaulted the other way
+     * would empty a long-standing user's calendar in one launch.
+     */
+    @Test
+    fun migration16To17_leavesEveryExistingEventNotRequiringAcceptance() {
+        val db = helper.createDatabase(TEST_DB, VERSION_16)
+        db.execSQL(
+            """
+            INSERT INTO events (id, title, startDateTime, eventType, parentOwner, isRecurring,
+                                createdAt, updatedAt, syncedToFirestore, sharedWithJson,
+                                permissions, isPrivate)
+            VALUES ('e1', 'Football', '2026-09-01T16:00:00', 'training', 'dad', 0,
+                    '2026-08-01T09:00:00', '2026-08-01T09:00:00', 1, '["uid-dad"]',
+                    'read_write', 0)
+            """.trimIndent()
+        )
+        db.close()
+
+        val migrated = helper.runMigrationsAndValidate(
+            TEST_DB, VERSION_17, true, DatabaseMigrations.MIGRATION_16_17
+        )
+
+        migrated.query(
+            "SELECT title, sharedWithJson, acceptance, acceptedBy, acceptedAt FROM events"
+        ).use {
+            assertTrue(it.moveToFirst())
+            assertEquals("Football", it.getString(0))
+            assertEquals("[\"uid-dad\"]", it.getString(1))
+            assertEquals("NOT_REQUIRED", it.getString(2))
+            assertTrue("nobody has answered an event nobody was asked about", it.isNull(3))
+            assertTrue(it.isNull(4))
+        }
+    }
+
     private companion object {
         const val TEST_DB = "coplanly-migration-test.db"
         const val VERSION_11 = 11
@@ -405,6 +445,7 @@ class CoPlanlyDatabaseMigrationTest {
         const val VERSION_14 = 14
         const val VERSION_15 = 15
         const val VERSION_16 = 16
+        const val VERSION_17 = 17
 
         /** 2026-08-01T12:00:00 at UTC+05:30, i.e. 06:30:00Z. */
         const val NOON_AT_PLUS_FIVE_THIRTY_MILLIS = 1_785_565_800_000L
