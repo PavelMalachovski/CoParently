@@ -274,19 +274,21 @@ Data flow: UI → ViewModel → UseCase → Repository → Room (source of truth
   no FX conversion between currencies (spec §10) — deliberately: totals stay honest within each
   currency rather than being normalised. Do not reintroduce a single cross-currency total.
 
-- **A failed chat Firestore listener is never re-established** (known, accepted at merge time —
-  backlog with the time-zone item below). Both mirror branches in `MessageRepositoryImpl` end in
-  `.catch { Log.w(...) }`, which *completes* the mirror flow, so `merge(mirror, local)` then runs
-  on Room alone for the rest of the process. `SharingStarted.WhileSubscribed` cannot restart it:
-  `rememberChatUnreadCount()` in `NavGraph` holds an Activity-scoped `ChatViewModel` collecting
-  `unreadCount` for the whole process lifetime, so the subscriber count never reaches zero.
-  Observed once in production, on the first launch after install — both chat listeners were
-  denied ~0.5 s before `ensureConversation` created the canonical conversation document, and that
-  session ran on local data only. Nothing is lost and a cold restart clears it, but the app looks
-  entirely healthy while receiving nothing. Recurs on any reinstall, factory reset or account
-  switch. Fix when touching this code: `retryWhen` with backoff on both branches, or await
-  `ensureConversation` before subscribing the observers. Don't "fix" it by removing the `.catch` —
-  an uncaught failure in `viewModelScope.launch` terminates the process.
+- **A failed chat Firestore listener now re-establishes itself — FIXED.** Both mirror branches
+  in `MessageRepositoryImpl` used to end in `.catch { Log.w(...) }`, and a `catch` *completes*
+  the flow, so `merge(mirror, local)` then ran on Room alone for the rest of the process — the
+  app looking entirely healthy while receiving nothing. `SharingStarted.WhileSubscribed` could
+  not restart it: `rememberChatUnreadCount()` in `NavGraph` holds an Activity-scoped
+  `ChatViewModel` collecting `unreadCount` for the whole process lifetime, so the subscriber
+  count never reaches zero. Observed in production on the first launch after install, when both
+  listeners were denied ~0.5 s before `ensureConversation` created the conversation document.
+  Both branches now `retryWhen` with backoff (`ChatRetryBackoff`) *before* the `catch`, placed
+  after `onEach` so the retry establishes a **new** snapshot listener rather than re-collecting
+  a dead one. Three things not to undo: the `catch` stays — removing it lets an uncaught failure
+  in `viewModelScope.launch` terminate the process; there is deliberately **no attempt limit**,
+  because what a limit buys is a final `catch` and that is exactly the dead state this replaced;
+  and the delay is clamped, because `1000L shl 62` is negative and would busy-loop against a
+  backend already refusing every request (`ChatRetryBackoffTest` pins it over `Long.MAX_VALUE`).
 
 - **Cross-time-zone chat is implemented but never verified on two devices.** The August 2026
   chat sync moved message times to epoch millis specifically so two parents in different zones
@@ -400,38 +402,30 @@ Data flow: UI → ViewModel → UseCase → Repository → Room (source of truth
   (they targeted long-gone APIs); rewrite them against the current constructors when
   touching those features.
 
-- **`ChildInfoViewModel` stays subscribed to the whole child list for the editor's entire
-  lifetime, and any emission can overwrite the wrong child's row.** `init` calls
-  `loadChildInfo()`, which collects `childInfoRepository.getAllChildInfo()` — a reactive
-  Room `Flow` — for as long as the ViewModel lives, and every single emission unconditionally
-  runs `_currentChildInfo.value = childInfoList.first()`, regardless of which child
-  `AddEditChildInfoScreen` was actually opened to edit. The damage is not the prefill, it is
-  the **save**: while a user is genuinely editing child B — not the first child in the
-  household — any write that touches the `child_info` table re-emits the list and clobbers
-  `_currentChildInfo` back to child A; `LaunchedEffect(currentChildInfo)` then silently
-  repopulates the visible form with child A's data. The trigger needs no user error at all —
-  a background Firestore sync tick is enough, and so is an unrelated edit to child A made
-  from another screen. The medical-profile editor added in this round
-  (`presentation/common/MedicalProfileEditor.kt`) made the blast radius concrete: the save
-  button's snapshot-and-`copy()` base is `currentChildInfo`, so at save time the base is
-  child A, and the write overwrites **child A's real row** — its id, `createdAt` and
-  `createdByFirebaseUid` included — with a mix of stale values and whatever child B's form
-  fields currently hold. The `isNewChild` guard added alongside that save
-  (`base = currentChildInfo.takeIf { !isNewChild }`) does not help here: it only forces a
-  fresh `ChildInfo` when adding a brand-new child, and `isNewChild` is `false` for a genuine
-  edit of an existing child, so this path runs through unguarded exactly as before. The
-  correct fix is for the editor to stop reading the head of a list it does not own: load the
-  one child actually being edited by id and observe that, the way `loadChildInfoById` already
-  does for the initial load — `ChildInfoDao.observeChildInfoById` (already wired through
-  `ChildInfoRepository.observeChildInfoById`) is the right subscription for the whole screen
-  lifetime, not `getAllChildInfo()`. `getAllChildInfo()`/`loadChildInfo()` belongs to the list
-  screen that owns showing every child, not to an editor that owns exactly one. Left unfixed
-  this round: it is pre-existing (present since before `ChildInfo.medicalProfile` did, and
-  therefore before this task), and fixing the ViewModel's subscription strategy is a change of
-  its own, not a rider on adding a field editor. Don't "fix" it by widening the `isNewChild`
-  guard — that guard's job is stopping a brand-new child from saving on top of an existing
-  row, and two *existing* children being confused for each other never involves `"new"` or a
-  `null` id in the first place, so no version of that check touches this path.
+- **The child editor observes the one child it was opened with — FIXED, and the screen behind
+  it changed too.** `ChildInfoViewModel.loadChildInfo()` used to collect `getAllChildInfo()` — a
+  reactive Room flow — for the ViewModel's whole lifetime and set `_currentChildInfo` to
+  `childInfoList.first()` on **every** emission, whichever child the editor was actually open
+  on. The damage was the save: editing child B, any write touching the `child_info` table
+  (a background sync tick was enough) moved the base back to child A, and the save then
+  overwrote **child A's real row** — id, `createdAt` and `createdByFirebaseUid` included. The
+  `isNewChild` guard never covered it: `isNewChild` is `false` for a genuine edit.
+
+  The editor now uses `loadChildInfoById`, which observes `observeChildInfoById` and cancels any
+  previous observation. `getAllChildInfo()` belongs to the list screen that owns showing every
+  child, and only there.
+
+  **The other half is why nobody hit it.** `ChildInfoScreen` rendered `currentChildInfo`, so it
+  only ever showed the first child, and the only "add a child" affordance in the app was its
+  empty state — so once one child existed there could never be a second for the head of the list
+  to be wrong about. The screen now lists every child (each group its own list item, keyed by
+  child id, or two children with no medications collide on one slot and share Compose state) and
+  carries an "add a child" row. Don't re-narrow it to one child: package G2's guest list and
+  revoke action live on this screen, so a second child's access would become unmanageable again.
+
+  Still true, and deliberately not changed: `LaunchedEffect(currentChildInfo)` repopulates the
+  form when the observed child changes, so a co-parent's edit arriving mid-typing wins. Whether
+  a remote change to the record you are editing should interrupt you is a product question.
 
 ## Localization (i18n) — July 2026, keep consistent
 
