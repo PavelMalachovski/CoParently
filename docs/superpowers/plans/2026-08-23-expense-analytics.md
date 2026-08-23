@@ -165,13 +165,20 @@ The chart and the table are two views of one number: a filter change must move b
   6. An empty month: an empty state, not a blank canvas or a crash.
   7. Switch to Russian: category labels, tab labels and the empty state are all translated.
 
-- [x] **Step 5:** record the run in the spec's §7 and commit.
+- [x] **Step 5:** record the run in the spec's §7 and commit. *(Both sessions recorded; the second added the measured build failure and the re-run test totals.)*
 
 > `[~]` = done except for the Gradle half. No Android SDK and no route to Google's Maven host in
 > the container this was implemented in, so every `assembleDebug` / `testDebugUnitTest` step and
 > all seven device checks are outstanding; the code, the tests and the strings are written and
 > committed. The colour validator, every pure-Kotlin test, the locale greps and the
 > no-new-dependency check *were* run — see `2026-08-23-expense-analytics-PROGRESS.md`.
+>
+> **Re-attempted after the merge, on `main` @ `2e3a7c2`, with the same outcome.** Step 1 was run
+> this time and fails before reaching a source file: the Android Gradle Plugin cannot be resolved
+> because `dl.google.com` is denied by the egress policy (403 to CONNECT). Steps 1 and 4 therefore
+> stay `[~]`. The pure-Kotlin suite was re-run on the merged base — **312 passing, 0 failing**,
+> `CategoryPaletteTest` among them, so the pinned palette still matches the theme. Details in the
+> ledger.
 >
 > **Task 2's premise did not survive measurement**: nine distinguishable fills are not
 > achievable, in any palette. What shipped instead, and why the table now carries the load, is in

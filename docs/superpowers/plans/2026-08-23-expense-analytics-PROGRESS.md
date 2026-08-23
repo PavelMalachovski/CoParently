@@ -118,9 +118,61 @@ Everything Gradle-shaped, and the device run, still outstanding.
 ## Still to run
 
 - [ ] `./gradlew clean assembleDebug testDebugUnitTest lint detekt` — nothing Compose-shaped in
-      this package has compiled.
+      this package has compiled. **Attempted a second time (below) and it does not reach a source
+      file:** the Android Gradle Plugin cannot be resolved in this container.
 - [ ] The seven device checks, plan Task 5 step 4.
-- [ ] Record the run in the spec's §7.
+- [ ] `@Preview CategoryPieChartAllNinePreview` in light and dark — the all-nine case, and with it
+      the question of whether the tail should fold into "other". Still open.
+- [ ] `app/schemas/15.json`…`19.json` — package E's tail. They are annotation-processor output and
+      appear only after a successful build, so they are blocked behind the same wall.
+- [x] Record the run in the spec's §7.
+
+### Second attempt, on the merged base
+
+F merged as PR #57; this ran against `main` @ `2e3a7c2`. **The wall is the same one, and it is now
+measured rather than inferred.** `./gradlew clean assembleDebug testDebugUnitTest lint detekt`
+fetches Gradle 8.13 and then fails at plugin resolution:
+
+```
+Plugin [id: 'com.android.application', version: '8.10.1', apply: false] was not found
+  could not resolve plugin artifact 'com.android.application:com.android.application.gradle.plugin:8.10.1'
+  Searched in: Google, MavenRepo, Gradle Central Plugin Repository
+```
+
+`dl.google.com` answers **403 to CONNECT** — an organization egress-policy denial, which the
+proxy's own documentation says to report rather than route around — and `maven.google.com` is a
+301 to it. Maven Central *is* reachable, which is why the pure-Kotlin half below could run at
+all, but no Android artifact can be. No `.kt` file was reached, so the failure says nothing about
+this package's code either way.
+
+What did run, and what it settles:
+
+- **The whole pure-Kotlin suite, re-run on the merged base: 312 passing, 0 failing, 34 classes.**
+  A standalone Kotlin 2.1.20 compiler (fetched from Maven Central) over 87 pure main sources.
+  Identical to the count the first session recorded, so the merge of E and F together moved
+  nothing.
+- **`CategoryPaletteTest`: 6 passing.** This is the one worth naming. The test exists to fail if
+  the theme's primary moves, and the standing instruction is that a failure means re-running the
+  validator, never editing the expected hexes down to the actual ones. It did not fail — the nine
+  validated colours are still the nine the theme derives.
+- **`CategoryBreakdownTest`: 13 passing**, including the cross-currency case.
+- **The four suspected compile risks were read against their APIs, and none of them looks wrong.**
+  The segmented-button trio matches the M3 1.4 signatures (`label` is `SegmentedButton`'s last
+  parameter, so the trailing lambda binds correctly) and sits under
+  `@OptIn(ExperimentalMaterial3Api::class)`; `ExpenseCategory.entries` is the Kotlin 2.1 accessor
+  over a nine-constant enum; `clearAndSetSemantics` comes from `androidx.compose.ui.semantics`;
+  `ExpenseAnalytics.kt`'s `width`/`size` come from `androidx.compose.foundation.layout`. Every
+  project symbol resolves too — `PillChip`, `SectionGroup`, `ParentNames.labelForUid`,
+  `SupportedCurrency.code`, the file-local `FilterChip`, `LightDarkPreviews`.
+  **This is a reading, and it does not substitute for a compile.** The Compose compiler plugin is
+  precisely the thing a human reading cannot stand in for, and three of the four suspicions are
+  about signatures that only a compiler can confirm.
+- The invariants re-checked mechanically: 12 keys × 5 locales, all 29 `R.string` references
+  resolving, nothing over 120 columns, and `git diff 3122436..HEAD -- app/build.gradle.kts` empty
+  (no charting dependency).
+
+**Nothing was adjusted to make anything pass**, and nothing was added to the detekt baseline —
+detekt never ran.
 
 Note this package needs **no** schema, migration or rules work — it is presentation and
 arithmetic over data that already exists. The uncommitted `app/schemas/15.json`…`19.json` are
