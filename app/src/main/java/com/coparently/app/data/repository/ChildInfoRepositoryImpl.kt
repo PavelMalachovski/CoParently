@@ -6,7 +6,9 @@ import com.coparently.app.data.local.entity.ChildInfoEntity
 import com.coparently.app.data.remote.firebase.FirebaseAuthService
 import com.coparently.app.data.remote.firebase.FirestoreChildInfoDataSource
 import com.coparently.app.data.sync.ChildInfoAudience
+import com.coparently.app.data.sync.ChildInfoGuests
 import com.coparently.app.data.sync.ChildInfoPhotos
+import com.coparently.app.domain.guests.GuestGrantPolicy
 import com.coparently.app.domain.model.ChildInfo
 import com.coparently.app.domain.model.MedicalProfile
 import com.coparently.app.domain.repository.ChildInfoRepository
@@ -14,6 +16,7 @@ import com.google.gson.GsonBuilder
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
+import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
@@ -61,7 +64,8 @@ class ChildInfoRepositoryImpl @Inject constructor(
             val audience = ChildInfoAudience.entitled(
                 userId = firebaseUser.uid,
                 creatorUid = childInfo.createdByFirebaseUid,
-                partnerId = currentPartnerId(firebaseUser.uid)
+                partnerId = currentPartnerId(firebaseUser.uid),
+                guestUids = activeGuestUids(childInfo)
             )
             val childInfoData = childInfo.toFirestoreMap(audience)
             val result = firestoreChildInfoDataSource.upsertChildInfo(childInfo.id, childInfoData)
@@ -109,7 +113,8 @@ class ChildInfoRepositoryImpl @Inject constructor(
             val audience = ChildInfoAudience.entitled(
                 userId = firebaseUser.uid,
                 creatorUid = entity.createdByFirebaseUid,
-                partnerId = partnerId
+                partnerId = partnerId,
+                guestUids = activeGuestUids(childInfo)
             )
             val childInfoData = childInfo.toFirestoreMap(audience)
             val result = firestoreChildInfoDataSource.upsertChildInfo(entity.id, childInfoData)
@@ -132,6 +137,17 @@ class ChildInfoRepositoryImpl @Inject constructor(
     }
 
     /**
+     * The uids of [childInfo]'s guests whose grants are still good.
+     *
+     * Filtered rather than passed whole, so an expired guest leaves `sharedWith` on the very next
+     * upload rather than waiting for the scheduled sweep. That is the sweep's work being done
+     * early, which is the direction to fail in; the reverse — a guest whose grant has run out
+     * still sitting in the audience — is what the sweep exists to clean up.
+     */
+    private fun activeGuestUids(childInfo: ChildInfo): List<String> =
+        GuestGrantPolicy.active(childInfo.guests.values.toList(), Instant.now()).map { it.uid }
+
+    /**
      * Converts ChildInfoEntity to domain ChildInfo.
      */
     private fun ChildInfoEntity.toDomain(): ChildInfo {
@@ -151,6 +167,7 @@ class ChildInfoRepositoryImpl @Inject constructor(
             medicalPhotos = ChildInfoPhotos.decode(
                 gson.fromJson(medicalPhotosJson, Array<String>::class.java)?.toList()
             ),
+            guests = ChildInfoGuests.decode(gson.fromJson(guestsJson, Map::class.java)),
             createdAt = createdAt,
             updatedAt = updatedAt,
             createdByFirebaseUid = createdByFirebaseUid,
@@ -175,6 +192,7 @@ class ChildInfoRepositoryImpl @Inject constructor(
             schoolInfoJson = schoolInfo?.let { gson.toJson(it) },
             medicalProfileJson = gson.toJson(medicalProfile),
             medicalPhotosJson = gson.toJson(medicalPhotos),
+            guestsJson = gson.toJson(ChildInfoGuests.encode(guests)),
             createdAt = createdAt,
             updatedAt = updatedAt,
             createdByFirebaseUid = createdByFirebaseUid,
@@ -227,6 +245,7 @@ class ChildInfoRepositoryImpl @Inject constructor(
             )},
             "medicalProfile" to gson.fromJson(gson.toJson(medicalProfile), Map::class.java),
             "medicalPhotos" to medicalPhotos,
+            "guests" to ChildInfoGuests.encode(guests),
             "createdAt" to createdAt.format(formatter),
             "updatedAt" to updatedAt.format(formatter),
             "createdByFirebaseUid" to createdByFirebaseUid,
@@ -287,6 +306,7 @@ class ChildInfoRepositoryImpl @Inject constructor(
                 } ?: MedicalProfile()
                 ).withSanitizedVaccinationNames(),
             medicalPhotos = ChildInfoPhotos.decode(this["medicalPhotos"]),
+            guests = ChildInfoGuests.decode(this["guests"]),
             createdAt = LocalDateTime.parse(this["createdAt"] as String, formatter),
             updatedAt = LocalDateTime.parse(this["updatedAt"] as String, formatter),
             createdByFirebaseUid = this["createdByFirebaseUid"] as? String,

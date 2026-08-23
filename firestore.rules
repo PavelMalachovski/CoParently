@@ -232,9 +232,39 @@ service cloud.firestore {
 
     // ---- Child info ----------------------------------------------------
     // Shared between a parent pair via the sharedWith list.
+    // True when `guests` names the caller and their grant has run out — or carries no usable
+    // expiry at all.
+    //
+    // **Fail closed, and read `GuestGrantPolicy` before changing this.** That file is the
+    // statement all three implementations of this question must agree with: the app, this rule,
+    // and `sweepExpiredGuests`. The comparison is a strict `<` against `expiresAtMillis`, so a
+    // grant expiring at noon is not active at noon in any of the three.
+    //
+    // Epoch millis rather than the ISO strings the rest of this schema uses, and that is not a
+    // stylistic slip: Rules cannot parse a string into a timestamp, so an ISO expiry could not be
+    // compared here at all and this rule could only ever check that a guest *is* a guest.
+    //
+    // A grant with no `expiresAtMillis`, or a non-positive one, is expired. `get(…, 0)` is what
+    // makes an absent field a value rather than an evaluation error — the hazard that has already
+    // bitten this file twice.
+    function guestGrantExpired(data) {
+      return data.get('guests', {}).keys().hasAny([request.auth.uid]) &&
+             (data.guests[request.auth.uid].get('expiresAtMillis', 0) <= 0 ||
+              data.guests[request.auth.uid].get('expiresAtMillis', 0) <= request.time.toMillis());
+    }
+
     match /child_info/{childInfoId} {
+      // A guest reads through `sharedWith` like anybody else — that is why they are put in it —
+      // but only while their grant stands. A parent is never in `guests`, so this costs them
+      // nothing.
+      //
+      // The rule is the weaker half of the expiry. It stops the read, but the uid stays in
+      // `sharedWith`, so the record keeps coming back from the audience query and the guest
+      // keeps appearing in the audience. `sweepExpiredGuests` is what actually removes them;
+      // this is what holds until it runs.
       allow read: if isAuthenticated() &&
-                    request.auth.uid in resource.data.sharedWith;
+                    request.auth.uid in resource.data.sharedWith &&
+                    !guestGrantExpired(resource.data);
 
       allow create: if isAuthenticated() &&
                       request.resource.data.createdByFirebaseUid == request.auth.uid &&

@@ -19,6 +19,7 @@ import java.time.LocalDateTime
  * @property medicalProfileJson JSON object of [com.coparently.app.domain.model.MedicalProfile];
  * `{}` when never filled
  * @property medicalPhotosJson JSON array of photograph download URLs; `[]` when none
+ * @property guestsJson JSON object of guest grants keyed by uid; `{}` when none
  * @property createdAt Timestamp when the info was created
  * @property updatedAt Timestamp when the info was last updated
  * @property createdByFirebaseUid Firebase UID of the user who created this info
@@ -44,6 +45,14 @@ data class ChildInfoEntity(
      * list on this record rather than as a relation — the app never queries by photograph.
      */
     val medicalPhotosJson: String = "[]",
+    /**
+     * JSON object of [com.coparently.app.domain.guests.GuestGrant] keyed by uid; `{}` when none.
+     *
+     * Room's copy is for display while offline. The document's copy is the one that decides
+     * access, because `firestore.rules` reads that one — so a stale row here shows a parent a
+     * guest who can no longer read, never a guest who can.
+     */
+    val guestsJson: String = "{}",
     val createdAt: LocalDateTime,
     val updatedAt: LocalDateTime,
     val createdByFirebaseUid: String?,

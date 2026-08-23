@@ -208,19 +208,25 @@ describe('Part 1d: child_info', () => {
     // plus an entry in `guests`, which is what makes them a guest rather than a parent. The
     // update rule tightened above is what keeps the first half from implying the second.
 
-    const FUTURE = '2099-01-01T00:00:00Z';
-    const PAST = '2020-01-01T00:00:00Z';
+    // Epoch millis, not an ISO string: `firestore.rules` has no way to parse a string into a
+    // timestamp, so millis is the only representation the app, the rule and the sweep can all
+    // compare. See `GuestGrant.expiresAtMillis`.
+    const FUTURE = Date.parse('2099-01-01T00:00:00Z');
+    const PAST = Date.parse('2020-01-01T00:00:00Z');
 
     /**
      * A guests map holding one grant.
      *
      * @param {string} uid The guest's UID.
-     * @param {string} expiresAt ISO-8601 instant the grant ends at.
+     * @param {number} expiresAtMillis Epoch millis the grant ends at.
      * @return {!Object} The map to store under `guests`.
      */
-    function guests(uid, expiresAt) {
+    function guests(uid, expiresAtMillis) {
       return {[uid]: {
-        name: 'Nina', grantedBy: ALICE, grantedAt: '2026-08-23T09:30:00Z', expiresAt,
+        name: 'Nina',
+        grantedBy: ALICE,
+        grantedAtMillis: Date.parse('2026-08-23T09:30:00Z'),
+        expiresAtMillis,
       }};
     }
 
@@ -243,11 +249,21 @@ describe('Part 1d: child_info', () => {
           env.authenticatedContext(CAROL).firestore().doc('child_info/child-1').get());
     });
 
-    it('denies a guest whose expiry will not parse', async () => {
-      // Fail closed, the same way GuestGrantPolicy does. A value the rule cannot compare must
-      // not read as "no expiry".
+    it('denies a guest whose grant carries no usable expiry', async () => {
+      // Fail closed, the same way GuestGrantPolicy does: a non-positive value is a field that
+      // was absent, defaulted, or written by something that did not know it had to fill it in,
+      // and it must not read as "no expiry".
       await seed(env, {'child_info/child-1': childInfoDoc({
-        sharedWith: [ALICE, BOB, CAROL], guests: guests(CAROL, 'next Tuesday'),
+        sharedWith: [ALICE, BOB, CAROL], guests: guests(CAROL, 0),
+      })});
+      await assertFails(
+          env.authenticatedContext(CAROL).firestore().doc('child_info/child-1').get());
+    });
+
+    it('denies a guest whose grant has no expiry field at all', async () => {
+      await seed(env, {'child_info/child-1': childInfoDoc({
+        sharedWith: [ALICE, BOB, CAROL],
+        guests: {[CAROL]: {name: 'Nina', grantedBy: ALICE}},
       })});
       await assertFails(
           env.authenticatedContext(CAROL).firestore().doc('child_info/child-1').get());

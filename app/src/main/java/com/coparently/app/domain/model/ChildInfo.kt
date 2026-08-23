@@ -1,5 +1,6 @@
 package com.coparently.app.domain.model
 
+import com.coparently.app.domain.guests.GuestGrant
 import java.time.LocalDateTime
 
 /**
@@ -21,6 +22,11 @@ import java.time.LocalDateTime
  *   prescription, a rash, a vaccination card — in the order they were added. Shared with the
  *   co-parent like the rest of this record. **Not encrypted**, and deliberately so: nothing in
  *   this app is, and a false promise about medical images would be worse than none.
+ * @property guests People who may read this record without being a parent of the child, keyed
+ *   by uid — a grandparent for a weekend. A guest sits beside the two-slot parent model and
+ *   never occupies a slot. Being here is what makes them a *guest*; being in the document's
+ *   `sharedWith` is what makes the record readable to them, and `firestore.rules` will not let
+ *   the second imply write.
  * @property createdAt Timestamp when the info was created
  * @property updatedAt Timestamp when the info was last updated
  * @property createdByFirebaseUid Firebase UID of the user who created this info
@@ -39,6 +45,7 @@ data class ChildInfo(
     val schoolInfo: SchoolInfo? = null,
     val medicalProfile: MedicalProfile = MedicalProfile(),
     val medicalPhotos: List<String> = emptyList(),
+    val guests: Map<String, GuestGrant> = emptyMap(),
     val createdAt: LocalDateTime,
     val updatedAt: LocalDateTime,
     val createdByFirebaseUid: String? = null,
