@@ -45,10 +45,10 @@ Today an unpaired account sees the handover hero, both stat tiles, the week and 
 
 `HomeViewModelTest` already pins that `paired` tracks `PairingRepository.observePairingState` and treats `Loading` as not paired — extend that file rather than starting a parallel one.
 
-- [ ] **Step 1: Extend the test** — while unpaired, the state exposes the CTA and no handover, tiles, week or changes; while `Loading`, the same (a screen that flashes tiles and then removes them is worse than one that waits); while paired, all of it returns.
-- [ ] **Step 2: Run it; expect failure.**
-- [ ] **Step 3: Implement.** Prefer one sealed `HomeUiState` over a scatter of booleans the composable has to recombine — the screen should be told what to draw, not work it out.
-- [ ] **Step 4: Run tests; build; commit** — `feat(home): ask for a co-parent, and nothing else, until there is one`
+- [x] **Step 1: Extend the test** — while unpaired, the state exposes the CTA and no handover, tiles, week or changes; while `Loading`, the same (a screen that flashes tiles and then removes them is worse than one that waits); while paired, all of it returns.
+- [~] **Step 2: Run it; expect failure.**
+- [x] **Step 3: Implement.** Prefer one sealed `HomeUiState` over a scatter of booleans the composable has to recombine — the screen should be told what to draw, not work it out.
+- [~] **Step 4: Run tests; build; commit** — `feat(home): ask for a co-parent, and nothing else, until there is one`
 
 ---
 
@@ -69,11 +69,11 @@ One boolean, defaulting false, set on the event form. It means "the co-parent is
 
 **The event form keeps a snapshot and uses `copy()`.** Never rebuild an `Event` from scratch on save — that wiped `sharedWith`, `permissions` and `createdByFirebaseUid` once already.
 
-- [ ] **Step 1: Add the field** to model and entity with KDoc and `@property` entries; bump the version; write the additive migration; register it.
-- [ ] **Step 2: Carry it through every map site.** Report which you found.
-- [ ] **Step 3: Add the switch to the event form**, with helper text saying what the flag means. New strings in all five locales.
-- [ ] **Step 4: Add the migration test case; run it on the device.**
-- [ ] **Step 5: Verify locales; build; commit** — `feat(events): mark an event important, meaning the co-parent is expected`
+- [x] **Step 1: Add the field** to model and entity with KDoc and `@property` entries; bump the version; write the additive migration; register it.
+- [x] **Step 2: Carry it through every map site.** Report which you found.
+- [x] **Step 3: Add the switch to the event form**, with helper text saying what the flag means. New strings in all five locales.
+- [~] **Step 4: Add the migration test case; run it on the device.**
+- [~] **Step 5: Verify locales; build; commit** — `feat(events): mark an event important, meaning the co-parent is expected`
 
 ---
 
@@ -87,10 +87,10 @@ The next **seven days from today**, not Monday-to-Sunday: a parent opening the a
 
 Each row: the event, the parent whose day it falls on, and an exclamation mark when `isImportant`. The mark's content description must say what it means — an unexplained glyph is worse than none for a screen reader.
 
-- [ ] **Step 1: Extend the test** — the window is seven days from today; a recurring series contributes distinct occurrences with keys that do not collide (they share the master id); the co-parent's **private** event never appears.
-- [ ] **Step 2: Run it; expect failure.**
-- [ ] **Step 3: Implement,** moving the week above the tiles and the spend tile to the bottom, per spec §3's order.
-- [ ] **Step 4: Run tests; build; commit** — `feat(home): lead with the child's week, and mark what matters`
+- [x] **Step 1: Extend the test** — the window is seven days from today; a recurring series contributes distinct occurrences with keys that do not collide (they share the master id); the co-parent's **private** event never appears.
+- [~] **Step 2: Run it; expect failure.**
+- [x] **Step 3: Implement,** moving the week above the tiles and the spend tile to the bottom, per spec §3's order.
+- [~] **Step 4: Run tests; build; commit** — `feat(home): lead with the child's week, and mark what matters`
 
 ---
 
@@ -103,11 +103,11 @@ Each row: the event, the parent whose day it falls on, and an exclamation mark w
 
 The August refresh made the home button the summary's single entry point, deliberately. Removing the button removes the last way in, so the screen goes with it rather than becoming unreachable code.
 
-- [ ] **Step 1: Remove the button, the route and the `Screen` entry.**
-- [ ] **Step 2: Delete both files.**
-- [ ] **Step 3: `grep -rn "WeeklySummary" app/src`** — expected: no output.
-- [ ] **Step 4: Delete strings nothing else uses**, from all five locales; report which you deleted and which survive.
-- [ ] **Step 5: Build; commit** — `feat(home): remove the weekly summary, and the screen behind it`
+- [x] **Step 1: Remove the button, the route and the `Screen` entry.**
+- [x] **Step 2: Delete both files.**
+- [x] **Step 3: `grep -rn "WeeklySummary" app/src`** — expected: no output.
+- [x] **Step 4: Delete strings nothing else uses**, from all five locales; report which you deleted and which survive.
+- [~] **Step 5: Build; commit** — `feat(home): remove the weekly summary, and the screen behind it`
 
 ---
 
@@ -126,11 +126,11 @@ The August refresh made the home button the summary's single entry point, delibe
 
 Editing goes to B1's existing editor — one list, one editor.
 
-- [ ] **Step 1: Write the strings in all five locales**, matching each file's register.
-- [ ] **Step 2: Build the ViewModel** over `ChildInfoRepository`. An entry with a blank phone must not be dialable.
-- [ ] **Step 3: Build the screen** with `SectionGroup` / `SectionRow`: name as title, relationship as supporting, one trailing call action.
-- [ ] **Step 4: Add the home button and the route.** It is a detail screen — not in `BottomNavDestination.topLevelRoutes`.
-- [ ] **Step 5: Verify locales; confirm no hardcoded text; build; commit** — `feat(home): put the numbers worth finding in a hurry one tap away`
+- [x] **Step 1: Write the strings in all five locales**, matching each file's register.
+- [x] **Step 2: Build the ViewModel** over `ChildInfoRepository`. An entry with a blank phone must not be dialable.
+- [x] **Step 3: Build the screen** with `SectionGroup` / `SectionRow`: name as title, relationship as supporting, one trailing call action.
+- [x] **Step 4: Add the home button and the route.** It is a detail screen — not in `BottomNavDestination.topLevelRoutes`.
+- [~] **Step 5: Verify locales; confirm no hardcoded text; build; commit** — `feat(home): put the numbers worth finding in a hurry one tap away`
 
 ---
 
@@ -150,27 +150,33 @@ A day belonging to a **pending proposal** is drawn in that parent's hue at a low
 
 **Read package C's plan first if C is in flight.** Both packages rewrite this file, and it must end with **one** decision function covering weekend base, custody, holiday, today, and — depending on what has landed — the handover diagonal, the pending-swap arrows and this alpha. Two functions each knowing some cases is how the weekend band became unreachable before.
 
-- [ ] **Step 1: Extend `DayCellFillsTest`** — a day in a pending proposal renders at the proposal alpha; the same day with no proposal renders at full; an accepted proposal is indistinguishable from an ordinary agreed day.
-- [ ] **Step 2: Run it; expect failure.**
-- [ ] **Step 3: Implement,** feeding the pending proposal into the ViewModel's cell-fill inputs.
-- [ ] **Step 4: Run tests; build; commit** — `feat(calendar): draw a schedule nobody has agreed to yet as a preview`
+- [x] **Step 1: Extend `DayCellFillsTest`** — a day in a pending proposal renders at the proposal alpha; the same day with no proposal renders at full; an accepted proposal is indistinguishable from an ordinary agreed day.
+- [~] **Step 2: Run it; expect failure.**
+- [x] **Step 3: Implement,** feeding the pending proposal into the ViewModel's cell-fill inputs.
+- [~] **Step 4: Run tests; build; commit** — `feat(calendar): draw a schedule nobody has agreed to yet as a preview`
 
 ---
 
 ### Task 7: Full verification
 
-- [ ] **Step 1:** `./gradlew clean assembleDebug testDebugUnitTest lint detekt` — totals, and whether any changed file is named.
-- [ ] **Step 2:** the instrumented migration test on the device.
-- [ ] **Step 3:** locale grep — five files per new key.
-- [ ] **Step 4:** `grep -rn "WeeklySummary" app/src` — no output.
-- [ ] **Step 5: Device checks.**
+- [~] **Step 1:** `./gradlew clean assembleDebug testDebugUnitTest lint detekt` — totals, and whether any changed file is named.
+- [~] **Step 2:** the instrumented migration test on the device.
+- [x] **Step 3:** locale grep — five files per new key.
+- [x] **Step 4:** `grep -rn "WeeklySummary" app/src` — no output.
+- [~] **Step 5: Device checks.**
   1. Unpaired: the home screen shows one explanation and one button — no hero, no tiles, no week.
   2. Paired: the week leads, spend is at the bottom, and there is no weekly-summary button.
   3. Create an important event: the mark appears on home and in the calendar's day agenda.
   4. Tap a contact: the dialler opens pre-filled, and no permission is requested.
   5. **Two devices:** propose a custody change from A. On B — who has not agreed — those days draw translucent while the agreed pattern still shows at full strength. Accept on B; they go solid on both.
 
-- [ ] **Step 6:** record the run in the spec's §6 and commit.
+- [x] **Step 6:** record the run in the spec's §6 and commit.
+
+> `[~]` = done except for the Gradle half. No Android SDK and no route to Google's Maven host in
+> the container this was implemented in, so every `assembleDebug` / `testDebugUnitTest` /
+> `connectedDebugAndroidTest` step is outstanding; the code, the tests and the strings are
+> written and committed. The Firestore rules suite, every pure-Kotlin test and the locale greps
+> *were* run — see `2026-08-23-home-screen-PROGRESS.md`.
 
 ---
 
