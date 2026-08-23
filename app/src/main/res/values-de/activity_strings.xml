@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- German translations of activity_strings.xml. -->
+<resources>
+    <string name="activity_event_created">Neuer Termin: %1$s</string>
+    <string name="activity_event_updated">Termin geändert: %1$s</string>
+    <string name="activity_event_deleted">Termin gelöscht: %1$s</string>
+    <string name="activity_event_accepted">Termin angenommen: %1$s</string>
+    <string name="activity_event_declined">Termin abgelehnt: %1$s</string>
+    <string name="activity_change_requested">Neue Zeit vorgeschlagen: %1$s</string>
+    <string name="activity_change_accepted">Neue Zeit vereinbart: %1$s</string>
+    <string name="activity_change_declined">Neue Zeit abgelehnt: %1$s</string>
+    <string name="activity_expense_added">Neue Ausgabe: %1$s</string>
+    <string name="activity_expense_updated">Ausgabe geändert: %1$s</string>
+    <string name="activity_expense_deleted">Ausgabe gelöscht: %1$s</string>
+    <string name="activity_day_swap_offered">Tagestausch angeboten: %1$s</string>
+    <string name="activity_day_swap_accepted">Tagestausch vereinbart: %1$s</string>
+    <string name="activity_day_swap_declined">Tagestausch abgelehnt: %1$s</string>
+</resources>

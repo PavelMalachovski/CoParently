@@ -5,6 +5,7 @@ import com.coparently.app.data.local.entity.MessageEntity
 import com.coparently.app.domain.model.Conversation
 import com.coparently.app.domain.model.Message
 import com.coparently.app.domain.model.MessageSendStatus
+import com.coparently.app.domain.activity.ActivityAnnouncement
 import com.coparently.app.domain.model.MessageType
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
@@ -26,6 +27,9 @@ private val gson = Gson()
 private val chatDateFormatter: DateTimeFormatter = DateTimeFormatter.ISO_LOCAL_DATE_TIME
 
 private val stringListType = object : TypeToken<List<String>>() {}.type
+
+/** The stored shape of an activity payload — the same sub-map the Firestore document carries. */
+private val activityMapType = object : TypeToken<Map<String, Any?>>() {}.type
 
 private val markMapType = object : TypeToken<Map<String, Long>>() {}.type
 
@@ -69,13 +73,20 @@ internal fun MessageEntity.toDomain(): Message = Message(
     senderName = senderName,
     content = content,
     sentAtMillis = sentAtMillis,
-    messageType = MessageType.valueOf(messageType),
+    // Guarded the same way the Firestore reader below is, and for the same reason: a row whose
+    // type this build does not know must degrade to a text bubble carrying `content`, not throw
+    // on the path that draws the thread. Unguarded, one such row killed the whole list.
+    messageType = runCatching { MessageType.valueOf(messageType) }
+        .getOrDefault(MessageType.TEXT),
     attachments = gson.fromJson(attachmentsJson, stringListType) ?: emptyList(),
     isRead = isRead,
     replyToMessageId = replyToMessageId,
     syncedToFirestore = syncedToFirestore,
     status = runCatching { MessageSendStatus.valueOf(status ?: MessageSendStatus.SENT.name) }
-        .getOrDefault(MessageSendStatus.SENT)
+        .getOrDefault(MessageSendStatus.SENT),
+    activity = activityJson
+        ?.let { json -> runCatching { gson.fromJson(json, activityMapType) }.getOrNull() }
+        ?.let(ActivityAnnouncement::fromMap)
 )
 
 /** The domain message as a storable row. */
@@ -91,7 +102,8 @@ internal fun Message.toEntity(): MessageEntity = MessageEntity(
     isRead = isRead,
     replyToMessageId = replyToMessageId,
     syncedToFirestore = syncedToFirestore,
-    status = status.name
+    status = status.name,
+    activityJson = activity?.let { gson.toJson(it.toMap()) }
 )
 
 /**
@@ -117,7 +129,7 @@ internal fun Message.toFirestoreMap(): Map<String, Any> = mapOf(
     "attachments" to attachments,
     "isRead" to isRead,
     "replyToMessageId" to (replyToMessageId ?: "")
-)
+) + (activity?.let { mapOf("activity" to it.toMap()) } ?: emptyMap())
 
 /**
  * A remote message document as a domain message, or `null` when it lacks a field the
@@ -148,7 +160,8 @@ internal fun Map<String, Any>.toMessageOrNull(): Message? {
         replyToMessageId = (this["replyToMessageId"] as? String)?.takeIf { it.isNotEmpty() },
         syncedToFirestore = true,
         // Everything read back from Firestore has, by definition, been sent.
-        status = MessageSendStatus.SENT
+        status = MessageSendStatus.SENT,
+        activity = ActivityAnnouncement.fromMap(this["activity"] as? Map<*, *>)
     )
 }
 

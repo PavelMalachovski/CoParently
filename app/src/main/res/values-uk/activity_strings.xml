@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Ukrainian translations of activity_strings.xml. -->
+<resources>
+    <string name="activity_event_created">Нова подія: %1$s</string>
+    <string name="activity_event_updated">Подію змінено: %1$s</string>
+    <string name="activity_event_deleted">Подію видалено: %1$s</string>
+    <string name="activity_event_accepted">Подію прийнято: %1$s</string>
+    <string name="activity_event_declined">Подію відхилено: %1$s</string>
+    <string name="activity_change_requested">Запропоновано новий час: %1$s</string>
+    <string name="activity_change_accepted">Новий час погоджено: %1$s</string>
+    <string name="activity_change_declined">Новий час відхилено: %1$s</string>
+    <string name="activity_expense_added">Нова витрата: %1$s</string>
+    <string name="activity_expense_updated">Витрату змінено: %1$s</string>
+    <string name="activity_expense_deleted">Витрату видалено: %1$s</string>
+    <string name="activity_day_swap_offered">Запропоновано обмін днями: %1$s</string>
+    <string name="activity_day_swap_accepted">Обмін днями погоджено: %1$s</string>
+    <string name="activity_day_swap_declined">Обмін днями відхилено: %1$s</string>
+</resources>

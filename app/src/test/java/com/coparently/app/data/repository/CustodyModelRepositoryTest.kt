@@ -73,7 +73,11 @@ class CustodyModelRepositoryTest {
         userRepository = mockk()
         firestoreCustodyDataSource = mockk()
         repository = CustodyModelRepository(
-            custodyModelDao, userRepository, firestoreCustodyDataSource, CoroutineScope(dispatcher)
+            custodyModelDao,
+            userRepository,
+            firestoreCustodyDataSource,
+            mockk(relaxed = true),
+            CoroutineScope(dispatcher)
         )
 
         pairedWith(PARTNER_UID)

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- An event created for the other parent, which does not enter either calendar until
+     they agree to it. Every parent label goes through ParentLabels: never "Mom" or "Dad". -->
+<resources>
+    <string name="event_acceptance_section">Events waiting on you</string>
+    <string name="event_acceptance_offered_to_you">%1$s added this to your days</string>
+    <string name="event_acceptance_offered_by_you">You added this to %1$s\'s days</string>
+    <string name="event_acceptance_waiting">Waiting for an answer</string>
+    <string name="event_acceptance_accepted">Agreed</string>
+    <string name="event_acceptance_declined">Turned down</string>
+    <string name="event_acceptance_accept">Accept</string>
+    <string name="event_acceptance_decline">Decline</string>
+    <string name="event_acceptance_withdraw">Withdraw</string>
+    <string name="event_acceptance_waiting_strip">%1$d of your events are waiting on your co-parent</string>
+    <string name="event_acceptance_waiting_strip_one">One of your events is waiting on your co-parent</string>
+    <string name="event_acceptance_hidden_note">It stays out of both calendars until they answer.</string>
+</resources>

@@ -66,8 +66,9 @@ import java.time.format.DateTimeFormatter
  * @param onNavigateToPairing Sends an unpaired user to pairing
  * @param onOpenSettings Opens settings from the tab's gear action
  * @param draft Composer text carried in from elsewhere (e.g. a settle-up message)
- * @param onRequestChangeForEvent Starts a change request from the inlined thread, given the event
- *   and the conversation the resulting message should be posted back to
+ * @param onRequestChangeForEvent Starts a change request from the inlined thread, given the event.
+ *   It no longer needs the conversation: `ActivityAnnouncer` resolves the pair's thread from the
+ *   two uids, so the card reaches it whether the request was started here or from the calendar
  * @param onOpenChangeRequest Opens the change-request inbox with the request for the given
  *   event id highlighted; forwarded to the inlined [ChatScreen]
  * @param viewModel Chat state
@@ -82,7 +83,7 @@ fun ConversationsScreen(
     onNavigateToPairing: () -> Unit,
     onOpenSettings: () -> Unit,
     draft: String = "",
-    onRequestChangeForEvent: (eventId: String, conversationId: String) -> Unit = { _, _ -> },
+    onRequestChangeForEvent: (eventId: String) -> Unit = {},
     onOpenChangeRequest: ((String) -> Unit)? = null,
     viewModel: ChatViewModel = hiltViewModel()
 ) {
@@ -124,9 +125,7 @@ fun ConversationsScreen(
             // No back arrow: this *is* the tab, there is nothing above it to return to.
             onBack = null,
             draft = draft,
-            onRequestChangeForEvent = { eventId ->
-                onRequestChangeForEvent(eventId, onlyConversation.id)
-            },
+            onRequestChangeForEvent = onRequestChangeForEvent,
             onOpenSettings = onOpenSettings,
             onOpenChangeRequest = onOpenChangeRequest
         )

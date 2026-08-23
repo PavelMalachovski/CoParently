@@ -7,8 +7,10 @@ import com.coparently.app.domain.custody.DayOverride
 import com.coparently.app.domain.custody.DayOverrideTransition
 import com.coparently.app.domain.custody.DaySwap
 import com.coparently.app.domain.custody.DaySwapInbox
+import com.coparently.app.domain.events.EventAcceptanceTransition
 import com.coparently.app.domain.model.ChangeRequest
 import com.coparently.app.domain.model.ChangeRequestStatus
+import com.coparently.app.domain.model.Event
 import com.coparently.app.domain.repository.ChangeRequestRepository
 import com.coparently.app.domain.repository.EventRepository
 import com.coparently.app.domain.repository.UserRepository
@@ -23,6 +25,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -115,6 +118,33 @@ class ChangeRequestViewModel @Inject constructor(
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = emptyList()
         )
+
+    /**
+     * Events the co-parent created for this parent that are still waiting on an answer.
+     *
+     * Read from `getAllEvents`, which is deliberately **not** acceptance-filtered — the calendar
+     * queries are, and this is the one screen that has to see what they hide. Without it a pending
+     * event would be invisible on both phones, which is worse than not having the feature.
+     *
+     * Only events this parent did not create appear: `EventAcceptanceTransition` and the
+     * repository both refuse a creator deciding their own, so offering the buttons here would
+     * promise an action that is rejected. The creator sees theirs on the event list instead.
+     */
+    val eventsAwaitingMe: StateFlow<List<Event>> = combine(
+        eventRepository.getAllEvents(),
+        _currentUserId
+    ) { events, uid ->
+        if (uid.isEmpty()) {
+            emptyList()
+        } else {
+            events.filter { it.acceptance.isPending && it.createdByFirebaseUid != uid }
+                .sortedBy { it.startDateTime }
+        }
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
 
     init {
         viewModelScope.launch {
@@ -214,6 +244,45 @@ class ChangeRequestViewModel @Inject constructor(
             }.onFailure { e ->
                 _errorMessage.value = e.message ?: "The swap could not be answered"
             }
+        }
+    }
+
+    /** Takes up an event the co-parent created for this parent. It then enters both calendars. */
+    fun acceptEvent(eventId: String) = decideEvent(eventId, accept = true)
+
+    /**
+     * Turns one down. It stays `DECLINED` rather than being deleted: the creator needs to know
+     * the answer was no, and an event that silently vanished would read as a bug.
+     */
+    fun declineEvent(eventId: String) = decideEvent(eventId, accept = false)
+
+    /**
+     * Applies a decision through [EventAcceptanceTransition] and saves it.
+     *
+     * The event is re-read immediately before deciding rather than taken from the list this
+     * screen last collected: the co-parent may have edited or withdrawn it in between, and a held
+     * snapshot would write that edit back out along with the answer.
+     *
+     * A refusal is surfaced, not swallowed — the transition refuses a creator deciding their own
+     * event and a decision on an already-answered one, and both are things the parent has to see
+     * rather than watch a button do nothing.
+     */
+    private fun decideEvent(eventId: String, accept: Boolean) {
+        viewModelScope.launch {
+            val fresh = eventRepository.getEventById(eventId) ?: return@launch
+            val uid = _currentUserId.value.takeIf { it.isNotEmpty() }
+                ?: userRepository.getCurrentUserId()
+                ?: return@launch
+            val now = LocalDateTime.now()
+            val result = if (accept) {
+                EventAcceptanceTransition.accept(fresh, uid, now)
+            } else {
+                EventAcceptanceTransition.decline(fresh, uid, now)
+            }
+            result.fold(
+                onSuccess = { eventRepository.updateEvent(it) },
+                onFailure = { e -> _errorMessage.value = e.message ?: "Could not answer that" }
+            )
         }
     }
 

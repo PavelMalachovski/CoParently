@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Announcements of a change, rendered by the READER in the reader's own language.
+     The two parents may not read the same language, so a card composed by the sender is a card
+     the recipient may not be able to read. Each key takes the entity's own name as %1$s and never
+     concatenates it, because word order differs by language. -->
+<resources>
+    <string name="activity_event_created">New event: %1$s</string>
+    <string name="activity_event_updated">Event changed: %1$s</string>
+    <string name="activity_event_deleted">Event removed: %1$s</string>
+    <string name="activity_event_accepted">Event accepted: %1$s</string>
+    <string name="activity_event_declined">Event declined: %1$s</string>
+    <string name="activity_change_requested">New time proposed for %1$s</string>
+    <string name="activity_change_accepted">New time agreed for %1$s</string>
+    <string name="activity_change_declined">New time turned down for %1$s</string>
+    <string name="activity_expense_added">New expense: %1$s</string>
+    <string name="activity_expense_updated">Expense changed: %1$s</string>
+    <string name="activity_expense_deleted">Expense removed: %1$s</string>
+    <string name="activity_day_swap_offered">Day swap offered: %1$s</string>
+    <string name="activity_day_swap_accepted">Day swap agreed: %1$s</string>
+    <string name="activity_day_swap_declined">Day swap turned down: %1$s</string>
+</resources>

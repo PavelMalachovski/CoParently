@@ -361,6 +361,37 @@ object DatabaseMigrations {
     }
 
     /**
+     * Records whether an event is still waiting on the other parent's word.
+     *
+     * Three columns, all defaulted or nullable, so nothing existing is read or rewritten.
+     * `NOT_REQUIRED` on every existing row is the correct starting state rather than a
+     * convenience: every event written before this column existed was created without an
+     * acceptance step, and marking any of them pending would remove it from every calendar view
+     * with nobody able to give it back.
+     */
+    val MIGRATION_16_17 = object : Migration(16, 17) {
+        override fun migrate(database: SupportSQLiteDatabase) {
+            database.execSQL(
+                "ALTER TABLE events ADD COLUMN acceptance TEXT NOT NULL DEFAULT 'NOT_REQUIRED'"
+            )
+            database.execSQL("ALTER TABLE events ADD COLUMN acceptedBy TEXT")
+            database.execSQL("ALTER TABLE events ADD COLUMN acceptedAt TEXT")
+        }
+    }
+
+    /**
+     * Carries the structured payload behind an announced change.
+     *
+     * One nullable column. Every existing message is null, which is exactly right: they are all
+     * ordinary messages, and `ChatMappers` renders a null payload as the message's own text.
+     */
+    val MIGRATION_17_18 = object : Migration(17, 18) {
+        override fun migrate(database: SupportSQLiteDatabase) {
+            database.execSQL("ALTER TABLE messages ADD COLUMN activityJson TEXT")
+        }
+    }
+
+    /**
      * List of all migrations in order.
      */
     val ALL_MIGRATIONS = arrayOf(
@@ -374,6 +405,8 @@ object DatabaseMigrations {
         MIGRATION_12_13,
         MIGRATION_13_14,
         MIGRATION_14_15,
-        MIGRATION_15_16
+        MIGRATION_15_16,
+        MIGRATION_16_17,
+        MIGRATION_17_18
     )
 }

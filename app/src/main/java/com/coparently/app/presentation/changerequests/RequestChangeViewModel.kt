@@ -2,6 +2,10 @@ package com.coparently.app.presentation.changerequests
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.coparently.app.domain.activity.ActivityAnnouncement
+import com.coparently.app.domain.activity.ActivityAnnouncer
+import com.coparently.app.domain.activity.ActivityEntityType
+import com.coparently.app.domain.activity.ActivityKind
 import com.coparently.app.domain.model.ChangeRequest
 import com.coparently.app.domain.model.Event
 import com.coparently.app.domain.repository.ChangeRequestRepository
@@ -39,7 +43,7 @@ class RequestChangeViewModel @Inject constructor(
     private val eventRepository: EventRepository,
     private val changeRequestRepository: ChangeRequestRepository,
     private val userRepository: UserRepository,
-    private val messageRepository: com.coparently.app.domain.repository.MessageRepository
+    private val activityAnnouncer: ActivityAnnouncer
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<RequestChangeUiState>(RequestChangeUiState.Loading)
@@ -57,18 +61,19 @@ class RequestChangeViewModel @Inject constructor(
     }
 
     /**
-     * Creates and sends the change request to the paired co-parent.
+     * Creates and sends the change request to the paired co-parent, and announces it.
      *
-     * When [conversationId] is provided (the request was started from a chat),
-     * a structured message summarising the proposal is also posted to that
-     * conversation so it appears in the thread.
+     * The announcement no longer depends on where the request was started from. It used to be
+     * posted only when a `conversationId` was passed — that is, only when the request came from
+     * the chat screen — so a change proposed from the calendar reached the thread silently, or
+     * rather did not reach it at all. `ActivityAnnouncer` resolves the pair's thread itself, from
+     * the two uids, so there is nothing left for a caller to supply or to forget.
      */
     fun submit(
         event: Event,
         proposedStart: LocalDateTime,
         proposedEnd: LocalDateTime?,
-        note: String?,
-        conversationId: String? = null
+        note: String?
     ) {
         if (_uiState.value is RequestChangeUiState.Sending) return
 
@@ -102,9 +107,26 @@ class RequestChangeViewModel @Inject constructor(
                         createdAt = LocalDateTime.now()
                     )
                 )
-                if (conversationId != null) {
-                    postChatMessage(conversationId, user.id, user.name, event, proposedStart, proposedEnd, note)
-                }
+                // The card is now a payload the *reader* renders in their own language, posted
+                // by the one announcer every other change goes through. It used to be a sentence
+                // this method built by concatenating hardcoded English — on a Russian phone, an
+                // English card.
+                //
+                // `entityId` is the **event's** id, not the request's, and that is deliberate:
+                // `ChangeRequestHighlight.forEvent` resolves a tap to the newest request the
+                // reader can still act on, and one event collects several requests over its life.
+                // Linking to a particular request would point at whichever one happened to be
+                // newest when the card was posted.
+                activityAnnouncer.announce(
+                    announcement = ActivityAnnouncement(
+                        kind = ActivityKind.CHANGE_REQUESTED,
+                        entityType = ActivityEntityType.CHANGE_REQUEST,
+                        entityId = event.id,
+                        title = event.title,
+                        whenIso = proposedStart.toString()
+                    ),
+                    senderName = user.name
+                )
                 _uiState.value = RequestChangeUiState.Sent
             } catch (
                 // Firestore/network failures surface as a form error, not a crash
@@ -116,42 +138,4 @@ class RequestChangeViewModel @Inject constructor(
         }
     }
 
-    @Suppress("LongParameterList") // one message built from the request's fields
-    private suspend fun postChatMessage(
-        conversationId: String,
-        senderId: String,
-        senderName: String,
-        event: Event,
-        proposedStart: LocalDateTime,
-        proposedEnd: LocalDateTime?,
-        note: String?
-    ) {
-        val whenText = proposedStart.format(chatDateTimeFormatter) +
-            (proposedEnd?.let { " – " + it.format(chatTimeFormatter) } ?: "")
-        val content = buildString {
-            append("🔁 Change requested for \"${event.title}\" → ")
-            append(whenText)
-            if (!note.isNullOrBlank()) append("\n“$note”")
-        }
-        messageRepository.sendMessage(
-            com.coparently.app.domain.model.Message(
-                id = UUID.randomUUID().toString(),
-                conversationId = conversationId,
-                senderId = senderId,
-                senderName = senderName,
-                content = content,
-                sentAtMillis = System.currentTimeMillis(),
-                messageType = com.coparently.app.domain.model.MessageType.EVENT_LINK,
-                attachments = listOf(event.id),
-                status = com.coparently.app.domain.model.MessageSendStatus.SENDING
-            )
-        )
-    }
-
-    private companion object {
-        val chatDateTimeFormatter: java.time.format.DateTimeFormatter =
-            java.time.format.DateTimeFormatter.ofPattern("EEE, MMM d · HH:mm")
-        val chatTimeFormatter: java.time.format.DateTimeFormatter =
-            java.time.format.DateTimeFormatter.ofPattern("HH:mm")
-    }
 }

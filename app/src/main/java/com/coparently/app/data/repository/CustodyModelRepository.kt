@@ -4,9 +4,14 @@ import android.util.Log
 import com.coparently.app.data.local.dao.CustodyModelDao
 import com.coparently.app.data.local.entity.CustodyModelEntity
 import com.coparently.app.data.remote.firebase.FirestoreCustodyDataSource
+import com.coparently.app.domain.activity.ActivityAnnouncement
+import com.coparently.app.domain.activity.ActivityAnnouncer
+import com.coparently.app.domain.activity.ActivityEntityType
+import com.coparently.app.domain.activity.ActivityKind
 import com.coparently.app.domain.custody.CustodyKey
 import com.coparently.app.domain.custody.CustodyWriteKind
 import com.coparently.app.domain.custody.DayOverride
+import com.coparently.app.domain.custody.DayOverrideStatus
 import com.coparently.app.domain.custody.SharedCustody
 import com.coparently.app.domain.custody.SharedCustodyRead
 import com.coparently.app.domain.model.CustodyModel
@@ -57,6 +62,7 @@ class CustodyModelRepository(
     private val custodyModelDao: CustodyModelDao,
     private val userRepository: UserRepository,
     private val firestoreCustodyDataSource: FirestoreCustodyDataSource,
+    private val activityAnnouncer: ActivityAnnouncer,
     private val scope: CoroutineScope
 ) {
     /**
@@ -74,8 +80,15 @@ class CustodyModelRepository(
     constructor(
         custodyModelDao: CustodyModelDao,
         userRepository: UserRepository,
-        firestoreCustodyDataSource: FirestoreCustodyDataSource
-    ) : this(custodyModelDao, userRepository, firestoreCustodyDataSource, defaultScope())
+        firestoreCustodyDataSource: FirestoreCustodyDataSource,
+        activityAnnouncer: ActivityAnnouncer
+    ) : this(
+        custodyModelDao,
+        userRepository,
+        firestoreCustodyDataSource,
+        activityAnnouncer,
+        defaultScope()
+    )
 
     /**
      * The shared remote stream. **Every subscriber gets this one flow**, because each raw
@@ -540,11 +553,30 @@ class CustodyModelRepository(
                 )
             )
         }
-        return if (written == null) {
-            Result.failure(IllegalStateException("The swap could not be written"))
-        } else {
-            Result.success(next)
+        if (written == null) {
+            return Result.failure(IllegalStateException("The swap could not be written"))
         }
+
+        // Package C left this gap on purpose rather than adding a bespoke card the way the
+        // change-request path once had: there must be exactly one way a change reaches the
+        // thread, and this is it. The status the transition produced *is* the announcement —
+        // offered, agreed or turned down — so nothing here has to be told which it was.
+        next[date]?.let { entry ->
+            activityAnnouncer.announce(
+                announcement = ActivityAnnouncement(
+                    kind = when (entry.status) {
+                        DayOverrideStatus.PENDING -> ActivityKind.DAY_SWAP_OFFERED
+                        DayOverrideStatus.ACCEPTED -> ActivityKind.DAY_SWAP_ACCEPTED
+                        DayOverrideStatus.DECLINED -> ActivityKind.DAY_SWAP_DECLINED
+                    },
+                    entityType = ActivityEntityType.DAY_SWAP,
+                    entityId = date,
+                    title = date,
+                    whenIso = date
+                )
+            )
+        }
+        return Result.success(next)
     }
 
     /**

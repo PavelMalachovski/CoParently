@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Czech translations of event_acceptance_strings.xml. -->
+<resources>
+    <string name="event_acceptance_section">Události čekající na vaši odpověď</string>
+    <string name="event_acceptance_offered_to_you">%1$s přidal(a) tuto událost do vašich dnů</string>
+    <string name="event_acceptance_offered_by_you">Přidali jste to do dnů: %1$s</string>
+    <string name="event_acceptance_waiting">Čeká na odpověď</string>
+    <string name="event_acceptance_accepted">Domluveno</string>
+    <string name="event_acceptance_declined">Odmítnuto</string>
+    <string name="event_acceptance_accept">Přijmout</string>
+    <string name="event_acceptance_decline">Odmítnout</string>
+    <string name="event_acceptance_withdraw">Stáhnout</string>
+    <string name="event_acceptance_waiting_strip">Vašich událostí čeká na druhého rodiče: %1$d</string>
+    <string name="event_acceptance_waiting_strip_one">Jedna vaše událost čeká na druhého rodiče</string>
+    <string name="event_acceptance_hidden_note">Do žádného kalendáře se nedostane, dokud neodpoví.</string>
+</resources>

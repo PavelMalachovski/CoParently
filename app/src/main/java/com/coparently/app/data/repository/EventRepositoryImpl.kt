@@ -5,6 +5,13 @@ import com.coparently.app.data.local.dao.UserDao
 import com.coparently.app.data.local.entity.EventEntity
 import com.coparently.app.data.remote.firebase.FirebaseAuthService
 import com.coparently.app.data.remote.firebase.FirestoreEventDataSource
+import com.coparently.app.domain.activity.ActivityAnnouncement
+import com.coparently.app.domain.activity.ActivityAnnouncer
+import com.coparently.app.domain.activity.ActivityEntityType
+import com.coparently.app.domain.activity.ActivityKind
+import com.coparently.app.domain.events.CalendarVisibility
+import com.coparently.app.domain.events.EventAcceptance
+import com.coparently.app.domain.events.EventAcceptanceTransition
 import com.coparently.app.domain.model.Event
 import com.coparently.app.domain.repository.EventRepository
 import com.google.gson.Gson
@@ -29,7 +36,8 @@ class EventRepositoryImpl @Inject constructor(
     private val eventDao: EventDao,
     private val userDao: UserDao,
     private val firebaseAuthService: FirebaseAuthService,
-    private val firestoreEventDataSource: FirestoreEventDataSource
+    private val firestoreEventDataSource: FirestoreEventDataSource,
+    private val activityAnnouncer: ActivityAnnouncer
 ) : EventRepository {
 
     private val dateFormatter = DateTimeFormatter.ISO_LOCAL_DATE_TIME
@@ -42,6 +50,19 @@ class EventRepositoryImpl @Inject constructor(
         }
     }
 
+    /**
+     * Every event in the range, recurring ones expanded into their occurrences — minus the ones
+     * no calendar view may draw.
+     *
+     * The filter lives here because this is the query the month grid, the week view and the day
+     * view all read from, so one rule covers every view rather than three that can disagree.
+     * CLAUDE.md already requires range queries to go through this function; [CalendarVisibility]
+     * is what it now enforces.
+     *
+     * Recurring masters are filtered **before** expansion. Occurrences share their master's id
+     * and carry nothing of their own, so a series waiting on the co-parent produces no
+     * occurrences at all rather than a set that has to be filtered again afterwards.
+     */
     override fun getEventsByDateRange(start: LocalDateTime, end: LocalDateTime): Flow<List<Event>> {
         // Non-recurring events matched by the query + recurring events expanded
         // into their occurrences within the range.
@@ -49,9 +70,9 @@ class EventRepositoryImpl @Inject constructor(
             eventDao.getSingleEventsByDateRange(start, end),
             eventDao.getRecurringEventsStartedBefore(end)
         ) { single, recurring ->
-            val singleEvents = single.map { it.toDomain() }
+            val singleEvents = CalendarVisibility.visible(single.map { it.toDomain() })
             val occurrences = com.coparently.app.domain.usecase.RecurrenceExpander.expandAll(
-                recurring.map { it.toDomain() },
+                CalendarVisibility.visible(recurring.map { it.toDomain() }),
                 start,
                 end
             )
@@ -59,9 +80,10 @@ class EventRepositoryImpl @Inject constructor(
         }
     }
 
+    /** One day's events, filtered by the same rule as the range query. */
     override fun getEventsByDate(date: LocalDateTime): Flow<List<Event>> {
         return eventDao.getEventsByDate(date).map { entities ->
-            entities.map { it.toDomain() }
+            CalendarVisibility.visible(entities.map { it.toDomain() })
         }
     }
 
@@ -89,7 +111,7 @@ class EventRepositoryImpl @Inject constructor(
             event.copy(createdByFirebaseUid = event.createdByFirebaseUid ?: firebaseUser.uid)
         } else {
             event
-        }
+        }.let { withAcceptance(it, firebaseUser?.uid) }
         eventDao.insertEvent(stamped.toEntity())
 
         if (firebaseUser != null && !stamped.syncedToFirestore && !stamped.isPrivate) {
@@ -103,6 +125,8 @@ class EventRepositoryImpl @Inject constructor(
             )
             eventDao.updateEvent(syncedEvent.toEntity())
         }
+
+        announce(stamped, ActivityKind.EVENT_CREATED)
     }
 
     override suspend fun updateEvent(event: Event) {
@@ -126,6 +150,8 @@ class EventRepositoryImpl @Inject constructor(
                 eventDao.updateEvent(event.copy(sharedWith = audience).toEntity())
             }
         }
+
+        announce(event, event.acceptanceKind() ?: ActivityKind.EVENT_UPDATED)
     }
 
     override suspend fun deleteEvent(event: Event) {
@@ -142,6 +168,8 @@ class EventRepositoryImpl @Inject constructor(
                 android.util.Log.w("EventRepo", "Event Firestore delete failed", e)
             }
         }
+
+        announce(event, ActivityKind.EVENT_DELETED)
     }
 
     override suspend fun deleteEventById(id: String) {
@@ -194,6 +222,70 @@ class EventRepositoryImpl @Inject constructor(
      * @param creatorUid The document's `createdByFirebaseUid`.
      * @param currentUid The signed-in user's Firebase UID.
      */
+    /**
+     * Marks [event] as needing the co-parent's word, when it does.
+     *
+     * The creator's own slot comes from their `users` row — the **same** source
+     * `AddEditEventScreen` reads to pick the event's default `parentOwner` (`User.role`, through
+     * `asNamedParent`). That matters more than its accuracy: CLAUDE.md records that `User.role` is
+     * a mirror the pairing accept path does not write, so it can lag a slot reassignment. Reading
+     * the same lagging value the form read keeps "I made this for myself" true relative to what
+     * the parent was actually shown; reading a fresher one from somewhere else would let the two
+     * disagree and hide a parent's own event from their own calendar.
+     *
+     * Only ever *adds* the requirement, and only to an event that arrived at the default. An
+     * event already carrying a decision — a re-inserted row, an undo restoring a captured event —
+     * keeps it, so nothing re-asks a question that has been answered.
+     */
+    /**
+     * Tells the co-parent about [event], unless there is a reason not to.
+     *
+     * Suppressed for a **private** event, which never reaches Firestore at all — announcing one
+     * would leak it through a channel the sync path is careful to close, which is a worse
+     * disclosure than the calendar entry itself would have been.
+     *
+     * Suppressed for an event this device did not create: a change arriving from sync must not be
+     * echoed back to the parent who made it. The repository's write paths run for both, so the
+     * check belongs here rather than in each caller.
+     *
+     * Never throws — see [ActivityAnnouncer]. An announcement that fails is logged and dropped,
+     * because a parent's event must not fail to save because chat is down.
+     */
+    private suspend fun announce(event: Event, kind: ActivityKind) {
+        val myUid = firebaseAuthService.getCurrentUser()?.uid ?: return
+        val mine = event.lastModifiedBy?.takeIf { it.isNotBlank() }
+            ?: event.createdByFirebaseUid
+        activityAnnouncer.announce(
+            announcement = ActivityAnnouncement(
+                kind = kind,
+                entityType = ActivityEntityType.EVENT,
+                entityId = event.id,
+                title = event.title,
+                whenIso = event.startDateTime.format(dateFormatter)
+            ),
+            senderName = userDao.getUserById(myUid)?.name.orEmpty(),
+            suppress = event.isPrivate || (mine != null && mine != myUid)
+        )
+    }
+
+    /** The announcement an acceptance decision deserves, or null when this was an ordinary edit. */
+    private fun Event.acceptanceKind(): ActivityKind? = when (acceptance) {
+        EventAcceptance.ACCEPTED -> ActivityKind.EVENT_ACCEPTED
+        EventAcceptance.DECLINED -> ActivityKind.EVENT_DECLINED
+        EventAcceptance.NOT_REQUIRED, EventAcceptance.PENDING -> null
+    }
+
+    private suspend fun withAcceptance(event: Event, currentUid: String?): Event {
+        if (currentUid == null || event.acceptance != EventAcceptance.NOT_REQUIRED) return event
+        val me = userDao.getUserById(currentUid)
+        val required = EventAcceptanceTransition.required(
+            event = event,
+            creatorSlot = me?.role,
+            partnerUid = me?.partnerId
+        )
+        return if (required) event.copy(acceptance = EventAcceptance.PENDING) else event
+    }
+
     private suspend fun shareTargets(event: Event, creatorUid: String, currentUid: String): List<String> {
         val partnerId = userDao.getUserById(currentUid)?.partnerId
         val entitled = (listOf(currentUid, creatorUid) + listOfNotNull(partnerId))
@@ -227,7 +319,10 @@ class EventRepositoryImpl @Inject constructor(
             "sharedWith" to audience,
             "lastModifiedBy" to (lastModifiedBy ?: creatorUid),
             "permissions" to permissions,
-            "imageUrl" to (imageUrl ?: "")
+            "imageUrl" to (imageUrl ?: ""),
+            "acceptance" to acceptance.name,
+            "acceptedBy" to (acceptedBy ?: ""),
+            "acceptedAt" to (acceptedAt?.format(dateFormatter) ?: "")
         )
     }
 
@@ -259,7 +354,14 @@ class EventRepositoryImpl @Inject constructor(
             pickupConfirmedBy = pickupConfirmedBy,
             pickupConfirmedAt = pickupConfirmedAt,
             reminderMinutes = reminderMinutes,
-            imageUrl = imageUrl
+            imageUrl = imageUrl,
+            // An unrecognised status from a newer build reads as NOT_REQUIRED rather than
+            // throwing. That is the safe direction: the worst case is an event that shows when a
+            // newer build would have hidden it, against a crash on the path that draws the grid.
+            acceptance = runCatching { EventAcceptance.valueOf(acceptance) }
+                .getOrDefault(EventAcceptance.NOT_REQUIRED),
+            acceptedBy = acceptedBy,
+            acceptedAt = acceptedAt
         )
     }
 
@@ -289,7 +391,10 @@ class EventRepositoryImpl @Inject constructor(
             pickupConfirmedBy = pickupConfirmedBy,
             pickupConfirmedAt = pickupConfirmedAt,
             reminderMinutes = reminderMinutes,
-            imageUrl = imageUrl
+            imageUrl = imageUrl,
+            acceptance = acceptance.name,
+            acceptedBy = acceptedBy,
+            acceptedAt = acceptedAt
         )
     }
 }

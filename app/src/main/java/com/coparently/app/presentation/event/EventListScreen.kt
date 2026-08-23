@@ -27,6 +27,7 @@ import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
+import androidx.compose.material3.Surface
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
@@ -47,6 +48,7 @@ import com.coparently.app.domain.model.Event
 import com.coparently.app.presentation.common.ParentNames
 import com.coparently.app.presentation.common.animations.AnimatedEmptyState
 import com.coparently.app.presentation.common.rememberParentNames
+import com.coparently.app.domain.events.CalendarVisibility
 import com.coparently.app.presentation.theme.CoPlanlyColors
 import kotlinx.coroutines.launch
 
@@ -62,7 +64,14 @@ fun EventListScreen(
     onNavigateUp: () -> Unit,
     viewModel: EventViewModel = hiltViewModel()
 ) {
-    val events by viewModel.events.collectAsState()
+    val allEvents by viewModel.events.collectAsState()
+
+    // Events this parent created that the co-parent has not answered are summarised rather than
+    // listed: they are in nobody's calendar yet, so listing them among real events would say they
+    // are settled. The strip is what tells their creator "not answered yet" apart from "I never
+    // created it" — without it a withheld event is simply gone from the phone that made it.
+    val awaitingCoParent = remember(allEvents) { allEvents.filter { it.acceptance.isPending } }
+    val events = remember(allEvents) { CalendarVisibility.visible(allEvents) }
     val parentNames = rememberParentNames(viewModel.parents.collectAsState().value)
     val uiState by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -150,7 +159,7 @@ fun EventListScreen(
             // the current events, or an empty state.
             is EventUiState.OperationSuccess,
             is EventUiState.Success -> {
-                if (events.isEmpty()) {
+                if (events.isEmpty() && awaitingCoParent.isEmpty()) {
                     AnimatedEmptyState(
                         icon = Icons.Default.Event,
                         title = stringResource(R.string.event_list_empty_title),
@@ -165,6 +174,11 @@ fun EventListScreen(
                             .padding(paddingValues)
                             .padding(horizontal = 16.dp)
                     ) {
+                        if (awaitingCoParent.isNotEmpty()) {
+                            item(key = "awaiting-strip") {
+                                WaitingOnCoParentStrip(count = awaitingCoParent.size)
+                            }
+                        }
                         items(events, key = { it.id }) { event ->
                             SwipeableEventCard(
                                 event = event,
@@ -273,5 +287,38 @@ private fun EventCardContent(
                 }
             )
         }
+    }
+}
+
+
+/**
+ * How many of this parent's own events the co-parent has not answered.
+ *
+ * A count rather than a list. The events themselves are in nobody's calendar until they are
+ * answered, and rendering them as cards among settled ones would say they are settled — but their
+ * creator still has to be able to tell "they have not answered" from "I never created it", which
+ * is the whole reason a declined event is not deleted either.
+ *
+ * @param count How many are outstanding; always at least one when this is shown.
+ */
+@Composable
+private fun WaitingOnCoParentStrip(count: Int) {
+    Surface(
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        shape = MaterialTheme.shapes.medium,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp)
+    ) {
+        Text(
+            text = if (count == 1) {
+                stringResource(R.string.event_acceptance_waiting_strip_one)
+            } else {
+                stringResource(R.string.event_acceptance_waiting_strip, count)
+            },
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSecondaryContainer,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
+        )
     }
 }
