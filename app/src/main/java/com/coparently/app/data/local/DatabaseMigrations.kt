@@ -407,6 +407,21 @@ object DatabaseMigrations {
     }
 
     /**
+     * Holds photographs attached to a child's medical notes.
+     *
+     * One column, `NOT NULL DEFAULT '[]'` — the same shape every other list on this record uses.
+     * An empty list on every existing row is the true answer, not merely the safe one: there was
+     * nowhere to put a photograph until now.
+     */
+    val MIGRATION_19_20 = object : Migration(19, 20) {
+        override fun migrate(database: SupportSQLiteDatabase) {
+            database.execSQL(
+                "ALTER TABLE child_info ADD COLUMN medicalPhotosJson TEXT NOT NULL DEFAULT '[]'"
+            )
+        }
+    }
+
+    /**
      * List of all migrations in order.
      */
     val ALL_MIGRATIONS = arrayOf(
@@ -423,6 +438,7 @@ object DatabaseMigrations {
         MIGRATION_15_16,
         MIGRATION_16_17,
         MIGRATION_17_18,
-        MIGRATION_18_19
+        MIGRATION_18_19,
+        MIGRATION_19_20
     )
 }

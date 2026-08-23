@@ -6,6 +6,7 @@ import com.coparently.app.data.local.entity.ChildInfoEntity
 import com.coparently.app.data.remote.firebase.FirebaseAuthService
 import com.coparently.app.data.remote.firebase.FirestoreChildInfoDataSource
 import com.coparently.app.data.sync.ChildInfoAudience
+import com.coparently.app.data.sync.ChildInfoPhotos
 import com.coparently.app.domain.model.ChildInfo
 import com.coparently.app.domain.model.MedicalProfile
 import com.coparently.app.domain.repository.ChildInfoRepository
@@ -147,6 +148,9 @@ class ChildInfoRepositoryImpl @Inject constructor(
             medicalProfile = (
                 gson.fromJson(medicalProfileJson, MedicalProfile::class.java) ?: MedicalProfile()
                 ).withSanitizedVaccinationNames(),
+            medicalPhotos = ChildInfoPhotos.decode(
+                gson.fromJson(medicalPhotosJson, Array<String>::class.java)?.toList()
+            ),
             createdAt = createdAt,
             updatedAt = updatedAt,
             createdByFirebaseUid = createdByFirebaseUid,
@@ -170,6 +174,7 @@ class ChildInfoRepositoryImpl @Inject constructor(
             emergencyContactsJson = gson.toJson(emergencyContacts),
             schoolInfoJson = schoolInfo?.let { gson.toJson(it) },
             medicalProfileJson = gson.toJson(medicalProfile),
+            medicalPhotosJson = gson.toJson(medicalPhotos),
             createdAt = createdAt,
             updatedAt = updatedAt,
             createdByFirebaseUid = createdByFirebaseUid,
@@ -221,6 +226,7 @@ class ChildInfoRepositoryImpl @Inject constructor(
                 "grade" to it.grade
             )},
             "medicalProfile" to gson.fromJson(gson.toJson(medicalProfile), Map::class.java),
+            "medicalPhotos" to medicalPhotos,
             "createdAt" to createdAt.format(formatter),
             "updatedAt" to updatedAt.format(formatter),
             "createdByFirebaseUid" to createdByFirebaseUid,
@@ -280,6 +286,7 @@ class ChildInfoRepositoryImpl @Inject constructor(
                     gson.fromJson(gson.toJson(it), MedicalProfile::class.java)
                 } ?: MedicalProfile()
                 ).withSanitizedVaccinationNames(),
+            medicalPhotos = ChildInfoPhotos.decode(this["medicalPhotos"]),
             createdAt = LocalDateTime.parse(this["createdAt"] as String, formatter),
             updatedAt = LocalDateTime.parse(this["updatedAt"] as String, formatter),
             createdByFirebaseUid = this["createdByFirebaseUid"] as? String,

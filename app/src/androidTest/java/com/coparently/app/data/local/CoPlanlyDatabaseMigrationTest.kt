@@ -503,6 +503,40 @@ class CoPlanlyDatabaseMigrationTest {
         }
     }
 
+    /**
+     * 19-to-20 gives a child record somewhere to keep photographs, and touches nothing existing.
+     *
+     * `[]` on every existing row is the true answer, not merely the safe one: there was nowhere
+     * to put a photograph until now. The column is `NOT NULL`, so a row that came through with a
+     * literal null would fail the insert rather than reach a screen — which is why the default
+     * is asserted rather than assumed.
+     */
+    @Test
+    fun migration19To20_givesEveryExistingChildAnEmptyPhotoList() {
+        val db = helper.createDatabase(TEST_DB, VERSION_19)
+        db.execSQL(
+            """
+            INSERT INTO child_info (id, childName, medicationsJson, activitiesJson, allergiesJson,
+                                    emergencyContactsJson, medicalProfileJson, createdAt,
+                                    updatedAt, syncedToFirestore)
+            VALUES ('c1', 'Ema', '[]', '[]', '["pollen"]', '[]', '{}',
+                    '2026-08-01T09:00:00', '2026-08-01T09:00:00', 1)
+            """.trimIndent()
+        )
+        db.close()
+
+        val migrated = helper.runMigrationsAndValidate(
+            TEST_DB, VERSION_20, true, DatabaseMigrations.MIGRATION_19_20
+        )
+
+        migrated.query("SELECT childName, allergiesJson, medicalPhotosJson FROM child_info").use {
+            assertTrue(it.moveToFirst())
+            assertEquals("Ema", it.getString(0))
+            assertEquals("[\"pollen\"]", it.getString(1))
+            assertEquals("a child on record before this column had no photographs", "[]", it.getString(2))
+        }
+    }
+
     private companion object {
         const val TEST_DB = "coplanly-migration-test.db"
         const val VERSION_11 = 11
@@ -514,6 +548,7 @@ class CoPlanlyDatabaseMigrationTest {
         const val VERSION_17 = 17
         const val VERSION_18 = 18
         const val VERSION_19 = 19
+        const val VERSION_20 = 20
 
         /** 2026-08-01T12:00:00 at UTC+05:30, i.e. 06:30:00Z. */
         const val NOON_AT_PLUS_FIVE_THIRTY_MILLIS = 1_785_565_800_000L

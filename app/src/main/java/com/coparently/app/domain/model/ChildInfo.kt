@@ -17,6 +17,10 @@ import java.time.LocalDateTime
  * @property schoolInfo Information about the child's school
  * @property medicalProfile Emergency-relevant medical facts: blood type, intolerances,
  *   hereditary conditions and vaccinations. Defaults to an empty profile, not null.
+ * @property medicalPhotos Download URLs of photographs attached to the medical notes — a
+ *   prescription, a rash, a vaccination card — in the order they were added. Shared with the
+ *   co-parent like the rest of this record. **Not encrypted**, and deliberately so: nothing in
+ *   this app is, and a false promise about medical images would be worse than none.
  * @property createdAt Timestamp when the info was created
  * @property updatedAt Timestamp when the info was last updated
  * @property createdByFirebaseUid Firebase UID of the user who created this info
@@ -34,6 +38,7 @@ data class ChildInfo(
     val emergencyContacts: List<EmergencyContact> = emptyList(),
     val schoolInfo: SchoolInfo? = null,
     val medicalProfile: MedicalProfile = MedicalProfile(),
+    val medicalPhotos: List<String> = emptyList(),
     val createdAt: LocalDateTime,
     val updatedAt: LocalDateTime,
     val createdByFirebaseUid: String? = null,
