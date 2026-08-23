@@ -85,7 +85,7 @@ internal fun MessageEntity.toDomain(): Message = Message(
     status = runCatching { MessageSendStatus.valueOf(status ?: MessageSendStatus.SENT.name) }
         .getOrDefault(MessageSendStatus.SENT),
     activity = activityJson
-        ?.let { json -> runCatching { gson.fromJson(json, activityMapType) }.getOrNull() }
+        ?.let { json -> runCatching { gson.fromJson<Map<String, Any?>>(json, activityMapType) }.getOrNull() }
         ?.let(ActivityAnnouncement::fromMap)
 )
 

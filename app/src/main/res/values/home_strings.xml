@@ -46,7 +46,7 @@
 
     <!-- Contacts: item 16's one button, between the changes feed and the spend tile. -->
     <string name="home_contacts">Contacts</string>
-    <string name="home_contacts_supporting">Grandparents, doctors, a friend's parents</string>
+    <string name="home_contacts_supporting">Grandparents, doctors, a friend\'s parents</string>
 
     <!-- Activity feed. %1$s = event title; the section header already names who made the
          change, so the row states the action rather than repeating "Co-parent". -->
