@@ -4,13 +4,7 @@ import com.coparently.app.domain.activity.ActivityAnnouncement
 import com.coparently.app.domain.activity.ActivityEntityType
 import com.coparently.app.domain.activity.ActivityKind
 import com.coparently.app.domain.model.Message
-import com.coparently.app.domain.activity.ActivityAnnouncement
-import com.coparently.app.domain.activity.ActivityEntityType
-import com.coparently.app.domain.activity.ActivityKind
 import com.coparently.app.domain.model.MessageSendStatus
-import com.coparently.app.domain.activity.ActivityAnnouncement
-import com.coparently.app.domain.activity.ActivityEntityType
-import com.coparently.app.domain.activity.ActivityKind
 import com.coparently.app.domain.model.MessageType
 import org.junit.After
 import org.junit.Assert.assertEquals
