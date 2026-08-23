@@ -9,7 +9,7 @@
     <string name="contacts_call">Call</string>
 
     <string name="contacts_empty">No contacts yet.</string>
-    <string name="contacts_empty_hint">Add grandparents, doctors or a friend's parents to a child's details, and they will be one tap from the dialler here.</string>
+    <string name="contacts_empty_hint">Add grandparents, doctors or a friend\'s parents to a child\'s details, and they will be one tap from the dialler here.</string>
 
     <!-- Shown when there is no dialler to open — rare, but a silent no-op looks like a broken
          button. -->
