@@ -7,6 +7,7 @@ import com.coparently.app.data.remote.firebase.FirebaseAuthService
 import com.coparently.app.data.remote.firebase.FirestoreEventDataSource
 import com.coparently.app.domain.events.CalendarVisibility
 import com.coparently.app.domain.events.EventAcceptance
+import com.coparently.app.domain.events.EventAcceptanceTransition
 import com.coparently.app.domain.model.Event
 import com.coparently.app.domain.repository.EventRepository
 import com.google.gson.Gson
@@ -105,7 +106,7 @@ class EventRepositoryImpl @Inject constructor(
             event.copy(createdByFirebaseUid = event.createdByFirebaseUid ?: firebaseUser.uid)
         } else {
             event
-        }
+        }.let { withAcceptance(it, firebaseUser?.uid) }
         eventDao.insertEvent(stamped.toEntity())
 
         if (firebaseUser != null && !stamped.syncedToFirestore && !stamped.isPrivate) {
@@ -210,6 +211,32 @@ class EventRepositoryImpl @Inject constructor(
      * @param creatorUid The document's `createdByFirebaseUid`.
      * @param currentUid The signed-in user's Firebase UID.
      */
+    /**
+     * Marks [event] as needing the co-parent's word, when it does.
+     *
+     * The creator's own slot comes from their `users` row — the **same** source
+     * `AddEditEventScreen` reads to pick the event's default `parentOwner` (`User.role`, through
+     * `asNamedParent`). That matters more than its accuracy: CLAUDE.md records that `User.role` is
+     * a mirror the pairing accept path does not write, so it can lag a slot reassignment. Reading
+     * the same lagging value the form read keeps "I made this for myself" true relative to what
+     * the parent was actually shown; reading a fresher one from somewhere else would let the two
+     * disagree and hide a parent's own event from their own calendar.
+     *
+     * Only ever *adds* the requirement, and only to an event that arrived at the default. An
+     * event already carrying a decision — a re-inserted row, an undo restoring a captured event —
+     * keeps it, so nothing re-asks a question that has been answered.
+     */
+    private suspend fun withAcceptance(event: Event, currentUid: String?): Event {
+        if (currentUid == null || event.acceptance != EventAcceptance.NOT_REQUIRED) return event
+        val me = userDao.getUserById(currentUid)
+        val required = EventAcceptanceTransition.required(
+            event = event,
+            creatorSlot = me?.role,
+            partnerUid = me?.partnerId
+        )
+        return if (required) event.copy(acceptance = EventAcceptance.PENDING) else event
+    }
+
     private suspend fun shareTargets(event: Event, creatorUid: String, currentUid: String): List<String> {
         val partnerId = userDao.getUserById(currentUid)?.partnerId
         val entitled = (listOf(currentUid, creatorUid) + listOfNotNull(partnerId))
