@@ -26,4 +26,10 @@
     <string name="guest_error_not_guest_invitation">Das ist eine Einladung für den anderen Elternteil, kein Gastcode. Bitte um eine Gasteinladung.</string>
     <string name="guest_error_grant_ended">Dieser Zugang ist bereits abgelaufen. Bitte um eine neue Einladung.</string>
     <string name="guest_error_inviter_not_entitled">Wer diesen Code geschickt hat, darf für diese Akte keinen Zugang erteilen.</string>
+    <string name="guest_access_until">Zugang bis %1$s</string>
+    <string name="guest_revoke_title">Zugang von %1$s entfernen?</string>
+    <string name="guest_revoke_message">Diese Person kann die Akte dann nicht mehr lesen. Du kannst sie später wieder einladen.</string>
+    <string name="guest_revoke_confirm">Zugang entfernen</string>
+    <string name="guest_revoke_cancel">Abbrechen</string>
+    <string name="guest_revoke_failed">Der Zugang konnte nicht entfernt werden. Verbindung prüfen und erneut versuchen.</string>
 </resources>

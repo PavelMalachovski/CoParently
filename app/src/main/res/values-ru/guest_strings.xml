@@ -26,4 +26,10 @@
     <string name="guest_error_not_guest_invitation">Это приглашение для второго родителя, а не гостевой код. Попросите родителя прислать гостевое приглашение.</string>
     <string name="guest_error_grant_ended">Этот доступ уже закончился. Попросите родителя прислать новое приглашение.</string>
     <string name="guest_error_inviter_not_entitled">Тот, кто прислал этот код, не может открыть доступ к этой карточке.</string>
+    <string name="guest_access_until">Доступ до %1$s</string>
+    <string name="guest_revoke_title">Закрыть доступ: %1$s?</string>
+    <string name="guest_revoke_message">Этот человек больше не сможет читать карточку. Позже вы сможете пригласить его снова.</string>
+    <string name="guest_revoke_confirm">Закрыть доступ</string>
+    <string name="guest_revoke_cancel">Отмена</string>
+    <string name="guest_revoke_failed">Не удалось закрыть доступ. Проверьте соединение и попробуйте ещё раз.</string>
 </resources>

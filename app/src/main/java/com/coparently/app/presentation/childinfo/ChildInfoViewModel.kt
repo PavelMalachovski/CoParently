@@ -98,6 +98,54 @@ class ChildInfoViewModel @Inject constructor(
         _photoError.value = null
     }
 
+    /**
+     * Set when revoking a guest failed, so the screen can say so.
+     *
+     * A silent failure here is the worst kind this feature has: the parent has decided
+     * somebody should no longer be able to read their child's medical record, the row would
+     * disappear from the list on the next emission if the local write went through, and they
+     * would walk away believing the access is gone while `sharedWith` still holds the uid.
+     */
+    private val _guestRevokeFailed = MutableStateFlow(false)
+    val guestRevokeFailed: StateFlow<Boolean> = _guestRevokeFailed.asStateFlow()
+
+    /** Clears [guestRevokeFailed] once the screen has shown it. */
+    fun clearGuestRevokeFailed() {
+        _guestRevokeFailed.value = false
+    }
+
+    /**
+     * Takes a guest's access back, now.
+     *
+     * Removing the grant from the map is the whole of it: `sharedWith` is **derived** at
+     * upload time by `ChildInfoAudience.entitled` from the grants that are still active, so
+     * dropping the entry drops the uid from the audience in the same write. Nothing here
+     * touches `sharedWith` directly, and nothing should — a second place computing the
+     * audience is a second place for it to disagree with the first.
+     *
+     * `upsertChildInfo` writes Room and Firestore in one call, so this takes effect on the
+     * next read rather than at the next sync tick. If the remote write fails the row is
+     * marked unsynced and retried, and [guestRevokeFailed] tells the parent it has not
+     * happened yet.
+     */
+    fun revokeGuest(childInfo: ChildInfo, guestUid: String) {
+        if (guestUid !in childInfo.guests) return
+        viewModelScope.launch {
+            try {
+                childInfoRepository.upsertChildInfo(
+                    childInfo.copy(guests = childInfo.guests - guestUid)
+                )
+            } catch (e: CancellationException) {
+                throw e
+            } catch (
+                @Suppress("TooGenericExceptionCaught") e: Exception
+            ) {
+                crashlyticsManager.recordException(e)
+                _guestRevokeFailed.value = true
+            }
+        }
+    }
+
     /** The guest-invite sheet's state; [GuestInviteState.isOpen] is false when it is closed. */
     private val _guestInvite = MutableStateFlow(GuestInviteState())
     val guestInvite: StateFlow<GuestInviteState> = _guestInvite.asStateFlow()

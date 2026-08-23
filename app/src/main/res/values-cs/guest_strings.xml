@@ -26,4 +26,10 @@
     <string name="guest_error_not_guest_invitation">Toto je pozvánka pro druhého rodiče, ne kód pro hosta. Požádejte rodiče o pozvánku pro hosta.</string>
     <string name="guest_error_grant_ended">Tento přístup už skončil. Požádejte rodiče o novou pozvánku.</string>
     <string name="guest_error_inviter_not_entitled">Ten, kdo poslal tento kód, nemůže k tomuto záznamu udělit přístup.</string>
+    <string name="guest_access_until">Přístup do %1$s</string>
+    <string name="guest_revoke_title">Odebrat přístup: %1$s?</string>
+    <string name="guest_revoke_message">Tento záznam si už nebude moci přečíst. Později ho můžete pozvat znovu.</string>
+    <string name="guest_revoke_confirm">Odebrat přístup</string>
+    <string name="guest_revoke_cancel">Zrušit</string>
+    <string name="guest_revoke_failed">Přístup se nepodařilo odebrat. Zkontrolujte připojení a zkuste to znovu.</string>
 </resources>

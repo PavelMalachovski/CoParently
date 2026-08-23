@@ -26,4 +26,10 @@
     <string name="guest_error_not_guest_invitation">This is a co-parent invitation, not a guest code. Ask the parent for a guest invitation.</string>
     <string name="guest_error_grant_ended">This access has already ended. Ask the parent for a new invitation.</string>
     <string name="guest_error_inviter_not_entitled">Whoever sent this code cannot grant access to that record.</string>
+    <string name="guest_access_until">Access until %1$s</string>
+    <string name="guest_revoke_title">Remove %1$s\'s access?</string>
+    <string name="guest_revoke_message">They will no longer be able to read this record. You can invite them again later.</string>
+    <string name="guest_revoke_confirm">Remove access</string>
+    <string name="guest_revoke_cancel">Cancel</string>
+    <string name="guest_revoke_failed">Access could not be removed. Check your connection and try again.</string>
 </resources>

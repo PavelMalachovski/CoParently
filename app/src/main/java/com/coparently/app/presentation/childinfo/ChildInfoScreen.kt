@@ -20,6 +20,8 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.coparently.app.R
 import com.coparently.app.domain.model.Activity
+import com.coparently.app.domain.guests.GuestGrant
+import com.coparently.app.domain.guests.GuestGrantPolicy
 import com.coparently.app.domain.model.ChildInfo
 import com.coparently.app.domain.model.EmergencyContact
 import com.coparently.app.domain.model.MedicalProfile
@@ -28,11 +30,14 @@ import com.coparently.app.domain.model.SchoolInfo
 import com.coparently.app.domain.model.Vaccination
 import com.coparently.app.presentation.childinfo.components.GuestInviteSheet
 import com.coparently.app.presentation.childinfo.components.MedicalPhotoStrip
+import com.coparently.app.presentation.common.ConfirmationDialog
 import com.coparently.app.presentation.common.GroupLabel
 import com.coparently.app.presentation.common.SectionGroup
 import com.coparently.app.presentation.common.SectionGroupScope
 import com.coparently.app.presentation.common.SectionRow
 import com.coparently.app.presentation.common.labelRes
+import java.time.Instant
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 
@@ -56,6 +61,18 @@ fun ChildInfoScreen(
     val uiState by viewModel.uiState.collectAsState()
     val currentChildInfo by viewModel.currentChildInfo.collectAsState()
     val guestInvite by viewModel.guestInvite.collectAsState()
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    // A failed revoke has to be said out loud. The row vanishes from the list either way once
+    // Room is written, so silence here would leave the parent believing access is gone.
+    val revokeFailed by viewModel.guestRevokeFailed.collectAsState()
+    val revokeFailedMessage = stringResource(R.string.guest_revoke_failed)
+    LaunchedEffect(revokeFailed) {
+        if (revokeFailed) {
+            snackbarHostState.showSnackbar(revokeFailedMessage)
+            viewModel.clearGuestRevokeFailed()
+        }
+    }
 
     GuestInviteSheet(
         state = guestInvite,
@@ -66,6 +83,7 @@ fun ChildInfoScreen(
     )
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.childinfo_screen_title)) },
@@ -155,7 +173,8 @@ fun ChildInfoScreen(
                             ChildInfoContent(
                                 childInfo = childInfo,
                                 onEditClick = onEditClick,
-                                onInviteGuest = { viewModel.openGuestInvite(childInfo.id) }
+                                onInviteGuest = { viewModel.openGuestInvite(childInfo.id) },
+                                onRevokeGuest = { uid -> viewModel.revokeGuest(childInfo, uid) }
                             )
                         }
                     }
@@ -177,7 +196,8 @@ fun ChildInfoScreen(
 private fun ChildInfoContent(
     childInfo: ChildInfo,
     onEditClick: (String) -> Unit,
-    onInviteGuest: () -> Unit
+    onInviteGuest: () -> Unit,
+    onRevokeGuest: (String) -> Unit
 ) {
     val haptic = LocalHapticFeedback.current
     val onRowClick: () -> Unit = {
@@ -220,7 +240,13 @@ private fun ChildInfoContent(
             item { SchoolGroup(schoolInfo = school, onClick = onRowClick) }
         }
         item { MedicalDetailsGroup(profile = childInfo.medicalProfile, onClick = onRowClick) }
-        item { GuestAccessGroup(onInviteGuest = onInviteGuest) }
+        item {
+            GuestAccessGroup(
+                guests = childInfo.guests,
+                onInviteGuest = onInviteGuest,
+                onRevokeGuest = onRevokeGuest
+            )
+        }
     }
 }
 
@@ -232,11 +258,42 @@ private fun ChildInfoContent(
  * offered the button that shares it.
  */
 @Composable
-private fun GuestAccessGroup(onInviteGuest: () -> Unit) {
+private fun GuestAccessGroup(
+    guests: Map<String, GuestGrant>,
+    onInviteGuest: () -> Unit,
+    onRevokeGuest: (String) -> Unit
+) {
     val haptic = LocalHapticFeedback.current
+    // Only the grants that are still good. An expired one is not somebody to revoke — the
+    // rule already refuses them and the sweep removes them — and offering a destructive
+    // action that does nothing is worse than not listing them at all.
+    val active = remember(guests) {
+        GuestGrantPolicy.active(guests.values.toList(), Instant.now())
+    }
+    var pendingRevoke by remember { mutableStateOf<GuestGrant?>(null) }
+
     Column {
         GroupLabel(stringResource(R.string.guest_section_label))
         SectionGroup {
+            active.forEach { grant ->
+                // Red, and it confirms: the sign-out anatomy, because the row's whole action
+                // is destructive and a row is easier to hit by accident than a button.
+                SectionRow(
+                    icon = Icons.Default.PersonRemove,
+                    iconTint = MaterialTheme.colorScheme.error,
+                    title = grant.name,
+                    titleColor = MaterialTheme.colorScheme.error,
+                    supporting = stringResource(
+                        R.string.guest_access_until,
+                        localDate(grant.expiresAtMillis)
+                    ),
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        pendingRevoke = grant
+                    }
+                )
+                Divider()
+            }
             SectionRow(
                 icon = Icons.Default.PersonAdd,
                 title = stringResource(R.string.guest_invite_row_title),
@@ -248,7 +305,28 @@ private fun GuestAccessGroup(onInviteGuest: () -> Unit) {
             )
         }
     }
+
+    pendingRevoke?.let { grant ->
+        ConfirmationDialog(
+            title = stringResource(R.string.guest_revoke_title, grant.name),
+            message = stringResource(R.string.guest_revoke_message),
+            confirmText = stringResource(R.string.guest_revoke_confirm),
+            dismissText = stringResource(R.string.guest_revoke_cancel),
+            isDestructive = true,
+            onDismiss = { pendingRevoke = null },
+            onConfirm = {
+                pendingRevoke = null
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                onRevokeGuest(grant.uid)
+            }
+        )
+    }
 }
+
+/** An epoch-millis instant as a date in the reader's own zone. */
+private fun localDate(millis: Long): String =
+    DateTimeFormatter.ofLocalizedDate(FormatStyle.LONG)
+        .format(Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()))
 
 /** Builds the share-sheet intent for a guest link. */
 private fun guestShareIntent(context: Context, link: String): Intent {
