@@ -1,14 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <string name="calendar_custody_today_with">Heute bei %1$s</string>
-    <string name="calendar_custody_handover_tomorrow">→ %1$s morgen</string>
-    <plurals name="calendar_custody_handover_in_days">
-        <item quantity="one">→ %2$s in %1$d Tag</item>
-        <item quantity="other">→ %2$s in %1$d Tagen</item>
-    </plurals>
-    <string name="calendar_custody_ribbon_description">Heute ist das Kind bei %1$s</string>
-    <string name="calendar_custody_ribbon_description_handover">Heute ist das Kind bei %1$s. Die Betreuung geht in %3$d Tagen an %2$s über.</string>
 
     <string name="calendar_viewmode_month">Monat</string>
     <string name="calendar_viewmode_week">Woche</string>

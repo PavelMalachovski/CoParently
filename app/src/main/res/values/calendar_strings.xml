@@ -9,14 +9,6 @@
     <!-- Parent names, used to compose custody and handover copy -->
 
     <!-- Custody ribbon -->
-    <string name="calendar_custody_today_with">Today with %1$s</string>
-    <string name="calendar_custody_handover_tomorrow">→ %1$s tomorrow</string>
-    <plurals name="calendar_custody_handover_in_days">
-        <item quantity="one">→ %2$s in %1$d day</item>
-        <item quantity="other">→ %2$s in %1$d days</item>
-    </plurals>
-    <string name="calendar_custody_ribbon_description">Today the child is with %1$s</string>
-    <string name="calendar_custody_ribbon_description_handover">Today the child is with %1$s. Custody passes to %2$s in %3$d days.</string>
 
     <!-- View mode switcher -->
     <string name="calendar_viewmode_month">Month</string>

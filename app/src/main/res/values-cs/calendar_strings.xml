@@ -4,16 +4,6 @@
     <!-- Parent names, used to compose custody and handover copy -->
 
     <!-- Custody ribbon -->
-    <string name="calendar_custody_today_with">Dnes má %1$s</string>
-    <string name="calendar_custody_handover_tomorrow">→ zítra %1$s</string>
-    <plurals name="calendar_custody_handover_in_days">
-        <item quantity="one">→ %2$s za %1$d den</item>
-        <item quantity="few">→ %2$s za %1$d dny</item>
-        <item quantity="many">→ %2$s za %1$d dní</item>
-        <item quantity="other">→ %2$s za %1$d dní</item>
-    </plurals>
-    <string name="calendar_custody_ribbon_description">Dnes má dítě %1$s</string>
-    <string name="calendar_custody_ribbon_description_handover">Dnes má dítě %1$s. Za %3$d dní přebírá %2$s.</string>
 
     <!-- View mode switcher -->
     <string name="calendar_viewmode_month">Měsíc</string>

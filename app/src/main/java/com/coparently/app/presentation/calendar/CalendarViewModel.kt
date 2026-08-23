@@ -8,8 +8,6 @@ import com.coparently.app.data.local.preferences.EncryptedPreferences
 import com.coparently.app.data.local.preferences.PreferenceKeys
 import com.coparently.app.data.repository.CustodyModelRepository
 import com.coparently.app.domain.custody.CustodyChangeAnnouncement
-import com.coparently.app.domain.custody.HandoverCalculator
-import com.coparently.app.domain.custody.HandoverInfo
 import com.coparently.app.domain.custody.SharedCustody
 import com.coparently.app.domain.model.CustodyModel
 import com.coparently.app.presentation.common.Parents
@@ -27,7 +25,7 @@ import java.time.LocalDate
 import java.time.YearMonth
 import javax.inject.Inject
 
-/** Keeps the handover flow warm across brief unsubscriptions (config changes). */
+/** Keeps the shared flows warm across brief unsubscriptions (config changes). */
 private const val HANDOVER_STOP_TIMEOUT_MS = 5_000L
 
 /**
@@ -68,15 +66,6 @@ class CalendarViewModel @Inject constructor(
     val custodyModel: StateFlow<CustodyModel?> = _custodyModel.asStateFlow()
 
     /**
-     * Next custody handover, or null when no model is configured or custody never switches.
-     * Feeds the trailing half of the custody ribbon ("→ Pavel in 2 days"). Shares
-     * [HandoverCalculator] with the home dashboard so the two cannot disagree on the date.
-     */
-    val nextHandover: StateFlow<HandoverInfo?> = _custodyModel
-        .map { model -> model?.let { HandoverCalculator.nextHandoverFrom(it, LocalDate.now()) } }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(HANDOVER_STOP_TIMEOUT_MS), null)
-
-    /**
      * The `lastModifiedAt` of the shared-custody change the user last dismissed the banner for,
      * or null if none was ever dismissed. Seeded from [EncryptedPreferences] so an
      * acknowledged change stays acknowledged across process death, and updated in place by
@@ -99,7 +88,7 @@ class CalendarViewModel @Inject constructor(
      * before its own uid is known — announcing the user's own edit as the co-parent's, exactly
      * the failure this feature must not have, just pointed the other way.
      *
-     * `WhileSubscribed`, like [nextHandover], and not an eager collector: [parents] itself only
+     * `WhileSubscribed`, like the banner below, and not an eager collector: [parents] itself only
      * subscribes to [ParentsSource]'s pairing listener while something is collecting it, and
      * that stream is expensive to hold open (three Firestore listeners — see
      * [ParentsSource.observe]'s own doc). An always-on collector here would keep it attached for

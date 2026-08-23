@@ -11,8 +11,8 @@ import com.coparently.app.R
  * fallbacks for when one of them cannot be named.
  *
  * This exists so a screen passes *one* value down its tree instead of five. Threading `me`,
- * `coParent` and three strings through `MonthView`, `DayWeekView`, `CustodyRibbon`,
- * `DayAgendaCard`, `ExpenseList` and the rest would be noise at every level, and — the reason
+ * `coParent` and three strings through `MonthView`, `DayWeekView`, `DayAgendaCard`,
+ * `ExpenseList` and the rest would be noise at every level, and — the reason
  * that matters — it is how one composable quietly ends up resolving labels from a different
  * pair than the sibling rendered next to it.
  *

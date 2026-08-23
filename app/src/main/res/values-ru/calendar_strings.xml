@@ -1,16 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <string name="calendar_custody_today_with">Сегодня с %1$s</string>
-    <string name="calendar_custody_handover_tomorrow">→ %1$s завтра</string>
-    <plurals name="calendar_custody_handover_in_days">
-        <item quantity="one">→ %2$s через %1$d день</item>
-        <item quantity="few">→ %2$s через %1$d дня</item>
-        <item quantity="many">→ %2$s через %1$d дней</item>
-        <item quantity="other">→ %2$s через %1$d дня</item>
-    </plurals>
-    <string name="calendar_custody_ribbon_description">Сегодня ребёнок с %1$s</string>
-    <string name="calendar_custody_ribbon_description_handover">Сегодня ребёнок с %1$s. Опека перейдёт к %2$s через %3$d дн.</string>
 
     <string name="calendar_viewmode_month">Месяц</string>
     <string name="calendar_viewmode_week">Неделя</string>

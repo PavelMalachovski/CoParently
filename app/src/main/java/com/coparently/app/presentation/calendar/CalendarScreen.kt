@@ -1,15 +1,9 @@
 package com.coparently.app.presentation.calendar
 
 import android.os.Build
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -61,7 +55,6 @@ import com.coparently.app.domain.model.Event
 import com.coparently.app.presentation.calendar.components.CalendarHeader
 import com.coparently.app.presentation.calendar.components.ChangeRequestBanner
 import com.coparently.app.presentation.calendar.components.CustodyChangedBanner
-import com.coparently.app.presentation.calendar.components.CustodyRibbon
 import com.coparently.app.presentation.calendar.components.DayAgendaCard
 import com.coparently.app.presentation.calendar.components.EventTypeFilterSheet
 import com.coparently.app.presentation.common.rememberParentNames
@@ -230,7 +223,6 @@ fun CalendarScreen(
     val hiddenEventTypes by calendarViewModel.hiddenEventTypes.collectAsState()
     val customEventTypes by calendarViewModel.customEventTypes.collectAsState()
     val showHolidays by calendarViewModel.showHolidays.collectAsState()
-    val nextHandover by calendarViewModel.nextHandover.collectAsState()
     val custodyChangeAnnouncement by calendarViewModel.custodyChangeAnnouncement.collectAsState()
 
     // Who the two parents are, resolved with the fallback strings once for the whole screen.
@@ -514,38 +506,10 @@ fun CalendarScreen(
                     )
                 }
 
-                // Today's custody ribbon. Shown in month and day view; week view carries its own
-                // full-width custody band above the day headers instead.
-                if (viewMode != CalendarViewMode.WEEK) {
-                    val today = LocalDate.now()
-                    val todayCustody = getCustody(today)
-                    if (todayCustody != null) {
-                        key(todayCustody) {
-                            AnimatedContent(
-                                targetState = todayCustody,
-                                transitionSpec = {
-                                    slideInVertically(
-                                        animationSpec = tween(animationDuration),
-                                        initialOffsetY = { -it }
-                                    ) + fadeIn() togetherWith slideOutVertically(
-                                        animationSpec = tween(animationDuration),
-                                        targetOffsetY = { it }
-                                    ) + fadeOut()
-                                },
-                                modifier = Modifier.padding(
-                                    horizontal = dims.paddingMedium,
-                                    vertical = dims.paddingSmall / 2
-                                )
-                            ) { custody ->
-                                CustodyRibbon(
-                                    custody = custody,
-                                    handover = nextHandover,
-                                    parentNames = parentNames
-                                )
-                            }
-                        }
-                    }
-                }
+                // No "Today with X" ribbon here. The day cells already say whose day it is, in
+                // the colour that says it everywhere else, and the handover countdown the ribbon
+                // also carried lives on the home screen's hero. Two answers to one question is
+                // what the design refresh removed elsewhere.
 
                 // Calendar content based on view mode
                 Crossfade(
