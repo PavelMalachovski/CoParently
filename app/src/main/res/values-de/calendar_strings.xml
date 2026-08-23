@@ -69,4 +69,6 @@
     <string name="calendar_agenda_header_with_custody">%1$s · Tag von %2$s</string>
     <string name="calendar_agenda_empty">Nichts geplant.</string>
     <string name="calendar_agenda_time_range">%1$s–%2$s</string>
+    <string name="calendar_events_load_failed">Der Kalender konnte nicht geladen werden.</string>
+    <string name="calendar_retry">Erneut versuchen</string>
 </resources>

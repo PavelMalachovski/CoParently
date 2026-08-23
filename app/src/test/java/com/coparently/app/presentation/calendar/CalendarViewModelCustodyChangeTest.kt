@@ -30,6 +30,7 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
+import java.time.Instant
 import java.time.LocalDate
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -180,28 +181,37 @@ class CalendarViewModelCustodyChangeTest {
         advanceUntilIdle()
         assertEquals(change, viewModel.custodyChangeAnnouncement.value)
 
-        viewModel.dismissCustodyChange(change.lastModifiedAt)
+        viewModel.dismissCustodyChange(change.lastModifiedAtMillis)
         advanceUntilIdle()
 
         assertNull(viewModel.custodyChangeAnnouncement.value)
         verify {
-            encryptedPreferences.putString(PreferenceKeys.DISMISSED_CUSTODY_CHANGE_AT, change.lastModifiedAt)
+            encryptedPreferences.putString(
+                PreferenceKeys.DISMISSED_CUSTODY_CHANGE_AT,
+                change.lastModifiedAtMillis.toString()
+            )
         }
     }
 
     @Test
-    fun `a later change with a different lastModifiedAt is announced again after dismissal`() =
+    fun `a later change at a different instant is announced again after dismissal`() =
         runTest(testDispatcher) {
             val viewModel = viewModelSignedInAs(MY_UID)
             advanceUntilIdle()
-            val firstChange = custodyOf(lastModifiedBy = CO_PARENT_UID, lastModifiedAt = "2026-08-05T09:00:00")
+            val firstChange = custodyOf(
+                lastModifiedBy = CO_PARENT_UID,
+                lastModifiedAtMillis = MODIFIED_AT_MILLIS + 1
+            )
             sharedCustody.value = firstChange
             advanceUntilIdle()
-            viewModel.dismissCustodyChange(firstChange.lastModifiedAt)
+            viewModel.dismissCustodyChange(firstChange.lastModifiedAtMillis)
             advanceUntilIdle()
             assertNull(viewModel.custodyChangeAnnouncement.value)
 
-            val secondChange = custodyOf(lastModifiedBy = CO_PARENT_UID, lastModifiedAt = "2026-08-06T10:00:00")
+            val secondChange = custodyOf(
+                lastModifiedBy = CO_PARENT_UID,
+                lastModifiedAtMillis = MODIFIED_AT_MILLIS + 2
+            )
             sharedCustody.value = secondChange
             advanceUntilIdle()
 
@@ -213,7 +223,7 @@ class CalendarViewModelCustodyChangeTest {
         val change = custodyOf(lastModifiedBy = CO_PARENT_UID)
         every {
             encryptedPreferences.getString(PreferenceKeys.DISMISSED_CUSTODY_CHANGE_AT)
-        } returns change.lastModifiedAt
+        } returns change.lastModifiedAtMillis.toString()
         sharedCustody.value = change
 
         val viewModel = viewModelSignedInAs(MY_UID)
@@ -271,7 +281,7 @@ class CalendarViewModelCustodyChangeTest {
 
     private fun custodyOf(
         lastModifiedBy: String,
-        lastModifiedAt: String = MODIFIED_AT
+        lastModifiedAtMillis: Long = MODIFIED_AT_MILLIS
     ) = SharedCustody(
         model = CustodyModel(
             id = "model-1",
@@ -281,7 +291,8 @@ class CalendarViewModelCustodyChangeTest {
             startDate = LocalDate.of(2026, 1, 1)
         ),
         lastModifiedBy = lastModifiedBy,
-        lastModifiedAt = lastModifiedAt,
+        lastModifiedAtMillis = lastModifiedAtMillis,
+        lastModifiedAt = MODIFIED_AT,
         createdAt = "2026-01-01T00:00:00"
     )
 
@@ -289,5 +300,8 @@ class CalendarViewModelCustodyChangeTest {
         const val MY_UID = "my-uid"
         const val CO_PARENT_UID = "co-parent-uid"
         const val MODIFIED_AT = "2026-08-05T12:00:00"
+
+        /** The instant behind [MODIFIED_AT]; what the banner's dismissal is now keyed on. */
+        val MODIFIED_AT_MILLIS: Long = Instant.parse("2026-08-05T10:00:00Z").toEpochMilli()
     }
 }

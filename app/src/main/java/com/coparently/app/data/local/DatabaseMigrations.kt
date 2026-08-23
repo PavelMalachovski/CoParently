@@ -436,6 +436,67 @@ object DatabaseMigrations {
     }
 
     /**
+     * Custody's `lastModifiedAt` becomes epoch millis.
+     *
+     * The column it replaces held a naive `LocalDateTime` formatted ISO, and it is not merely
+     * displayed: `CustodyModelRepository.isNewer` compares it and the mirror **re-pushes the
+     * side it judges newer over the other**, so two parents in different zones could have the
+     * wrong pattern win and overwrite. See `CustodyTimestamps`.
+     *
+     * A rebuild rather than an `ALTER`: SQLite cannot change a column's type or name in place,
+     * and the value has to be converted row by row on the way across.
+     *
+     * **`strftime('%s', …)` reads the stored string as UTC**, which is not what it meant — it
+     * meant the writing device's wall clock. Every row on one device is therefore off by the
+     * same amount, so their order relative to each other, which is the only thing the local
+     * guard uses them for, is preserved exactly. Relative to a co-parent's future millis writes
+     * a pre-migration row is off by this device's offset — bounded, one-time, and gone the
+     * first time the pattern is saved again. The alternative, zeroing every row, would disable
+     * the guard entirely until the next write, and the guard is what stops a stale remote
+     * document reverting a save the user just made.
+     *
+     * A string SQLite cannot parse yields NULL, coalesced to 0 — which `CustodyTimestamps`
+     * reads as "cannot tell" rather than as "ancient", so such a row loses no comparison; the
+     * mirror simply behaves as it did before the guard existed.
+     */
+    val MIGRATION_21_22 = object : Migration(21, 22) {
+        override fun migrate(database: SupportSQLiteDatabase) {
+            database.execSQL(
+                """
+                CREATE TABLE custody_models_new (
+                    id TEXT NOT NULL PRIMARY KEY,
+                    modelType TEXT NOT NULL,
+                    patternDays INTEGER NOT NULL,
+                    momDaysPattern TEXT NOT NULL,
+                    startDate TEXT NOT NULL,
+                    isActive INTEGER NOT NULL,
+                    repeatYearly INTEGER NOT NULL,
+                    createdAt TEXT NOT NULL,
+                    lastModifiedAtMillis INTEGER NOT NULL,
+                    dayOverridesJson TEXT
+                )
+                """.trimIndent()
+            )
+            database.execSQL(
+                """
+                INSERT INTO custody_models_new (
+                    id, modelType, patternDays, momDaysPattern, startDate,
+                    isActive, repeatYearly, createdAt, lastModifiedAtMillis, dayOverridesJson
+                )
+                SELECT
+                    id, modelType, patternDays, momDaysPattern, startDate,
+                    isActive, repeatYearly, createdAt,
+                    COALESCE(CAST(strftime('%s', lastModifiedAt) AS INTEGER), 0) * 1000,
+                    dayOverridesJson
+                FROM custody_models
+                """.trimIndent()
+            )
+            database.execSQL("DROP TABLE custody_models")
+            database.execSQL("ALTER TABLE custody_models_new RENAME TO custody_models")
+        }
+    }
+
+    /**
      * List of all migrations in order.
      */
     val ALL_MIGRATIONS = arrayOf(
@@ -454,6 +515,7 @@ object DatabaseMigrations {
         MIGRATION_17_18,
         MIGRATION_18_19,
         MIGRATION_19_20,
-        MIGRATION_20_21
+        MIGRATION_20_21,
+        MIGRATION_21_22
     )
 }

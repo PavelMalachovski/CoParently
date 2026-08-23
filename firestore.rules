@@ -127,9 +127,13 @@ service cloud.firestore {
     // silencing the `lastModifiedBy` rule below exists to prevent, arriving through the door this
     // package just added.
     //
-    // `lastModifiedAt` is deliberately absent from the allowed set, which is what keeps a swap
-    // from re-dating the document: that field is what `CustodyModelRepository.isNewer` compares
-    // to decide which phone's document survives, and the winner is re-pushed over the loser.
+    // `lastModifiedAtMillis` — and the legacy `lastModifiedAt` beside it — are deliberately
+    // absent from the allowed set, which is what keeps a swap from re-dating the document: the
+    // millis field is what `CustodyTimestamps.isNewer` compares to decide which phone's document
+    // survives, and the winner is re-pushed over the loser. The string is excluded for a second
+    // reason as well: it is a naive local date-time, so re-deriving it in the other parent's zone
+    // would produce a different string for the same instant and this check would deny the write
+    // — which is exactly why the client carries it verbatim instead.
     function swapWriteTouchesOnlyTheSwap(before, after) {
       return after.diff(before).affectedKeys()
                   .hasOnly(['dayOverrides', 'lastSwapDate', 'lastModifiedBy', 'lastModifiedKind']);

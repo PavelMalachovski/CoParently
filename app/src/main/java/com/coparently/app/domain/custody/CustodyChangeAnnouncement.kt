@@ -36,9 +36,12 @@ object CustodyChangeAnnouncement {
      *   with no Room profile row stays that way forever — and in that case a real write is never
      *   suppressed by uid; there is nothing more to wait for once loaded is true, unlike the
      *   not-yet-loaded case above.
-     * - [shared]'s [SharedCustody.lastModifiedAt] equals [dismissedLastModifiedAt] — the user
-     *   already acknowledged this exact change. A later change carries a different
-     *   `lastModifiedAt` and is announced again.
+     * - [shared]'s [SharedCustody.lastModifiedAtMillis] equals [dismissedLastModifiedAtMillis]
+     *   — the user already acknowledged this exact change. A later change carries a different
+     *   instant and is announced again. Millis rather than the ISO string it used to be, so the
+     *   token identifying a change is the same one that orders changes; a device whose stored
+     *   preference still holds an old ISO string simply matches nothing, and the one change it
+     *   had dismissed is announced once more.
      * - [shared]'s [SharedCustody.lastModifiedKind] is [CustodyWriteKind.SWAP] — the last write
      *   offered or answered a **one-off day swap** and changed no pattern. `firestore.rules`
      *   requires every update to stamp `lastModifiedBy` with its caller, so such a write cannot
@@ -60,12 +63,12 @@ object CustodyChangeAnnouncement {
         shared: SharedCustody?,
         myUid: String?,
         parentsLoaded: Boolean,
-        dismissedLastModifiedAt: String?
+        dismissedLastModifiedAtMillis: Long?
     ): SharedCustody? {
         if (shared == null || !parentsLoaded) return null
         if (shared.lastModifiedKind == CustodyWriteKind.SWAP) return null
         val isOwnWrite = myUid != null && shared.lastModifiedBy == myUid
-        val isAlreadyDismissed = shared.lastModifiedAt == dismissedLastModifiedAt
+        val isAlreadyDismissed = shared.lastModifiedAtMillis == dismissedLastModifiedAtMillis
         return shared.takeUnless { isOwnWrite || isAlreadyDismissed }
     }
 }

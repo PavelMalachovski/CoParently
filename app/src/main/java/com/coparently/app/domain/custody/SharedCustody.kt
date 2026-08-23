@@ -12,8 +12,16 @@ import com.coparently.app.domain.model.CustodyModel
  * @property model The custody pattern itself, carrying the id its writer gave it.
  * @property lastModifiedBy Firebase UID of whoever wrote the document last. Compared against
  *   the signed-in uid to tell "the co-parent changed the schedule" from this device's own echo.
- * @property lastModifiedAt ISO date-time string of that write, as everywhere else in this
- *   Firestore schema — dates cross the wire as strings, not as Firestore timestamps.
+ * @property lastModifiedAtMillis When that write happened, as epoch milliseconds. The field
+ *   that decides: `CustodyModelRepository.isNewer` compares it and the mirror re-pushes the
+ *   winner over the loser, so it must name one instant rather than a wall clock whose zone
+ *   nothing records. See [CustodyTimestamps].
+ * @property lastModifiedAt The same write as a naive ISO string, carried **only** for a
+ *   co-parent still on a build that reads no other field. Never compared here, and never
+ *   re-derived: it travels verbatim from whatever was read, because a swap write must leave it
+ *   byte-identical — `swapWriteTouchesOnlyTheSwap` in `firestore.rules` denies a swap that
+ *   changes it, and re-deriving it in a second parent's zone would produce a different string
+ *   for the same instant.
  * @property createdAt ISO date-time string of when the pair's arrangement was first written.
  *   Preserved across updates, so editing the pattern does not re-date the arrangement.
  * @property repeatYearly Mirrors `CustodyModelEntity.repeatYearly`. Always true for MVP; it
@@ -41,6 +49,7 @@ import com.coparently.app.domain.model.CustodyModel
 data class SharedCustody(
     val model: CustodyModel,
     val lastModifiedBy: String,
+    val lastModifiedAtMillis: Long,
     val lastModifiedAt: String,
     val createdAt: String,
     val repeatYearly: Boolean = true,

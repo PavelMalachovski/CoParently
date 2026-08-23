@@ -296,7 +296,7 @@ class PairingViewModel @Inject constructor(
      * `CustodyModelRepository.observePair()` keys the shared listener on. The mirror re-pushes a
      * local model it considers newer than the document, and a pre-pairing local model usually is
      * newer — so with the old order the pattern it republished over the co-parent's was the
-     * *un-complemented* one, and the echo came back carrying the same preserved `lastModifiedAt`
+     * *un-complemented* one, and the echo came back carrying the same preserved timestamp
      * the complemented row holds, so `isNewer` was false and the mirror wrote it into Room. Both
      * phones then settled on the inverted schedule, with no banner for the accepter because
      * `lastModifiedBy` was their own uid.

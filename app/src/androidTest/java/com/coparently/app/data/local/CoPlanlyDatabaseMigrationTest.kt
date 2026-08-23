@@ -571,6 +571,62 @@ class CoPlanlyDatabaseMigrationTest {
         }
     }
 
+    /**
+     * The custody document's `lastModifiedAt` becomes epoch millis.
+     *
+     * The column it replaces decided which parent's schedule survives a sync, using a naive
+     * local date-time that two phones in different zones do not agree about. What matters here
+     * is not the exact converted number — `strftime` reads the stored string as UTC, which is a
+     * known, bounded approximation the migration's own comment names — but that **the order of
+     * two rows is preserved**, since that ordering is the only thing the local staleness guard
+     * uses, and that an unparseable value degrades to 0 rather than to a number that would
+     * silently lose or win every future comparison.
+     */
+    @Test
+    fun migration21To22_keepsTheOrderOfTwoSchedulesAndZeroesWhatItCannotRead() {
+        val db = helper.createDatabase(TEST_DB, VERSION_21)
+        db.execSQL(
+            """
+            INSERT INTO custody_models (id, modelType, patternDays, momDaysPattern, startDate,
+                                        isActive, repeatYearly, createdAt, lastModifiedAt)
+            VALUES ('older', 'week_on_week_off', 14, '[0,1,2,3,4,5,6]', '2026-08-03',
+                    0, 1, '2026-07-01T09:00:00', '2026-08-04T18:30:00'),
+                   ('newer', 'week_on_week_off', 14, '[0,1,2,3,4,5,6]', '2026-08-03',
+                    1, 1, '2026-07-01T09:00:00', '2026-08-05T07:15:00'),
+                   ('unreadable', 'week_on_week_off', 14, '[0,1,2,3,4,5,6]', '2026-08-03',
+                    0, 1, '2026-07-01T09:00:00', 'whenever')
+            """.trimIndent()
+        )
+        db.close()
+
+        val migrated = helper.runMigrationsAndValidate(
+            TEST_DB, VERSION_22, true, DatabaseMigrations.MIGRATION_21_22
+        )
+
+        val millis = mutableMapOf<String, Long>()
+        migrated.query("SELECT id, lastModifiedAtMillis FROM custody_models").use {
+            while (it.moveToNext()) {
+                millis[it.getString(0)] = it.getLong(1)
+            }
+        }
+
+        assertEquals(3, millis.size)
+        assertTrue(
+            "the later schedule must still read as later after the conversion",
+            millis.getValue("newer") > millis.getValue("older")
+        )
+        assertEquals(
+            "a string SQLite cannot read becomes \"cannot tell\", not a winning or losing date",
+            0L,
+            millis.getValue("unreadable")
+        )
+        assertEquals(
+            "2026-08-04T18:30:00 read as UTC, which is what strftime does",
+            1_785_868_200_000L,
+            millis.getValue("older")
+        )
+    }
+
     private companion object {
         const val TEST_DB = "coplanly-migration-test.db"
         const val VERSION_11 = 11
@@ -584,6 +640,7 @@ class CoPlanlyDatabaseMigrationTest {
         const val VERSION_19 = 19
         const val VERSION_20 = 20
         const val VERSION_21 = 21
+        const val VERSION_22 = 22
 
         /** 2026-08-01T12:00:00 at UTC+05:30, i.e. 06:30:00Z. */
         const val NOON_AT_PLUS_FIVE_THIRTY_MILLIS = 1_785_565_800_000L

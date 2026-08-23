@@ -348,6 +348,8 @@ fun CalendarScreen(
     // Resolved here: stringResource is composable and must not be called inside LaunchedEffect.
     val movedMessage = stringResource(R.string.calendar_event_moved)
     val undoMoveLabel = stringResource(R.string.calendar_undo)
+    val loadFailedMessage = stringResource(R.string.calendar_events_load_failed)
+    val retryLabel = stringResource(R.string.calendar_retry)
     LaunchedEffect(uiState) {
         when (val state = uiState) {
             is EventUiState.OperationSuccess -> {
@@ -360,6 +362,26 @@ fun CalendarScreen(
                     if (result == SnackbarResult.ActionPerformed) {
                         eventViewModel.undoLastMove()
                     }
+                }
+            }
+            // A failed range query used to leave the last-loaded grid on screen — or an empty
+            // one on a cold start — with nothing anywhere saying the calendar was not showing
+            // what the user asked for. The recovery lever existed (pull-to-refresh calls
+            // `refresh()`, which re-collects the query from scratch; re-requesting the same
+            // range is conflated away and could not restart it), but nothing said so.
+            //
+            // A snackbar rather than an error state in the grid: the query flips to `Loading`
+            // on every re-anchor, so rendering failure in the grid would flicker on ordinary
+            // paging. `Indefinite`, because a message about a grid the user is currently
+            // reading must not time out before they look up from it.
+            is EventUiState.Error -> {
+                val result = snackbarHostState.showSnackbar(
+                    message = loadFailedMessage,
+                    actionLabel = retryLabel,
+                    duration = SnackbarDuration.Indefinite
+                )
+                if (result == SnackbarResult.ActionPerformed) {
+                    eventViewModel.refresh()
                 }
             }
             else -> {}
@@ -530,7 +552,7 @@ fun CalendarScreen(
                     CustodyChangedBanner(
                         byName = parentNames.labelForUid(announcement.lastModifiedBy),
                         onDismiss = {
-                            calendarViewModel.dismissCustodyChange(announcement.lastModifiedAt)
+                            calendarViewModel.dismissCustodyChange(announcement.lastModifiedAtMillis)
                         },
                         modifier = Modifier.padding(
                             horizontal = dims.paddingMedium,

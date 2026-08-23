@@ -5,17 +5,20 @@ import com.coparently.app.data.local.dao.MessageDao
 import com.coparently.app.data.remote.firebase.FirebaseAuthService
 import com.coparently.app.data.remote.firebase.FirestoreMessageDataSource
 import com.coparently.app.domain.chat.ChatReadState
+import com.coparently.app.domain.chat.ChatRetryBackoff
 import com.coparently.app.domain.chat.ConversationKey
 import com.coparently.app.domain.model.Conversation
 import com.coparently.app.domain.model.Message
 import com.coparently.app.domain.model.MessageSendStatus
 import com.coparently.app.domain.repository.MessageRepository
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.retryWhen
 import kotlinx.coroutines.flow.transform
 import java.time.LocalDateTime
 import javax.inject.Inject
@@ -50,14 +53,18 @@ class MessageRepositoryImpl @Inject constructor(
     override fun observeConversation(conversationId: String): Flow<Conversation?> {
         val mirror = firestoreMessageDataSource.observeConversation(conversationId)
             .onEach { remote -> mirrorConversation(conversationId, remote) }
+            .reestablishing(
+                "Conversation observe for conversationId=$conversationId " +
+                    "(conversations/$conversationId document listener). " +
+                    "This is a single-document listener, so no index is involved — a " +
+                    "PERMISSION_DENIED here means the deployed conversations rule, " +
+                    "check firestore.rules."
+            )
             .catch { e ->
                 Log.w(
                     TAG,
-                    "Conversation observe failed for conversationId=$conversationId " +
-                        "(conversations/$conversationId document listener). " +
-                        "This is a single-document listener, so no index is involved — a " +
-                        "PERMISSION_DENIED here means the deployed conversations rule, " +
-                        "check firestore.rules. Keeping the local Room copy.",
+                    "Conversation observe for conversationId=$conversationId gave up. " +
+                        "Keeping the local Room copy.",
                     e
                 )
             }
@@ -82,13 +89,17 @@ class MessageRepositoryImpl @Inject constructor(
     override fun observeMessages(conversationId: String): Flow<List<Message>> {
         val mirror = firestoreMessageDataSource.getMessages(conversationId)
             .onEach { documents -> mirrorMessages(documents) }
+            .reestablishing(
+                "Message observe for conversationId=$conversationId " +
+                    "(messages: conversationId ==, orderBy timestamp ASC). " +
+                    "A FAILED_PRECONDITION here means a missing Firestore index — " +
+                    "check firestore.indexes.json."
+            )
             .catch { e ->
                 Log.w(
                     TAG,
-                    "Message observe failed for conversationId=$conversationId " +
-                        "(messages: conversationId ==, orderBy timestamp ASC). " +
-                        "A FAILED_PRECONDITION here means a missing Firestore index — " +
-                        "check firestore.indexes.json. Keeping the local Room copy.",
+                    "Message observe for conversationId=$conversationId gave up. " +
+                        "Keeping the local Room copy.",
                     e
                 )
             }
@@ -349,6 +360,38 @@ class MessageRepositoryImpl @Inject constructor(
     }
 
     // ---- helpers ----------------------------------------------------------
+
+    /**
+     * Re-subscribes the upstream listener after a failure, backing off between attempts.
+     *
+     * Without this, a failed listener stayed failed for the life of the process. Both mirror
+     * branches end in a `catch`, and a `catch` **completes** the flow — so `merge(mirror,
+     * local)` then ran on Room alone, and the app looked entirely healthy while receiving
+     * nothing. `SharingStarted.WhileSubscribed` could not rescue it either:
+     * `rememberChatUnreadCount()` in `NavGraph` holds an Activity-scoped `ChatViewModel`
+     * collecting `unreadCount` for the whole process lifetime, so the subscriber count never
+     * reaches zero and nothing ever re-subscribes. Observed in production on the first launch
+     * after install, when both listeners were denied about half a second before
+     * `ensureConversation` created the conversation document; a cold restart was the only cure,
+     * and it recurred on every reinstall, factory reset and account switch.
+     *
+     * Placed **after** `onEach` deliberately: the retry re-runs the whole chain, which is what
+     * establishes a new snapshot listener rather than re-collecting a dead one.
+     *
+     * No attempt limit — see [ChatRetryBackoff] for why, and note that the `catch` below is
+     * therefore no longer the ordinary path. It stays because removing it is the one thing this
+     * must not do: an uncaught failure here escapes into the caller's `viewModelScope.launch`,
+     * where nothing handles it and the process is killed.
+     *
+     * @param what Prefixes each log line, so a listener that is retrying says which one it is.
+     */
+    private fun <T> Flow<T>.reestablishing(what: String): Flow<T> = retryWhen { cause, attempt ->
+        if (cause is CancellationException) return@retryWhen false
+        val wait = ChatRetryBackoff.delayMillis(attempt)
+        Log.w(TAG, "$what Attempt ${attempt + 1} failed; re-establishing in ${wait}ms.", cause)
+        delay(wait)
+        true
+    }
 
     /**
      * Turns a mirroring flow into one that never emits.

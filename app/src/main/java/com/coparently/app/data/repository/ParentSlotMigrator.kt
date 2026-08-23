@@ -171,7 +171,8 @@ class ParentSlotMigrator @Inject constructor(
      * reason: it keeps the two entry points auditable the same way.
      *
      * The complement is a Room-only write, through [CustodyModelRepository.saveReslotted]:
-     * it preserves the model's existing `createdAt`/`lastModifiedAt` rather than re-dating it.
+     * it preserves the model's existing `createdAt`/`lastModifiedAtMillis` rather than re-dating
+     * it.
      * Re-dating would make this device win every later staleness comparison in
      * [CustodyModelRepository]'s mirror, turning a re-expression of the same arrangement into
      * an overwrite of the co-parent's schedule — the failure mode [CustodyModelRepository]'s

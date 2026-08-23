@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
@@ -59,7 +60,6 @@ fun ChildInfoScreen(
     val haptic = LocalHapticFeedback.current
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsState()
-    val currentChildInfo by viewModel.currentChildInfo.collectAsState()
     val guestInvite by viewModel.guestInvite.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -169,14 +169,12 @@ fun ChildInfoScreen(
                             }
                         }
                     } else {
-                        currentChildInfo?.let { childInfo ->
-                            ChildInfoContent(
-                                childInfo = childInfo,
-                                onEditClick = onEditClick,
-                                onInviteGuest = { viewModel.openGuestInvite(childInfo.id) },
-                                onRevokeGuest = { uid -> viewModel.revokeGuest(childInfo, uid) }
-                            )
-                        }
+                        ChildInfoContent(
+                            children = state.childInfoList,
+                            onEditClick = onEditClick,
+                            onInviteGuest = viewModel::openGuestInvite,
+                            onRevokeGuest = viewModel::revokeGuest
+                        )
                     }
                 }
             }
@@ -185,68 +183,141 @@ fun ChildInfoScreen(
 }
 
 /**
- * Content displaying detailed child information as tappable, grouped sections.
+ * Every child in the household, as tappable, grouped sections.
  *
- * Every row opens the single editor for [childInfo] via [onEditClick] — this screen is a
+ * **All of them, not the first one.** This screen used to render
+ * `ChildInfoViewModel.currentChildInfo`, which was the head of the list — so a second child
+ * was unreachable here, and with G2 that meant their guest list was unreachable too. It is
+ * also why the head-of-list bug in the ViewModel went unnoticed for so long: with no way to
+ * add a second child, there was never a second child for it to confuse the first with. Both
+ * halves are fixed together, because either one alone changes nothing observable.
+ *
+ * Every row opens the single editor for its own child via [onEditClick] — this screen is a
  * read-only summary, the pencil that used to hide editing in the top bar is gone. Each group
  * mirrors one of the old `Card` + `SectionHeader` pairs, rebuilt on [GroupLabel] and
  * [SectionGroup]/[SectionRow] from the shared design system.
  */
 @Composable
 private fun ChildInfoContent(
-    childInfo: ChildInfo,
+    children: List<ChildInfo>,
     onEditClick: (String) -> Unit,
-    onInviteGuest: () -> Unit,
-    onRevokeGuest: (String) -> Unit
+    onInviteGuest: (String) -> Unit,
+    onRevokeGuest: (ChildInfo, String) -> Unit
 ) {
-    val haptic = LocalHapticFeedback.current
-    val onRowClick: () -> Unit = {
-        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-        onEditClick(childInfo.id)
-    }
-
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        item { BasicInfoGroup(childInfo = childInfo, onClick = onRowClick) }
-
-        if (childInfo.medications.isNotEmpty()) {
-            item { MedicationsGroup(medications = childInfo.medications, onClick = onRowClick) }
-        }
-        if (childInfo.activities.isNotEmpty()) {
-            item { ActivitiesGroup(activities = childInfo.activities, onClick = onRowClick) }
-        }
-        if (childInfo.allergies.isNotEmpty()) {
-            item { AllergiesGroup(allergies = childInfo.allergies, onClick = onRowClick) }
-        }
-        childInfo.medicalNotes?.let { notes ->
-            item { MedicalNotesGroup(notes = notes, onClick = onRowClick) }
-        }
-        if (childInfo.medicalPhotos.isNotEmpty()) {
-            // Beside the notes, because that is what they are: what the doctor said, in the form
-            // a parent could actually capture it in. Read-only here — the strip becomes an editor
-            // only when the same composable is given add and remove callbacks.
-            item { MedicalPhotoStrip(photos = childInfo.medicalPhotos) }
-        }
-        if (childInfo.emergencyContacts.isNotEmpty()) {
-            item {
-                EmergencyContactsGroup(contacts = childInfo.emergencyContacts, onClick = onRowClick)
-            }
-        }
-        childInfo.schoolInfo?.let { school ->
-            item { SchoolGroup(schoolInfo = school, onClick = onRowClick) }
-        }
-        item { MedicalDetailsGroup(profile = childInfo.medicalProfile, onClick = onRowClick) }
-        item {
-            GuestAccessGroup(
-                guests = childInfo.guests,
+        children.forEach { childInfo ->
+            childSections(
+                childInfo = childInfo,
+                onEditClick = onEditClick,
                 onInviteGuest = onInviteGuest,
                 onRevokeGuest = onRevokeGuest
             )
         }
+        item(key = "add-child") { AddChildRow(onClick = { onEditClick("new") }) }
+    }
+}
+
+/**
+ * One child's groups, as items in the enclosing list.
+ *
+ * A `LazyListScope` extension rather than a composable so each group stays its own list item:
+ * a household with three children would otherwise compose every group of all three at once.
+ * Keys are prefixed with the child's id — without that, two children with no medications
+ * would collide on the same slot and Compose would reuse one's state for the other.
+ */
+@Suppress("LongMethod") // one child's anatomy, expressed as one linear run of sections
+private fun LazyListScope.childSections(
+    childInfo: ChildInfo,
+    onEditClick: (String) -> Unit,
+    onInviteGuest: (String) -> Unit,
+    onRevokeGuest: (ChildInfo, String) -> Unit
+) {
+    val id = childInfo.id
+
+    item(key = "basic-$id") {
+        val haptic = LocalHapticFeedback.current
+        BasicInfoGroup(childInfo = childInfo) {
+            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            onEditClick(id)
+        }
+    }
+    if (childInfo.medications.isNotEmpty()) {
+        item(key = "medications-$id") {
+            MedicationsGroup(childInfo.medications, rowClick(onEditClick, id))
+        }
+    }
+    if (childInfo.activities.isNotEmpty()) {
+        item(key = "activities-$id") {
+            ActivitiesGroup(childInfo.activities, rowClick(onEditClick, id))
+        }
+    }
+    if (childInfo.allergies.isNotEmpty()) {
+        item(key = "allergies-$id") {
+            AllergiesGroup(childInfo.allergies, rowClick(onEditClick, id))
+        }
+    }
+    childInfo.medicalNotes?.let { notes ->
+        item(key = "notes-$id") { MedicalNotesGroup(notes, rowClick(onEditClick, id)) }
+    }
+    if (childInfo.medicalPhotos.isNotEmpty()) {
+        // Beside the notes, because that is what they are: what the doctor said, in the form
+        // a parent could actually capture it in. Read-only here — the strip becomes an editor
+        // only when the same composable is given add and remove callbacks.
+        item(key = "photos-$id") { MedicalPhotoStrip(photos = childInfo.medicalPhotos) }
+    }
+    if (childInfo.emergencyContacts.isNotEmpty()) {
+        item(key = "contacts-$id") {
+            EmergencyContactsGroup(childInfo.emergencyContacts, rowClick(onEditClick, id))
+        }
+    }
+    childInfo.schoolInfo?.let { school ->
+        item(key = "school-$id") { SchoolGroup(school, rowClick(onEditClick, id)) }
+    }
+    item(key = "medical-$id") {
+        MedicalDetailsGroup(childInfo.medicalProfile, rowClick(onEditClick, id))
+    }
+    item(key = "guests-$id") {
+        GuestAccessGroup(
+            guests = childInfo.guests,
+            onInviteGuest = { onInviteGuest(id) },
+            onRevokeGuest = { uid -> onRevokeGuest(childInfo, uid) }
+        )
+    }
+}
+
+/** The tap handler every one of a child's rows shares: haptic, then open that child's editor. */
+@Composable
+private fun rowClick(onEditClick: (String) -> Unit, childInfoId: String): () -> Unit {
+    val haptic = LocalHapticFeedback.current
+    return {
+        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        onEditClick(childInfoId)
+    }
+}
+
+/**
+ * Adding another child.
+ *
+ * The empty state has always offered this; with one child on file there was no second
+ * affordance anywhere, so a household could never record a second child at all.
+ */
+@Composable
+private fun AddChildRow(onClick: () -> Unit) {
+    val haptic = LocalHapticFeedback.current
+    SectionGroup {
+        SectionRow(
+            icon = Icons.Default.Add,
+            title = stringResource(R.string.childinfo_title_add),
+            onClick = {
+                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                onClick()
+            }
+        )
     }
 }
 

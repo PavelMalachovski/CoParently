@@ -247,10 +247,10 @@ Data flow: UI → ViewModel → UseCase → Repository → Room (source of truth
     older build stays readable. Deliberately *not* changed: `Event`, `Expense`, `Budget`
     and `ChildInfo` dates, where a naive local time is often the right model — whether a
     custody handover follows the child's zone or the viewer's is an unmade product
-    decision, not an oversight. **`CustodyModelEntity.lastModifiedAt` is a fifth, and it
-    does not belong with those four**: it is not merely displayed, it decides which phone's
-    schedule survives. See the custody entry in "Known issues" below before adding to this
-    list.
+    decision, not an oversight. **`CustodyModelEntity.lastModifiedAtMillis` was a fifth and
+    has since made the same move**, for a sharper reason: it is not merely displayed, it
+    decides which phone's schedule survives. See `CustodyTimestamps` and the custody entry in
+    "Known issues" below — that entry now records what the fix costs, not an outstanding bug.
 14. **`sharedWith` is computed at upload time and never recomputed for a row already marked
     synced.** An event created while the account was unpaired is uploaded with an audience of
     one uid, and nothing revisits it — so it stays unreadable by a co-parent who arrives later.
@@ -274,19 +274,21 @@ Data flow: UI → ViewModel → UseCase → Repository → Room (source of truth
   no FX conversion between currencies (spec §10) — deliberately: totals stay honest within each
   currency rather than being normalised. Do not reintroduce a single cross-currency total.
 
-- **A failed chat Firestore listener is never re-established** (known, accepted at merge time —
-  backlog with the time-zone item below). Both mirror branches in `MessageRepositoryImpl` end in
-  `.catch { Log.w(...) }`, which *completes* the mirror flow, so `merge(mirror, local)` then runs
-  on Room alone for the rest of the process. `SharingStarted.WhileSubscribed` cannot restart it:
-  `rememberChatUnreadCount()` in `NavGraph` holds an Activity-scoped `ChatViewModel` collecting
-  `unreadCount` for the whole process lifetime, so the subscriber count never reaches zero.
-  Observed once in production, on the first launch after install — both chat listeners were
-  denied ~0.5 s before `ensureConversation` created the canonical conversation document, and that
-  session ran on local data only. Nothing is lost and a cold restart clears it, but the app looks
-  entirely healthy while receiving nothing. Recurs on any reinstall, factory reset or account
-  switch. Fix when touching this code: `retryWhen` with backoff on both branches, or await
-  `ensureConversation` before subscribing the observers. Don't "fix" it by removing the `.catch` —
-  an uncaught failure in `viewModelScope.launch` terminates the process.
+- **A failed chat Firestore listener now re-establishes itself — FIXED.** Both mirror branches
+  in `MessageRepositoryImpl` used to end in `.catch { Log.w(...) }`, and a `catch` *completes*
+  the flow, so `merge(mirror, local)` then ran on Room alone for the rest of the process — the
+  app looking entirely healthy while receiving nothing. `SharingStarted.WhileSubscribed` could
+  not restart it: `rememberChatUnreadCount()` in `NavGraph` holds an Activity-scoped
+  `ChatViewModel` collecting `unreadCount` for the whole process lifetime, so the subscriber
+  count never reaches zero. Observed in production on the first launch after install, when both
+  listeners were denied ~0.5 s before `ensureConversation` created the conversation document.
+  Both branches now `retryWhen` with backoff (`ChatRetryBackoff`) *before* the `catch`, placed
+  after `onEach` so the retry establishes a **new** snapshot listener rather than re-collecting
+  a dead one. Three things not to undo: the `catch` stays — removing it lets an uncaught failure
+  in `viewModelScope.launch` terminate the process; there is deliberately **no attempt limit**,
+  because what a limit buys is a final `catch` and that is exactly the dead state this replaced;
+  and the delay is clamped, because `1000L shl 62` is negative and would busy-loop against a
+  backend already refusing every request (`ChatRetryBackoffTest` pins it over `Long.MAX_VALUE`).
 
 - **Cross-time-zone chat is implemented but never verified on two devices.** The August 2026
   chat sync moved message times to epoch millis specifically so two parents in different zones
@@ -296,38 +298,45 @@ Data flow: UI → ViewModel → UseCase → Repository → Room (source of truth
   badge clears on open, and the ticks reach READ — was **deferred, not run**. Backlog item for
   the next review round. Everything else in that acceptance run passed on real devices.
 
-- **The shared custody schedule orders the two phones' writes by a naive local date-time.**
-  `CustodyModelEntity.lastModifiedAt` (and the `lastModifiedAt` field of the `custody_models`
-  document, which mirrors it) is `LocalDateTime.now()` formatted ISO — no zone, no offset.
-  `CustodyModelRepository.isNewer` parses both sides and compares them, and `mirrorIntoRoom`
-  acts on the answer: the side it judges newer is not merely kept, it is **re-pushed over the
-  other**. So for two parents 2–3 zones apart the wrong side can win *and overwrite*, where
-  before the custody sync existed a local pattern merely stayed local. The banner does fire on
-  the loser's phone (`lastModifiedBy` is the other parent), so this is silent-wrong-answer, not
-  silent-loss — but the answer can still be wrong by exactly the offset between the two zones.
-  Accepted for this round rather than fixed: the correct fix is epoch millis with a Room
-  migration, the same move `Message.sentAtMillis` made in item 13, and it drags the Firestore
-  field, a legacy-ISO read path for a co-parent on an older build, and a migration test with it
-  — a change of its own size, not a rider on the sync work. `isNewer` already degrades an
-  unparseable value on either side to "not newer", so a mixed-format transition is survivable.
-  Until then: do not add more decisions to `lastModifiedAt`, and do not "fix" it by comparing
-  the strings (they are ISO, so string order agrees with the same wrong answer) or by stamping
-  `now()` in `saveReslotted`/`archiveRejected` — those two keep the stored dates on purpose,
-  and re-dating them makes this device win every comparison forever
-  (`CustodyModelRepositoryTest` pins both).
+- **The shared custody schedule is ordered by epoch millis — FIXED, and here is what the fix
+  costs.** `CustodyModelEntity.lastModifiedAtMillis` (Room schema 22) and the document's
+  `lastModifiedAtMillis` replace the naive `LocalDateTime` this used to compare, which could
+  have the wrong parent's pattern win *and overwrite* by exactly the offset between two zones.
+  `CustodyTimestamps` is the pure statement of the rule; `CustodyModelRepository` and the
+  `custody_models` block in `firestore.rules` both defer to it.
 
-- **The calendar never renders `EventUiState.Error`.** `EventViewModel` sets it when a range query
-  fails, but the only `LaunchedEffect(uiState)` branch in `CalendarScreen` handles
-  `OperationSuccess` — so a failed range leaves the last-loaded grid on screen, or an empty one on
-  a cold start, with nothing saying anything went wrong. Milder than the chat-listener entry above,
-  which is why it is listed and not fixed: a recovery lever exists (pull-to-refresh calls
-  `EventViewModel.refresh()`, which re-collects the query from scratch — re-requesting the same
-  range is conflated away and could not restart it), and leaving and re-entering the Calendar tab
-  recreates the ViewModel anyway. What is missing is that the user has to guess at the lever. The
-  fix is an `is EventUiState.Error` branch in that same `LaunchedEffect` raising a snackbar with a
-  Retry action wired to `refresh()`; it needs a new string in all five locales, which is why it was
-  not folded into the query-window work. Don't "fix" it by rendering `Loading` in the calendar —
-  the query flips to `Loading` on every re-anchor and the grid would flicker.
+  Three things not to undo:
+  - **The document still carries `lastModifiedAt` as an ISO string, and it is written
+    verbatim, never re-derived.** It exists for a co-parent on an older build, which reads
+    only that field and reads it with `as? String` — a number there comes back blank and their
+    device then judges its own copy newer and re-pushes it over this one. It is also why the
+    string must travel unchanged: `swapWriteTouchesOnlyTheSwap` denies a swap that alters it,
+    and re-deriving the same instant in the other parent's zone yields a different string.
+    Only `pushToFirestore` — a pattern write — may move it.
+  - **Neither timestamp is in that rule's allowed key set**, so a swap can never re-date the
+    document. Two rules cases pin each direction, plus one that an ordinary swap still passes.
+  - **`saveReslotted`/`archiveRejected` still keep the stored value** rather than stamping
+    now; re-dating there makes this device win every comparison forever
+    (`CustodyModelRepositoryTest` pins both).
+
+  Two accepted costs, both one-time: `MIGRATION_21_22` converts the stored ISO with
+  `strftime`, which reads it as UTC and is therefore off by the device's own offset — the
+  *order* of two local rows is preserved, which is all the local guard uses, and the error is
+  gone at the next write. And the banner's dismissal key is now millis, so a preference left
+  holding an ISO string matches nothing and the one change that device had dismissed is
+  announced once more.
+
+- **A failed calendar range query now says so — FIXED.** `EventViewModel` sets
+  `EventUiState.Error` when a range query fails; `CalendarScreen`'s `LaunchedEffect(uiState)`
+  now has a branch for it, raising an indefinite snackbar with a Retry action wired to
+  `EventViewModel.refresh()`. Before it, a failed range left the last-loaded grid on screen —
+  or an empty one on a cold start — with nothing saying anything had gone wrong; the recovery
+  lever existed (pull-to-refresh calls the same `refresh()`, because re-requesting the same
+  range is conflated away and could not restart the query) but the user had to guess at it.
+  Two rules for anything similar here: don't render `Loading` in the grid — the query flips to
+  it on every re-anchor and the grid would flicker on ordinary paging — and don't shorten the
+  snackbar, because a message about a grid the user is currently reading must not time out
+  before they look up from it.
 
 - `firestore.rules` (strict) was realigned with the real document schema (ISO **string**
   dates, presence-based key validation, `change_requests`/`expenses` collections added,
@@ -393,38 +402,30 @@ Data flow: UI → ViewModel → UseCase → Repository → Room (source of truth
   (they targeted long-gone APIs); rewrite them against the current constructors when
   touching those features.
 
-- **`ChildInfoViewModel` stays subscribed to the whole child list for the editor's entire
-  lifetime, and any emission can overwrite the wrong child's row.** `init` calls
-  `loadChildInfo()`, which collects `childInfoRepository.getAllChildInfo()` — a reactive
-  Room `Flow` — for as long as the ViewModel lives, and every single emission unconditionally
-  runs `_currentChildInfo.value = childInfoList.first()`, regardless of which child
-  `AddEditChildInfoScreen` was actually opened to edit. The damage is not the prefill, it is
-  the **save**: while a user is genuinely editing child B — not the first child in the
-  household — any write that touches the `child_info` table re-emits the list and clobbers
-  `_currentChildInfo` back to child A; `LaunchedEffect(currentChildInfo)` then silently
-  repopulates the visible form with child A's data. The trigger needs no user error at all —
-  a background Firestore sync tick is enough, and so is an unrelated edit to child A made
-  from another screen. The medical-profile editor added in this round
-  (`presentation/common/MedicalProfileEditor.kt`) made the blast radius concrete: the save
-  button's snapshot-and-`copy()` base is `currentChildInfo`, so at save time the base is
-  child A, and the write overwrites **child A's real row** — its id, `createdAt` and
-  `createdByFirebaseUid` included — with a mix of stale values and whatever child B's form
-  fields currently hold. The `isNewChild` guard added alongside that save
-  (`base = currentChildInfo.takeIf { !isNewChild }`) does not help here: it only forces a
-  fresh `ChildInfo` when adding a brand-new child, and `isNewChild` is `false` for a genuine
-  edit of an existing child, so this path runs through unguarded exactly as before. The
-  correct fix is for the editor to stop reading the head of a list it does not own: load the
-  one child actually being edited by id and observe that, the way `loadChildInfoById` already
-  does for the initial load — `ChildInfoDao.observeChildInfoById` (already wired through
-  `ChildInfoRepository.observeChildInfoById`) is the right subscription for the whole screen
-  lifetime, not `getAllChildInfo()`. `getAllChildInfo()`/`loadChildInfo()` belongs to the list
-  screen that owns showing every child, not to an editor that owns exactly one. Left unfixed
-  this round: it is pre-existing (present since before `ChildInfo.medicalProfile` did, and
-  therefore before this task), and fixing the ViewModel's subscription strategy is a change of
-  its own, not a rider on adding a field editor. Don't "fix" it by widening the `isNewChild`
-  guard — that guard's job is stopping a brand-new child from saving on top of an existing
-  row, and two *existing* children being confused for each other never involves `"new"` or a
-  `null` id in the first place, so no version of that check touches this path.
+- **The child editor observes the one child it was opened with — FIXED, and the screen behind
+  it changed too.** `ChildInfoViewModel.loadChildInfo()` used to collect `getAllChildInfo()` — a
+  reactive Room flow — for the ViewModel's whole lifetime and set `_currentChildInfo` to
+  `childInfoList.first()` on **every** emission, whichever child the editor was actually open
+  on. The damage was the save: editing child B, any write touching the `child_info` table
+  (a background sync tick was enough) moved the base back to child A, and the save then
+  overwrote **child A's real row** — id, `createdAt` and `createdByFirebaseUid` included. The
+  `isNewChild` guard never covered it: `isNewChild` is `false` for a genuine edit.
+
+  The editor now uses `loadChildInfoById`, which observes `observeChildInfoById` and cancels any
+  previous observation. `getAllChildInfo()` belongs to the list screen that owns showing every
+  child, and only there.
+
+  **The other half is why nobody hit it.** `ChildInfoScreen` rendered `currentChildInfo`, so it
+  only ever showed the first child, and the only "add a child" affordance in the app was its
+  empty state — so once one child existed there could never be a second for the head of the list
+  to be wrong about. The screen now lists every child (each group its own list item, keyed by
+  child id, or two children with no medications collide on one slot and share Compose state) and
+  carries an "add a child" row. Don't re-narrow it to one child: package G2's guest list and
+  revoke action live on this screen, so a second child's access would become unmanageable again.
+
+  Still true, and deliberately not changed: `LaunchedEffect(currentChildInfo)` repopulates the
+  form when the observed child changes, so a co-parent's edit arriving mid-typing wins. Whether
+  a remote change to the record you are editing should interrupt you is a product question.
 
 ## Localization (i18n) — July 2026, keep consistent
 

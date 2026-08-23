@@ -98,4 +98,6 @@
     <string name="calendar_agenda_header_with_custody">%1$s · %2$s\'s day</string>
     <string name="calendar_agenda_empty">Nothing scheduled.</string>
     <string name="calendar_agenda_time_range">%1$s–%2$s</string>
+    <string name="calendar_events_load_failed">The calendar could not be loaded.</string>
+    <string name="calendar_retry">Retry</string>
 </resources>

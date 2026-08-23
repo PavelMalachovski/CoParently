@@ -18,7 +18,12 @@ import androidx.room.PrimaryKey
  * @property isActive Whether this model is currently active
  * @property repeatYearly Whether this pattern repeats yearly (always true for MVP)
  * @property createdAt ISO date-time string when this model was created
- * @property lastModifiedAt ISO date-time string when this model was last modified
+ * @property lastModifiedAtMillis When this model was last modified, as epoch milliseconds.
+ * **Not an ISO string, and not a naive local date-time, which is what it used to be.** This
+ * field is not merely displayed: `CustodyModelRepository.isNewer` compares it against the
+ * shared document's and `mirrorIntoRoom` re-pushes whichever side it judges newer over the
+ * other, so for two parents in different zones the wrong pattern could win *and overwrite*.
+ * See `CustodyTimestamps`.
  * @property dayOverridesJson JSON object of one-off day swaps keyed by ISO date, mirroring the
  * shared document's `dayOverrides`; null on a row that predates the field and on any row that
  * has never carried a swap
@@ -34,7 +39,7 @@ data class CustodyModelEntity(
     val isActive: Boolean = true,
     val repeatYearly: Boolean = true,
     val createdAt: String,
-    val lastModifiedAt: String,
+    val lastModifiedAtMillis: Long,
     /**
      * JSON object of one-off day swaps keyed by ISO date, mirroring the shared document's
      * `dayOverrides`. Null means "none recorded" — including on every row written before this

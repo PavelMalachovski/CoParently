@@ -34,6 +34,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import java.time.Instant
 import java.time.LocalDate
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -193,7 +194,7 @@ class CustodyModelRepositoryTest {
         // pattern rewritten for their new slot — into an unattributed overwrite of the
         // co-parent's schedule. Not pushing matters for the same reason from the other side: the
         // shared document may hold a pattern the user is at that moment being asked about.
-        val stored = localEntity(lastModifiedAt = LONG_AGO).copy(createdAt = PRE_EXISTING_CREATED_AT)
+        val stored = localEntity(lastModifiedAtMillis = LONG_AGO).copy(createdAt = PRE_EXISTING_CREATED_AT)
         coEvery { custodyModelDao.getModelById(LOCAL_MODEL_ID) } returns stored
         val entity = slot<CustodyModelEntity>()
 
@@ -201,7 +202,7 @@ class CustodyModelRepositoryTest {
 
         coVerify(exactly = 1) { custodyModelDao.insertModel(capture(entity)) }
         assertEquals(stored.createdAt, entity.captured.createdAt)
-        assertEquals(stored.lastModifiedAt, entity.captured.lastModifiedAt)
+        assertEquals(stored.lastModifiedAtMillis, entity.captured.lastModifiedAtMillis)
         // The complement itself did land, so this is not passing by writing nothing at all.
         assertEquals("[7,8,9,10,11,12,13]", entity.captured.momDaysPattern)
         assertTrue(entity.captured.isActive)
@@ -215,7 +216,7 @@ class CustodyModelRepositoryTest {
             // delete the pattern that just won rather than keep the one that lost. The dates are
             // kept for the same reason as above: an inactive row is never pushed, but it can be
             // re-activated from `getAllModels()`, and it must not come back claiming to be newer.
-            val stored = localEntity(lastModifiedAt = LONG_AGO)
+            val stored = localEntity(lastModifiedAtMillis = LONG_AGO)
                 .copy(createdAt = PRE_EXISTING_CREATED_AT)
             coEvery { custodyModelDao.getModelById(LOCAL_MODEL_ID) } returns stored
             val entity = slot<CustodyModelEntity>()
@@ -226,7 +227,7 @@ class CustodyModelRepositoryTest {
             assertNotEquals(LOCAL_MODEL_ID, entity.captured.id)
             assertFalse(entity.captured.isActive)
             assertEquals(stored.createdAt, entity.captured.createdAt)
-            assertEquals(stored.lastModifiedAt, entity.captured.lastModifiedAt)
+            assertEquals(stored.lastModifiedAtMillis, entity.captured.lastModifiedAtMillis)
             coVerify(exactly = 0) { custodyModelDao.deactivateAllModels() }
             coVerify(exactly = 0) { firestoreCustodyDataSource.setCustody(any(), any(), any()) }
         }
@@ -248,7 +249,7 @@ class CustodyModelRepositoryTest {
             // swallowed. The document still holds the pattern that was mirrored before it.
             coEvery { custodyModelDao.getActiveModelSync() } returns saved.captured
             every { firestoreCustodyDataSource.observeCustody(DOCUMENT_ID) } returns
-                flowOf(remoteCustody(lastModifiedAt = LONG_AGO))
+                flowOf(remoteCustody(lastModifiedAtMillis = LONG_AGO))
 
             repository.observeShared().first()
 
@@ -265,9 +266,9 @@ class CustodyModelRepositoryTest {
     fun `a local model newer than the document is sent again rather than discarded`() =
         runTest(dispatcher) {
             coEvery { custodyModelDao.getActiveModelSync() } returns
-                localEntity(lastModifiedAt = RECENTLY)
+                localEntity(lastModifiedAtMillis = RECENTLY)
             every { firestoreCustodyDataSource.observeCustody(DOCUMENT_ID) } returns
-                flowOf(remoteCustody(lastModifiedAt = LONG_AGO))
+                flowOf(remoteCustody(lastModifiedAtMillis = LONG_AGO))
             val custody = slot<SharedCustody>()
             coEvery {
                 firestoreCustodyDataSource.setCustody(any(), any(), capture(custody))
@@ -282,15 +283,15 @@ class CustodyModelRepositoryTest {
                 firestoreCustodyDataSource.setCustody(DOCUMENT_ID, any(), any())
             }
             assertEquals(LOCAL_MODEL_ID, custody.captured.model.id)
-            assertEquals(RECENTLY, custody.captured.lastModifiedAt)
+            assertEquals(RECENTLY, custody.captured.lastModifiedAtMillis)
         }
 
     @Test
     fun `a document newer than the local model still wins`() = runTest(dispatcher) {
         coEvery { custodyModelDao.getActiveModelSync() } returns
-            localEntity(lastModifiedAt = LONG_AGO)
+            localEntity(lastModifiedAtMillis = LONG_AGO)
         every { firestoreCustodyDataSource.observeCustody(DOCUMENT_ID) } returns
-            flowOf(remoteCustody(lastModifiedAt = RECENTLY))
+            flowOf(remoteCustody(lastModifiedAtMillis = RECENTLY))
         val entity = slot<CustodyModelEntity>()
 
         repository.observeShared().first()
@@ -403,7 +404,7 @@ class CustodyModelRepositoryTest {
             assertTrue(entity.captured.isActive)
             assertEquals("[0,1,2,3,4,5,6]", entity.captured.momDaysPattern)
             assertEquals(REMOTE_CREATED_AT, entity.captured.createdAt)
-            assertEquals(REMOTE_MODIFIED_AT, entity.captured.lastModifiedAt)
+            assertEquals(REMOTE_MODIFIED_AT_MILLIS, entity.captured.lastModifiedAtMillis)
         }
 
     @Test
@@ -446,17 +447,19 @@ class CustodyModelRepositoryTest {
         startDate = START_DATE
     )
 
-    private fun localEntity(lastModifiedAt: String) = mirroredEntity().copy(
+    private fun localEntity(lastModifiedAtMillis: Long) = mirroredEntity().copy(
         id = LOCAL_MODEL_ID,
-        lastModifiedAt = lastModifiedAt
+        lastModifiedAtMillis = lastModifiedAtMillis
     )
 
-    private fun remoteCustody(lastModifiedAt: String = REMOTE_MODIFIED_AT) = SharedCustody(
-        model = localModel().copy(id = REMOTE_MODEL_ID),
-        lastModifiedBy = PARTNER_UID,
-        lastModifiedAt = lastModifiedAt,
-        createdAt = REMOTE_CREATED_AT
-    )
+    private fun remoteCustody(lastModifiedAtMillis: Long = REMOTE_MODIFIED_AT_MILLIS) =
+        SharedCustody(
+            model = localModel().copy(id = REMOTE_MODEL_ID),
+            lastModifiedBy = PARTNER_UID,
+            lastModifiedAtMillis = lastModifiedAtMillis,
+            lastModifiedAt = REMOTE_MODIFIED_AT,
+            createdAt = REMOTE_CREATED_AT
+        )
 
     /** The row [remoteCustody] mirrors to, for the echo-guard case. */
     private fun mirroredEntity() = CustodyModelEntity(
@@ -468,7 +471,7 @@ class CustodyModelRepositoryTest {
         isActive = true,
         repeatYearly = true,
         createdAt = REMOTE_CREATED_AT,
-        lastModifiedAt = REMOTE_MODIFIED_AT
+        lastModifiedAtMillis = REMOTE_MODIFIED_AT_MILLIS
     )
 
     private fun permissionDenied() = FirebaseFirestoreException(
@@ -491,16 +494,18 @@ class CustodyModelRepositoryTest {
         const val REMOTE_MODEL_ID = "remote-model-1"
         const val REMOTE_CREATED_AT = "2026-07-01T09:00:00"
         const val REMOTE_MODIFIED_AT = "2026-08-04T18:30:00"
+        val REMOTE_MODIFIED_AT_MILLIS: Long = Instant.parse("2026-08-04T16:30:00Z").toEpochMilli()
 
         /** Distinct from [REMOTE_CREATED_AT], so "kept the row's dates" cannot pass by accident. */
         const val PRE_EXISTING_CREATED_AT = "2026-06-15T07:45:00"
 
         /**
          * Ordering fixtures for the staleness guard. Absolute rather than relative to `now()`, so
-         * what is asserted is the comparison under test and not the machine's clock.
+         * what is asserted is the comparison under test and not the machine's clock. Epoch millis
+         * since the guard moved off naive local date-times — see `CustodyTimestamps`.
          */
-        const val LONG_AGO = "2020-01-01T00:00:00"
-        const val RECENTLY = "2099-01-01T00:00:00"
+        val LONG_AGO: Long = Instant.parse("2020-01-01T00:00:00Z").toEpochMilli()
+        val RECENTLY: Long = Instant.parse("2099-01-01T00:00:00Z").toEpochMilli()
 
         /** `RETRY_BASE_MS shl 0`, the repository's first backoff step. */
         const val FIRST_BACKOFF_MS = 1_000L
