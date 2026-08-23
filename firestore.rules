@@ -242,8 +242,21 @@ service cloud.firestore {
                       request.resource.data.keys().hasAll(['childName', 'createdByFirebaseUid', 'sharedWith']) &&
                       isValidLength(request.resource.data.childName, 1, 100);
 
+      // Being in the audience is not permission to write. `sharedWith` is what makes the
+      // document *readable*, and package G2 puts a guest — a grandparent, for a weekend — into
+      // it for exactly that reason. Under the old rule, which asked only for membership, that
+      // would have made them an editor of a child's medical record: notes, allergies, the
+      // medical profile and the photographs G1 added. A writer must be the creator or the
+      // creator's partner.
+      //
+      // Membership is still required on top, and deliberately: it is what keeps a document
+      // whose `sharedWith` has been stripped un-updatable rather than quietly writable by its
+      // creator again. Part 3 of `child-info.test.js` pins that, and it is the state that once
+      // could only be escaped by deleting the document.
       allow update: if isAuthenticated() &&
                       request.auth.uid in resource.data.sharedWith &&
+                      (resource.data.createdByFirebaseUid == request.auth.uid ||
+                       isPartnerOf(resource.data.createdByFirebaseUid)) &&
                       request.resource.data.createdByFirebaseUid == resource.data.createdByFirebaseUid;
 
       allow delete: if isAuthenticated() &&

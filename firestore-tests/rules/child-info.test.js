@@ -146,6 +146,63 @@ describe('Part 1d: child_info', () => {
         .doc('child_info/child-1').update({createdByFirebaseUid: BOB}));
   });
 
+  describe('Package G2: audience membership must not imply write', () => {
+    // The rule this whole package rests on. A guest is put into `sharedWith` so the *read*
+    // rule works unchanged — which, under an update rule that allows any member of the
+    // audience to write, would make a grandparent an editor of a child's medical record.
+    //
+    // Written before the rule changed, and every pre-existing case in this file has to keep
+    // passing afterwards: if one stops, the audience model differs from what the design
+    // assumed and the plan needs revisiting, not the test.
+
+    it('denies an update from a uid in sharedWith who is neither creator nor their partner',
+        async () => {
+          // Carol is in the audience and nothing else — exactly a guest's position.
+          await seed(env, {'child_info/child-1': childInfoDoc({sharedWith: [ALICE, BOB, CAROL]})});
+          await assertFails(env.authenticatedContext(CAROL).firestore()
+              .doc('child_info/child-1').update({medicalNotes: 'I changed this'}));
+        });
+
+    it('denies such a uid adding a photograph to the record', async () => {
+      // The same hole, pointed at what package G1 just added. A guest who could write the
+      // record could attach or remove medical photographs on a child that is not theirs.
+      await seed(env, {'child_info/child-1': childInfoDoc({sharedWith: [ALICE, BOB, CAROL]})});
+      await assertFails(env.authenticatedContext(CAROL).firestore()
+          .doc('child_info/child-1').update({medicalPhotos: ['https://example.test/x.jpg']}));
+    });
+
+    it('still lets the creator update', async () => {
+      await seed(env, {'child_info/child-1': childInfoDoc({sharedWith: [ALICE, BOB, CAROL]})});
+      await assertSucceeds(env.authenticatedContext(ALICE).firestore()
+          .doc('child_info/child-1').update({medicalNotes: 'Pollen allergy'}));
+    });
+
+    it("still lets the creator's partner update", async () => {
+      await seed(env, {'child_info/child-1': childInfoDoc({sharedWith: [ALICE, BOB, CAROL]})});
+      await assertSucceeds(env.authenticatedContext(BOB).firestore()
+          .doc('child_info/child-1').update({medicalNotes: 'Pollen allergy'}));
+    });
+
+    it('lets the partner update a record the partner created', async () => {
+      // The mirror of the case above: Bob creates, Alice edits. `isPartnerOf` is not
+      // symmetric by construction — it reads one uid's `partnerId` — so both directions are
+      // pinned rather than assumed.
+      await seed(env, {
+        'child_info/child-2': childInfoDoc({
+          id: 'child-2', createdByFirebaseUid: BOB, lastModifiedBy: BOB,
+        }),
+      });
+      await assertSucceeds(env.authenticatedContext(ALICE).firestore()
+          .doc('child_info/child-2').update({medicalNotes: 'Pollen allergy'}));
+    });
+
+    it('denies a uid outside sharedWith entirely, as it always did', async () => {
+      await seed(env, {'child_info/child-1': childInfoDoc({sharedWith: [ALICE, BOB]})});
+      await assertFails(env.authenticatedContext(CAROL).firestore()
+          .doc('child_info/child-1').update({medicalNotes: 'I changed this'}));
+    });
+  });
+
   describe('Part 3: a document whose sharedWith has been stripped', () => {
     beforeEach(async () => {
       const stripped = childInfoDoc({});
