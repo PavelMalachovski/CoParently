@@ -181,6 +181,39 @@ describe('Part 1d: messages', () => {
     await assertFails(db.doc('messages/msg-1').set(messageDoc({senderId: CAROL})));
   });
 
+  it('lets a participant post an announcement carrying its activity payload', async () => {
+    // No rule change was needed - `create` does not enumerate keys - which is why this is
+    // pinned rather than assumed.
+    const db = env.authenticatedContext(ALICE).firestore();
+    await assertSucceeds(db.doc('messages/msg-1').set(messageDoc({
+      messageType: 'ACTIVITY',
+      content: 'New expense: School trip',
+      activity: {
+        kind: 'EXPENSE_ADDED',
+        entityType: 'EXPENSE',
+        entityId: 'x1',
+        title: 'School trip',
+      },
+    })));
+  });
+
+  it('refuses an announcement forged as coming from the co-parent', async () => {
+    // `senderId == request.auth.uid` already covers this, and it matters more now: a card the
+    // reader renders themselves looks exactly as trustworthy as one the app wrote, so a forged
+    // sender would be a forged fact rather than a forged sentence.
+    const db = env.authenticatedContext(BOB).firestore();
+    await assertFails(db.doc('messages/msg-1').set(messageDoc({
+      senderId: ALICE,
+      messageType: 'ACTIVITY',
+      activity: {
+        kind: 'EVENT_DELETED',
+        entityType: 'EVENT',
+        entityId: 'e1',
+        title: 'Football',
+      },
+    })));
+  });
+
   it('denies sending into a conversation that does not exist', async () => {
     const db = env.authenticatedContext(ALICE).firestore();
     await assertFails(db.doc('messages/msg-1').set(messageDoc({conversationId: 'nope'})));
