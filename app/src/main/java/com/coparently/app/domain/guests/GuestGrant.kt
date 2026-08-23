@@ -23,7 +23,8 @@ package com.coparently.app.domain.guests
  *   compared to `request.time` at all, and the rule could only ever check that a guest *is* a
  *   guest, never that their grant still stands. Millis is the one representation all three can
  *   compare. It is also the move `Message.sentAtMillis` already made, and CLAUDE.md records the
- *   custody document's zone-less `lastModifiedAt` as the mistake not to repeat.
+ *   custody document's zone-less `lastModifiedAt` as the mistake not to repeat — since fixed,
+ *   the same way, by `CustodyTimestamps`.
  *
  *   There is no "no expiry" value. The expiry is mandatory, because a permanent grant is the
  *   wrong default for an access token handed out casually and a separated parent will not

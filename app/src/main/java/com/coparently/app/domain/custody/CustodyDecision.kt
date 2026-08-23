@@ -8,7 +8,8 @@ enum class CustodyDecisionOutcome { ACCEPTED, DECLINED }
  *
  * Only the latest is kept: a history of past proposals is out of scope, and the banner this feeds
  * is dismissed against [at] the same way the "schedule changed" banner is dismissed against
- * `SharedCustody.lastModifiedAt`.
+ * `SharedCustody.lastModifiedAt`, the legacy string field — a decision is displayed, never
+ * compared.
  *
  * @property outcome Accepted or declined.
  * @property by Firebase UID of whoever decided — never the proposer, which

@@ -530,7 +530,7 @@ fun CalendarScreen(
                     CustodyChangedBanner(
                         byName = parentNames.labelForUid(announcement.lastModifiedBy),
                         onDismiss = {
-                            calendarViewModel.dismissCustodyChange(announcement.lastModifiedAt)
+                            calendarViewModel.dismissCustodyChange(announcement.lastModifiedAtMillis)
                         },
                         modifier = Modifier.padding(
                             horizontal = dims.paddingMedium,

@@ -12,8 +12,9 @@ import com.coparently.app.domain.model.CustodyModel
  * waiting"), and a silent no-op would be the invisible change this whole feature exists to
  * remove.
  *
- * **A proposal write leaves the pattern, [SharedCustody.lastModifiedBy] and
- * [SharedCustody.lastModifiedAt] exactly as they were.** That is not tidiness: `lastModifiedBy`
+ * **A proposal write leaves the pattern, [SharedCustody.lastModifiedBy] and both timestamps —
+ * [SharedCustody.lastModifiedAtMillis] and [SharedCustody.lastModifiedAt] — exactly as they
+ * were.** That is not tidiness: `lastModifiedBy`
  * is what [CustodyChangeAnnouncement] compares against the reader's own uid to ignore the echo
  * of its own write, so a proposal that stamped the proposer would make the co-parent's
  * not-yet-dismissed pattern change read as the proposer's own echo and swallow its banner.
@@ -75,13 +76,28 @@ object CustodyProposalTransition {
      * [SharedCustody.createdAt] is preserved, so agreeing a change does not re-date the
      * arrangement itself — the same rule `CustodyModelRepository` already follows when updating
      * the pattern directly.
+     *
+     * Both timestamps move, and [atMillis] is the one that counts: it is what
+     * [CustodyTimestamps.isNewer] compares to decide which phone's document survives. [atIso]
+     * is written beside it only for a co-parent on a build that reads no other field, and is
+     * also what the decision record is stamped with. Accepting is a genuine pattern change —
+     * unlike proposing, withdrawing or declining, none of which touch either.
+     *
+     * @param atIso ISO date-time of the decision, in the accepter's own zone.
+     * @param atMillis The same instant as epoch milliseconds.
      */
-    fun accept(current: SharedCustody, byUid: String, atIso: String): Result<SharedCustody> =
+    fun accept(
+        current: SharedCustody,
+        byUid: String,
+        atIso: String,
+        atMillis: Long
+    ): Result<SharedCustody> =
         current.pendingForDecisionBy(byUid).map { pending ->
             current.copy(
                 model = pending.model,
                 repeatYearly = pending.repeatYearly,
                 lastModifiedBy = byUid,
+                lastModifiedAtMillis = atMillis,
                 lastModifiedAt = atIso,
                 proposal = null,
                 lastDecision = CustodyDecision(

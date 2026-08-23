@@ -247,10 +247,10 @@ Data flow: UI → ViewModel → UseCase → Repository → Room (source of truth
     older build stays readable. Deliberately *not* changed: `Event`, `Expense`, `Budget`
     and `ChildInfo` dates, where a naive local time is often the right model — whether a
     custody handover follows the child's zone or the viewer's is an unmade product
-    decision, not an oversight. **`CustodyModelEntity.lastModifiedAt` is a fifth, and it
-    does not belong with those four**: it is not merely displayed, it decides which phone's
-    schedule survives. See the custody entry in "Known issues" below before adding to this
-    list.
+    decision, not an oversight. **`CustodyModelEntity.lastModifiedAtMillis` was a fifth and
+    has since made the same move**, for a sharper reason: it is not merely displayed, it
+    decides which phone's schedule survives. See `CustodyTimestamps` and the custody entry in
+    "Known issues" below — that entry now records what the fix costs, not an outstanding bug.
 14. **`sharedWith` is computed at upload time and never recomputed for a row already marked
     synced.** An event created while the account was unpaired is uploaded with an audience of
     one uid, and nothing revisits it — so it stays unreadable by a co-parent who arrives later.
@@ -296,25 +296,33 @@ Data flow: UI → ViewModel → UseCase → Repository → Room (source of truth
   badge clears on open, and the ticks reach READ — was **deferred, not run**. Backlog item for
   the next review round. Everything else in that acceptance run passed on real devices.
 
-- **The shared custody schedule orders the two phones' writes by a naive local date-time.**
-  `CustodyModelEntity.lastModifiedAt` (and the `lastModifiedAt` field of the `custody_models`
-  document, which mirrors it) is `LocalDateTime.now()` formatted ISO — no zone, no offset.
-  `CustodyModelRepository.isNewer` parses both sides and compares them, and `mirrorIntoRoom`
-  acts on the answer: the side it judges newer is not merely kept, it is **re-pushed over the
-  other**. So for two parents 2–3 zones apart the wrong side can win *and overwrite*, where
-  before the custody sync existed a local pattern merely stayed local. The banner does fire on
-  the loser's phone (`lastModifiedBy` is the other parent), so this is silent-wrong-answer, not
-  silent-loss — but the answer can still be wrong by exactly the offset between the two zones.
-  Accepted for this round rather than fixed: the correct fix is epoch millis with a Room
-  migration, the same move `Message.sentAtMillis` made in item 13, and it drags the Firestore
-  field, a legacy-ISO read path for a co-parent on an older build, and a migration test with it
-  — a change of its own size, not a rider on the sync work. `isNewer` already degrades an
-  unparseable value on either side to "not newer", so a mixed-format transition is survivable.
-  Until then: do not add more decisions to `lastModifiedAt`, and do not "fix" it by comparing
-  the strings (they are ISO, so string order agrees with the same wrong answer) or by stamping
-  `now()` in `saveReslotted`/`archiveRejected` — those two keep the stored dates on purpose,
-  and re-dating them makes this device win every comparison forever
-  (`CustodyModelRepositoryTest` pins both).
+- **The shared custody schedule is ordered by epoch millis — FIXED, and here is what the fix
+  costs.** `CustodyModelEntity.lastModifiedAtMillis` (Room schema 22) and the document's
+  `lastModifiedAtMillis` replace the naive `LocalDateTime` this used to compare, which could
+  have the wrong parent's pattern win *and overwrite* by exactly the offset between two zones.
+  `CustodyTimestamps` is the pure statement of the rule; `CustodyModelRepository` and the
+  `custody_models` block in `firestore.rules` both defer to it.
+
+  Three things not to undo:
+  - **The document still carries `lastModifiedAt` as an ISO string, and it is written
+    verbatim, never re-derived.** It exists for a co-parent on an older build, which reads
+    only that field and reads it with `as? String` — a number there comes back blank and their
+    device then judges its own copy newer and re-pushes it over this one. It is also why the
+    string must travel unchanged: `swapWriteTouchesOnlyTheSwap` denies a swap that alters it,
+    and re-deriving the same instant in the other parent's zone yields a different string.
+    Only `pushToFirestore` — a pattern write — may move it.
+  - **Neither timestamp is in that rule's allowed key set**, so a swap can never re-date the
+    document. Two rules cases pin each direction, plus one that an ordinary swap still passes.
+  - **`saveReslotted`/`archiveRejected` still keep the stored value** rather than stamping
+    now; re-dating there makes this device win every comparison forever
+    (`CustodyModelRepositoryTest` pins both).
+
+  Two accepted costs, both one-time: `MIGRATION_21_22` converts the stored ISO with
+  `strftime`, which reads it as UTC and is therefore off by the device's own offset — the
+  *order* of two local rows is preserved, which is all the local guard uses, and the error is
+  gone at the next write. And the banner's dismissal key is now millis, so a preference left
+  holding an ISO string matches nothing and the one change that device had dismissed is
+  announced once more.
 
 - **The calendar never renders `EventUiState.Error`.** `EventViewModel` sets it when a range query
   fails, but the only `LaunchedEffect(uiState)` branch in `CalendarScreen` handles

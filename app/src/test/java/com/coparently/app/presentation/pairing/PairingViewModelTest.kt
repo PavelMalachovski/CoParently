@@ -725,6 +725,7 @@ class PairingViewModelTest {
         SharedCustody(
             model = model,
             lastModifiedBy = "user-b",
+            lastModifiedAtMillis = java.time.Instant.parse("2026-08-01T08:00:00Z").toEpochMilli(),
             lastModifiedAt = "2026-08-01T10:00:00",
             createdAt = "2026-08-01T10:00:00"
         )

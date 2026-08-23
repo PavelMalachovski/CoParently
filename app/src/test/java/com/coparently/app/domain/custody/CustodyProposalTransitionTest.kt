@@ -3,6 +3,7 @@ package com.coparently.app.domain.custody
 import com.coparently.app.domain.model.CustodyModel
 import com.coparently.app.domain.model.CustodyModelType
 import org.junit.Test
+import java.time.Instant
 import java.time.LocalDate
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -28,6 +29,7 @@ class CustodyProposalTransitionTest {
     private val current = SharedCustody(
         model = agreed,
         lastModifiedBy = MOM,
+        lastModifiedAtMillis = AGREED_AT_MILLIS,
         lastModifiedAt = "2026-08-03T10:00:00",
         createdAt = "2026-08-01T09:00:00"
     )
@@ -39,6 +41,7 @@ class CustodyProposalTransitionTest {
 
         assertEquals(agreed, next.model)
         assertEquals(MOM, next.lastModifiedBy)
+        assertEquals(AGREED_AT_MILLIS, next.lastModifiedAtMillis)
         assertEquals("2026-08-03T10:00:00", next.lastModifiedAt)
         assertEquals(wanted, next.proposal?.model)
         assertEquals(DAD, next.proposal?.proposedBy)
@@ -72,10 +75,12 @@ class CustodyProposalTransitionTest {
         val pending = CustodyProposalTransition
             .propose(current, wanted, true, DAD, NOW).getOrThrow()
 
-        val next = CustodyProposalTransition.accept(pending, byUid = MOM, atIso = LATER).getOrThrow()
+        val next = CustodyProposalTransition
+            .accept(pending, byUid = MOM, atIso = LATER, atMillis = LATER_MILLIS).getOrThrow()
 
         assertEquals(wanted, next.model)
         assertEquals(MOM, next.lastModifiedBy)
+        assertEquals(LATER_MILLIS, next.lastModifiedAtMillis)
         assertEquals(LATER, next.lastModifiedAt)
         assertNull(next.proposal)
         assertEquals(CustodyDecisionOutcome.ACCEPTED, next.lastDecision?.outcome)
@@ -87,7 +92,7 @@ class CustodyProposalTransitionTest {
         val pending = CustodyProposalTransition
             .propose(current, wanted, true, DAD, NOW).getOrThrow()
 
-        val next = CustodyProposalTransition.accept(pending, MOM, LATER).getOrThrow()
+        val next = CustodyProposalTransition.accept(pending, MOM, LATER, LATER_MILLIS).getOrThrow()
 
         assertEquals("2026-08-01T09:00:00", next.createdAt)
     }
@@ -102,6 +107,7 @@ class CustodyProposalTransitionTest {
 
         assertEquals(agreed, next.model)
         assertEquals(MOM, next.lastModifiedBy)
+        assertEquals(AGREED_AT_MILLIS, next.lastModifiedAtMillis)
         assertEquals("2026-08-03T10:00:00", next.lastModifiedAt)
         assertNull(next.proposal)
         assertEquals(CustodyDecisionOutcome.DECLINED, next.lastDecision?.outcome)
@@ -125,7 +131,7 @@ class CustodyProposalTransitionTest {
         val pending = CustodyProposalTransition
             .propose(current, wanted, true, DAD, NOW).getOrThrow()
 
-        assertTrue(CustodyProposalTransition.accept(pending, DAD, LATER).isFailure)
+        assertTrue(CustodyProposalTransition.accept(pending, DAD, LATER, LATER_MILLIS).isFailure)
         assertTrue(CustodyProposalTransition.decline(pending, DAD, LATER, null).isFailure)
     }
 
@@ -143,7 +149,7 @@ class CustodyProposalTransitionTest {
 
     @Test
     fun `deciding when nothing is pending is a failure, not a no-op`() {
-        assertTrue(CustodyProposalTransition.accept(current, MOM, NOW).isFailure)
+        assertTrue(CustodyProposalTransition.accept(current, MOM, NOW, NOW_MILLIS).isFailure)
         assertTrue(CustodyProposalTransition.decline(current, MOM, NOW, null).isFailure)
         assertTrue(CustodyProposalTransition.withdraw(current, MOM).isFailure)
     }
@@ -153,5 +159,11 @@ class CustodyProposalTransitionTest {
         const val DAD = "uid-dad"
         const val NOW = "2026-08-09T08:00:00"
         const val LATER = "2026-08-09T09:00:00"
+
+        // The instants behind the three ISO strings above. `lastModifiedAtMillis` is what
+        // decides which phone's document survives; the strings are the legacy field beside it.
+        val AGREED_AT_MILLIS: Long = Instant.parse("2026-08-03T08:00:00Z").toEpochMilli()
+        val NOW_MILLIS: Long = Instant.parse("2026-08-09T06:00:00Z").toEpochMilli()
+        val LATER_MILLIS: Long = Instant.parse("2026-08-09T07:00:00Z").toEpochMilli()
     }
 }

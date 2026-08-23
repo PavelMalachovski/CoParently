@@ -16,6 +16,15 @@ const STRANGER = 'uid-stranger';
 const KEY = [MOM, DAD].sort().join('__');
 const PATH = `custody_models/${KEY}`;
 
+/**
+ * The instant the document is ordered by, matching the ISO string beside it.
+ *
+ * Epoch millis rather than the naive local string this schema used to compare: that string had
+ * no zone, so two parents two hours apart could have the wrong pattern win *and overwrite*.
+ * `CustodyTimestamps` on the Kotlin side is the statement all of this agrees with.
+ */
+const MODIFIED_AT_MILLIS = Date.parse('2026-08-03T08:00:00Z');
+
 const PAIRED_USERS = {
   'users/uid-mom': {name: 'Olya', email: 'o@x.test', partnerId: DAD},
   'users/uid-dad': {name: 'Pavel', email: 'p@x.test', partnerId: MOM},
@@ -33,6 +42,7 @@ function custodyDoc(overrides) {
     startDate: '2026-08-03',
     repeatYearly: true,
     createdAt: '2026-08-03T10:00:00',
+    lastModifiedAtMillis: MODIFIED_AT_MILLIS,
     lastModifiedAt: '2026-08-03T10:00:00',
   }, overrides);
 }
@@ -454,14 +464,44 @@ describe('custody_models', () => {
     });
 
     it('refuses a swap write that re-dates the document', async () => {
-      // `lastModifiedAt` is what decides which phone's document survives, and the winner is
-      // re-pushed over the loser - so a swap that re-dated it would make this device win every
-      // future comparison.
+      // The legacy string. Still refused, and for a second reason now: it is a naive local
+      // date-time, so a co-parent in another zone re-deriving it from the same instant would
+      // produce a different string and have their swap denied - which is why the client carries
+      // it verbatim rather than recomputing it.
       await seed(env, {[PATH]: custodyDoc({})});
       const db = env.authenticatedContext(MOM).firestore();
       await assertFails(db.doc(PATH).update({
         dayOverrides: {[DATE]: pendingSwap(MOM, 'dad')},
         lastModifiedAt: '2026-09-01T08:00:00',
+        lastModifiedBy: MOM,
+        lastModifiedKind: 'SWAP',
+        lastSwapDate: DATE,
+      }));
+    });
+
+    it('refuses a swap write that moves the instant the document is ordered by', async () => {
+      // `lastModifiedAtMillis` is what decides which phone's document survives, and the winner
+      // is re-pushed over the loser - so a swap that moved it would make this device win every
+      // future comparison and quietly overwrite the co-parent's pattern.
+      await seed(env, {[PATH]: custodyDoc({})});
+      const db = env.authenticatedContext(MOM).firestore();
+      await assertFails(db.doc(PATH).update({
+        dayOverrides: {[DATE]: pendingSwap(MOM, 'dad')},
+        lastModifiedAtMillis: MODIFIED_AT_MILLIS + 86400000,
+        lastModifiedBy: MOM,
+        lastModifiedKind: 'SWAP',
+        lastSwapDate: DATE,
+      }));
+    });
+
+    it('allows a swap that leaves both timestamps alone', async () => {
+      // The companion to the two above: the rule must still admit the ordinary swap. Without
+      // this, a `hasOnly` list that accidentally excluded a key a real swap does write would
+      // read as "correctly strict" while breaking the feature outright.
+      await seed(env, {[PATH]: custodyDoc({})});
+      const db = env.authenticatedContext(MOM).firestore();
+      await assertSucceeds(db.doc(PATH).update({
+        dayOverrides: {[DATE]: pendingSwap(MOM, 'dad')},
         lastModifiedBy: MOM,
         lastModifiedKind: 'SWAP',
         lastSwapDate: DATE,

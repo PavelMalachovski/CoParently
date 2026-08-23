@@ -22,6 +22,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import java.time.Instant
 import java.time.LocalDate
 
 /**
@@ -272,6 +273,7 @@ class FirestoreCustodyDataSourceTest {
             startDate = LocalDate.of(2026, 8, 3)
         ),
         lastModifiedBy = LATER_UID,
+        lastModifiedAtMillis = MODIFIED_AT_MILLIS,
         lastModifiedAt = "2026-08-04T18:30:00",
         createdAt = "2026-07-01T09:00:00"
     )
@@ -317,6 +319,7 @@ class FirestoreCustodyDataSourceTest {
         "startDate" to "2026-08-03",
         "repeatYearly" to true,
         "createdAt" to "2026-07-01T09:00:00",
+        "lastModifiedAtMillis" to MODIFIED_AT_MILLIS,
         "lastModifiedAt" to "2026-08-04T18:30:00"
     ) + overrides
 
@@ -326,6 +329,9 @@ class FirestoreCustodyDataSourceTest {
     }
 
     private companion object {
+        /** The instant behind the ISO string beside it; the field the mirror actually orders by. */
+        val MODIFIED_AT_MILLIS: Long = Instant.parse("2026-08-04T16:30:00Z").toEpochMilli()
+
         const val EARLIER_UID = "uidA"
         const val LATER_UID = "uidB"
         const val DOCUMENT_ID = "uidA__uidB"

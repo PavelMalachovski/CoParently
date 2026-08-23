@@ -12,6 +12,7 @@ import com.coparently.app.domain.custody.CustodyKey
 import com.coparently.app.domain.custody.CustodyWriteKind
 import com.coparently.app.domain.custody.DayOverride
 import com.coparently.app.domain.custody.DayOverrideStatus
+import com.coparently.app.domain.custody.CustodyTimestamps
 import com.coparently.app.domain.custody.SharedCustody
 import com.coparently.app.domain.custody.SharedCustodyRead
 import com.coparently.app.domain.model.CustodyModel
@@ -239,7 +240,7 @@ class CustodyModelRepository(
      *
      * Both departures from [saveAndActivate] are the point:
      *
-     * - **The dates are kept.** [toEntity]'s default stamps `lastModifiedAt` with now, which
+     * - **The dates are kept.** [toEntity]'s default stamps `lastModifiedAtMillis` with now, which
      *   would make this device the unconditional winner of every later comparison in
      *   [mirrorIntoRoom] — so the re-slot alone would cause this pattern to be republished over
      *   the co-parent's document, with nobody having chosen anything.
@@ -255,7 +256,7 @@ class CustodyModelRepository(
         val existing = custodyModelDao.getModelById(model.id)
         val entity = model.toEntity(
             createdAt = existing?.createdAt ?: nowIso(),
-            lastModifiedAt = existing?.lastModifiedAt ?: nowIso()
+            lastModifiedAtMillis = existing?.lastModifiedAtMillis ?: nowMillis()
         ).copy(isActive = true, repeatYearly = existing?.repeatYearly ?: true)
         if (entity == existing) return
         custodyModelDao.deactivateAllModels()
@@ -278,7 +279,7 @@ class CustodyModelRepository(
         val original = custodyModelDao.getModelById(model.id)
         val entity = model.toEntity(
             createdAt = original?.createdAt ?: nowIso(),
-            lastModifiedAt = original?.lastModifiedAt ?: nowIso()
+            lastModifiedAtMillis = original?.lastModifiedAtMillis ?: nowMillis()
         ).copy(id = UUID.randomUUID().toString(), isActive = false)
         custodyModelDao.insertModel(entity)
     }
@@ -408,7 +409,7 @@ class CustodyModelRepository(
      * fire on the replay — the stored row differs from the computed one precisely in `isActive`
      * — so the mirror used to deactivate the model the user had just chosen and re-activate the
      * stale one, silently, with no error anywhere: `CustodySetupViewModel` only catches what
-     * [saveAndActivate] rethrows, and it rethrows nothing. Comparing `lastModifiedAt` is the
+     * [saveAndActivate] rethrows, and it rethrows nothing. Comparing `lastModifiedAtMillis` is the
      * same last-write-wins rule the shared document already runs on, applied in the one
      * direction it was missing.
      */
@@ -417,13 +418,19 @@ class CustodyModelRepository(
         val existing = custodyModelDao.getModelById(remote.model.id)
         val entity = remote.model.toEntity(
             createdAt = remote.createdAt.ifBlank { existing?.createdAt ?: nowIso() },
-            lastModifiedAt = remote.lastModifiedAt.ifBlank { existing?.lastModifiedAt ?: nowIso() },
+            lastModifiedAtMillis = remote.lastModifiedAtMillis
+                .takeIf { it > 0L } ?: existing?.lastModifiedAtMillis ?: nowMillis(),
             dayOverrides = remote.dayOverrides
         ).copy(isActive = true, repeatYearly = remote.repeatYearly)
         if (entity == existing) return
 
         val localActive = custodyModelDao.getActiveModelSync()
-        if (localActive != null && isNewer(localActive.lastModifiedAt, entity.lastModifiedAt)) {
+        if (localActive != null &&
+            CustodyTimestamps.isNewer(
+                localActive.lastModifiedAtMillis,
+                entity.lastModifiedAtMillis
+            )
+        ) {
             republish(localActive)
             return
         }
@@ -442,34 +449,12 @@ class CustodyModelRepository(
      * attempt: it turns a swallowed write into a recovered one at the cost of a guarded call
      * that is already written.
      *
-     * This cannot loop. The re-push echoes back carrying the same `lastModifiedAt` the local row
+     * This cannot loop. The re-push echoes back carrying the same `lastModifiedAtMillis` the row
      * holds, so the next pass finds neither side newer and mirrors normally.
      */
     private suspend fun republish(local: CustodyModelEntity) {
         pushToFirestore(local.toDomainModel(), local)
     }
-
-    /**
-     * Whether the ISO date-time [candidate] is strictly later than [reference].
-     *
-     * Parsed rather than compared as strings, and an unparseable value on either side answers
-     * `false` — "not newer" — so a malformed timestamp degrades to the mirror behaving as it did
-     * before this guard existed rather than to a local row that can never be updated again.
-     *
-     * Caveat worth naming: `CustodyModelEntity.lastModifiedAt` is a *naive local* date-time, so
-     * two parents in different time zones do not order their writes by real time. That is a
-     * property of the stored schema, not of this comparison — changing it is a Room schema
-     * change, and `CLAUDE.md` records the same open question for `Event`/`Expense`/`Budget`
-     * dates. Within one device, which is the case this guard exists for, it is exact.
-     */
-    private fun isNewer(candidate: String, reference: String): Boolean {
-        val left = candidate.toLocalDateTimeOrNull() ?: return false
-        val right = reference.toLocalDateTimeOrNull() ?: return false
-        return left.isAfter(right)
-    }
-
-    private fun String.toLocalDateTimeOrNull(): LocalDateTime? =
-        runCatching { LocalDateTime.parse(this) }.getOrNull()
 
     /**
      * Pushes the just-saved model to the pair's document, guarded.
@@ -494,7 +479,11 @@ class CustodyModelRepository(
                 custody = SharedCustody(
                     model = model,
                     lastModifiedBy = pair.myUid,
-                    lastModifiedAt = entity.lastModifiedAt,
+                    lastModifiedAtMillis = entity.lastModifiedAtMillis,
+                    // Derived here and only here. Every other write carries whatever it read,
+                    // because a swap that changed this string would be denied by
+                    // `swapWriteTouchesOnlyTheSwap`; a pattern write is the one that may move it.
+                    lastModifiedAt = CustodyTimestamps.toLegacyIso(entity.lastModifiedAtMillis),
                     createdAt = existingCreatedAt ?: entity.createdAt,
                     repeatYearly = entity.repeatYearly,
                     // Carried over, not dropped. `setCustody` replaces the whole document, so a
@@ -514,9 +503,13 @@ class CustodyModelRepository(
      * The whole document is re-sent — `setCustody` is a `set()` — so everything else it holds is
      * read first and carried across unchanged. Two fields are handled deliberately:
      *
-     * - **`lastModifiedAt` keeps the pattern's value.** It is what [isNewer] compares to decide
-     *   which phone's document survives, and the winner is then *re-pushed over the loser*.
-     *   Re-dating for a swap would make this device win every future comparison.
+     * - **Both timestamps keep the pattern's values.** `lastModifiedAtMillis` is what
+     *   [CustodyTimestamps.isNewer] compares to decide which phone's document survives, and the
+     *   winner is then *re-pushed over the loser*, so re-dating for a swap would make this
+     *   device win every future comparison. `lastModifiedAt` travels verbatim beside it for a
+     *   second reason as well: `swapWriteTouchesOnlyTheSwap` in `firestore.rules` names the only
+     *   four keys a swap may change, and re-deriving that string in a second parent's zone would
+     *   produce a different one for the same instant and have the write denied.
      * - **`lastModifiedBy` becomes this device's uid**, because `firestore.rules` requires every
      *   update to stamp it with the caller. [CustodyWriteKind.SWAP] is what stops the co-parent's
      *   phone reading that stamp as a pattern change; see `CustodyChangeAnnouncement`.
@@ -685,12 +678,14 @@ class CustodyModelRepository(
      *
      * @param createdAt ISO date-time to stamp; defaults to now for a locally created model and
      *   is supplied from the document when mirroring, so a synced row keeps the pair's dates.
-     * @param lastModifiedAt ISO date-time of the change; defaults to [createdAt] rather than to
-     *   a second `now()`, which would differ from it by a stray millisecond.
+     * @param lastModifiedAtMillis When the change happened, epoch millis; defaults to now. Not
+     *   derived from [createdAt] the way it used to be — the two are different types now, and
+     *   the stray-millisecond argument that justified sharing one value applied to an ISO
+     *   string being compared as a string, which is exactly what this no longer is.
      */
     private fun CustodyModel.toEntity(
         createdAt: String = nowIso(),
-        lastModifiedAt: String = createdAt,
+        lastModifiedAtMillis: Long = nowMillis(),
         dayOverrides: Map<String, DayOverride> = emptyMap()
     ): CustodyModelEntity {
         val momDaysJson = momDayIndices.sorted().joinToString(",", "[", "]")
@@ -704,7 +699,7 @@ class CustodyModelRepository(
             isActive = isActive,
             repeatYearly = true,
             createdAt = createdAt,
-            lastModifiedAt = lastModifiedAt,
+            lastModifiedAtMillis = lastModifiedAtMillis,
             // Null rather than "{}" for none, so a row that has never carried a swap is
             // byte-identical to one written before the column existed — which the equality
             // guard in `mirrorIntoRoom` depends on to stay quiet.
@@ -714,6 +709,9 @@ class CustodyModelRepository(
 
     private fun nowIso(): String =
         LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
+
+    /** Now, as the epoch millis the shared document is ordered by. */
+    private fun nowMillis(): Long = System.currentTimeMillis()
 
     /**
      * The two parents behind one custody document.

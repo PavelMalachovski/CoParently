@@ -3,6 +3,7 @@ package com.coparently.app.data.remote.firebase
 import com.coparently.app.domain.custody.CustodyDecision
 import com.coparently.app.domain.custody.CustodyDecisionOutcome
 import com.coparently.app.domain.custody.CustodyProposal
+import com.coparently.app.domain.custody.CustodyTimestamps
 import com.coparently.app.domain.custody.CustodyWriteKind
 import com.coparently.app.domain.custody.DayOverride
 import com.coparently.app.domain.custody.DayOverrideStatus
@@ -121,6 +122,13 @@ class FirestoreCustodyDataSource @Inject constructor(
             put("startDate", model.startDate.format(DateTimeFormatter.ISO_LOCAL_DATE))
             put("repeatYearly", repeatYearly)
             put("createdAt", createdAt)
+            // The field that decides which phone's schedule survives — see `CustodyTimestamps`.
+            put("lastModifiedAtMillis", lastModifiedAtMillis)
+            // Written beside it, not instead of it. A co-parent on a build that predates this
+            // change reads only `lastModifiedAt`, and reads it as a string; a number there would
+            // come back blank and their device would judge its own copy newer and re-push it
+            // over this one. Carried verbatim rather than re-derived: a swap write must leave it
+            // byte-identical or `swapWriteTouchesOnlyTheSwap` denies the write.
             put("lastModifiedAt", lastModifiedAt)
             // Omitted rather than written as an explicit null: `set()` replaces the whole
             // document, so leaving the key out is what actually clears a withdrawn or answered
@@ -208,6 +216,13 @@ class FirestoreCustodyDataSource @Inject constructor(
                 isActive = true
             ),
             lastModifiedBy = (this["lastModifiedBy"] as? String).orEmpty(),
+            // Prefers the number and falls back to parsing the legacy string, which is what a
+            // co-parent on an older build writes and what every document written before this
+            // change holds. See `CustodyTimestamps.fromWire` for why the fallback is a guess.
+            lastModifiedAtMillis = CustodyTimestamps.fromWire(
+                millis = this["lastModifiedAtMillis"],
+                legacyIso = this["lastModifiedAt"]
+            ),
             lastModifiedAt = (this["lastModifiedAt"] as? String).orEmpty(),
             createdAt = (this["createdAt"] as? String).orEmpty(),
             repeatYearly = this["repeatYearly"] as? Boolean ?: true,
