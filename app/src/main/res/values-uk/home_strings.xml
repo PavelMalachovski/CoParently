@@ -30,6 +30,7 @@
     <string name="home_stat_settled">Усе врегульовано →</string>
 
     <string name="home_section_this_week">Цього тижня</string>
+    <string name="home_week_empty">У найближчі сім днів нічого немає.</string>
     <string name="home_section_recent_changes">Останні зміни</string>
     <string name="home_section_partner_changed">Зміни: %1$s</string>
 

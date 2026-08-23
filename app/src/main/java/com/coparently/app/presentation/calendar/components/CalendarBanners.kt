@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.PriorityHigh
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -269,13 +270,31 @@ fun DayAgendaCard(
                             .background(ParentColors.fill(event.parentOwner))
                     )
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = event.title,
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Medium,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // Same mark as the home timeline, same description. An exclamation
+                            // mark on its own does not say "the co-parent is expected" to
+                            // anyone who cannot see it.
+                            if (event.isImportant) {
+                                Icon(
+                                    imageVector = Icons.Default.PriorityHigh,
+                                    contentDescription = stringResource(
+                                        R.string.event_important_mark_description
+                                    ),
+                                    tint = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                            Text(
+                                text = event.title,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
                         Text(
                             text = agendaTime(event, timeFormatter),
                             style = MaterialTheme.typography.bodySmall,

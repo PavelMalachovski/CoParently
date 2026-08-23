@@ -33,6 +33,7 @@
 
     <!-- Section headers. %1$s = the co-parent's name. -->
     <string name="home_section_this_week">This week</string>
+    <string name="home_week_empty">Nothing in the next seven days.</string>
     <string name="home_section_recent_changes">Recent changes</string>
     <string name="home_section_partner_changed">%1$s changed</string>
 

@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Payments
+import androidx.compose.material.icons.filled.PriorityHigh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.Badge
@@ -62,7 +63,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.coparently.app.R
 import com.coparently.app.domain.custody.HandoverInfo
 import com.coparently.app.domain.expenses.CurrencyBalance
-import com.coparently.app.domain.model.Event
+import com.coparently.app.domain.home.WeekEntry
 import com.coparently.app.presentation.common.ParentNames
 import com.coparently.app.presentation.common.PillChip
 import com.coparently.app.presentation.common.SectionGroup
@@ -249,29 +250,32 @@ private fun Dashboard(
             }
         }
 
-        item {
-            StatTiles(
-                spend = state.monthSpend,
-                balances = state.monthBalances,
-                unreadCount = state.unreadCount,
-                onOpenExpenses = onOpenExpenses,
-                onOpenChat = onOpenChat
-            )
-        }
-
-        if (state.upcomingEvents.isNotEmpty()) {
-            item { SectionHeader(stringResource(R.string.home_section_this_week)) }
+        // The week leads, per spec §3: it is what a separated parent opens the app to see, and
+        // it is where the timeline rail already sat.
+        item { SectionHeader(stringResource(R.string.home_section_this_week)) }
+        if (state.week.isEmpty()) {
+            item {
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        text = stringResource(R.string.home_week_empty),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(16.dp)
+                    )
+                }
+            }
+        } else {
             itemsIndexed(
-                items = state.upcomingEvents,
-                // Recurring occurrences share the master event's id, so the start time has
-                // to be part of the key or two occurrences collide.
-                key = { _, event -> "up_${event.id}_${event.startDateTime}" }
-            ) { index, event ->
+                items = state.week,
+                // Recurring occurrences share the master event's id, so `HomeWeek` builds a key
+                // that carries the occurrence's own start time; the id alone collides.
+                key = { _, entry -> entry.key }
+            ) { index, entry ->
                 TimelineRow(
-                    event = event,
+                    entry = entry,
                     parentNames = parentNames,
-                    isLast = index == state.upcomingEvents.lastIndex,
-                    onClick = { onOpenEvent(event.id) }
+                    isLast = index == state.week.lastIndex,
+                    onClick = { onOpenEvent(entry.event.id) }
                 )
             }
         }
@@ -315,6 +319,20 @@ private fun Dashboard(
                     onOpenEvent = onOpenEvent
                 )
             }
+        }
+
+        item {
+            // Last, as spec §3 asks. The unread tile travels with it rather than being
+            // stranded alone at the top: the two are one row, and the Chat tab already
+            // carries its own unread badge, so nothing is lost by it sitting here.
+            Spacer(modifier = Modifier.size(4.dp))
+            StatTiles(
+                spend = state.monthSpend,
+                balances = state.monthBalances,
+                unreadCount = state.unreadCount,
+                onOpenExpenses = onOpenExpenses,
+                onOpenChat = onOpenChat
+            )
         }
 
         item {
@@ -571,21 +589,29 @@ private fun StatTile(
 }
 
 /**
- * One event on the "this week" timeline: a parent-coloured node on a vertical rail, with the
- * event beside it. Replaces the per-row Card, which made a three-item feed look like a stack
- * of unrelated panels.
+ * One row of the child's week: a parent-coloured node on a vertical rail, with the event beside
+ * it and an exclamation mark when the co-parent is expected.
  *
- * @param event The event
+ * **The colour and the words name the same parent** — the one whose custody day the event falls
+ * on, which is the question this row exists to answer. When no arrangement answers for that date
+ * the row falls back to the event's own owner rather than going colourless: a rail of grey dots
+ * says nothing, and the owner is a fact the app does hold. The words drop the "'s day" clause in
+ * that case, because that is the part that would be a guess.
+ *
+ * @param entry The row
+ * @param parentNames Resolves a slot to that parent's name
  * @param isLast Whether this is the final row, which drops the trailing connector
  * @param onClick Opens the event
  */
 @Composable
 private fun TimelineRow(
-    event: Event,
+    entry: WeekEntry,
     parentNames: ParentNames,
     isLast: Boolean,
     onClick: () -> Unit
 ) {
+    val event = entry.event
+    val dotSlot = entry.dayParent ?: event.parentOwner
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -601,7 +627,7 @@ private fun TimelineRow(
                     .padding(top = 4.dp)
                     .size(12.dp)
                     .clip(CircleShape)
-                    .background(ParentColors.fill(event.parentOwner))
+                    .background(ParentColors.fill(dotSlot))
             )
             if (!isLast) {
                 Box(
@@ -614,19 +640,34 @@ private fun TimelineRow(
             }
         }
         Column(modifier = Modifier.padding(bottom = 6.dp)) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // The mark carries its own description rather than none: an unexplained glyph
+                // is worse than no glyph for anyone not reading the screen, and what it means —
+                // that the co-parent is expected — is not guessable from an exclamation mark.
+                if (event.isImportant) {
+                    Icon(
+                        imageVector = Icons.Default.PriorityHigh,
+                        contentDescription = stringResource(R.string.event_important_mark_description),
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+                Text(
+                    text = event.title,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            val timeLabel = event.startDateTime.format(timelineFormatter)
             Text(
-                text = event.title,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Medium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Text(
-                text = stringResource(
-                    R.string.home_timeline_meta,
-                    event.startDateTime.format(timelineFormatter),
-                    parentNames.labelFor(event.parentOwner)
-                ),
+                text = entry.dayParent
+                    ?.let { stringResource(R.string.home_timeline_meta, timeLabel, parentNames.labelFor(it)) }
+                    ?: timeLabel,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

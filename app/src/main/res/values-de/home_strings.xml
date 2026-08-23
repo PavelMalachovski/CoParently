@@ -26,6 +26,7 @@
     <string name="home_stat_settled">Alles ausgeglichen →</string>
 
     <string name="home_section_this_week">Diese Woche</string>
+    <string name="home_week_empty">In den nächsten sieben Tagen steht nichts an.</string>
     <string name="home_section_recent_changes">Letzte Änderungen</string>
     <string name="home_section_partner_changed">Änderungen von %1$s</string>
 

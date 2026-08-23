@@ -6,10 +6,15 @@ import androidx.lifecycle.viewModelScope
 import com.coparently.app.data.repository.CustodyModelRepository
 import com.coparently.app.domain.chat.ChatReadState
 import com.coparently.app.domain.chat.ConversationKey
+import com.coparently.app.domain.custody.CustodyResolver
+import com.coparently.app.domain.custody.DayOverride
 import com.coparently.app.domain.custody.HandoverCalculator
 import com.coparently.app.domain.custody.HandoverInfo
 import com.coparently.app.domain.expenses.CurrencyBalance
 import com.coparently.app.domain.expenses.calculateExpenseBalancesByCurrency
+import com.coparently.app.domain.home.HomeWeek
+import com.coparently.app.domain.home.WeekEntry
+import com.coparently.app.domain.model.CustodyModel
 import com.coparently.app.domain.model.Event
 import com.coparently.app.domain.model.Expense
 import com.coparently.app.domain.model.PairingState
@@ -135,7 +140,8 @@ sealed interface HomeUiState {
      *
      * @property partner The linked co-parent, used to name the changes feed.
      * @property nextHandover When the child next changes hands, or null with no custody model.
-     * @property upcomingEvents The child's week.
+     * @property week The child's next seven days, each row naming the parent whose day it
+     *   falls on.
      * @property recentChanges What the co-parent changed, newest first.
      * @property monthSpend This month's spending, one subtotal per currency.
      * @property monthBalances This month's settle-up position, per currency.
@@ -144,7 +150,7 @@ sealed interface HomeUiState {
     data class Dashboard(
         val partner: PartnerSummary?,
         val nextHandover: HandoverInfo?,
-        val upcomingEvents: List<Event>,
+        val week: List<WeekEntry>,
         val recentChanges: List<ActivityItem>,
         val monthSpend: MonthSpend,
         val monthBalances: List<CurrencyBalance>,
@@ -227,6 +233,20 @@ class HomeViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), false)
 
     /**
+     * The agreed pattern and the one-off swaps, as one subscription.
+     *
+     * Both the hero and the week ask "whose day is this", so they share the two Room flows
+     * rather than opening them twice. It also makes it structurally impossible for the two
+     * sections of the same screen to answer that question differently.
+     */
+    private val custody: StateFlow<Pair<CustodyModel?, Map<String, DayOverride>>> = combine(
+        custodyModelRepository.getActiveModel(),
+        custodyModelRepository.observeDayOverrides()
+    ) { model, overrides ->
+        model to overrides
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), null to emptyMap())
+
+    /**
      * Next custody handover, or null when no custody model is configured.
      *
      * **Computed with the one-off swaps, not from the pattern alone.** A swap both creates a
@@ -239,28 +259,45 @@ class HomeViewModel @Inject constructor(
      * is no handover time anywhere in the schema — `CustodyModel` carries days, never hours — so
      * an hour here would be invented, and a separated parent would plan around it.
      */
-    private val nextHandover: StateFlow<HandoverInfo?> = combine(
-        custodyModelRepository.getActiveModel(),
-        custodyModelRepository.observeDayOverrides()
-    ) { model, overrides ->
-        model?.let { HandoverCalculator.nextHandoverFrom(it, LocalDate.now(), overrides) }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), null)
+    private val nextHandover: StateFlow<HandoverInfo?> = custody
+        .map { (model, overrides) ->
+            model?.let { HandoverCalculator.nextHandoverFrom(it, LocalDate.now(), overrides) }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), null)
 
     /**
-     * The next [MAX_UPCOMING] events starting from now, within [LOOKAHEAD_DAYS] (private
-     * events included). The dashboard renders these as the "this week" timeline, so the
-     * window is a week rather than the two months the old flat "Upcoming" list looked over —
-     * a dentist appointment seven weeks out is not what "this week" promises.
+     * The child's week: every event in the next [HomeWeek.DAYS] days, each row naming the parent
+     * whose day it falls on.
+     *
+     * This is the screen's centre of gravity now, so it is not capped: it used to show the next
+     * three events under a header that said "this week", which on a busy Monday meant the week
+     * ended on Tuesday with nothing saying so. A week of a child's events is a list a parent can
+     * read.
+     *
+     * The window arithmetic, the private-event filter and the collision-free keys live in the
+     * pure [HomeWeek] so they can be tested without a clock or a repository. Custody is resolved
+     * through [CustodyResolver], the same lookup the calendar grid uses.
      */
-    private val upcomingEvents: StateFlow<List<Event>> = eventRepository
-        .getEventsByDateRange(LocalDateTime.now(), LocalDateTime.now().plusDays(LOOKAHEAD_DAYS))
-        .map { events ->
-            val now = LocalDateTime.now()
-            events.filter { it.startDateTime >= now }
-                .sortedBy { it.startDateTime }
-                .take(MAX_UPCOMING)
-        }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), emptyList())
+    private val week: StateFlow<List<WeekEntry>> = combine(
+        eventRepository.getEventsByDateRange(
+            LocalDateTime.now(),
+            LocalDateTime.now().plusDays(HomeWeek.DAYS)
+        ),
+        custody,
+        _userId
+    ) { events, (model, overrides), userId ->
+        HomeWeek.of(
+            events = events,
+            now = LocalDateTime.now(),
+            userId = userId,
+            // No legacy fallback, deliberately: this ViewModel has never had one — the handover
+            // hero above resolves from the model and the swaps alone — and adding a Room DAO
+            // here to answer for accounts that never migrated off `custody_schedules` would put
+            // a second custody lookup on the screen. An unanswered day leaves the row's parent
+            // unknown, which the row renders as no parent rather than as a guess.
+            custodyFor = CustodyResolver.resolver(model, overrides, legacy = { null })
+        )
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), emptyList())
 
     /**
      * Expenses dated in the current calendar month. Shared by [monthSpend] and
@@ -405,18 +442,18 @@ class HomeViewModel @Inject constructor(
      * to pair. Each source seeding itself keeps that from happening.
      */
     private val dashboard: StateFlow<HomeUiState.Dashboard> = combine(
-        combine(partner, nextHandover, upcomingEvents) { coParent, handover, events ->
-            Triple(coParent, handover, events)
+        combine(partner, nextHandover, week) { coParent, handover, weekRows ->
+            Triple(coParent, handover, weekRows)
         },
         combine(monthSpend, monthBalances, unreadCount) { spend, balances, unread ->
             Triple(spend, balances, unread)
         },
         recentChanges
-    ) { (coParent, handover, events), (spend, balances, unread), changes ->
+    ) { (coParent, handover, weekRows), (spend, balances, unread), changes ->
         HomeUiState.Dashboard(
             partner = coParent,
             nextHandover = handover,
-            upcomingEvents = events,
+            week = weekRows,
             recentChanges = changes,
             monthSpend = spend,
             monthBalances = balances,
@@ -475,7 +512,7 @@ class HomeViewModel @Inject constructor(
         val EMPTY_DASHBOARD = HomeUiState.Dashboard(
             partner = null,
             nextHandover = null,
-            upcomingEvents = emptyList(),
+            week = emptyList(),
             recentChanges = emptyList(),
             monthSpend = MonthSpend(listOf(CurrencyAmount(SupportedCurrency.DEFAULT.code, 0.0))),
             monthBalances = emptyList(),
@@ -483,8 +520,6 @@ class HomeViewModel @Inject constructor(
         )
 
         const val MAX_ITEMS = 5
-        const val MAX_UPCOMING = 3
-        const val LOOKAHEAD_DAYS = 7L
         const val STOP_TIMEOUT_MS = 5000L
         const val TAG = "HomeViewModel"
         val NEAR_THRESHOLD: Duration = Duration.ofSeconds(2)
