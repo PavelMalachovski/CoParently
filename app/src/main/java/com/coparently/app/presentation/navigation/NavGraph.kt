@@ -38,6 +38,7 @@ import com.coparently.app.presentation.childinfo.ChildInfoScreen
 import com.coparently.app.presentation.common.animations.*
 import com.coparently.app.presentation.event.AddEditEventScreen
 import com.coparently.app.presentation.event.EventListScreen
+import com.coparently.app.presentation.onboarding.OnboardingScreen
 import com.coparently.app.presentation.pairing.PairingScreen
 import com.coparently.app.presentation.settings.SettingsScreen
 import com.coparently.app.presentation.sync.AuthStateViewModel
@@ -79,13 +80,20 @@ fun NavGraph(
     val authStateViewModel: AuthStateViewModel = hiltViewModel()
     val isAuthenticated by authStateViewModel.isAuthenticated.collectAsState()
     val isLoading by authStateViewModel.isLoading.collectAsState()
+    val needsOnboarding by authStateViewModel.needsOnboarding.collectAsState()
     val chatUnreadCount = rememberChatUnreadCount()
 
-    // Determine start destination based on authentication state
+    // Determine start destination based on authentication state, and — for a signed-in account
+    // — on whether the first-run questionnaire still has to run. That second answer is a Room
+    // read, so it is unknown for a moment after authentication resolves; while it is unknown
+    // this must stay on Loading. Routing an unknown answer to Home would flash the dashboard
+    // and then replace it with a questionnaire, which is worse than a moment's spinner.
     val startDestination = when {
         isLoading -> Screen.Loading.route
-        isAuthenticated == true -> Screen.Home.route
-        else -> Screen.Auth.route
+        isAuthenticated != true -> Screen.Auth.route
+        needsOnboarding == null -> Screen.Loading.route
+        needsOnboarding == true -> Screen.Onboarding.route
+        else -> Screen.Home.route
     }
 
     PairingDeepLinkEffect(pendingPairingCode, isAuthenticated, navController, onPairingCodeConsumed)
@@ -123,6 +131,23 @@ fun NavGraph(
                 LoadingScreen()
             }
 
+            // The first-run questionnaire, for an account that has not been through it.
+            composable(
+                route = Screen.Onboarding.route,
+                enterTransition = { fadeIn() },
+                exitTransition = { fadeOut() }
+            ) {
+                OnboardingScreen(
+                    onFinished = {
+                        navController.navigate(Screen.Home.route) {
+                            popUpTo(Screen.Onboarding.route) { inclusive = true }
+                        }
+                    },
+                    onOpenCustodySetup = { navController.navigate(Screen.CustodySetup.route) },
+                    onOpenPairing = { navController.navigate(Screen.Pairing.routeWithCode(null)) }
+                )
+            }
+
             // Authentication screen for unauthenticated users
             composable(
                 route = Screen.Auth.route,
@@ -131,9 +156,13 @@ fun NavGraph(
             ) {
                 AuthScreen(
                     onAuthSuccess = {
-                        // Refresh auth state and navigate to main app
+                        // Re-runs the whole start-destination decision, questionnaire included,
+                        // and parks on Loading until it resolves. Navigating straight to Home
+                        // here — as this did — is what would let a parent who signed up in this
+                        // very session never see the wizard at all: the start-destination
+                        // decision above resolves once per authentication check, not per frame.
                         authStateViewModel.refreshAuthState()
-                        navController.navigate(Screen.Home.route) {
+                        navController.navigate(Screen.Loading.route) {
                             popUpTo(Screen.Auth.route) { inclusive = true }
                         }
                     },
@@ -885,6 +914,13 @@ private fun LoadingScreen() {
 sealed class Screen(val route: String) {
     data object Loading : Screen("loading")
     data object Auth : Screen("auth")
+
+    /**
+     * The first-run questionnaire. Deliberately absent from
+     * [BottomNavDestination.topLevelRoutes]: the bottom bar hides itself for any route not
+     * listed there, which is exactly what a wizard wants.
+     */
+    data object Onboarding : Screen("onboarding")
     data object Home : Screen("home")
     data object Calendar : Screen("calendar")
     data object EventList : Screen("event_list")
