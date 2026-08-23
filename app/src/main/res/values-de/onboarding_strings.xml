@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- German translations of onboarding_strings.xml. -->
+<resources>
+    <string name="onboarding_title">Einrichtung</string>
+    <string name="onboarding_progress">Schritt %1$d von %2$d</string>
+    <string name="onboarding_next">Weiter</string>
+    <string name="onboarding_back">Zurück</string>
+    <string name="onboarding_skip">Überspringen</string>
+    <string name="onboarding_finish">Fertig</string>
+    <string name="onboarding_intro_title">Ein paar Fragen, bevor du loslegst</string>
+    <string name="onboarding_intro_body">CoPlanly kann die Angaben deiner Familie aufbewahren, damit derjenige, der gerade bei deinem Kind ist, handeln kann, wenn etwas Unerwartetes passiert — eine Blutgruppe, eine Allergie, die Telefonnummer der Großmutter.\n\nAlles davon ist freiwillig außer deinem Namen, und du kannst es später in den Einstellungen ergänzen.</string>
+    <string name="onboarding_footnote">Für dich und deinen Co-Elternteil aufbewahrt, für den Notfall.</string>
+    <string name="onboarding_profile_title">Über dich</string>
+    <string name="onboarding_profile_name_required">Dein Name ist das Einzige, was die App braucht — er steht an jedem Termin und jeder Ausgabe.</string>
+    <string name="onboarding_child_title">Über dein Kind</string>
+    <string name="onboarding_child_body">Medikamente, Aktivitäten und Angaben zur Schule kannst du später in den Einstellungen ergänzen.</string>
+    <string name="onboarding_relatives_title">Wer helfen kann</string>
+    <string name="onboarding_relatives_body">Oma, Opa, Tante, Onkel — jeder, der dein Kind abholen könnte oder im Notfall angerufen wird.</string>
+    <string name="onboarding_relatives_needs_child">Diese Kontakte werden bei deinem Kind gespeichert, füge also zuerst dein Kind hinzu — geh einen Schritt zurück oder ergänze sie später in den Einstellungen.</string>
+    <string name="onboarding_custody_title">Euer Betreuungsplan</string>
+    <string name="onboarding_custody_body">Lege fest, an welchen Tagen dein Kind bei wem von euch ist. Du kannst das jederzeit ändern, und dein Co-Elternteil muss der Änderung zustimmen.</string>
+    <string name="onboarding_custody_open">Plan einrichten</string>
+    <string name="onboarding_coparent_title">Lade deinen Co-Elternteil ein</string>
+    <string name="onboarding_coparent_body">Schick ihm einen Link oder einen Code. Sobald er dabei ist, sieht er alles, was du hier ausgefüllt hast, und kann es ergänzen.</string>
+    <string name="onboarding_coparent_open">Einladung senden</string>
+</resources>

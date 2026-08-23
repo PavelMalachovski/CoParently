@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- First-run questionnaire. The footnote is the reason the questionnaire is acceptable at all:
+     it says the details are kept for the family's own benefit. It must not claim the data is
+     encrypted (it is not) and must not claim only the user can see it (the co-parent can, by
+     design). -->
+<resources>
+    <string name="onboarding_title">Getting set up</string>
+    <string name="onboarding_progress">Step %1$d of %2$d</string>
+    <string name="onboarding_next">Next</string>
+    <string name="onboarding_back">Back</string>
+    <string name="onboarding_skip">Skip</string>
+    <string name="onboarding_finish">Finish</string>
+    <string name="onboarding_intro_title">A few questions before you start</string>
+    <string name="onboarding_intro_body">CoPlanly can hold your family\'s details so that whoever is with your child can act if something unexpected happens — a blood group, an allergy, a grandparent\'s phone number.\n\nAll of it is optional except your name, and you can fill it in later from Settings.</string>
+    <string name="onboarding_footnote">Kept for you and your co-parent, in case of an emergency.</string>
+    <string name="onboarding_profile_title">About you</string>
+    <string name="onboarding_profile_name_required">Your name is the one thing the app needs — it labels every event and expense.</string>
+    <string name="onboarding_child_title">About your child</string>
+    <string name="onboarding_child_body">You can add medications, activities and school details later, from Settings.</string>
+    <string name="onboarding_relatives_title">People who can help</string>
+    <string name="onboarding_relatives_body">A grandparent, an aunt, an uncle — anyone who might collect your child or be called in an emergency.</string>
+    <string name="onboarding_relatives_needs_child">These contacts are saved with your child, so add your child first — go back a step, or add them later from Settings.</string>
+    <string name="onboarding_custody_title">Your custody schedule</string>
+    <string name="onboarding_custody_body">Set out which days your child is with each of you. You can change it at any time, and your co-parent has to agree to a change.</string>
+    <string name="onboarding_custody_open">Set up the schedule</string>
+    <string name="onboarding_coparent_title">Invite your co-parent</string>
+    <string name="onboarding_coparent_body">Send them a link or a code. Once they join, they will see everything you have filled in here and can add to it.</string>
+    <string name="onboarding_coparent_open">Send an invitation</string>
+</resources>
