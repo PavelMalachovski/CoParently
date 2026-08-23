@@ -512,10 +512,14 @@ class CustodyModelRepository(
      * needs somebody to accept it, and an unpaired parent moving their own day is an edit the
      * custody editor already does.
      *
+     * @param date The ISO date this write touches. Named rather than derived because
+     *   `firestore.rules` requires the document to carry it: Rules cannot iterate a map, so the
+     *   write names its one date and the rule checks the diff affects only that key.
      * @param transform The transition to apply, from [DayOverrideTransition].
      * @return The applied map, or the transition's own failure.
      */
     suspend fun applyDayOverrides(
+        date: String,
         transform: (Map<String, DayOverride>) -> Result<Map<String, DayOverride>>
     ): Result<Map<String, DayOverride>> {
         val pair = currentPair()
@@ -531,6 +535,7 @@ class CustodyModelRepository(
                 custody = existing.copy(
                     lastModifiedBy = pair.myUid,
                     dayOverrides = next,
+                    lastSwapDate = date,
                     lastModifiedKind = CustodyWriteKind.SWAP
                 )
             )

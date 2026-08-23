@@ -28,6 +28,10 @@ import com.coparently.app.domain.model.CustodyModel
  * @property dayOverrides One-off day swaps keyed by ISO date. Absent from the document reads as
  *   an empty map, never null: every document written before this field existed has no such key,
  *   and a null would make every caller test for two shapes of "none". See [DayOverride].
+ * @property lastSwapDate The ISO date the last swap write touched, or null when the last write
+ *   was not a swap. It exists for `firestore.rules`: Rules cannot iterate a map, so a swap write
+ *   names the one date it changes and the rule then requires the diff to affect only that key —
+ *   which makes naming the wrong date self-defeating rather than merely useless.
  * @property lastModifiedKind What the last write to this document actually changed. It exists
  *   because `firestore.rules` requires every update to stamp [lastModifiedBy] with the caller,
  *   so a swap write cannot leave the field alone — and without this marker the co-parent's
@@ -43,6 +47,7 @@ data class SharedCustody(
     val proposal: CustodyProposal? = null,
     val lastDecision: CustodyDecision? = null,
     val dayOverrides: Map<String, DayOverride> = emptyMap(),
+    val lastSwapDate: String? = null,
     val lastModifiedKind: CustodyWriteKind = CustodyWriteKind.PATTERN
 )
 

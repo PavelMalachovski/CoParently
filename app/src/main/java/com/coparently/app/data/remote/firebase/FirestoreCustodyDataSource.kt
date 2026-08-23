@@ -133,6 +133,10 @@ class FirestoreCustodyDataSource @Inject constructor(
             if (dayOverrides.isNotEmpty()) {
                 put("dayOverrides", dayOverrides.mapValues { (_, o) -> o.toMap() })
             }
+            // Required by `firestore.rules` on any write that changes `dayOverrides`: Rules
+            // cannot iterate a map, so the write names the one date it touches and the rule
+            // checks the diff affects only that key.
+            lastSwapDate?.let { put("lastSwapDate", it) }
             put("lastModifiedKind", lastModifiedKind.name)
         }
 
@@ -210,6 +214,7 @@ class FirestoreCustodyDataSource @Inject constructor(
             proposal = (this["proposal"] as? Map<*, *>)?.toProposal(documentId),
             lastDecision = (this["lastDecision"] as? Map<*, *>)?.toDecision(),
             dayOverrides = (this["dayOverrides"] as? Map<*, *>).toDayOverrides(),
+            lastSwapDate = (this["lastSwapDate"] as? String)?.takeIf { it.isNotBlank() },
             // A document written before this field existed only ever carried pattern writes, so
             // PATTERN is the honest default rather than a convenient one. An unrecognised value
             // from a newer build lands there too: announcing a change that did happen is the
