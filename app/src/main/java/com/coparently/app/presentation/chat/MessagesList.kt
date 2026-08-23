@@ -39,6 +39,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
@@ -270,14 +271,19 @@ private fun DaySeparator(date: LocalDate) {
 /**
  * One message bubble.
  *
- * The timestamp and delivery receipt sit *below* the bubble rather than inside it: in the tail of
- * a 10sp label on a filled primary background they were borderline for contrast, and they pushed
- * every bubble wider than its text needed.
+ * The timestamp and delivery receipt sit *inside* the bubble, hugging its bottom-end corner —
+ * the messenger convention, adopted in the August 2026 second pass. The first pass had moved
+ * them below the bubble over a contrast worry, but that worry belonged to the old 10sp tail:
+ * this meta renders at labelSmall in `onPrimary` at [META_ALPHA], which stays comfortably
+ * readable on the filled primary bubble, and bottom-aligning it beside the last line keeps the
+ * bubble no wider than its text plus one small trailer. The one state that stays *outside* is
+ * a failed send: "failed to send" must shout in `error` red, and error-on-primary is exactly
+ * the pairing that fails, so it renders as its own line under the bubble.
  *
  * @param message The message
  * @param isCurrentUser Whether this parent sent it, which sides and colours the bubble
  * @param startsGroup First of a run by the same sender — takes the larger top gap
- * @param endsGroup Last of a run — the only one showing a timestamp and receipt
+ * @param endsGroup Last of a run — carries the tail corner
  * @param onEventLinkClick Handler for tapping a change-request card, given the linked event id,
  *   or null to render such cards inert
  */
@@ -327,12 +333,14 @@ fun MessageItem(
         Row(
             modifier = Modifier
                 .widthIn(max = BUBBLE_MAX_WIDTH)
-                .clip(bubbleShape(isCurrentUser, startsGroup))
+                .clip(bubbleShape(isCurrentUser, startsGroup, endsGroup))
                 .background(
                     if (isCurrentUser) {
                         MaterialTheme.colorScheme.primary
                     } else {
-                        MaterialTheme.colorScheme.surfaceVariant
+                        // A step above the day pill's surfaceContainer, so a bubble and a
+                        // separator never read as the same kind of surface.
+                        MaterialTheme.colorScheme.surfaceContainerHigh
                     }
                 )
                 .then(
@@ -345,8 +353,10 @@ fun MessageItem(
                         Modifier
                     }
                 )
-                .padding(horizontal = 14.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            // Bottom, not centre: the meta trailer sits beside the *last* line of a
+            // multi-line message, hugging the bubble's bottom-end corner.
+            verticalAlignment = Alignment.Bottom
         ) {
             Text(
                 text = bubbleText,
@@ -363,7 +373,7 @@ fun MessageItem(
                     imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                     contentDescription = null,
                     modifier = Modifier
-                        .padding(start = 6.dp)
+                        .padding(start = 4.dp)
                         .size(RECEIPT_ICON_SIZE * CHEVRON_SCALE),
                     tint = if (isCurrentUser) {
                         MaterialTheme.colorScheme.onPrimary
@@ -372,49 +382,19 @@ fun MessageItem(
                     }
                 )
             }
-        }
-
-        if (endsGroup) {
-            Row(
-                modifier = Modifier.padding(top = 2.dp, start = 4.dp, end = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(3.dp)
-            ) {
-                Text(
-                    text = formatSentAt(message.sentAtMillis, timeFormatter),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                if (isCurrentUser) DeliveryReceipt(message)
-            }
-        }
-    }
-}
-
-/**
- * Sending / failed / sent / delivered / read, as an icon rather than a sentence.
- *
- * The state is real: `ChatViewModel` promotes a SENT message to DELIVERED or READ from the
- * conversation's per-user marks (`ChatReadState.statusFor`), so a delivered-but-unread message is
- * distinguishable from one the co-parent has actually opened.
- *
- * This `when` must handle every [MessageSendStatus] — the compiler rejects it as non-exhaustive
- * otherwise. One check for SENT, two muted for DELIVERED, two in `colorScheme.primary` for READ —
- * never Mom-pink/Dad-blue, which are parent identity colours, not status colours.
- */
-@Composable
-private fun DeliveryReceipt(message: Message) {
-    when (message.status) {
-        MessageSendStatus.SENDING -> {
-            Icon(
-                imageVector = Icons.Default.Schedule,
-                contentDescription = stringResource(R.string.chat_status_sending),
-                modifier = Modifier.size(RECEIPT_ICON_SIZE),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            BubbleMeta(
+                message = message,
+                isCurrentUser = isCurrentUser,
+                modifier = Modifier.padding(start = 8.dp)
             )
         }
-        MessageSendStatus.ERROR -> {
+
+        // The one delivery state loud enough to leave the bubble: error red on the filled
+        // primary background is the contrast pairing that fails, so a failed send says so
+        // on the surface below instead.
+        if (isCurrentUser && message.status == MessageSendStatus.ERROR) {
             Row(
+                modifier = Modifier.padding(top = 2.dp, start = 4.dp, end = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(3.dp)
             ) {
@@ -431,12 +411,89 @@ private fun DeliveryReceipt(message: Message) {
                 )
             }
         }
+    }
+}
+
+/**
+ * The in-bubble trailer: sent time, and (on an outgoing message) the delivery receipt.
+ *
+ * On the primary bubble the trailer renders in `onPrimary` at [META_ALPHA] — present but a
+ * step quieter than the message itself — and the READ receipt comes back to full `onPrimary`,
+ * so "read" is visibly brighter than "delivered" the way messengers signal it. A failed
+ * send shows its time here but keeps its receipt outside the bubble (see [MessageItem]).
+ */
+@Composable
+private fun BubbleMeta(
+    message: Message,
+    isCurrentUser: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val metaColor = if (isCurrentUser) {
+        MaterialTheme.colorScheme.onPrimary.copy(alpha = META_ALPHA)
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    }
+    Row(
+        modifier = modifier,
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(3.dp)
+    ) {
+        Text(
+            text = formatSentAt(message.sentAtMillis, timeFormatter),
+            style = MaterialTheme.typography.labelSmall,
+            color = metaColor
+        )
+        if (isCurrentUser && message.status != MessageSendStatus.ERROR) {
+            DeliveryReceipt(
+                message = message,
+                baseTint = metaColor,
+                readTint = MaterialTheme.colorScheme.onPrimary
+            )
+        }
+    }
+}
+
+/**
+ * Sending / sent / delivered / read, as an icon rather than a sentence.
+ *
+ * The state is real: `ChatViewModel` promotes a SENT message to DELIVERED or READ from the
+ * conversation's per-user marks (`ChatReadState.statusFor`), so a delivered-but-unread message is
+ * distinguishable from one the co-parent has actually opened.
+ *
+ * This `when` must handle every [MessageSendStatus] — the compiler rejects it as non-exhaustive
+ * otherwise. [BubbleMeta] never calls this for ERROR (a failed send renders its own loud row
+ * under the bubble), so that branch is a defensive no-frills glyph rather than a reachable state.
+ *
+ * Tints are taken as parameters because the receipt now lives *inside* the primary-filled
+ * bubble: SENDING/SENT/DELIVERED render in [baseTint] (the quiet meta colour), READ in
+ * [readTint] (full brightness) — never Mom-pink/Dad-blue, which are parent identity colours,
+ * not status colours.
+ */
+@Composable
+private fun DeliveryReceipt(message: Message, baseTint: Color, readTint: Color) {
+    when (message.status) {
+        MessageSendStatus.SENDING -> {
+            Icon(
+                imageVector = Icons.Default.Schedule,
+                contentDescription = stringResource(R.string.chat_status_sending),
+                modifier = Modifier.size(RECEIPT_ICON_SIZE),
+                tint = baseTint
+            )
+        }
+        MessageSendStatus.ERROR -> {
+            Icon(
+                imageVector = Icons.Default.Error,
+                contentDescription = stringResource(R.string.chat_status_error),
+                modifier = Modifier.size(RECEIPT_ICON_SIZE),
+                tint = baseTint
+            )
+        }
         MessageSendStatus.SENT -> {
             Icon(
                 imageVector = Icons.Default.Check,
                 contentDescription = stringResource(R.string.chat_status_sent),
                 modifier = Modifier.size(RECEIPT_ICON_SIZE),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                tint = baseTint
             )
         }
         MessageSendStatus.DELIVERED -> {
@@ -444,7 +501,7 @@ private fun DeliveryReceipt(message: Message) {
                 imageVector = Icons.Default.DoneAll,
                 contentDescription = stringResource(R.string.chat_status_delivered),
                 modifier = Modifier.size(RECEIPT_ICON_SIZE),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                tint = baseTint
             )
         }
         MessageSendStatus.READ -> {
@@ -452,7 +509,7 @@ private fun DeliveryReceipt(message: Message) {
                 imageVector = Icons.Default.DoneAll,
                 contentDescription = stringResource(R.string.chat_status_read),
                 modifier = Modifier.size(RECEIPT_ICON_SIZE),
-                tint = MaterialTheme.colorScheme.primary
+                tint = readTint
             )
         }
     }
@@ -461,41 +518,60 @@ private fun DeliveryReceipt(message: Message) {
 /**
  * Bubble corners.
  *
- * The two corners on the far side from the sender stay fully round. On the sender's own side the
- * bottom corner is always tight — that is the tail the original design already had — and the top
- * corner is only round on the first bubble of a run, so consecutive messages stack into one block
- * instead of a column of identical lozenges.
+ * The two corners on the far side from the sender stay fully round. On the sender's own side
+ * the corners between adjacent bubbles of one run are the mid radius, so the run stacks into
+ * one visual block; the run's *last* bubble alone takes the tight tail corner, which is what
+ * points the block at its sender. A lone message is both first and last, so it gets the round
+ * top and the tail.
  *
  * @param isCurrentUser Which side the bubble sits on
  * @param startsGroup Whether this is the first bubble of a run by the same sender
+ * @param endsGroup Whether this is the last bubble of a run — the tail's owner
  */
-private fun bubbleShape(isCurrentUser: Boolean, startsGroup: Boolean): RoundedCornerShape {
-    val innerTop = if (startsGroup) CORNER_ROUND else CORNER_TIGHT
+private fun bubbleShape(
+    isCurrentUser: Boolean,
+    startsGroup: Boolean,
+    endsGroup: Boolean
+): RoundedCornerShape {
+    val innerTop = if (startsGroup) CORNER_ROUND else CORNER_MID
+    val innerBottom = if (endsGroup) CORNER_TAIL else CORNER_MID
     return if (isCurrentUser) {
         RoundedCornerShape(
             topStart = CORNER_ROUND,
             topEnd = innerTop,
             bottomStart = CORNER_ROUND,
-            bottomEnd = CORNER_TIGHT
+            bottomEnd = innerBottom
         )
     } else {
         RoundedCornerShape(
             topStart = innerTop,
             topEnd = CORNER_ROUND,
-            bottomStart = CORNER_TIGHT,
+            bottomStart = innerBottom,
             bottomEnd = CORNER_ROUND
         )
     }
 }
 
 /** Fully rounded bubble corner. */
-private val CORNER_ROUND = 16.dp
+private val CORNER_ROUND = 18.dp
 
-/** Squared-off bubble corner on the sender's own side. */
-private val CORNER_TIGHT = 4.dp
+/** Sender-side corner between two adjacent bubbles of one run. */
+private val CORNER_MID = 6.dp
+
+/** The tail: the tight sender-side bottom corner on the last bubble of a run. */
+private val CORNER_TAIL = 4.dp
 
 /** Widest a bubble may grow before its text wraps. */
-private val BUBBLE_MAX_WIDTH = 280.dp
+private val BUBBLE_MAX_WIDTH = 300.dp
+
+/**
+ * Opacity of the in-bubble meta (time and non-READ receipts) on an outgoing bubble.
+ *
+ * `onPrimary` is white on the indigo primary — a very high-contrast pairing — so even at this
+ * alpha the labelSmall trailer clears readable contrast while sitting a step behind the
+ * message text; READ receipts come back to full opacity so "read" is visibly brighter.
+ */
+private const val META_ALPHA = 0.78f
 
 /** Size of the delivery-receipt glyph under an outgoing bubble. */
 private val RECEIPT_ICON_SIZE = 13.dp
