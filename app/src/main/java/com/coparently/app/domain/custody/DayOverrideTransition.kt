@@ -12,13 +12,16 @@ package com.coparently.app.domain.custody
  * transition is a real outcome the UI has to show, and a silent no-op is the invisible change
  * this whole family of features exists to remove.
  *
- * **A swap write leaves the pattern, `SharedCustody.lastModifiedBy` and
- * `SharedCustody.lastModifiedAt` exactly as they were.** That is not tidiness. `lastModifiedBy`
- * is what `CustodyChangeAnnouncement` compares against the reader's own uid to ignore the echo of
- * its own write, and `lastModifiedAt` is what `CustodyModelRepository.isNewer` uses to decide
- * which phone's document survives — a comparison that then *re-pushes the winner over the loser*.
- * Re-dating the document for a swap would make this device win every future comparison, which is
- * why an override is never allowed to touch either field.
+ * **A swap write leaves the pattern and `SharedCustody.lastModifiedAt` exactly as they were.**
+ * That is not tidiness: `lastModifiedAt` is what `CustodyModelRepository.isNewer` uses to decide
+ * which phone's document survives — a comparison that then *re-pushes the winner over the loser*
+ * — so re-dating the document for a swap would make this device win every future comparison.
+ *
+ * `lastModifiedBy` is the one field a swap cannot leave alone: `firestore.rules` requires every
+ * update to stamp it with the caller. That is why the document also carries
+ * [SharedCustody.lastModifiedKind] — `CustodyChangeAnnouncement` reads `lastModifiedBy` to decide
+ * whether the co-parent changed the agreed schedule, and without the marker every offer and every
+ * answer would raise that banner about a day nobody has agreed to.
  */
 object DayOverrideTransition {
 

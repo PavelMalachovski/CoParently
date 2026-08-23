@@ -348,6 +348,19 @@ object DatabaseMigrations {
     }
 
     /**
+     * Mirrors the pair's one-off day swaps into Room, so the calendar can paint them offline.
+     *
+     * A single nullable column, so the migration cannot lose anything it does not touch. Null on
+     * every existing row is the correct starting state: no pair has ever had a swap, and the
+     * repository reads a null column back as an empty map rather than as a distinct third state.
+     */
+    val MIGRATION_15_16 = object : Migration(15, 16) {
+        override fun migrate(database: SupportSQLiteDatabase) {
+            database.execSQL("ALTER TABLE custody_models ADD COLUMN dayOverridesJson TEXT")
+        }
+    }
+
+    /**
      * List of all migrations in order.
      */
     val ALL_MIGRATIONS = arrayOf(
@@ -360,6 +373,7 @@ object DatabaseMigrations {
         MIGRATION_11_12,
         MIGRATION_12_13,
         MIGRATION_13_14,
-        MIGRATION_14_15
+        MIGRATION_14_15,
+        MIGRATION_15_16
     )
 }

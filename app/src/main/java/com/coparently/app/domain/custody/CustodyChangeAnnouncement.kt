@@ -39,6 +39,12 @@ object CustodyChangeAnnouncement {
      * - [shared]'s [SharedCustody.lastModifiedAt] equals [dismissedLastModifiedAt] — the user
      *   already acknowledged this exact change. A later change carries a different
      *   `lastModifiedAt` and is announced again.
+     * - [shared]'s [SharedCustody.lastModifiedKind] is [CustodyWriteKind.SWAP] — the last write
+     *   offered or answered a **one-off day swap** and changed no pattern. `firestore.rules`
+     *   requires every update to stamp `lastModifiedBy` with its caller, so such a write cannot
+     *   leave that field alone; without this clause the co-parent's device would read the stamp
+     *   as a pattern change and announce a schedule change that never happened. A swap has its
+     *   own channel — the change-request inbox, and the arrows the grid draws on that date.
      *
      * Otherwise [shared] is returned unchanged — including when `lastModifiedBy` matches
      * neither parent. Naming who changed it is a separate question the caller answers by
@@ -57,6 +63,7 @@ object CustodyChangeAnnouncement {
         dismissedLastModifiedAt: String?
     ): SharedCustody? {
         if (shared == null || !parentsLoaded) return null
+        if (shared.lastModifiedKind == CustodyWriteKind.SWAP) return null
         val isOwnWrite = myUid != null && shared.lastModifiedBy == myUid
         val isAlreadyDismissed = shared.lastModifiedAt == dismissedLastModifiedAt
         return shared.takeUnless { isOwnWrite || isAlreadyDismissed }

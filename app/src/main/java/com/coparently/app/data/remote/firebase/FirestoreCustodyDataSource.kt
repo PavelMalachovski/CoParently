@@ -3,6 +3,9 @@ package com.coparently.app.data.remote.firebase
 import com.coparently.app.domain.custody.CustodyDecision
 import com.coparently.app.domain.custody.CustodyDecisionOutcome
 import com.coparently.app.domain.custody.CustodyProposal
+import com.coparently.app.domain.custody.CustodyWriteKind
+import com.coparently.app.domain.custody.DayOverride
+import com.coparently.app.domain.custody.DayOverrideStatus
 import com.coparently.app.domain.custody.SharedCustody
 import com.coparently.app.domain.model.CustodyModel
 import com.coparently.app.domain.model.CustodyModelType
@@ -125,7 +128,27 @@ class FirestoreCustodyDataSource @Inject constructor(
             // nothing.
             proposal?.let { put("proposal", it.toMap()) }
             lastDecision?.let { put("lastDecision", it.toMap()) }
+            // Same omit-rather-than-null rule as the two above, and for the same reason: this is
+            // a whole-document `set()`, so leaving the key out is what clears the last swap.
+            if (dayOverrides.isNotEmpty()) {
+                put("dayOverrides", dayOverrides.mapValues { (_, o) -> o.toMap() })
+            }
+            put("lastModifiedKind", lastModifiedKind.name)
         }
+
+    /**
+     * One day's swap as a sub-map. `note` and the two decision fields are omitted when absent
+     * rather than written as null, matching every other sub-map in this document.
+     */
+    private fun DayOverride.toMap(): Map<String, Any> = buildMap {
+        put("toParent", toParent)
+        put("requestedBy", requestedBy)
+        put("requestedAt", requestedAt)
+        put("status", status.name)
+        decidedBy?.let { put("decidedBy", it) }
+        decidedAt?.let { put("decidedAt", it) }
+        note?.let { put("note", it) }
+    }
 
     /** The proposal as a sub-map; `momDayIndices` is a real array, like the pattern's. */
     private fun CustodyProposal.toMap(): Map<String, Any> = mapOf(
@@ -185,7 +208,49 @@ class FirestoreCustodyDataSource @Inject constructor(
             createdAt = (this["createdAt"] as? String).orEmpty(),
             repeatYearly = this["repeatYearly"] as? Boolean ?: true,
             proposal = (this["proposal"] as? Map<*, *>)?.toProposal(documentId),
-            lastDecision = (this["lastDecision"] as? Map<*, *>)?.toDecision()
+            lastDecision = (this["lastDecision"] as? Map<*, *>)?.toDecision(),
+            dayOverrides = (this["dayOverrides"] as? Map<*, *>).toDayOverrides(),
+            // A document written before this field existed only ever carried pattern writes, so
+            // PATTERN is the honest default rather than a convenient one. An unrecognised value
+            // from a newer build lands there too: announcing a change that did happen is the
+            // safe side of that error, and silence is the side this product cannot afford.
+            lastModifiedKind = (this["lastModifiedKind"] as? String)
+                ?.let { name -> CustodyWriteKind.entries.firstOrNull { it.name == name } }
+                ?: CustodyWriteKind.PATTERN
+        )
+    }
+
+    /**
+     * The one-off swaps, keyed by ISO date. Absent reads as an empty map, never null.
+     *
+     * An entry that cannot describe a swap is **dropped**, not defaulted — the same rule the
+     * proposal sub-map follows, and it matters more here: a half-parsed override silently moves a
+     * child to the wrong parent on the calendar both parents plan around. An unrecognised status
+     * from a newer build is dropped for the same reason, rather than being read as ACCEPTED.
+     */
+    private fun Map<*, *>?.toDayOverrides(): Map<String, DayOverride> =
+        this.orEmpty().entries.mapNotNull { (key, value) ->
+            val date = (key as? String)?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            val entry = (value as? Map<*, *>)?.toDayOverride() ?: return@mapNotNull null
+            date to entry
+        }.toMap()
+
+    /** One swap sub-map, or null when it cannot describe a swap this build understands. */
+    private fun Map<*, *>.toDayOverride(): DayOverride? {
+        val toParent = (this["toParent"] as? String)?.takeIf { it.isNotBlank() } ?: return null
+        val requestedBy = (this["requestedBy"] as? String)?.takeIf { it.isNotBlank() } ?: return null
+        val status = (this["status"] as? String)
+            ?.let { name -> DayOverrideStatus.entries.firstOrNull { it.name == name } }
+            ?: return null
+
+        return DayOverride(
+            toParent = toParent,
+            requestedBy = requestedBy,
+            requestedAt = (this["requestedAt"] as? String).orEmpty(),
+            status = status,
+            decidedBy = (this["decidedBy"] as? String)?.takeIf { it.isNotBlank() },
+            decidedAt = (this["decidedAt"] as? String)?.takeIf { it.isNotBlank() },
+            note = (this["note"] as? String)?.takeIf { it.isNotBlank() }
         )
     }
 

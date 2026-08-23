@@ -19,6 +19,9 @@ import androidx.room.PrimaryKey
  * @property repeatYearly Whether this pattern repeats yearly (always true for MVP)
  * @property createdAt ISO date-time string when this model was created
  * @property lastModifiedAt ISO date-time string when this model was last modified
+ * @property dayOverridesJson JSON object of one-off day swaps keyed by ISO date, mirroring the
+ * shared document's `dayOverrides`; null on a row that predates the field and on any row that
+ * has never carried a swap
  */
 @Entity(tableName = "custody_models")
 data class CustodyModelEntity(
@@ -31,5 +34,11 @@ data class CustodyModelEntity(
     val isActive: Boolean = true,
     val repeatYearly: Boolean = true,
     val createdAt: String,
-    val lastModifiedAt: String
+    val lastModifiedAt: String,
+    /**
+     * JSON object of one-off day swaps keyed by ISO date, mirroring the shared document's
+     * `dayOverrides`. Null means "none recorded" — including on every row written before this
+     * column existed — and reads back as an empty map, never as a second shape of "none".
+     */
+    val dayOverridesJson: String? = null
 )
