@@ -48,11 +48,11 @@
 
 **Resolve the schema version by reading `CoPlanlyDatabase`.**
 
-- [ ] **Step 1: Write the failing test** — the list survives all six map sites; a document written before this change reads as an empty list, not null.
-- [ ] **Step 2: Run it; expect failure.**
-- [ ] **Step 3: Add the field, the column, the migration; carry it through all six sites.** Report which you found.
-- [ ] **Step 4: Add a migration test case; run it on the device.**
-- [ ] **Step 5: Commit** — `feat(childinfo): carry several medical photographs, not one`
+- [x] **Step 1: Write the failing test** — the list survives all six map sites; a document written before this change reads as an empty list, not null.
+- [x] **Step 2: Run it; expect failure.**
+- [x] **Step 3: Add the field, the column, the migration; carry it through all six sites.** Report which you found.
+- [~] **Step 4: Add a migration test case; run it on the device.**
+- [x] **Step 5: Commit** — `feat(childinfo): carry several medical photographs, not one`
 
 ---
 
@@ -70,10 +70,10 @@ Path `medical_photos/{childInfoId}/{photoId}.jpg`, `photoId` a UUID. The existin
 
 Keep the 5 MB and `image/jpeg` constraints the neighbouring blocks impose.
 
-- [ ] **Step 1: Add the upload and delete methods**, with the photo id in the path.
-- [ ] **Step 2: Write the `storage.rules` block**, with the comment above.
-- [ ] **Step 3: Extend the rules tests** for the new path if the suite covers Storage; if it covers only Firestore, say so in your report rather than claiming coverage that does not exist.
-- [ ] **Step 4: `assembleDebug`; commit** — `feat(storage): a path per medical photograph`
+- [x] **Step 1: Add the upload and delete methods**, with the photo id in the path.
+- [x] **Step 2: Write the `storage.rules` block**, with the comment above.
+- [x] **Step 3: Extend the rules tests** for the new path if the suite covers Storage; if it covers only Firestore, say so in your report rather than claiming coverage that does not exist.
+- [~] **Step 4: `assembleDebug`; commit** — `feat(storage): a path per medical photograph`
 
 ---
 
@@ -90,19 +90,28 @@ The picker follows `AddExpenseScreen`'s receipt flow, which already handles perm
 
 **Nothing here may send a photograph anywhere but Firebase Storage.** The on-device-only rule that governs receipts governs these too.
 
-- [ ] **Step 1: Write the strings in all five locales.**
-- [ ] **Step 2: Read `AddExpenseScreen`'s receipt flow and follow it.**
-- [ ] **Step 3: Add the thumbnail strip, add and remove.**
-- [ ] **Step 4: Show them on `ChildInfoScreen`'s medical group**, tapping to view full-screen.
-- [ ] **Step 5: Verify locales; confirm no hardcoded text; build; commit** — `feat(childinfo): photograph what the doctor said`
+- [x] **Step 1: Write the strings in all five locales.**
+- [x] **Step 2: Read `AddExpenseScreen`'s receipt flow and follow it.**
+- [x] **Step 3: Add the thumbnail strip, add and remove.**
+- [x] **Step 4: Show them on `ChildInfoScreen`'s medical group**, tapping to view full-screen.
+- [~] **Step 5: Verify locales; confirm no hardcoded text; build; commit** — `feat(childinfo): photograph what the doctor said`
 
 ---
 
 ### Task 4: G1 verification, and merge
 
-- [ ] `./gradlew clean assembleDebug testDebugUnitTest lint detekt`; the instrumented migration test; locale grep.
-- [ ] **Device:** attach three photographs to one note; confirm all three survive a sync and reach the co-parent's phone; delete one and confirm the object is gone from the bucket, not merely from the list.
-- [ ] Record the run in spec §3, commit, and **open G1's pull request here.** G2 starts from a fresh branch.
+- [~] `./gradlew clean assembleDebug testDebugUnitTest lint detekt`; the instrumented migration test; locale grep.
+- [~] **Device:** attach three photographs to one note; confirm all three survive a sync and reach the co-parent's phone; delete one and confirm the object is gone from the bucket, not merely from the list.
+- [x] Record the run in spec §3, commit, and **open G1's pull request here.** G2 starts from a fresh branch.
+
+> `[~]` = done except for the Gradle half. No Android SDK and no route to Google's Maven host in
+> the container this was implemented in, so every `assembleDebug` / `testDebugUnitTest` /
+> `connectedDebugAndroidTest` step and the device run are outstanding; the code, the tests and
+> the strings are written and committed. The Firestore rules suite, every pure-Kotlin test and
+> the locale greps *were* run — see `2026-08-23-guest-access-and-photos-PROGRESS.md`.
+>
+> **Task 1 found seven map sites, not six**, and an eighth that is not a map. **Task 2 step 3's
+> answer is that no Storage rules coverage exists at all**, for any path. Both are in the ledger.
 
 ---
 
