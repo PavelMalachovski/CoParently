@@ -7,6 +7,7 @@ import android.graphics.BitmapFactory
 import android.net.Uri
 import com.coparently.app.domain.repository.EventImageStorage
 import com.coparently.app.domain.repository.MedicalPhotoStorage
+import com.coparently.app.domain.repository.PetPhotoStorage
 import com.coparently.app.domain.repository.ReceiptStorage
 import com.google.firebase.storage.FirebaseStorage
 import com.google.firebase.storage.StorageException
@@ -22,8 +23,8 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * [ReceiptStorage], [EventImageStorage] and [MedicalPhotoStorage] backed by Firebase Cloud
- * Storage.
+ * [ReceiptStorage], [EventImageStorage], [MedicalPhotoStorage] and [PetPhotoStorage] backed
+ * by Firebase Cloud Storage.
  *
  * Images are downscaled and recompressed to JPEG before upload to keep uploads fast
  * and storage usage low; the resulting download URL (with access token) is what gets
@@ -33,7 +34,7 @@ import javax.inject.Singleton
 class FirebaseImageStorage @Inject constructor(
     @ApplicationContext private val context: Context,
     private val storage: FirebaseStorage
-) : ReceiptStorage, EventImageStorage, MedicalPhotoStorage {
+) : ReceiptStorage, EventImageStorage, MedicalPhotoStorage, PetPhotoStorage {
 
     override suspend fun uploadReceipt(expenseId: String, localUri: String): String =
         upload(receiptPath(expenseId), localUri)
@@ -59,7 +60,17 @@ class FirebaseImageStorage @Inject constructor(
      * mean parsing the URL to get the ids back in order to construct the path the URL already
      * names.
      */
-    override suspend fun deleteMedicalPhoto(downloadUrl: String) {
+    override suspend fun deleteMedicalPhoto(downloadUrl: String) = deleteByUrl(downloadUrl)
+
+    override suspend fun uploadPetPhoto(
+        petId: String,
+        photoId: String,
+        localUri: String
+    ): String = upload(petPhotoPath(petId, photoId), localUri)
+
+    override suspend fun deletePetPhoto(downloadUrl: String) = deleteByUrl(downloadUrl)
+
+    private suspend fun deleteByUrl(downloadUrl: String) {
         val ref = try {
             storage.getReferenceFromUrl(downloadUrl)
         } catch (e: IllegalArgumentException) {
@@ -103,6 +114,10 @@ class FirebaseImageStorage @Inject constructor(
      */
     private fun medicalPhotoPath(childInfoId: String, photoId: String) =
         "medical_photos/$childInfoId/$photoId.jpg"
+
+    /** One object per photograph, under the pet that owns it. Same UUID rule as above. */
+    private fun petPhotoPath(petId: String, photoId: String) =
+        "pet_photos/$petId/$photoId.jpg"
 
     /**
      * Decodes the picked image with subsampling so full-resolution camera photos

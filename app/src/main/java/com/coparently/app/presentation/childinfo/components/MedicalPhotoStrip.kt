@@ -1,61 +1,20 @@
 package com.coparently.app.presentation.childinfo.components
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AddAPhoto
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material3.FilledTonalIconButton
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
-import coil.compose.AsyncImage
 import com.coparently.app.R
-
-/** Edge of a square thumbnail in the strip. Large enough to recognise a prescription. */
-private val THUMBNAIL_SIZE = 96.dp
+import com.coparently.app.presentation.common.PhotoStrip
+import com.coparently.app.presentation.common.PhotoStripStrings
 
 /**
- * The photographs attached to a child's medical notes: a scrolling strip of thumbnails, each
- * tapping open full-screen.
+ * The photographs attached to a child's medical notes.
  *
- * Read-only by default. Pass [onAdd] and [onRemove] to make it an editor — the child's detail
- * screen shows the same strip without them, so the two never drift into different ideas of what
- * a photograph looks like.
+ * A thin binding of the shared [PhotoStrip] to the medical strings — the strip's behaviour
+ * (read-only by default, removal is a request settled on save, full-screen open) lives in
+ * `presentation/common/PhotoStrip.kt`, where the pet record shares it.
  *
- * **Removal here is a request, not a deletion.** The caller collects it and, on save, deletes the
- * object *before* dropping the URL from the record — see `ChildInfoViewModel`. A strip that
- * deleted on tap would have to either block on the network or lie about having done it.
- *
- * @param photos What to show: download URLs already on the record, and content URIs picked on
- *   this device and not yet uploaded. Coil loads both, so this composable does not need to know
- *   which is which.
+ * @param photos What to show: download URLs already on the record, and content URIs picked
+ *   on this device and not yet uploaded.
  * @param modifier Modifier applied to the strip.
  * @param onAdd Opens the picker, or null for a read-only strip.
  * @param onRemove Asks for a photograph to be removed, or null for a read-only strip.
@@ -69,153 +28,21 @@ fun MedicalPhotoStrip(
     onRemove: ((String) -> Unit)? = null,
     enabled: Boolean = true
 ) {
-    var opened by remember { mutableStateOf<String?>(null) }
-
-    Column(
-        modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        Text(
-            text = stringResource(R.string.medical_photos_title),
-            style = MaterialTheme.typography.titleSmall
-        )
-
-        if (photos.isEmpty()) {
-            Text(
-                text = stringResource(R.string.medical_photos_none),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        } else {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                photos.forEachIndexed { index, photo ->
-                    Thumbnail(
-                        photo = photo,
-                        position = index + 1,
-                        total = photos.size,
-                        onOpen = { opened = photo },
-                        onRemove = onRemove?.takeIf { enabled }
-                    )
-                }
-            }
-        }
-
-        if (onAdd != null) {
-            OutlinedButton(
-                onClick = onAdd,
-                enabled = enabled,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Icon(Icons.Default.AddAPhoto, contentDescription = null)
-                Text(
-                    text = stringResource(R.string.medical_photos_add),
-                    modifier = Modifier.padding(start = 8.dp)
-                )
-            }
-            Text(
-                text = stringResource(R.string.medical_photos_hint),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
-
-    opened?.let { photo ->
-        FullScreenPhoto(photo = photo, onClose = { opened = null })
-    }
-}
-
-/**
- * One thumbnail, with its remove button when the strip is an editor.
- *
- * The description counts rather than describes: nothing in the app knows what is in the picture,
- * and "photograph" nine times over tells a screen reader user only that there are nine.
- */
-@Composable
-private fun Thumbnail(
-    photo: String,
-    position: Int,
-    total: Int,
-    onOpen: () -> Unit,
-    onRemove: ((String) -> Unit)?
-) {
-    Box(modifier = Modifier.size(THUMBNAIL_SIZE)) {
-        AsyncImage(
-            model = photo,
-            contentDescription = stringResource(
-                R.string.medical_photos_thumbnail_description,
-                position,
-                total
-            ),
-            contentScale = ContentScale.Crop,
-            modifier = Modifier
-                .fillMaxSize()
-                .clip(MaterialTheme.shapes.medium)
-                .clickable(
-                    onClick = onOpen,
-                    onClickLabel = stringResource(R.string.medical_photos_open)
-                )
-        )
-        if (onRemove != null) {
-            FilledTonalIconButton(
-                onClick = { onRemove(photo) },
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(4.dp)
-                    .size(28.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Close,
-                    contentDescription = stringResource(R.string.medical_photos_remove),
-                    modifier = Modifier.size(16.dp)
-                )
-            }
-        }
-    }
-}
-
-/**
- * One photograph, filling the screen.
- *
- * `usePlatformDefaultWidth = false` so a prescription is readable: the default dialog width is
- * sized for text and would letterbox the thing the parent opened it to read.
- */
-@Composable
-private fun FullScreenPhoto(photo: String, onClose: () -> Unit) {
-    Dialog(
-        onDismissRequest = onClose,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black)
-        ) {
-            AsyncImage(
-                model = photo,
-                // The strip's thumbnail already described this one; repeating it here would have
-                // a screen reader announce the same photograph twice on the way in.
-                contentDescription = null,
-                contentScale = ContentScale.Fit,
-                modifier = Modifier.fillMaxSize()
-            )
-            IconButton(
-                onClick = onClose,
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(12.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Close,
-                    contentDescription = stringResource(R.string.medical_photos_close),
-                    tint = Color.White
-                )
-            }
-        }
-    }
+    PhotoStrip(
+        photos = photos,
+        strings = PhotoStripStrings(
+            title = R.string.medical_photos_title,
+            empty = R.string.medical_photos_none,
+            add = R.string.medical_photos_add,
+            hint = R.string.medical_photos_hint,
+            thumbnailDescription = R.string.medical_photos_thumbnail_description,
+            open = R.string.medical_photos_open,
+            remove = R.string.medical_photos_remove,
+            close = R.string.medical_photos_close
+        ),
+        modifier = modifier,
+        onAdd = onAdd,
+        onRemove = onRemove,
+        enabled = enabled
+    )
 }

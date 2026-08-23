@@ -436,6 +436,41 @@ object DatabaseMigrations {
     }
 
     /**
+     * Creates the `pets` table.
+     *
+     * A new table rather than columns on `child_info`: a pet is its own record with its own
+     * lifecycle, and a family can have several. Column types follow [Converters] —
+     * `LocalDateTime` is stored as ISO TEXT, booleans as INTEGER.
+     */
+    val MIGRATION_21_22 = object : Migration(21, 22) {
+        override fun migrate(database: SupportSQLiteDatabase) {
+            database.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS pets (
+                    id TEXT NOT NULL PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    species TEXT NOT NULL,
+                    breed TEXT,
+                    dateOfBirth TEXT,
+                    medicationsJson TEXT NOT NULL,
+                    vaccinationsJson TEXT NOT NULL,
+                    specialNeeds TEXT,
+                    feedingNotes TEXT,
+                    vetName TEXT,
+                    vetPhone TEXT,
+                    photosJson TEXT NOT NULL DEFAULT '[]',
+                    createdAt TEXT NOT NULL,
+                    updatedAt TEXT NOT NULL,
+                    createdByFirebaseUid TEXT,
+                    lastModifiedBy TEXT,
+                    syncedToFirestore INTEGER NOT NULL
+                )
+                """.trimIndent()
+            )
+        }
+    }
+
+    /**
      * List of all migrations in order.
      */
     val ALL_MIGRATIONS = arrayOf(
@@ -454,6 +489,7 @@ object DatabaseMigrations {
         MIGRATION_17_18,
         MIGRATION_18_19,
         MIGRATION_19_20,
-        MIGRATION_20_21
+        MIGRATION_20_21,
+        MIGRATION_21_22
     )
 }

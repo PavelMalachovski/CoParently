@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Pets feature: the family's animals, shared between the two parents like child info. -->
+<resources>
+    <!-- List screen -->
+    <string name="pets_screen_title">Haustiere</string>
+    <string name="pets_back">Zurück</string>
+    <string name="pets_sync">Synchronisieren</string>
+    <string name="pets_add">Haustier hinzufügen</string>
+    <string name="pets_group_label">Haustiere</string>
+    <string name="pets_empty_state">Noch keine Haustiere</string>
+    <string name="pets_retry">Erneut versuchen</string>
+
+    <!-- Editor -->
+    <string name="pet_title_add">Haustier hinzufügen</string>
+    <string name="pet_title_edit">Haustier bearbeiten</string>
+    <string name="pet_section_basic">Grundinformationen</string>
+    <string name="pet_name_label">Name</string>
+    <string name="pet_species_label">Tierart</string>
+    <string name="pet_breed_label">Rasse (optional)</string>
+    <string name="pet_dob_value">Geburtsdatum: %1$s</string>
+    <string name="pet_select_dob">Geburtsdatum auswählen</string>
+    <string name="pet_section_medications">Medikamente</string>
+    <string name="pet_section_vaccinations">Impfungen</string>
+    <string name="pet_section_special_needs">Besondere Bedürfnisse</string>
+    <string name="pet_special_needs_label">Besondere Bedürfnisse</string>
+    <string name="pet_special_needs_placeholder">Verhalten, Ängste, Allergien, die beide Zuhause kennen sollten</string>
+    <string name="pet_section_feeding">Fütterung &amp; Routine</string>
+    <string name="pet_feeding_label">Fütterung und Gassigehen</string>
+    <string name="pet_feeding_placeholder">Was und wann füttern, Gassi-Routine</string>
+    <string name="pet_section_vet">Tierarzt</string>
+    <string name="pet_vet_name_label">Name der Praxis oder des Tierarztes</string>
+    <string name="pet_vet_phone_label">Telefon des Tierarztes</string>
+    <string name="pet_section_photos">Fotos</string>
+    <string name="pet_add_button">Haustier hinzufügen</string>
+    <string name="pet_save_changes">Änderungen speichern</string>
+
+    <!-- Delete -->
+    <string name="pet_delete_title">%1$s löschen?</string>
+    <string name="pet_delete_message">Dadurch wird das Haustier bei beiden Eltern entfernt. Dies kann nicht rückgängig gemacht werden.</string>
+    <string name="pet_delete_confirm">Löschen</string>
+    <string name="pet_delete_cancel">Abbrechen</string>
+
+    <!-- Species -->
+    <string name="pet_species_dog">Hund</string>
+    <string name="pet_species_cat">Katze</string>
+    <string name="pet_species_bird">Vogel</string>
+    <string name="pet_species_rodent">Nagetier</string>
+    <string name="pet_species_fish">Fisch</string>
+    <string name="pet_species_reptile">Reptil</string>
+    <string name="pet_species_other">Andere</string>
+
+    <!-- Photo strip. %1$d = this photo's position, %2$d = total count. -->
+    <string name="pet_photos_title">Fotos</string>
+    <string name="pet_photos_none">Noch keine Fotos</string>
+    <string name="pet_photos_add">Foto hinzufügen</string>
+    <string name="pet_photos_hint">Fotos werden mit deinem Co-Elternteil geteilt.</string>
+    <string name="pet_photos_thumbnail_description">Foto %1$d von %2$d</string>
+    <string name="pet_photos_open">Foto öffnen</string>
+    <string name="pet_photos_remove">Foto entfernen</string>
+    <string name="pet_photos_close">Schließen</string>
+    <string name="pet_photos_upload_failed">Foto konnte nicht hochgeladen werden. Bitte versuche es erneut.</string>
+    <string name="pet_photos_delete_failed">Foto konnte nicht entfernt werden. Es ist weiterhin angehängt.</string>
+</resources>

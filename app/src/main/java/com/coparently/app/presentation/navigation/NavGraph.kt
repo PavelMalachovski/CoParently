@@ -39,6 +39,8 @@ import com.coparently.app.presentation.common.animations.*
 import com.coparently.app.presentation.event.AddEditEventScreen
 import com.coparently.app.presentation.event.EventListScreen
 import com.coparently.app.presentation.onboarding.OnboardingScreen
+import com.coparently.app.presentation.pets.AddEditPetScreen
+import com.coparently.app.presentation.pets.PetsScreen
 import com.coparently.app.presentation.pairing.PairingScreen
 import com.coparently.app.presentation.settings.SettingsScreen
 import com.coparently.app.presentation.sync.AuthStateViewModel
@@ -398,6 +400,9 @@ fun NavGraph(
                     onNavigateToChildInfo = {
                         navController.navigate(Screen.ChildInfo.route)
                     },
+                    onNavigateToPets = {
+                        navController.navigate(Screen.Pets.route)
+                    },
                     onNavigateToPairing = {
                         navController.navigate(Screen.Pairing.routeWithCode(null))
                     },
@@ -455,6 +460,42 @@ fun NavGraph(
                     onNavigateBack = {
                         navController.popBackStack()
                     }
+                )
+            }
+
+            // Pets: a list screen plus its editor, both detail routes (bottom bar hidden),
+            // mirroring the ChildInfo pair above.
+            composable(
+                route = Screen.Pets.route,
+                enterTransition = { slideInFromRight() },
+                exitTransition = { slideOutToLeft() },
+                popEnterTransition = { slideInFromLeft() },
+                popExitTransition = { slideOutToRight() }
+            ) {
+                PetsScreen(
+                    onNavigateBack = { navController.popBackStack() },
+                    onEditPet = { petId ->
+                        navController.navigate(Screen.EditPet.createRoute(petId))
+                    }
+                )
+            }
+
+            composable(
+                route = Screen.EditPet.route,
+                arguments = listOf(
+                    navArgument(Screen.EditPet.ARG_PET_ID) {
+                        type = NavType.StringType
+                    }
+                ),
+                enterTransition = { fadeInScaleUp() },
+                exitTransition = { fadeOutScaleDown() },
+                popEnterTransition = { fadeInScaleUp() },
+                popExitTransition = { fadeOutScaleDown() }
+            ) { backStackEntry ->
+                val petId = backStackEntry.arguments?.getString(Screen.EditPet.ARG_PET_ID) ?: "new"
+                AddEditPetScreen(
+                    petId = petId,
+                    onNavigateBack = { navController.popBackStack() }
                 )
             }
 
@@ -986,6 +1027,7 @@ sealed class Screen(val route: String) {
     }
     data object Settings : Screen("settings")
     data object ChildInfo : Screen("child_info")
+    data object Pets : Screen("pets")
     data object Pairing : Screen("pairing?code={code}") {
         /** Optional invite code carried by a `coplanly://pair` deep link. */
         const val ARG_CODE = "code"
@@ -1037,6 +1079,14 @@ sealed class Screen(val route: String) {
 
         fun createRoute(childInfoId: String): String {
             return "edit_child_info/$childInfoId"
+        }
+    }
+
+    data object EditPet : Screen("edit_pet/{petId}") {
+        const val ARG_PET_ID = "petId"
+
+        fun createRoute(petId: String): String {
+            return "edit_pet/$petId"
         }
     }
 

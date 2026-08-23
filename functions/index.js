@@ -174,20 +174,34 @@ exports.cleanupOldNotifications = functions.pubsub
           .where('createdAt', '<', admin.firestore.Timestamp.fromDate(thirtyDaysAgo))
           .get();
 
-      const batch = admin.firestore().batch();
+      // Chunk the deletes: Firestore rejects a batch of more than 500 operations, so a single
+      // batch over every stale notification threw INVALID_ARGUMENT once the backlog crossed
+      // 500 — after which the daily job failed permanently and the queue only grew. The other
+      // batch loops in this file (guest sweep, unpair revocation) already cap at 400; match
+      // them.
+      const CLEANUP_BATCH_LIMIT = 400;
       let count = 0;
+      let batch = admin.firestore().batch();
+      let pending = 0;
 
-      oldNotificationsQuery.forEach((doc) => {
+      for (const doc of oldNotificationsQuery.docs) {
         batch.delete(doc.ref);
+        pending++;
         count++;
-      });
-
-      if (count > 0) {
-        await batch.commit();
-        console.log(`Deleted ${count} old notifications`);
-      } else {
-        console.log('No old notifications to delete');
+        if (pending === CLEANUP_BATCH_LIMIT) {
+          await batch.commit();
+          batch = admin.firestore().batch();
+          pending = 0;
+        }
       }
+
+      if (pending > 0) {
+        await batch.commit();
+      }
+
+      console.log(count > 0 ?
+        `Deleted ${count} old notifications` :
+        'No old notifications to delete');
 
       return null;
     });
@@ -203,6 +217,14 @@ exports.onEventCreated = functions.firestore
       const eventId = context.params.eventId;
 
       console.log(`New event created: ${eventId}`);
+
+      // Google Calendar imports are bulk-synced, not deliberately authored, so they must not
+      // each fire a "created a new event" push. A parent connecting a calendar with hundreds
+      // of events would otherwise flood their co-parent with hundreds of notifications at once.
+      if (eventData.eventType === 'google') {
+        console.log('Skipping notification for a Google Calendar import');
+        return null;
+      }
 
       // Находим партнера пользователя
       const creatorDoc = await admin.firestore()
@@ -287,7 +309,9 @@ exports.onChildInfoUpdated = functions.firestore
             targetUserId: partnerId,
             data: {
               title: 'Child Info Updated',
-              body: `${creatorData.email || 'Your partner'} updated information about ${newData.name}`,
+              // The child document's name field is `childName`, not `name` — reading `name`
+              // rendered every push as "... updated information about undefined".
+              body: `${creatorData.email || 'Your partner'} updated information about ${newData.childName || 'your child'}`,
               type: 'child_info_updated',
               childInfoId: childInfoId,
             },
@@ -864,12 +888,14 @@ exports.sweepExpiredGuests = functions.pubsub
 /**
  * Collections whose visibility is a per-document `sharedWith` audience.
  *
- * These are the only two: `expenses` and `budgets` are gated on the *live* `isPartnerOf`
- * relationship rather than a stored list, so clearing `partnerId` already revokes them.
- * `conversations` membership is deliberately immutable — whether an ended co-parent link
- * should also erase the chat history is a product decision, not a leak to close here.
+ * These three (`events`, `child_info`, `pets`) each keep a per-document `sharedWith` list
+ * that only ever widens on the client, so unpair has to narrow it here. `expenses` and
+ * `budgets` are gated on the *live* `isPartnerOf` relationship rather than a stored list, so
+ * clearing `partnerId` already revokes them. `conversations` membership is deliberately
+ * immutable — whether an ended co-parent link should also erase the chat history is a
+ * product decision, not a leak to close here.
  */
-const SHARED_AUDIENCE_COLLECTIONS = ['events', 'child_info'];
+const SHARED_AUDIENCE_COLLECTIONS = ['events', 'child_info', 'pets'];
 
 /** Firestore caps a batched write at 500 operations; stay clear of the edge. */
 const REVOCATION_BATCH_LIMIT = 400;

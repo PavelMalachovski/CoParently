@@ -17,6 +17,8 @@
     <string name="settings_pairing_description">Запросіть другого з батьків або керуйте зв’язком</string>
     <string name="settings_child_info_title">Інформація про дитину</string>
     <string name="settings_child_info_description">Ліки, заняття, алергії</string>
+    <string name="settings_pets_title">Улюбленці</string>
+    <string name="settings_pets_description">Фото, ліки, особливості</string>
     <string name="settings_custody_title">Графік опіки</string>
     <string name="settings_custody_description">Налаштуйте схему опіки (тиждень через тиждень, 2-2-3 тощо)</string>
     <string name="settings_about">Про CoPlanly</string>

@@ -18,6 +18,8 @@
     <string name="settings_pairing_description">Invite or manage your co-parent</string>
     <string name="settings_child_info_title">Child Information</string>
     <string name="settings_child_info_description">Medications, activities, allergies</string>
+    <string name="settings_pets_title">Pets</string>
+    <string name="settings_pets_description">Photos, medications, special needs</string>
     <string name="settings_custody_title">Custody Schedule</string>
     <string name="settings_custody_description">Set up your custody pattern (week-on/week-off, 2-2-3, etc.)</string>
     <string name="settings_about">About CoPlanly</string>

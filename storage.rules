@@ -57,6 +57,20 @@ service firebase.storage {
                 && request.resource.contentType == 'image/jpeg'));
     }
 
+    // Pet photographs, at pet_photos/{petId}/{photoId}.jpg — several per pet, the same
+    // shape as medical_photos above. The same caveat applies: this read rule is "any
+    // authenticated user", so the unguessable {photoId} UUID path is doing the work a
+    // real access rule cannot express here. That is obscurity, not access control — a pet
+    // photo is less sensitive than a child's medical record, but the mechanism is
+    // identical, and the real fix is the same proxy.
+    match /pet_photos/{petId}/{fileName} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null
+        && (request.resource == null
+            || (request.resource.size < 5 * 1024 * 1024
+                && request.resource.contentType == 'image/jpeg'));
+    }
+
     // Everything else is closed by default.
     match /{allPaths=**} {
       allow read, write: if false;

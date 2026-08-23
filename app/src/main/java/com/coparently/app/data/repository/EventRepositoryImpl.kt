@@ -323,7 +323,11 @@ class EventRepositoryImpl @Inject constructor(
             "acceptance" to acceptance.name,
             "acceptedBy" to (acceptedBy ?: ""),
             "acceptedAt" to (acceptedAt?.format(dateFormatter) ?: ""),
-            "isImportant" to isImportant
+            "isImportant" to isImportant,
+            // Round-tripped, not dropped: omitting it here meant the download half of a full
+            // sync REPLACEd the creator's own row with a map that had no reminder, wiping the
+            // value and (on the next update) cancelling the scheduled WorkManager reminder.
+            "reminderMinutes" to reminderMinutes
         )
     }
 
