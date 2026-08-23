@@ -164,19 +164,39 @@ class DayCellFillsTest {
     }
 
     @Test
-    fun `a swap creates a split on the day it moves`() {
-        // What the grid draws when an accepted override hands Thursday to the other parent: the
-        // resolver answers "dad" for the swapped day while the pattern still answers "mom" for
-        // the one before it, and the split follows from that alone.
+    fun `a swapped day is one solid fill, never split`() {
+        // An accepted override hands Thursday to the other parent. The resolver answers "dad"
+        // while the pattern still answers "mom" for the day before — but the day is a whole day
+        // in dad's care, and a diagonal would say the swap only half-happened (owner decision,
+        // Aug 2026 walkthrough). The overlay keeps the swapped-to parent at full strength.
         val fill = DayCellFills.monthCell(
             isWeekend = false,
             isCurrentMonth = true,
             custody = "dad",
             previousCustody = "mom",
-            isPublicHoliday = false
+            isPublicHoliday = false,
+            isSwapped = true
         )
 
-        assertEquals(DayCellOverlay.CUSTODY_MOM, fill.handoverFrom)
+        assertEquals(DayCellOverlay.CUSTODY_DAD, fill.overlay)
+        assertNull(fill.handoverFrom)
+    }
+
+    @Test
+    fun `the day after a swap is one solid fill too`() {
+        // The far edge of the swap: yesterday was overridden to dad, today the pattern's "mom"
+        // resumes. Without the suppression this cell would inherit a second split.
+        val fill = DayCellFills.monthCell(
+            isWeekend = false,
+            isCurrentMonth = true,
+            custody = "mom",
+            previousCustody = "dad",
+            isPublicHoliday = false,
+            previousSwapped = true
+        )
+
+        assertEquals(DayCellOverlay.CUSTODY_MOM, fill.overlay)
+        assertNull(fill.handoverFrom)
     }
 
     @Test

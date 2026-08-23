@@ -312,6 +312,17 @@ fun CalendarScreen(
             .toSet()
     }
 
+    // The dates an accepted swap decides. `getCustody` already answers whose day each one is;
+    // this set only tells the grid the answer came from a swap, so the cell (and the one after
+    // it) draws one solid fill instead of the handover diagonal.
+    val swappedDates: Set<LocalDate> = remember(dayOverrides) {
+        dayOverrides
+            .filterValues { it.isAccepted }
+            .keys
+            .mapNotNull { iso -> runCatching { LocalDate.parse(iso) }.getOrNull() }
+            .toSet()
+    }
+
     // Events filtered by parent view and hidden event types
     val filteredEvents = remember(events, parentFilter, hiddenEventTypes) {
         events
@@ -604,6 +615,7 @@ fun CalendarScreen(
                                     getProposedCustody = getProposedCustody,
                                     parentNames = parentNames,
                                     pendingSwapDates = pendingSwapDates,
+                                    swappedDates = swappedDates,
                                     // Only a paired account may offer a swap: unpaired there is
                                     // nobody to accept, and a swap that applies itself is just an
                                     // edit the custody editor already does. Null here removes the

@@ -30,7 +30,10 @@ enum class DayCellOverlay {
  *   on this cell's morning; null on every other day. Only ever [DayCellOverlay.CUSTODY_MOM] or
  *   [DayCellOverlay.CUSTODY_DAD]. It is a **shape**, not a fourth colour: the cell is split on a
  *   diagonal with this parent in the top-left and [overlay]'s parent in the bottom-right, so the
- *   weekend base still shows through both halves and this file's invariant survives.
+ *   weekend base still shows through both halves and this file's invariant survives. Reserved
+ *   for **pattern** boundaries: a day decided by an accepted one-off swap (and the day after it)
+ *   renders as a single solid fill instead — an owner decision from the Aug 2026 walkthrough,
+ *   where the split read as "the swap only half-happened".
  * @property pendingProposalFor The parent a **pending, unanswered** custody proposal would give
  *   this day to, when that differs from whose day it is now; null on every other day. Only ever
  *   [DayCellOverlay.CUSTODY_MOM] or [DayCellOverlay.CUSTODY_DAD]. It is drawn *over* [overlay],
@@ -83,14 +86,18 @@ object DayCellFills {
      *   Any other value is treated as no custody rather than guessed at.
      * @param previousCustody Whose day *yesterday* was, resolved through the same lookup. When it
      *   differs from [custody] the child changes hands on this cell's morning, and the cell is
-     *   split diagonally — see [DayCellFill.handoverFrom]. A one-off swap therefore both creates
-     *   a split and removes the one it displaced, for free, because the lookup already accounts
-     *   for it.
+     *   split diagonally — see [DayCellFill.handoverFrom].
      * @param isPublicHoliday A public holiday, not a school vacation — school vacation is a
      *   month-level banner and never a cell fill.
      * @param proposedCustody Whose day this would be under a **pending** custody proposal, or
      *   null when nothing is pending. Resolved from the proposal's own pattern, never from the
      *   agreed one. See [pendingProposal].
+     * @param isSwapped Whether an **accepted** one-off swap decides this day. A swapped day is a
+     *   whole day in the other parent's care, so it renders as one solid fill — the diagonal
+     *   would say the swap only half-happened. The custody lookup already resolves *whose* day it
+     *   is; this flag only says the answer came from a swap rather than the pattern.
+     * @param previousSwapped Whether an accepted swap decides *yesterday*. Suppresses the split
+     *   this cell would otherwise inherit from the swap's far edge, for the same reason.
      */
     @Suppress("LongParameterList") // one cell's inputs, expressed as one parameter list
     fun monthCell(
@@ -99,7 +106,9 @@ object DayCellFills {
         custody: String?,
         previousCustody: String?,
         isPublicHoliday: Boolean,
-        proposedCustody: String? = null
+        proposedCustody: String? = null,
+        isSwapped: Boolean = false,
+        previousSwapped: Boolean = false
     ): DayCellFill = DayCellFill(
         base = baseFor(isWeekend),
         overlay = if (!isCurrentMonth) {
@@ -108,7 +117,11 @@ object DayCellFills {
             custodyOverlay(custody)
                 ?: if (isPublicHoliday) DayCellOverlay.PUBLIC_HOLIDAY else DayCellOverlay.NONE
         },
-        handoverFrom = if (isCurrentMonth) handoverFrom(custody, previousCustody) else null,
+        handoverFrom = if (isCurrentMonth && !isSwapped && !previousSwapped) {
+            handoverFrom(custody, previousCustody)
+        } else {
+            null
+        },
         pendingProposalFor = if (isCurrentMonth) pendingProposal(custody, proposedCustody) else null
     )
 

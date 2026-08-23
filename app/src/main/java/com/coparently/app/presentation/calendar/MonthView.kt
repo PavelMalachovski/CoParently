@@ -108,6 +108,9 @@ private const val HOLIDAY_TINT_ALPHA = 0.10f
  * @param pendingSwapDates Dates a one-off swap is being negotiated on. Deliberately separate from
  *   [getCustody]: a pending swap has changed nothing about whose day it is, and saying otherwise
  *   in the cell's colour would be a lie both parents act on.
+ * @param swappedDates Dates an **accepted** swap decides. [getCustody] already answers whose day
+ *   each one is; this set only tells the cell the answer came from a swap, so it (and the day
+ *   after it) draws one solid fill instead of the handover diagonal — see `DayCellFills`.
  * @param onDayLongClick Offers that day to the co-parent. Null when there is nobody to offer it
  *   to — an unpaired account gets no long-press at all, because a swap that applies itself is
  *   just an edit and the custody editor already does that.
@@ -127,6 +130,7 @@ fun MonthView(
     onMonthChange: (YearMonth) -> Unit,
     holidays: Map<LocalDate, Holiday> = emptyMap(),
     pendingSwapDates: Set<LocalDate> = emptySet(),
+    swappedDates: Set<LocalDate> = emptySet(),
     onDayLongClick: ((LocalDate) -> Unit)? = null
 ) {
     val firstDayOfWeek = remember { DayOfWeek.MONDAY }
@@ -246,6 +250,8 @@ fun MonthView(
                         onDayClick = onDayClick,
                         holiday = holidays[day.date],
                         isSwapPending = day.date in pendingSwapDates,
+                        isSwapped = day.date in swappedDates,
+                        previousSwapped = day.date.minusDays(1) in swappedDates,
                         onDayLongClick = onDayLongClick
                     )
                 }
@@ -330,6 +336,8 @@ private fun DayCell(
     onDayClick: (LocalDate) -> Unit,
     holiday: Holiday? = null,
     isSwapPending: Boolean = false,
+    isSwapped: Boolean = false,
+    previousSwapped: Boolean = false,
     onDayLongClick: ((LocalDate) -> Unit)? = null
 ) {
     val dims = dimensions()
@@ -358,7 +366,9 @@ private fun DayCell(
         custody = custody,
         previousCustody = previousCustody,
         isPublicHoliday = isPublicHoliday,
-        proposedCustody = proposedCustody
+        proposedCustody = proposedCustody,
+        isSwapped = isSwapped,
+        previousSwapped = previousSwapped
     )
     val baseColor = when (fill.base) {
         DayCellBase.WEEKEND ->
