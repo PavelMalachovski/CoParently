@@ -84,15 +84,23 @@ class ExpenseRepositoryImpl @Inject constructor(
     }
 
     override suspend fun addExpense(expense: Expense) {
+        // A brand-new expense has no prior owner, so the current user is the owner — stamped on
+        // the Room row too, so the client can enforce creator-only editing without a network
+        // read. Null when signed out; the row then reads as "editable by both", which is all
+        // this device can honestly say about it.
+        val owned = expense.copy(
+            createdByFirebaseUid = expense.createdByFirebaseUid
+                ?: firebaseAuthService.getCurrentUser()?.uid
+        )
+
         // Room is the source of truth — persist locally first so the expense is never
         // lost, even if the Firestore push below fails.
-        expenseDao.insertExpense(expense.toEntity())
+        expenseDao.insertExpense(owned.toEntity())
 
-        announce(expense, ActivityKind.EXPENSE_ADDED)
+        announce(owned, ActivityKind.EXPENSE_ADDED)
 
         val firebaseUser = firebaseAuthService.getCurrentUser() ?: return
-        // A brand-new document has no prior owner, so the current user is the owner.
-        pushToFirestore(expense, ownerUid = firebaseUser.uid)
+        pushToFirestore(owned, ownerUid = owned.createdByFirebaseUid ?: firebaseUser.uid)
     }
 
     override suspend fun updateExpense(expense: Expense) {
@@ -217,7 +225,9 @@ class ExpenseRepositoryImpl @Inject constructor(
                         receiptUrl = (data["receiptUrl"] as? String)?.takeIf { it.isNotEmpty() },
                         notes = (data["notes"] as? String)?.takeIf { it.isNotEmpty() },
                         createdAt = LocalDateTime.parse(data["createdAt"] as String, dateTimeFormatter),
-                        syncedToFirestore = true
+                        syncedToFirestore = true,
+                        createdByFirebaseUid =
+                            (data["createdByFirebaseUid"] as? String)?.takeIf { it.isNotEmpty() }
                     )
                     expenseDao.insertExpense(expense.toEntity())
                 }
@@ -271,7 +281,8 @@ class ExpenseRepositoryImpl @Inject constructor(
             receiptUrl = receiptUrl,
             notes = notes,
             createdAt = createdAt,
-            syncedToFirestore = syncedToFirestore
+            syncedToFirestore = syncedToFirestore,
+            createdByFirebaseUid = createdByFirebaseUid
         )
     }
 
@@ -289,7 +300,8 @@ class ExpenseRepositoryImpl @Inject constructor(
             receiptUrl = receiptUrl,
             notes = notes,
             createdAt = createdAt,
-            syncedToFirestore = syncedToFirestore
+            syncedToFirestore = syncedToFirestore,
+            createdByFirebaseUid = createdByFirebaseUid
         )
     }
 }

@@ -471,6 +471,21 @@ object DatabaseMigrations {
     }
 
     /**
+     * Records who created an expense, so the client can enforce creator-only editing.
+     *
+     * Nullable, no default: for every existing row the honest answer is "not recorded" — the
+     * Firestore document may carry the owner, and the next sync fills it in. A null here reads
+     * as "editable by both", the pre-change behaviour, so legacy rows lose nothing.
+     */
+    val MIGRATION_22_23 = object : Migration(22, 23) {
+        override fun migrate(database: SupportSQLiteDatabase) {
+            database.execSQL(
+                "ALTER TABLE expenses ADD COLUMN createdByFirebaseUid TEXT"
+            )
+        }
+    }
+
+    /**
      * List of all migrations in order.
      */
     val ALL_MIGRATIONS = arrayOf(
@@ -490,6 +505,7 @@ object DatabaseMigrations {
         MIGRATION_18_19,
         MIGRATION_19_20,
         MIGRATION_20_21,
-        MIGRATION_21_22
+        MIGRATION_21_22,
+        MIGRATION_22_23
     )
 }

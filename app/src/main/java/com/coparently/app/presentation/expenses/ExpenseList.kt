@@ -70,6 +70,11 @@ private val ROW_CORNER = 12.dp
  * @param parentNames Resolves a slot to that parent's name
  * @param onDelete Invoked with the swiped expense; null hides the affordance
  * @param onExpenseClick Invoked when a row is tapped (opens the editor); null makes rows inert
+ * @param canModify Whether this user may edit or delete a given row. A co-parent's expense
+ *   renders with no swipe and no tap-to-edit — only its creator changes an expense (owner
+ *   decision, Aug 2026 walkthrough), and `firestore.rules` enforces the same server-side, so an
+ *   affordance here would only promise a write the server rejects. The receipt viewer stays: it
+ *   is a read.
  * @param modifier Modifier for the list
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -81,6 +86,7 @@ fun ExpenseList(
     parentNames: ParentNames,
     onDelete: ((Expense) -> Unit)? = null,
     onExpenseClick: ((Expense) -> Unit)? = null,
+    canModify: (Expense) -> Boolean = { true },
     modifier: Modifier = Modifier
 ) {
     // Receipt being viewed full-screen; transient UI state, deliberately local.
@@ -92,16 +98,17 @@ fun ExpenseList(
         verticalArrangement = Arrangement.spacedBy(7.dp)
     ) {
         items(expenses, key = { it.id }) { expense ->
+            val modifiable = canModify(expense)
             val row: @Composable () -> Unit = {
                 ExpenseItem(
                     expense = expense,
                     payerRole = roleByUid[expense.paidBy],
                     parentNames = parentNames,
-                    onClick = onExpenseClick?.let { { it(expense) } },
+                    onClick = onExpenseClick?.takeIf { modifiable }?.let { { it(expense) } },
                     onReceiptClick = { url -> viewedReceiptUrl = url }
                 )
             }
-            if (onDelete == null) {
+            if (onDelete == null || !modifiable) {
                 row()
             } else {
                 SwipeToDeleteRow(onDelete = { onDelete(expense) }, content = row)

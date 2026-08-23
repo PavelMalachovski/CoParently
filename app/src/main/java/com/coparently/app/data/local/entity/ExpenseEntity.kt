@@ -23,5 +23,11 @@ data class ExpenseEntity(
     val receiptUrl: String? = null,
     val notes: String? = null,
     val createdAt: LocalDateTime,
-    val syncedToFirestore: Boolean = false
+    val syncedToFirestore: Boolean = false,
+    /**
+     * Who created this expense — the uid the Firestore rules gate edits on. Null on rows
+     * written before schema 23 (and on legacy documents that never carried the field); a null
+     * reads as "editable by both", which is exactly what those rows were.
+     */
+    val createdByFirebaseUid: String? = null
 )
