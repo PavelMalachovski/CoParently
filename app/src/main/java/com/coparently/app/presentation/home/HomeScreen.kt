@@ -24,8 +24,10 @@ import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.ChildCare
 import androidx.compose.material.icons.filled.Contacts
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Pets
 import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material.icons.filled.PriorityHigh
 import androidx.compose.material.icons.filled.Settings
@@ -101,6 +103,8 @@ private const val SETTLED_EPSILON = 0.01
  * @param onOpenEvent Opens an event by id
  * @param onOpenChangeRequests Opens the change-request inbox
  * @param onOpenContacts Opens the contacts list
+ * @param onOpenChildInfo Opens the child records
+ * @param onOpenPets Opens the pet records
  * @param onOpenSettings Opens settings
  * @param onNavigateToPairing Opens the pairing screen
  * @param onOpenExpenses Switches to the Expenses tab — the spend tile's deep link
@@ -116,6 +120,8 @@ fun HomeScreen(
     onOpenEvent: (String) -> Unit,
     onOpenChangeRequests: () -> Unit,
     onOpenContacts: () -> Unit,
+    onOpenChildInfo: () -> Unit,
+    onOpenPets: () -> Unit,
     onOpenSettings: () -> Unit,
     onNavigateToPairing: () -> Unit,
     onOpenExpenses: () -> Unit,
@@ -164,6 +170,8 @@ fun HomeScreen(
                 onOpenEvent = onOpenEvent,
                 onOpenChangeRequests = onOpenChangeRequests,
                 onOpenContacts = onOpenContacts,
+                onOpenChildInfo = onOpenChildInfo,
+                onOpenPets = onOpenPets,
                 onOpenExpenses = onOpenExpenses,
                 onOpenChat = onOpenChat
             )
@@ -218,6 +226,8 @@ private fun PairingInvitation(
  * @param onOpenEvent Opens an event by id
  * @param onOpenChangeRequests Opens the change-request inbox
  * @param onOpenContacts Opens the contacts list
+ * @param onOpenChildInfo Opens the child records
+ * @param onOpenPets Opens the pet records
  * @param onOpenExpenses Switches to the Expenses tab
  * @param onOpenChat Switches to the Chat tab
  */
@@ -232,6 +242,8 @@ private fun Dashboard(
     onOpenEvent: (String) -> Unit,
     onOpenChangeRequests: () -> Unit,
     onOpenContacts: () -> Unit,
+    onOpenChildInfo: () -> Unit,
+    onOpenPets: () -> Unit,
     onOpenExpenses: () -> Unit,
     onOpenChat: () -> Unit
 ) {
@@ -242,6 +254,39 @@ private fun Dashboard(
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
+        item {
+            // First, by owner decision (Aug 2026 walkthrough): the emergency surface — who to
+            // call and the child's own record — belongs above the schedule, because the moment
+            // it is needed is the moment nobody scrolls. Child and pet records used to be
+            // reachable only through Settings; the rows reuse Settings' own titles so the two
+            // entrances can never drift apart.
+            SectionGroup {
+                SectionRow(
+                    title = stringResource(R.string.home_contacts),
+                    icon = Icons.Default.Contacts,
+                    supporting = stringResource(R.string.home_contacts_supporting),
+                    onClick = onOpenContacts,
+                    trailing = { HomeChevron() }
+                )
+                Divider()
+                SectionRow(
+                    title = stringResource(R.string.settings_child_info_title),
+                    icon = Icons.Default.ChildCare,
+                    supporting = stringResource(R.string.settings_child_info_description),
+                    onClick = onOpenChildInfo,
+                    trailing = { HomeChevron() }
+                )
+                Divider()
+                SectionRow(
+                    title = stringResource(R.string.settings_pets_title),
+                    icon = Icons.Default.Pets,
+                    supporting = stringResource(R.string.settings_pets_description),
+                    onClick = onOpenPets,
+                    trailing = { HomeChevron() }
+                )
+            }
+        }
+
         state.nextHandover?.let { handover ->
             item {
                 HandoverHero(
@@ -267,8 +312,8 @@ private fun Dashboard(
             )
         }
 
-        // The week leads, per spec §3: it is what a separated parent opens the app to see, and
-        // it is where the timeline rail already sat.
+        // The week follows the emergency group and the day cards (spec §3 had it lead; the
+        // Aug 2026 walkthrough moved the emergency surface above it).
         item { SectionHeader(stringResource(R.string.home_section_this_week)) }
         if (state.week.isEmpty()) {
             item {
@@ -339,27 +384,6 @@ private fun Dashboard(
         }
 
         item {
-            // Item 16: the numbers worth finding in a hurry, behind one button. It sits here
-            // rather than in the top bar because it is a destination, not a screen action, and
-            // an unlabelled icon up there is exactly what the design refresh removed elsewhere.
-            SectionGroup {
-                SectionRow(
-                    title = stringResource(R.string.home_contacts),
-                    icon = Icons.Default.Contacts,
-                    supporting = stringResource(R.string.home_contacts_supporting),
-                    onClick = onOpenContacts,
-                    trailing = {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                )
-            }
-        }
-
-        item {
             // Last, as spec §3 asks. The unread tile travels with it rather than being
             // stranded alone at the top: the two are one row, and the Chat tab already
             // carries its own unread badge, so nothing is lost by it sitting here.
@@ -373,6 +397,16 @@ private fun Dashboard(
             )
         }
     }
+}
+
+/** The trailing chevron every navigation row in the top group carries. */
+@Composable
+private fun HomeChevron() {
+    Icon(
+        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+        contentDescription = null,
+        tint = MaterialTheme.colorScheme.onSurfaceVariant
+    )
 }
 
 @Composable
