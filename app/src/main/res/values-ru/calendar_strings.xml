@@ -75,4 +75,6 @@
     <string name="calendar_agenda_header_with_custody">%1$s · день родителя %2$s</string>
     <string name="calendar_agenda_empty">Ничего не запланировано.</string>
     <string name="calendar_agenda_time_range">%1$s–%2$s</string>
+    <string name="calendar_events_load_failed">Не удалось загрузить календарь.</string>
+    <string name="calendar_retry">Повторить</string>
 </resources>
