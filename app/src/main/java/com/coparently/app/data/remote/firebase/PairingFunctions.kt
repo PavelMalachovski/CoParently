@@ -156,6 +156,7 @@ class PairingFunctions @Inject constructor(
                 "not-a-guest-invitation" -> PairingError.NotGuestInvitation
                 "grant-expired" -> PairingError.GrantEnded
                 "inviter-not-entitled" -> PairingError.InviterNotEntitled
+                "already-entitled" -> PairingError.AlreadyEntitled
                 else -> when ((e as? FirebaseFunctionsException)?.code) {
                     FirebaseFunctionsException.Code.UNAVAILABLE,
                     FirebaseFunctionsException.Code.DEADLINE_EXCEEDED -> PairingError.Network

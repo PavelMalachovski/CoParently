@@ -32,4 +32,5 @@
     <string name="guest_revoke_confirm">Zugang entfernen</string>
     <string name="guest_revoke_cancel">Abbrechen</string>
     <string name="guest_revoke_failed">Der Zugang konnte nicht entfernt werden. Verbindung prüfen und erneut versuchen.</string>
+    <string name="guest_error_already_entitled">Du kannst diese Akte bereits sehen — dafür brauchst du keinen Gastcode.</string>
 </resources>

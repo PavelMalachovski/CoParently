@@ -32,4 +32,5 @@
     <string name="guest_revoke_confirm">Закрыть доступ</string>
     <string name="guest_revoke_cancel">Отмена</string>
     <string name="guest_revoke_failed">Не удалось закрыть доступ. Проверьте соединение и попробуйте ещё раз.</string>
+    <string name="guest_error_already_entitled">Вы и так видите эту карточку — гостевой код для неё не нужен.</string>
 </resources>

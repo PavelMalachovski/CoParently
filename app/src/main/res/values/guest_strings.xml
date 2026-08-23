@@ -32,4 +32,5 @@
     <string name="guest_revoke_confirm">Remove access</string>
     <string name="guest_revoke_cancel">Cancel</string>
     <string name="guest_revoke_failed">Access could not be removed. Check your connection and try again.</string>
+    <string name="guest_error_already_entitled">You can already see this record — you do not need a guest code for it.</string>
 </resources>

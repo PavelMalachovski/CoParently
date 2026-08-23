@@ -108,6 +108,7 @@ class GuestAcceptViewModel @Inject constructor(
             PairingError.NotGuestInvitation -> R.string.guest_error_not_guest_invitation
             PairingError.GrantEnded -> R.string.guest_error_grant_ended
             PairingError.InviterNotEntitled -> R.string.guest_error_inviter_not_entitled
+            PairingError.AlreadyEntitled -> R.string.guest_error_already_entitled
             else -> R.string.pairing_error_unknown
         }
 }

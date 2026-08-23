@@ -46,6 +46,16 @@ sealed interface PairingError {
     /** The person who made the guest invitation may not grant access to that record. */
     data object InviterNotEntitled : PairingError
 
+    /**
+     * The accepter can already read the record, so a guest grant would add nothing.
+     *
+     * Reachable when a co-parent redeems a guest code. Refused rather than allowed as a
+     * harmless no-op: a parent sitting in `guests` *and* in `sharedWith` is a trap, because
+     * when the grant runs out the sweep would take them out of the audience of their own
+     * child's record.
+     */
+    data object AlreadyEntitled : PairingError
+
     /** Offline, timeout or an unreachable backend. */
     data object Network : PairingError
 
