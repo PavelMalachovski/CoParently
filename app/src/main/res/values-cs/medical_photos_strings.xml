@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Fotografie připojené k lékařským poznámkám dítěte. -->
+<resources>
+    <string name="medical_photos_title">Fotografie</string>
+    <string name="medical_photos_add">Přidat fotografii</string>
+    <string name="medical_photos_none">Zatím žádné fotografie.</string>
+    <string name="medical_photos_hint">Recept, vyrážka, očkovací průkaz — sdíleno s druhým rodičem.</string>
+
+    <!-- Spoken descriptions. %1$d = this photograph's position, %2$d = how many there are. -->
+    <string name="medical_photos_thumbnail_description">Lékařská fotografie %1$d z %2$d</string>
+    <string name="medical_photos_remove">Odebrat fotografii</string>
+    <string name="medical_photos_open">Otevřít fotografii</string>
+    <string name="medical_photos_close">Zavřít</string>
+
+    <!-- Failures. The two are opposite cases and say opposite things: a failed upload attached
+         nothing, while a failed delete left the photograph where it was — dropping the
+         reference anyway would leave an image nobody can see and nobody can delete. -->
+    <string name="medical_photos_upload_failed">Tuto fotografii se nepodařilo nahrát, takže nebyla připojena.</string>
+    <string name="medical_photos_delete_failed">Tuto fotografii se nepodařilo smazat, takže zůstává připojená.</string>
+</resources>

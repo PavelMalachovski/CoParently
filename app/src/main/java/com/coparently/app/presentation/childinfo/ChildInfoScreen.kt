@@ -23,6 +23,7 @@ import com.coparently.app.domain.model.MedicalProfile
 import com.coparently.app.domain.model.Medication
 import com.coparently.app.domain.model.SchoolInfo
 import com.coparently.app.domain.model.Vaccination
+import com.coparently.app.presentation.childinfo.components.MedicalPhotoStrip
 import com.coparently.app.presentation.common.GroupLabel
 import com.coparently.app.presentation.common.SectionGroup
 import com.coparently.app.presentation.common.SectionGroupScope
@@ -181,6 +182,12 @@ private fun ChildInfoContent(childInfo: ChildInfo, onEditClick: (String) -> Unit
         }
         childInfo.medicalNotes?.let { notes ->
             item { MedicalNotesGroup(notes = notes, onClick = onRowClick) }
+        }
+        if (childInfo.medicalPhotos.isNotEmpty()) {
+            // Beside the notes, because that is what they are: what the doctor said, in the form
+            // a parent could actually capture it in. Read-only here — the strip becomes an editor
+            // only when the same composable is given add and remove callbacks.
+            item { MedicalPhotoStrip(photos = childInfo.medicalPhotos) }
         }
         if (childInfo.emergencyContacts.isNotEmpty()) {
             item {

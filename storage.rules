@@ -5,6 +5,10 @@ rules_version = '2';
 // Receipt photos are stored at receipts/{expenseId}.jpg. Reads and writes require
 // authentication; download URLs embedded in Firestore documents carry an access
 // token and keep working for the paired parent regardless of these read rules.
+//
+// None of these blocks can tell one signed-in user from another: Storage rules cannot read
+// Firestore, so none of them knows who a parent of what is. See the medical_photos block, which
+// says at length what that costs and why it was accepted there.
 service firebase.storage {
   match /b/{bucket}/o {
     match /receipts/{fileName} {
@@ -19,6 +23,34 @@ service firebase.storage {
     // Event photos, stored at event_images/{eventId}.jpg, same constraints as receipts.
     match /event_images/{fileName} {
       allow read: if request.auth != null;
+      allow write: if request.auth != null
+        && (request.resource == null
+            || (request.resource.size < 5 * 1024 * 1024
+                && request.resource.contentType == 'image/jpeg'));
+    }
+
+    // Photographs attached to a child's medical notes, at
+    // medical_photos/{childInfoId}/{photoId}.jpg — several per child, unlike the two blocks
+    // above, which derive one fixed object from an entity id.
+    //
+    // READ THIS BEFORE WIDENING ANYTHING HERE. The read rule below is the same
+    // "any authenticated user" as receipts and event_images, and for a receipt that was judged
+    // acceptable. A photograph of a child's medical record is not the same thing, and
+    // "any signed-in CoPlanly user" is not an audience it should have.
+    //
+    // Storage rules cannot read Firestore, so they cannot ask whether the caller is a parent of
+    // this child. The two honest options were an unguessable path plus the download URL's access
+    // token, or a Cloud Function proxy. This takes the first, and {photoId} is a UUID for that
+    // reason rather than for uniqueness.
+    //
+    // That is obscurity, not access control. It is written here so a future reader does not
+    // mistake it for a boundary: anyone signed in who learns a path can read the object, and the
+    // only thing stopping them learning it is that they cannot guess a UUID. The real fix is the
+    // proxy.
+    match /medical_photos/{childInfoId}/{fileName} {
+      allow read: if request.auth != null;
+      // Same constraints as the blocks above: deletes have request.resource == null; uploads
+      // must be JPEG under 5 MB.
       allow write: if request.auth != null
         && (request.resource == null
             || (request.resource.size < 5 * 1024 * 1024

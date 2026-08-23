@@ -361,6 +361,9 @@ class SyncService @Inject constructor(
                 "emergencyContacts" to gson.fromJson(entity.emergencyContactsJson, List::class.java),
                 "schoolInfo" to entity.schoolInfoJson?.let { gson.fromJson(it, Map::class.java) },
                 "medicalProfile" to gson.fromJson(entity.medicalProfileJson, Map::class.java),
+                "medicalPhotos" to ChildInfoPhotos.decode(
+                    gson.fromJson(entity.medicalPhotosJson, List::class.java)
+                ),
                 "createdAt" to entity.createdAt.format(formatter),
                 "updatedAt" to entity.updatedAt.format(formatter),
                 "createdByFirebaseUid" to entity.createdByFirebaseUid,
@@ -419,6 +422,9 @@ class SyncService @Inject constructor(
                                 "emergencyContacts" to gson.fromJson(localEntity.emergencyContactsJson, List::class.java),
                                 "schoolInfo" to localEntity.schoolInfoJson?.let { gson.fromJson(it, Map::class.java) },
                                 "medicalProfile" to gson.fromJson(localEntity.medicalProfileJson, Map::class.java),
+                                "medicalPhotos" to ChildInfoPhotos.decode(
+                                    gson.fromJson(localEntity.medicalPhotosJson, List::class.java)
+                                ),
                                 "createdAt" to localEntity.createdAt.format(formatter),
                                 "updatedAt" to LocalDateTime.now().format(formatter),
                                 "createdByFirebaseUid" to localEntity.createdByFirebaseUid,
@@ -614,6 +620,7 @@ class SyncService @Inject constructor(
             emergencyContactsJson = gson.toJson(this["emergencyContacts"] ?: emptyList<Any>()),
             schoolInfoJson = (this["schoolInfo"] as? Map<*, *>)?.let { gson.toJson(it) },
             medicalProfileJson = gson.toJson(this["medicalProfile"] ?: emptyMap<String, Any?>()),
+            medicalPhotosJson = gson.toJson(ChildInfoPhotos.decode(this["medicalPhotos"])),
             createdAt = LocalDateTime.parse(this["createdAt"] as String, formatter),
             updatedAt = LocalDateTime.parse(this["updatedAt"] as String, formatter),
             createdByFirebaseUid = this["createdByFirebaseUid"] as? String,

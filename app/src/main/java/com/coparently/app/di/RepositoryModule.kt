@@ -15,6 +15,7 @@ import com.coparently.app.domain.repository.ChildInfoRepository
 import com.coparently.app.domain.repository.EventImageStorage
 import com.coparently.app.domain.repository.EventRepository
 import com.coparently.app.domain.repository.ExpenseRepository
+import com.coparently.app.domain.repository.MedicalPhotoStorage
 import com.coparently.app.domain.repository.MessageRepository
 import com.coparently.app.domain.repository.PairingRepository
 import com.coparently.app.domain.repository.PreferencesRepository
@@ -112,6 +113,19 @@ abstract class RepositoryModule {
     abstract fun bindEventImageStorage(
         firebaseImageStorage: FirebaseImageStorage
     ): EventImageStorage
+
+    /**
+     * Provides MedicalPhotoStorage implementation (Firebase Cloud Storage).
+     *
+     * The same class as the two above — one Storage client, three shapes of object — but a
+     * separate binding, because a caller that only ever attaches a photograph to a child should
+     * not be handed the ability to delete receipts.
+     */
+    @Binds
+    @Singleton
+    abstract fun bindMedicalPhotoStorage(
+        firebaseImageStorage: FirebaseImageStorage
+    ): MedicalPhotoStorage
 
     /** Binds the Firestore-backed pairing repository. */
     @Binds

@@ -18,6 +18,7 @@ import java.time.LocalDateTime
  * @property schoolInfoJson JSON string of school information
  * @property medicalProfileJson JSON object of [com.coparently.app.domain.model.MedicalProfile];
  * `{}` when never filled
+ * @property medicalPhotosJson JSON array of photograph download URLs; `[]` when none
  * @property createdAt Timestamp when the info was created
  * @property updatedAt Timestamp when the info was last updated
  * @property createdByFirebaseUid Firebase UID of the user who created this info
@@ -38,6 +39,11 @@ data class ChildInfoEntity(
     val schoolInfoJson: String?, // JSON object or null
     /** JSON object of [com.coparently.app.domain.model.MedicalProfile]; `{}` when never filled. */
     val medicalProfileJson: String = "{}",
+    /**
+     * JSON array of photograph download URLs; `[]` when none. Stored as JSON like every other
+     * list on this record rather than as a relation — the app never queries by photograph.
+     */
+    val medicalPhotosJson: String = "[]",
     val createdAt: LocalDateTime,
     val updatedAt: LocalDateTime,
     val createdByFirebaseUid: String?,

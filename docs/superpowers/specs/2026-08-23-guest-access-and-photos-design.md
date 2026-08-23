@@ -61,6 +61,30 @@ Storage path `medical_photos/{childInfoId}/{photoId}.jpg`, with a matching `stor
 
 Device: attach three photographs to one medical note, confirm all three survive a sync and appear on the co-parent's phone; delete one and confirm the file is gone from the bucket, not merely from the list.
 
+### What was run, 23 August 2026 (G1)
+
+Implemented on `claude/package-g1-medical-photos`, cut from `main` @ `3122436`. G2 has not been
+started. The full ledger is `docs/superpowers/plans/2026-08-23-guest-access-and-photos-PROGRESS.md`.
+
+| Check | Result |
+|---|---|
+| The list survives | **Seven** map sites, not six — `SyncService`'s `UseLocal` conflict map is missing from the plan's list. Four are covered by `ChildInfoPhotosMappingTest`; `SyncService`'s three cannot be instantiated in a unit test and are carried by inspection. Plus an **eighth** non-map site: `ConflictResolver.countNonNullFields`. |
+| Reading the field | `ChildInfoPhotosTest`, **5 passing** — absent key, wrong shape, non-string entry, blank URL. |
+| Deletion | Written: the object is deleted before the reference, and the URL is **kept** when the delete fails. Not yet exercised on a device, which is the only place it can be. |
+| Storage rules | **No coverage exists.** `firestore-tests/` is Firestore-only and `firebase.json` configures no storage emulator — so `receipts` and `event_images` have none either. Reported rather than claimed, per the plan. |
+| Firestore rules | **237 passing**, unchanged. `child_info` validates keys by presence, so the new key needed no rule change. |
+| Pure-Kotlin unit tests, whole tree | **298 passing** across 33 classes, up from 293. |
+| Locales | all **10** new keys in exactly five files each, every one referenced from code. |
+| No dependency added | `git diff main..HEAD -- app/build.gradle.kts` is empty; Coil was already here. |
+| Build (`assembleDebug testDebugUnitTest lint detekt`) | **Not run** — no Android SDK and no route to Google's Maven host in this container. No Compose file here has been compiled. |
+| Instrumented migration test (19→20) | **Not run** — same reason. |
+| Device | **Not run.** |
+
+§2's "deletion must remove the file, not just the reference" is the one thing here whose failure
+leaves no trace on any screen, so the device check is not a formality: the photograph would
+disappear from the app and stay in the bucket, readable by anyone holding the link, with nothing
+left pointing at it.
+
 ---
 
 # G2 — Guest access

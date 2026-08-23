@@ -7,12 +7,37 @@ import com.coparently.app.data.crashlytics.CrashlyticsManager
 import com.coparently.app.data.remote.firebase.FirebaseAuthService
 import com.coparently.app.domain.model.ChildInfo
 import com.coparently.app.domain.repository.ChildInfoRepository
+import com.coparently.app.domain.repository.MedicalPhotoStorage
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.util.UUID
 import javax.inject.Inject
+
+/**
+ * Why a photograph did not make it on or off the record.
+ *
+ * A code, not a message: a ViewModel has no `Context` and must not acquire one to build
+ * user-facing text — the same rule that keeps `GoogleCalendarSyncState.message` on the
+ * localization follow-up list. The screen resolves it in composable scope, exactly as
+ * `CalendarViewModel.SwapError` is resolved.
+ */
+enum class MedicalPhotoError {
+    /** The upload failed. The photograph is not on the record and nothing is in the bucket. */
+    UPLOAD_FAILED,
+
+    /**
+     * The object could not be deleted, so its URL was **kept** on the record.
+     *
+     * Dropping the reference anyway is the one thing this must not do: the image would stay in
+     * the bucket, readable by anyone holding the link, with nothing left pointing at it to
+     * delete it by.
+     */
+    DELETE_FAILED
+}
 
 /**
  * ViewModel for managing child information.
@@ -21,6 +46,7 @@ import javax.inject.Inject
 @HiltViewModel
 class ChildInfoViewModel @Inject constructor(
     private val childInfoRepository: ChildInfoRepository,
+    private val medicalPhotoStorage: MedicalPhotoStorage,
     private val firebaseAuthService: FirebaseAuthService,
     private val analyticsManager: AnalyticsManager,
     private val crashlyticsManager: CrashlyticsManager
@@ -31,6 +57,15 @@ class ChildInfoViewModel @Inject constructor(
 
     private val _currentChildInfo = MutableStateFlow<ChildInfo?>(null)
     val currentChildInfo: StateFlow<ChildInfo?> = _currentChildInfo.asStateFlow()
+
+    /** Why a photograph did not make it on or off the record, or null when nothing is wrong. */
+    private val _photoError = MutableStateFlow<MedicalPhotoError?>(null)
+    val photoError: StateFlow<MedicalPhotoError?> = _photoError.asStateFlow()
+
+    /** Clears [photoError] once the screen has shown it. */
+    fun clearPhotoError() {
+        _photoError.value = null
+    }
 
     init {
         loadChildInfo()
@@ -106,6 +141,96 @@ class ChildInfoViewModel @Inject constructor(
                 _uiState.value = ChildInfoUiState.Error(e.message ?: "Failed to save child info")
             }
         }
+    }
+
+    /**
+     * Saves the child, having first settled its photographs.
+     *
+     * Photographs are uploaded **on save**, never on pick, and this is the reason: a parent who
+     * attaches three photographs while adding a child and then backs out would otherwise leave
+     * three objects in the bucket under a child id that was never written — unreachable and
+     * undeletable forever, and medical images at that. Nothing is uploaded until there is a
+     * record to hang it on. It is also the flow `AddExpenseScreen` already uses for receipts.
+     *
+     * **A removal deletes the object first and keeps the URL if that fails.** A reference dropped
+     * from a record whose object is still in the bucket is an image nobody can see and nobody can
+     * delete, still readable by anyone who kept the link. Failing loudly and leaving the
+     * photograph attached is the recoverable half of that trade.
+     *
+     * A failed *upload* is the opposite case and is simply skipped: nothing reached the bucket,
+     * so there is nothing to reference and nothing to leak. Both are reported through
+     * [photoError].
+     *
+     * @param childInfo The record to save, carrying the photographs it already had.
+     * @param isNewChild Whether this is an add rather than an edit.
+     * @param newPhotoUris Content URIs of photographs picked on this device and not yet uploaded.
+     * @param removedPhotoUrls URLs the user removed, to be deleted from the bucket.
+     */
+    fun upsertChildInfoWithPhotos(
+        childInfo: ChildInfo,
+        isNewChild: Boolean,
+        newPhotoUris: List<String>,
+        removedPhotoUrls: List<String>
+    ) {
+        viewModelScope.launch {
+            val kept = childInfo.medicalPhotos.filter { url ->
+                url !in removedPhotoUrls || !deletePhoto(url)
+            }
+            val added = newPhotoUris.mapNotNull { uri -> uploadPhoto(childInfo.id, uri) }
+            upsertChildInfo(childInfo.copy(medicalPhotos = kept + added), isNewChild)
+        }
+    }
+
+    /**
+     * Deletes one photograph's object.
+     *
+     * @return true when the object is gone and its URL may be dropped from the record.
+     */
+    private suspend fun deletePhoto(url: String): Boolean = try {
+        medicalPhotoStorage.deleteMedicalPhoto(url)
+        true
+    } catch (e: CancellationException) {
+        // Not a failure: the screen went away. Swallowing it here would leave the coroutine
+        // machinery believing this scope is still alive. Same shape as `CustodyModelRepository`.
+        throw e
+    } catch (
+        @Suppress("TooGenericExceptionCaught") e: Exception
+    ) {
+        crashlyticsManager.recordExceptionWithContext(
+            e,
+            mapOf("action" to "delete_medical_photo")
+        )
+        _photoError.value = MedicalPhotoError.DELETE_FAILED
+        false
+    }
+
+    /**
+     * Uploads one picked photograph.
+     *
+     * The photo id is a fresh UUID, and that is load-bearing rather than merely unique: the
+     * Storage read rule cannot tell one signed-in user from another, so the unguessable path is
+     * what stands in for one. See the `medical_photos` block in `storage.rules`, which says at
+     * length that this is obscurity and not access control.
+     *
+     * @return the download URL, or null when the upload failed.
+     */
+    private suspend fun uploadPhoto(childInfoId: String, localUri: String): String? = try {
+        medicalPhotoStorage.uploadMedicalPhoto(
+            childInfoId = childInfoId,
+            photoId = UUID.randomUUID().toString(),
+            localUri = localUri
+        )
+    } catch (e: CancellationException) {
+        throw e
+    } catch (
+        @Suppress("TooGenericExceptionCaught") e: Exception
+    ) {
+        crashlyticsManager.recordExceptionWithContext(
+            e,
+            mapOf("action" to "upload_medical_photo", "child_id" to childInfoId)
+        )
+        _photoError.value = MedicalPhotoError.UPLOAD_FAILED
+        null
     }
 
     /**

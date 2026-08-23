@@ -150,6 +150,12 @@ class ConflictResolver @Inject constructor() {
         if (!childInfo.medicalNotes.isNullOrBlank()) count++
         if (!childInfo.emergencyContactsJson.isNullOrBlank() && childInfo.emergencyContactsJson != "[]") count++
         if (!childInfo.schoolInfoJson.isNullOrBlank()) count++
+        // Photographs count. This heuristic decides which side of a conflict survives, so a
+        // version holding three photographs and one holding none must not score equal: without
+        // this line the remote could win a tie and the photographs would be gone with no error
+        // anywhere. It is the eighth place this field has to be carried, and the only one that
+        // is not a map.
+        if (!childInfo.medicalPhotosJson.isNullOrBlank() && childInfo.medicalPhotosJson != "[]") count++
         return count
     }
 }
