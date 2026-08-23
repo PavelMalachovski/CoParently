@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Экран контактов: номера, которые нужно найти в спешке. -->
+<resources>
+    <string name="contacts_title">Контакты</string>
+    <string name="contacts_back">Назад</string>
+
+    <!-- Trailing action on a contact row. Opens the dialler pre-filled; it never places the
+         call itself, so no permission is asked for. -->
+    <string name="contacts_call">Позвонить</string>
+
+    <string name="contacts_empty">Контактов пока нет.</string>
+    <string name="contacts_empty_hint">Добавьте бабушек и дедушек, врачей или родителей друга в данные ребёнка — и здесь до них будет одно касание.</string>
+
+    <!-- Shown when there is no dialler to open — rare, but a silent no-op looks like a broken
+         button. -->
+    <string name="contacts_no_dialer">На этом устройстве нет приложения для звонков.</string>
+</resources>

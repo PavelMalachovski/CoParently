@@ -21,8 +21,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Contacts
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material.icons.filled.PriorityHigh
@@ -65,6 +67,7 @@ import com.coparently.app.domain.home.WeekEntry
 import com.coparently.app.presentation.common.ParentNames
 import com.coparently.app.presentation.common.PillChip
 import com.coparently.app.presentation.common.SectionGroup
+import com.coparently.app.presentation.common.SectionRow
 import com.coparently.app.presentation.common.rememberParentNames
 import com.coparently.app.presentation.theme.ParentColors
 import java.text.NumberFormat
@@ -96,6 +99,7 @@ private const val SETTLED_EPSILON = 0.01
  *
  * @param onOpenEvent Opens an event by id
  * @param onOpenChangeRequests Opens the change-request inbox
+ * @param onOpenContacts Opens the contacts list
  * @param onOpenSettings Opens settings
  * @param onNavigateToPairing Opens the pairing screen
  * @param onOpenExpenses Switches to the Expenses tab — the spend tile's deep link
@@ -110,6 +114,7 @@ private const val SETTLED_EPSILON = 0.01
 fun HomeScreen(
     onOpenEvent: (String) -> Unit,
     onOpenChangeRequests: () -> Unit,
+    onOpenContacts: () -> Unit,
     onOpenSettings: () -> Unit,
     onNavigateToPairing: () -> Unit,
     onOpenExpenses: () -> Unit,
@@ -157,6 +162,7 @@ fun HomeScreen(
                 contentPadding = padding,
                 onOpenEvent = onOpenEvent,
                 onOpenChangeRequests = onOpenChangeRequests,
+                onOpenContacts = onOpenContacts,
                 onOpenExpenses = onOpenExpenses,
                 onOpenChat = onOpenChat
             )
@@ -210,6 +216,7 @@ private fun PairingInvitation(
  * @param contentPadding The scaffold's own insets
  * @param onOpenEvent Opens an event by id
  * @param onOpenChangeRequests Opens the change-request inbox
+ * @param onOpenContacts Opens the contacts list
  * @param onOpenExpenses Switches to the Expenses tab
  * @param onOpenChat Switches to the Chat tab
  */
@@ -223,6 +230,7 @@ private fun Dashboard(
     contentPadding: PaddingValues,
     onOpenEvent: (String) -> Unit,
     onOpenChangeRequests: () -> Unit,
+    onOpenContacts: () -> Unit,
     onOpenExpenses: () -> Unit,
     onOpenChat: () -> Unit
 ) {
@@ -310,6 +318,27 @@ private fun Dashboard(
                     items = state.recentChanges,
                     onOpenChangeRequests = onOpenChangeRequests,
                     onOpenEvent = onOpenEvent
+                )
+            }
+        }
+
+        item {
+            // Item 16: the numbers worth finding in a hurry, behind one button. It sits here
+            // rather than in the top bar because it is a destination, not a screen action, and
+            // an unlabelled icon up there is exactly what the design refresh removed elsewhere.
+            SectionGroup {
+                SectionRow(
+                    title = stringResource(R.string.home_contacts),
+                    icon = Icons.Default.Contacts,
+                    supporting = stringResource(R.string.home_contacts_supporting),
+                    onClick = onOpenContacts,
+                    trailing = {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 )
             }
         }

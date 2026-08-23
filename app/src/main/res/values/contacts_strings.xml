@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Contacts screen: the numbers worth finding in a hurry. -->
+<resources>
+    <string name="contacts_title">Contacts</string>
+    <string name="contacts_back">Back</string>
+
+    <!-- Trailing action on a contact row. Opens the dialler pre-filled; it never places the
+         call itself, so no permission is asked for. -->
+    <string name="contacts_call">Call</string>
+
+    <string name="contacts_empty">No contacts yet.</string>
+    <string name="contacts_empty_hint">Add grandparents, doctors or a friend's parents to a child's details, and they will be one tap from the dialler here.</string>
+
+    <!-- Shown when there is no dialler to open — rare, but a silent no-op looks like a broken
+         button. -->
+    <string name="contacts_no_dialer">This device has no dialler.</string>
+</resources>
