@@ -88,6 +88,33 @@ The budget chip strip belongs to the list and stays there.
 
 **Device checks:** a month with two currencies shows the chip row and never a mixed pie; a month with one hides it; the filter renames itself with the two parents' real names; and the chart and table agree after every filter change. Then switch to Russian and confirm the category labels and the empty state are translated.
 
+### What was run, 23 August 2026
+
+Implemented on `claude/start-e-schemas-docs-3kn5c6`, alongside package E (PR #56). The full
+ledger — every decision, deviation and measurement — is
+`docs/superpowers/plans/2026-08-23-expense-analytics-PROGRESS.md`.
+
+| Check | Result |
+|---|---|
+| Aggregation | **13 tests passing**, including the cross-currency case and its subtler sibling (two totals sharing one denominator). |
+| Palette | **6 tests passing**, pinned to values a colour-blindness validator approved. See the finding below. |
+| Pure-Kotlin unit tests, whole tree | **312 passing** across 34 classes, up from 293. |
+| Locales | all **12** new keys in exactly five files each; none added and left unreferenced. |
+| No dependency added | `git diff main..HEAD -- app/build.gradle.kts` is empty. |
+| Line length | nothing over 120 in any file this package touches. |
+| Build (`assembleDebug testDebugUnitTest lint detekt`) | **Not run** — no Android SDK and no route to Google's Maven host in this container. No Compose file here has been compiled. |
+| Device checks | **Not run.** All seven are outstanding. |
+
+**§3's palette premise did not survive measurement.** "Nine categories need nine distinguishable
+fills" is not achievable: nine hues at fixed lightness separate by ΔE 1.0 under deuteranopia, and
+a search over several hundred lightness/chroma/ordering combinations could not lift the all-pairs
+worst case above ΔE 6.9 in light or 1.3 in dark. It is a property of nine, not of these nine. The
+shipped palette clears every check on *adjacent* pairs — ΔE 10.5 light / 11.1 dark under
+colour-blindness simulation, against a target of 8 — which is the pairlist a pie is graded on,
+because only neighbouring arcs touch. The rest is carried by the table: §3 already made it the
+accessible representation, and this makes that load-bearing rather than a courtesy. Nothing on
+this screen asks a reader to tell two slices apart by colour.
+
 ## 8. Deliberately not in F
 
 - **FX conversion.** §2. It is a recorded product decision, not an oversight.
