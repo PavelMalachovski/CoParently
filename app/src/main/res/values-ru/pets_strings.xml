@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Pets feature: the family's animals, shared between the two parents like child info. -->
+<resources>
+    <!-- List screen -->
+    <string name="pets_screen_title">Питомцы</string>
+    <string name="pets_back">Назад</string>
+    <string name="pets_sync">Синхронизировать</string>
+    <string name="pets_add">Добавить питомца</string>
+    <string name="pets_group_label">Питомцы</string>
+    <string name="pets_empty_state">Питомцев пока нет</string>
+    <string name="pets_retry">Повторить</string>
+
+    <!-- Editor -->
+    <string name="pet_title_add">Добавить питомца</string>
+    <string name="pet_title_edit">Изменить питомца</string>
+    <string name="pet_section_basic">Основная информация</string>
+    <string name="pet_name_label">Кличка</string>
+    <string name="pet_species_label">Вид</string>
+    <string name="pet_breed_label">Порода (необязательно)</string>
+    <string name="pet_dob_value">Дата рождения: %1$s</string>
+    <string name="pet_select_dob">Выберите дату рождения</string>
+    <string name="pet_section_medications">Лекарства</string>
+    <string name="pet_section_vaccinations">Прививки</string>
+    <string name="pet_section_special_needs">Особенности</string>
+    <string name="pet_special_needs_label">Особенности</string>
+    <string name="pet_special_needs_placeholder">Поведение, страхи, аллергии — что важно знать обоим домам</string>
+    <string name="pet_section_feeding">Кормление и режим</string>
+    <string name="pet_feeding_label">Кормление и прогулки</string>
+    <string name="pet_feeding_placeholder">Чем и когда кормить, режим прогулок</string>
+    <string name="pet_section_vet">Ветеринар</string>
+    <string name="pet_vet_name_label">Клиника или имя ветеринара</string>
+    <string name="pet_vet_phone_label">Телефон ветеринара</string>
+    <string name="pet_section_photos">Фотографии</string>
+    <string name="pet_add_button">Добавить питомца</string>
+    <string name="pet_save_changes">Сохранить изменения</string>
+
+    <!-- Delete -->
+    <string name="pet_delete_title">Удалить %1$s?</string>
+    <string name="pet_delete_message">Питомец будет удалён у обоих родителей. Это действие нельзя отменить.</string>
+    <string name="pet_delete_confirm">Удалить</string>
+    <string name="pet_delete_cancel">Отмена</string>
+
+    <!-- Species -->
+    <string name="pet_species_dog">Собака</string>
+    <string name="pet_species_cat">Кошка</string>
+    <string name="pet_species_bird">Птица</string>
+    <string name="pet_species_rodent">Грызун</string>
+    <string name="pet_species_fish">Рыба</string>
+    <string name="pet_species_reptile">Рептилия</string>
+    <string name="pet_species_other">Другое</string>
+
+    <!-- Photo strip. %1$d = this photo's position, %2$d = total count. -->
+    <string name="pet_photos_title">Фотографии</string>
+    <string name="pet_photos_none">Фотографий пока нет</string>
+    <string name="pet_photos_add">Добавить фото</string>
+    <string name="pet_photos_hint">Фотографии видны второму родителю.</string>
+    <string name="pet_photos_thumbnail_description">Фото %1$d из %2$d</string>
+    <string name="pet_photos_open">Открыть фото</string>
+    <string name="pet_photos_remove">Удалить фото</string>
+    <string name="pet_photos_close">Закрыть</string>
+    <string name="pet_photos_upload_failed">Не удалось загрузить фото. Попробуйте ещё раз.</string>
+    <string name="pet_photos_delete_failed">Не удалось удалить фото. Оно осталось прикреплённым.</string>
+</resources>

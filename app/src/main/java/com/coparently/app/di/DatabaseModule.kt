@@ -9,6 +9,7 @@ import com.coparently.app.data.local.dao.CustodyScheduleDao
 import com.coparently.app.data.local.dao.EventDao
 import com.coparently.app.data.local.dao.ExpenseDao
 import com.coparently.app.data.local.dao.MessageDao
+import com.coparently.app.data.local.dao.PetDao
 import com.coparently.app.data.local.dao.UserDao
 import dagger.Module
 import dagger.Provides
@@ -87,6 +88,14 @@ object DatabaseModule {
     @Provides
     fun provideChildInfoDao(database: CoPlanlyDatabase): ChildInfoDao {
         return database.childInfoDao()
+    }
+
+    /**
+     * Provides PetDao.
+     */
+    @Provides
+    fun providePetDao(database: CoPlanlyDatabase): PetDao {
+        return database.petDao()
     }
 
     /**

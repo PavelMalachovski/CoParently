@@ -91,6 +91,27 @@ class AnalyticsManager @Inject constructor(
     }
 
     /**
+     * Log pet added event.
+     */
+    fun logPetAdded() {
+        analytics.logEvent("pet_added", null)
+    }
+
+    /**
+     * Log pet updated event.
+     */
+    fun logPetUpdated() {
+        analytics.logEvent("pet_updated", null)
+    }
+
+    /**
+     * Log pet deleted event.
+     */
+    fun logPetDeleted() {
+        analytics.logEvent("pet_deleted", null)
+    }
+
+    /**
      * Log event created.
      *
      * @param eventType Type of event created (e.g., "pickup", "appointment", "other")

@@ -293,6 +293,36 @@ service cloud.firestore {
                       resource.data.createdByFirebaseUid == request.auth.uid;
     }
 
+    // ---- Pets ------------------------------------------------------------
+    // Shared between a parent pair via the `sharedWith` list, the same shape as
+    // `child_info` — a pet moves between the two homes and both parents need its
+    // medications, feeding routine and vet. Pets have no guest grants (a sitter is not
+    // modelled here), so this block is `child_info` without the guest-expiry gate.
+    //
+    // As with `child_info`, a list query is served by `whereArrayContains('sharedWith', …)`
+    // in `FirestorePetDataSource`, so `allow read` keys on membership. Being in the
+    // audience is not permission to write: a writer must be the creator or the creator's
+    // partner, and `createdByFirebaseUid` is immutable across an update.
+    match /pets/{petId} {
+      allow read: if isAuthenticated() &&
+                    request.auth.uid in resource.data.sharedWith;
+
+      allow create: if isAuthenticated() &&
+                      request.resource.data.createdByFirebaseUid == request.auth.uid &&
+                      request.auth.uid in request.resource.data.sharedWith &&
+                      request.resource.data.keys().hasAll(['name', 'createdByFirebaseUid', 'sharedWith']) &&
+                      isValidLength(request.resource.data.name, 1, 100);
+
+      allow update: if isAuthenticated() &&
+                      request.auth.uid in resource.data.sharedWith &&
+                      (resource.data.createdByFirebaseUid == request.auth.uid ||
+                       isPartnerOf(resource.data.createdByFirebaseUid)) &&
+                      request.resource.data.createdByFirebaseUid == resource.data.createdByFirebaseUid;
+
+      allow delete: if isAuthenticated() &&
+                      resource.data.createdByFirebaseUid == request.auth.uid;
+    }
+
     // ---- Expenses (receipt sync) --------------------------------------
     // Only the two paired parents involved may read/write. The document schema
     // (ExpenseRepositoryImpl.addExpense) has no `sharedWith` field — expenses carry

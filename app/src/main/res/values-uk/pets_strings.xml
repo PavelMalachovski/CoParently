@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Pets feature: the family's animals, shared between the two parents like child info. -->
+<resources>
+    <!-- List screen -->
+    <string name="pets_screen_title">Улюбленці</string>
+    <string name="pets_back">Назад</string>
+    <string name="pets_sync">Синхронізувати</string>
+    <string name="pets_add">Додати улюбленця</string>
+    <string name="pets_group_label">Улюбленці</string>
+    <string name="pets_empty_state">Улюбленців ще немає</string>
+    <string name="pets_retry">Повторити</string>
+
+    <!-- Editor -->
+    <string name="pet_title_add">Додати улюбленця</string>
+    <string name="pet_title_edit">Редагувати улюбленця</string>
+    <string name="pet_section_basic">Основна інформація</string>
+    <string name="pet_name_label">Кличка</string>
+    <string name="pet_species_label">Вид</string>
+    <string name="pet_breed_label">Порода (необов’язково)</string>
+    <string name="pet_dob_value">Дата народження: %1$s</string>
+    <string name="pet_select_dob">Виберіть дату народження</string>
+    <string name="pet_section_medications">Ліки</string>
+    <string name="pet_section_vaccinations">Щеплення</string>
+    <string name="pet_section_special_needs">Особливості</string>
+    <string name="pet_special_needs_label">Особливості</string>
+    <string name="pet_special_needs_placeholder">Поведінка, страхи, алергії — що важливо знати обом домівкам</string>
+    <string name="pet_section_feeding">Годування та режим</string>
+    <string name="pet_feeding_label">Годування та прогулянки</string>
+    <string name="pet_feeding_placeholder">Чим і коли годувати, режим прогулянок</string>
+    <string name="pet_section_vet">Ветеринар</string>
+    <string name="pet_vet_name_label">Клініка або ім’я ветеринара</string>
+    <string name="pet_vet_phone_label">Телефон ветеринара</string>
+    <string name="pet_section_photos">Фотографії</string>
+    <string name="pet_add_button">Додати улюбленця</string>
+    <string name="pet_save_changes">Зберегти зміни</string>
+
+    <!-- Delete -->
+    <string name="pet_delete_title">Видалити %1$s?</string>
+    <string name="pet_delete_message">Улюбленця буде видалено в обох батьків. Цю дію не можна скасувати.</string>
+    <string name="pet_delete_confirm">Видалити</string>
+    <string name="pet_delete_cancel">Скасувати</string>
+
+    <!-- Species -->
+    <string name="pet_species_dog">Собака</string>
+    <string name="pet_species_cat">Кіт</string>
+    <string name="pet_species_bird">Птах</string>
+    <string name="pet_species_rodent">Гризун</string>
+    <string name="pet_species_fish">Риба</string>
+    <string name="pet_species_reptile">Плазун</string>
+    <string name="pet_species_other">Інше</string>
+
+    <!-- Photo strip. %1$d = this photo's position, %2$d = total count. -->
+    <string name="pet_photos_title">Фотографії</string>
+    <string name="pet_photos_none">Фотографій ще немає</string>
+    <string name="pet_photos_add">Додати фото</string>
+    <string name="pet_photos_hint">Фотографії видно другому з батьків.</string>
+    <string name="pet_photos_thumbnail_description">Фото %1$d з %2$d</string>
+    <string name="pet_photos_open">Відкрити фото</string>
+    <string name="pet_photos_remove">Видалити фото</string>
+    <string name="pet_photos_close">Закрити</string>
+    <string name="pet_photos_upload_failed">Не вдалося завантажити фото. Спробуйте ще раз.</string>
+    <string name="pet_photos_delete_failed">Не вдалося видалити фото. Воно залишилося прикріпленим.</string>
+</resources>

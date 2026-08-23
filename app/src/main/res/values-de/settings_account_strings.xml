@@ -17,6 +17,8 @@
     <string name="settings_pairing_description">Co-Elternteil einladen oder verwalten</string>
     <string name="settings_child_info_title">Informationen zum Kind</string>
     <string name="settings_child_info_description">Medikamente, Aktivitäten, Allergien</string>
+    <string name="settings_pets_title">Haustiere</string>
+    <string name="settings_pets_description">Fotos, Medikamente, besondere Bedürfnisse</string>
     <string name="settings_custody_title">Betreuungsplan</string>
     <string name="settings_custody_description">Betreuungsmuster festlegen (wochenweise, 2-2-3 usw.)</string>
     <string name="settings_about">Über CoPlanly</string>

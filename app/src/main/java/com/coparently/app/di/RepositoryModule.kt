@@ -9,6 +9,7 @@ import com.coparently.app.data.repository.ExpenseRepositoryImpl
 import com.coparently.app.data.repository.GuestRepositoryImpl
 import com.coparently.app.data.repository.MessageRepositoryImpl
 import com.coparently.app.data.repository.PairingRepositoryImpl
+import com.coparently.app.data.repository.PetRepositoryImpl
 import com.coparently.app.data.repository.PreferencesRepositoryImpl
 import com.coparently.app.domain.repository.BudgetRepository
 import com.coparently.app.domain.repository.ChangeRequestRepository
@@ -20,6 +21,8 @@ import com.coparently.app.domain.repository.GuestRepository
 import com.coparently.app.domain.repository.MedicalPhotoStorage
 import com.coparently.app.domain.repository.MessageRepository
 import com.coparently.app.domain.repository.PairingRepository
+import com.coparently.app.domain.repository.PetPhotoStorage
+import com.coparently.app.domain.repository.PetRepository
 import com.coparently.app.domain.repository.PreferencesRepository
 import com.coparently.app.domain.repository.ReceiptStorage
 import dagger.Binds
@@ -128,6 +131,25 @@ abstract class RepositoryModule {
     abstract fun bindMedicalPhotoStorage(
         firebaseImageStorage: FirebaseImageStorage
     ): MedicalPhotoStorage
+
+    /**
+     * Provides PetRepository implementation.
+     */
+    @Binds
+    @Singleton
+    abstract fun bindPetRepository(
+        petRepositoryImpl: PetRepositoryImpl
+    ): PetRepository
+
+    /**
+     * Provides PetPhotoStorage implementation (Firebase Cloud Storage) — a separate binding
+     * for the same reason MedicalPhotoStorage has one.
+     */
+    @Binds
+    @Singleton
+    abstract fun bindPetPhotoStorage(
+        firebaseImageStorage: FirebaseImageStorage
+    ): PetPhotoStorage
 
     /** Binds the Firestore-backed pairing repository. */
     @Binds

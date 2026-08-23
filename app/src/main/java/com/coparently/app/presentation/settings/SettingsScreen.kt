@@ -34,6 +34,7 @@ import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PersonOutline
+import androidx.compose.material.icons.filled.Pets
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.AlertDialog
@@ -100,6 +101,7 @@ private val syncTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
  *
  * @param onNavigateUp Returns to the screen that opened Settings
  * @param onNavigateToChildInfo Opens child information
+ * @param onNavigateToPets Opens the pets list
  * @param onNavigateToPairing Opens co-parent pairing
  * @param onNavigateToCustodySetup Opens custody schedule setup
  * @param onNavigateToMyProfile Opens the signed-in user's own profile, editable
@@ -118,6 +120,7 @@ private val syncTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 fun SettingsScreen(
     onNavigateUp: (() -> Unit)? = null,
     onNavigateToChildInfo: (() -> Unit)? = null,
+    onNavigateToPets: (() -> Unit)? = null,
     onNavigateToPairing: (() -> Unit)? = null,
     onNavigateToCustodySetup: (() -> Unit)? = null,
     onNavigateToMyProfile: (() -> Unit)? = null,
@@ -201,6 +204,19 @@ fun SettingsScreen(
                             icon = Icons.Default.ChildCare,
                             title = stringResource(R.string.settings_child_info_title),
                             supporting = stringResource(R.string.settings_child_info_description),
+                            onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                navigate()
+                            },
+                            trailing = { Chevron() }
+                        )
+                        Divider()
+                    }
+                    onNavigateToPets?.let { navigate ->
+                        SectionRow(
+                            icon = Icons.Default.Pets,
+                            title = stringResource(R.string.settings_pets_title),
+                            supporting = stringResource(R.string.settings_pets_description),
                             onClick = {
                                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                 navigate()

@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Pets feature: the family's animals, shared between the two parents like child info. -->
+<resources>
+    <!-- List screen -->
+    <string name="pets_screen_title">Mazlíčci</string>
+    <string name="pets_back">Zpět</string>
+    <string name="pets_sync">Synchronizovat</string>
+    <string name="pets_add">Přidat mazlíčka</string>
+    <string name="pets_group_label">Mazlíčci</string>
+    <string name="pets_empty_state">Zatím žádní mazlíčci</string>
+    <string name="pets_retry">Zkusit znovu</string>
+
+    <!-- Editor -->
+    <string name="pet_title_add">Přidat mazlíčka</string>
+    <string name="pet_title_edit">Upravit mazlíčka</string>
+    <string name="pet_section_basic">Základní informace</string>
+    <string name="pet_name_label">Jméno</string>
+    <string name="pet_species_label">Druh</string>
+    <string name="pet_breed_label">Plemeno (nepovinné)</string>
+    <string name="pet_dob_value">Datum narození: %1$s</string>
+    <string name="pet_select_dob">Vyberte datum narození</string>
+    <string name="pet_section_medications">Léky</string>
+    <string name="pet_section_vaccinations">Očkování</string>
+    <string name="pet_section_special_needs">Zvláštní potřeby</string>
+    <string name="pet_special_needs_label">Zvláštní potřeby</string>
+    <string name="pet_special_needs_placeholder">Chování, obavy, alergie, o kterých mají vědět oba domovy</string>
+    <string name="pet_section_feeding">Krmení a režim</string>
+    <string name="pet_feeding_label">Krmení a venčení</string>
+    <string name="pet_feeding_placeholder">Čím a kdy krmit, režim venčení</string>
+    <string name="pet_section_vet">Veterinář</string>
+    <string name="pet_vet_name_label">Název kliniky nebo veterináře</string>
+    <string name="pet_vet_phone_label">Telefon na veterináře</string>
+    <string name="pet_section_photos">Fotografie</string>
+    <string name="pet_add_button">Přidat mazlíčka</string>
+    <string name="pet_save_changes">Uložit změny</string>
+
+    <!-- Delete -->
+    <string name="pet_delete_title">Odstranit %1$s?</string>
+    <string name="pet_delete_message">Tím se mazlíček odstraní u obou rodičů. Tuto akci nelze vrátit zpět.</string>
+    <string name="pet_delete_confirm">Odstranit</string>
+    <string name="pet_delete_cancel">Zrušit</string>
+
+    <!-- Species -->
+    <string name="pet_species_dog">Pes</string>
+    <string name="pet_species_cat">Kočka</string>
+    <string name="pet_species_bird">Pták</string>
+    <string name="pet_species_rodent">Hlodavec</string>
+    <string name="pet_species_fish">Ryba</string>
+    <string name="pet_species_reptile">Plaz</string>
+    <string name="pet_species_other">Jiné</string>
+
+    <!-- Photo strip. %1$d = this photo's position, %2$d = total count. -->
+    <string name="pet_photos_title">Fotografie</string>
+    <string name="pet_photos_none">Zatím žádné fotografie</string>
+    <string name="pet_photos_add">Přidat fotografii</string>
+    <string name="pet_photos_hint">Fotografie se sdílejí s druhým rodičem.</string>
+    <string name="pet_photos_thumbnail_description">Fotografie %1$d z %2$d</string>
+    <string name="pet_photos_open">Otevřít fotografii</string>
+    <string name="pet_photos_remove">Odebrat fotografii</string>
+    <string name="pet_photos_close">Zavřít</string>
+    <string name="pet_photos_upload_failed">Fotografii se nepodařilo nahrát. Zkuste to prosím znovu.</string>
+    <string name="pet_photos_delete_failed">Fotografii se nepodařilo odebrat. Stále je přiložena.</string>
+</resources>

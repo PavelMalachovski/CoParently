@@ -13,6 +13,7 @@ import com.coparently.app.data.remote.firebase.FirestoreEventDataSource
 import com.coparently.app.data.remote.firebase.FirestoreUserDataSource
 import com.coparently.app.data.repository.LocalDateJsonAdapter
 import com.coparently.app.data.repository.ParentSlotMigrator
+import com.coparently.app.domain.repository.PetRepository
 import com.coparently.app.domain.guests.GuestGrantPolicy
 import com.google.gson.GsonBuilder
 import kotlinx.coroutines.CancellationException
@@ -47,7 +48,8 @@ class SyncService @Inject constructor(
     private val fcmService: FcmService,
     private val conflictResolver: ConflictResolver,
     private val parentSlotMigrator: ParentSlotMigrator,
-    private val encryptedPreferences: EncryptedPreferences
+    private val encryptedPreferences: EncryptedPreferences,
+    private val petRepository: PetRepository
 ) {
     // `LocalDate::class.java` needs the same adapter `ChildInfoRepositoryImpl` and
     // `UserRepositoryImpl` register: `Vaccination.date` is a `LocalDate`, and a document read
@@ -84,7 +86,12 @@ class SyncService @Inject constructor(
             _syncStatus.value = SyncStatus.Syncing(70, 100)
             syncChildInfo(currentUser.uid)
 
-            // Step 4: Complete
+            // Step 4: Sync pets. The repository handles upload, download and audience repair
+            // itself (mirroring child info), so there is nothing to duplicate here.
+            _syncStatus.value = SyncStatus.Syncing(85, 100)
+            petRepository.syncWithFirestore()
+
+            // Step 5: Complete
             _syncStatus.value = SyncStatus.Success(LocalDateTime.now())
             Result.success(Unit)
         } catch (e: Exception) {

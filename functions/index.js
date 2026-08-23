@@ -864,12 +864,14 @@ exports.sweepExpiredGuests = functions.pubsub
 /**
  * Collections whose visibility is a per-document `sharedWith` audience.
  *
- * These are the only two: `expenses` and `budgets` are gated on the *live* `isPartnerOf`
- * relationship rather than a stored list, so clearing `partnerId` already revokes them.
- * `conversations` membership is deliberately immutable — whether an ended co-parent link
- * should also erase the chat history is a product decision, not a leak to close here.
+ * These three (`events`, `child_info`, `pets`) each keep a per-document `sharedWith` list
+ * that only ever widens on the client, so unpair has to narrow it here. `expenses` and
+ * `budgets` are gated on the *live* `isPartnerOf` relationship rather than a stored list, so
+ * clearing `partnerId` already revokes them. `conversations` membership is deliberately
+ * immutable — whether an ended co-parent link should also erase the chat history is a
+ * product decision, not a leak to close here.
  */
-const SHARED_AUDIENCE_COLLECTIONS = ['events', 'child_info'];
+const SHARED_AUDIENCE_COLLECTIONS = ['events', 'child_info', 'pets'];
 
 /** Firestore caps a batched write at 500 operations; stay clear of the edge. */
 const REVOCATION_BATCH_LIMIT = 400;
