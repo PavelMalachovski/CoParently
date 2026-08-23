@@ -1,5 +1,6 @@
 package com.coparently.app.domain.model
 
+import com.coparently.app.domain.events.EventAcceptance
 import java.time.LocalDateTime
 
 /**
@@ -28,6 +29,11 @@ import java.time.LocalDateTime
  * @property pickupConfirmedAt Timestamp when the pickup was confirmed
  * @property reminderMinutes Minutes before start to show a reminder notification (null = no reminder)
  * @property imageUrl Optional download URL of a photo attached to the event (shared with the co-parent)
+ * @property acceptance Whether the other parent still has to agree to this event before it counts.
+ * Deliberately not [pickupConfirmedBy], which records a parent collecting the child after the
+ * fact; see [com.coparently.app.domain.events.EventAcceptance].
+ * @property acceptedBy Firebase UID of whoever answered, or null while unanswered
+ * @property acceptedAt Timestamp of that answer, or null while unanswered
  */
 data class Event(
     val id: String,
@@ -51,6 +57,9 @@ data class Event(
     val pickupConfirmedBy: String? = null,
     val pickupConfirmedAt: LocalDateTime? = null,
     val reminderMinutes: Int? = null,
-    val imageUrl: String? = null
+    val imageUrl: String? = null,
+    val acceptance: EventAcceptance = EventAcceptance.NOT_REQUIRED,
+    val acceptedBy: String? = null,
+    val acceptedAt: LocalDateTime? = null
 )
 
