@@ -80,8 +80,9 @@ import com.coparently.app.presentation.theme.CoPlanlyColors
 import com.coparently.app.presentation.theme.dimensions
 import java.time.Instant
 import java.time.LocalDate
-import java.time.ZoneId
+import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
 
 /**
  * Screen for setting up custody model/pattern.
@@ -231,8 +232,10 @@ fun CustodySetupScreen(
                     )
                     Spacer(modifier = Modifier.width(dims.paddingMedium))
                     Text(
+                        // Locale-aware, not a hardcoded US pattern — day and month names
+                        // already follow the app language, their order must too.
                         text = uiState.startDate.format(
-                            DateTimeFormatter.ofPattern("EEEE, MMMM d, yyyy")
+                            DateTimeFormatter.ofLocalizedDate(FormatStyle.FULL)
                         ),
                         style = MaterialTheme.typography.bodyLarge
                     )
@@ -516,9 +519,11 @@ fun CustodySetupScreen(
 
     // Date picker dialog
     if (showDatePicker) {
+        // Material3's DatePickerState speaks UTC-midnight millis on both sides; converting
+        // through the system zone shifted the anchor a day early west of Greenwich.
         val datePickerState = rememberDatePickerState(
             initialSelectedDateMillis = uiState.startDate
-                .atStartOfDay(ZoneId.systemDefault())
+                .atStartOfDay(ZoneOffset.UTC)
                 .toInstant()
                 .toEpochMilli()
         )
@@ -530,7 +535,7 @@ fun CustodySetupScreen(
                     onClick = {
                         datePickerState.selectedDateMillis?.let { millis ->
                             val date = Instant.ofEpochMilli(millis)
-                                .atZone(ZoneId.systemDefault())
+                                .atZone(ZoneOffset.UTC)
                                 .toLocalDate()
                             viewModel.setStartDate(date)
                         }
