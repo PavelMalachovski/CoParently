@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Ukrainian translations of event_acceptance_strings.xml. -->
+<resources>
+    <string name="event_acceptance_section">Події, що чекають на вашу відповідь</string>
+    <string name="event_acceptance_offered_to_you">%1$s додав(ла) це до ваших днів</string>
+    <string name="event_acceptance_offered_by_you">Ви додали це до днів: %1$s</string>
+    <string name="event_acceptance_waiting">Чекає на відповідь</string>
+    <string name="event_acceptance_accepted">Погоджено</string>
+    <string name="event_acceptance_declined">Відхилено</string>
+    <string name="event_acceptance_accept">Прийняти</string>
+    <string name="event_acceptance_decline">Відхилити</string>
+    <string name="event_acceptance_withdraw">Відкликати</string>
+    <string name="event_acceptance_waiting_strip">Ваших подій чекають на відповідь другого з батьків: %1$d</string>
+    <string name="event_acceptance_waiting_strip_one">Одна ваша подія чекає на відповідь другого з батьків</string>
+    <string name="event_acceptance_hidden_note">Вона не з\'явиться в жодному календарі, доки не буде відповіді.</string>
+</resources>

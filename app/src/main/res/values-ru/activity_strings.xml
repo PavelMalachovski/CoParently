@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Russian translations of activity_strings.xml. -->
+<resources>
+    <string name="activity_event_created">Новое событие: %1$s</string>
+    <string name="activity_event_updated">Событие изменено: %1$s</string>
+    <string name="activity_event_deleted">Событие удалено: %1$s</string>
+    <string name="activity_event_accepted">Событие принято: %1$s</string>
+    <string name="activity_event_declined">Событие отклонено: %1$s</string>
+    <string name="activity_change_requested">Предложено новое время: %1$s</string>
+    <string name="activity_change_accepted">Новое время согласовано: %1$s</string>
+    <string name="activity_change_declined">Новое время отклонено: %1$s</string>
+    <string name="activity_expense_added">Новый расход: %1$s</string>
+    <string name="activity_expense_updated">Расход изменён: %1$s</string>
+    <string name="activity_expense_deleted">Расход удалён: %1$s</string>
+    <string name="activity_day_swap_offered">Предложен обмен днями: %1$s</string>
+    <string name="activity_day_swap_accepted">Обмен днями согласован: %1$s</string>
+    <string name="activity_day_swap_declined">Обмен днями отклонён: %1$s</string>
+</resources>

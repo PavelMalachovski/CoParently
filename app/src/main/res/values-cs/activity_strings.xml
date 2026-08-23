@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Czech translations of activity_strings.xml. -->
+<resources>
+    <string name="activity_event_created">Nová událost: %1$s</string>
+    <string name="activity_event_updated">Událost změněna: %1$s</string>
+    <string name="activity_event_deleted">Událost smazána: %1$s</string>
+    <string name="activity_event_accepted">Událost přijata: %1$s</string>
+    <string name="activity_event_declined">Událost odmítnuta: %1$s</string>
+    <string name="activity_change_requested">Navržen nový čas: %1$s</string>
+    <string name="activity_change_accepted">Nový čas domluven: %1$s</string>
+    <string name="activity_change_declined">Nový čas odmítnut: %1$s</string>
+    <string name="activity_expense_added">Nový výdaj: %1$s</string>
+    <string name="activity_expense_updated">Výdaj změněn: %1$s</string>
+    <string name="activity_expense_deleted">Výdaj smazán: %1$s</string>
+    <string name="activity_day_swap_offered">Nabídnuta výměna dne: %1$s</string>
+    <string name="activity_day_swap_accepted">Výměna dne domluvena: %1$s</string>
+    <string name="activity_day_swap_declined">Výměna dne odmítnuta: %1$s</string>
+</resources>

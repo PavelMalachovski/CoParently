@@ -43,6 +43,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import com.coparently.app.R
+import com.coparently.app.domain.activity.ActivityEntityType
 import com.coparently.app.domain.chat.ChatScrollPolicy
 import com.coparently.app.domain.model.Message
 import com.coparently.app.domain.model.MessageSendStatus
@@ -294,8 +295,27 @@ fun MessageItem(
 ) {
     // A change-request card is the one bubble that goes somewhere. It carries the event id in
     // `attachments`; the inbox resolves that to the request itself.
-    val linkedEventId = message.attachments.firstOrNull()
-        ?.takeIf { message.messageType == MessageType.EVENT_LINK && onEventLinkClick != null }
+    //
+    // An announcement about an event or a change request goes to the same place, by the same id.
+    // One about an expense or a day swap renders without a tap target: neither has a route
+    // reachable from chat today, and a bubble that looks tappable and does nothing is worse than
+    // one that plainly is not.
+    val activity = message.activity
+    val linkedEventId = when {
+        onEventLinkClick == null -> null
+        message.messageType == MessageType.EVENT_LINK -> message.attachments.firstOrNull()
+        activity?.entityType == ActivityEntityType.EVENT ||
+            activity?.entityType == ActivityEntityType.CHANGE_REQUEST -> activity.entityId
+        else -> null
+    }
+
+    // The sentence is composed **here**, on the reading device, from the facts the sender put in
+    // the payload — see `ActivityCardText`. `message.content` is the fallback a build that knows
+    // nothing about `ACTIVITY` shows instead, and the fallback this one shows if the payload
+    // could not be parsed.
+    val bubbleText = activity
+        ?.let { stringResource(ActivityCardText.resourceFor(it.kind), it.title) }
+        ?: message.content
 
     Column(
         modifier = Modifier
@@ -329,7 +349,7 @@ fun MessageItem(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = message.content,
+                text = bubbleText,
                 color = if (isCurrentUser) {
                     MaterialTheme.colorScheme.onPrimary
                 } else {

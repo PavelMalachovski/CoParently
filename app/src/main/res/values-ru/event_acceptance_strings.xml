@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Russian translations of event_acceptance_strings.xml. -->
+<resources>
+    <string name="event_acceptance_section">События, ждущие вашего ответа</string>
+    <string name="event_acceptance_offered_to_you">%1$s добавил это в ваши дни</string>
+    <string name="event_acceptance_offered_by_you">Вы добавили это в дни: %1$s</string>
+    <string name="event_acceptance_waiting">Ждёт ответа</string>
+    <string name="event_acceptance_accepted">Согласовано</string>
+    <string name="event_acceptance_declined">Отклонено</string>
+    <string name="event_acceptance_accept">Принять</string>
+    <string name="event_acceptance_decline">Отклонить</string>
+    <string name="event_acceptance_withdraw">Отозвать</string>
+    <string name="event_acceptance_waiting_strip">Ваших событий ждут ответа второго родителя: %1$d</string>
+    <string name="event_acceptance_waiting_strip_one">Одно ваше событие ждёт ответа второго родителя</string>
+    <string name="event_acceptance_hidden_note">Оно не появится ни в одном календаре, пока не будет ответа.</string>
+</resources>

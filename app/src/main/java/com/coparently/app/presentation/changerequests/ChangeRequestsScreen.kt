@@ -50,6 +50,7 @@ import com.coparently.app.domain.custody.DaySwap
 import com.coparently.app.domain.custody.DaySwapInbox
 import com.coparently.app.domain.model.ChangeRequest
 import com.coparently.app.domain.model.ChangeRequestStatus
+import com.coparently.app.domain.model.Event
 import com.coparently.app.presentation.common.ParentNames
 import com.coparently.app.presentation.common.rememberParentNames
 import java.time.format.DateTimeFormatter
@@ -101,6 +102,9 @@ fun ChangeRequestsScreen(
     // this section renders above the incoming one and every index below it shifts.
     val swapItemCount = if (daySwaps.isEmpty()) 0 else 1 + daySwaps.size
 
+    val eventsAwaitingMe by viewModel.eventsAwaitingMe.collectAsState()
+    val awaitingItemCount = if (eventsAwaitingMe.isEmpty()) 0 else 1 + eventsAwaitingMe.size
+
     val highlighted = remember(requests, linkedEventId) {
         linkedEventId?.let { ChangeRequestHighlight.forEvent(requests, it) }
     }
@@ -135,7 +139,7 @@ fun ChangeRequestsScreen(
                 incoming = incoming,
                 outgoing = outgoing,
                 requestId = target.id,
-                precedingItems = swapItemCount
+                precedingItems = awaitingItemCount + swapItemCount
             )
             if (index >= 0) listState.animateScrollToItem(index)
         }
@@ -157,7 +161,9 @@ fun ChangeRequestsScreen(
             )
         }
     ) { padding ->
-        if (incoming.isEmpty() && outgoing.isEmpty() && daySwaps.isEmpty()) {
+        if (incoming.isEmpty() && outgoing.isEmpty() && daySwaps.isEmpty() &&
+            eventsAwaitingMe.isEmpty()
+        ) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -186,7 +192,20 @@ fun ChangeRequestsScreen(
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Day swaps first: a pending swap is the most actionable thing the inbox can
+                // An event waiting on this parent comes first of all: until they answer it, it
+                // is in nobody's calendar, so this screen is the only place it exists at all.
+                if (eventsAwaitingMe.isNotEmpty()) {
+                    item { SectionHeader(stringResource(R.string.event_acceptance_section)) }
+                    items(eventsAwaitingMe, key = { it.id }) { event ->
+                        AwaitingEventCard(
+                            event = event,
+                            parentNames = parentNames,
+                            onAccept = { viewModel.acceptEvent(event.id) },
+                            onDecline = { viewModel.declineEvent(event.id) }
+                        )
+                    }
+                }
+                // Day swaps next: a pending swap is the most actionable thing the inbox can
                 // hold — a date is about to arrive whether or not it is answered — and unlike a
                 // change request it has no second home anywhere else in the app.
                 if (daySwaps.isNotEmpty()) {
@@ -228,6 +247,61 @@ fun ChangeRequestsScreen(
                             isHighlighted = request.id == highlighted?.id
                         )
                     }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * An event the co-parent created for this parent, waiting on an answer.
+ *
+ * It says plainly that the event is in nobody's calendar yet. Without that line the card reads as
+ * a notification about something that already happened, and a parent would reasonably assume the
+ * event is on their day whether they answer or not.
+ *
+ * @param event The event awaiting a decision.
+ * @param parentNames Resolves a uid to that person's name — never "Mom" or "Dad".
+ * @param onAccept Takes it up; it then enters both calendars.
+ * @param onDecline Turns it down; it stays out, and the creator learns the answer.
+ */
+@Composable
+private fun AwaitingEventCard(
+    event: Event,
+    parentNames: ParentNames,
+    onAccept: () -> Unit,
+    onDecline: () -> Unit
+) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(text = event.title, style = MaterialTheme.typography.titleMedium)
+            Text(
+                text = event.startDateTime.format(requestDateFormatter),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = stringResource(
+                    R.string.event_acceptance_offered_to_you,
+                    parentNames.labelForUid(event.createdByFirebaseUid)
+                ),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = stringResource(R.string.event_acceptance_hidden_note),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = onAccept) {
+                    Text(stringResource(R.string.event_acceptance_accept))
+                }
+                TextButton(onClick = onDecline) {
+                    Text(stringResource(R.string.event_acceptance_decline))
                 }
             }
         }

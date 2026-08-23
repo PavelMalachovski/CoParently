@@ -1,5 +1,7 @@
 package com.coparently.app.domain.model
 
+import com.coparently.app.domain.activity.ActivityAnnouncement
+
 /**
  * Domain model representing a message in a conversation.
  * This is the clean architecture model used in the domain layer.
@@ -13,11 +15,15 @@ package com.coparently.app.domain.model
  *   An instant, not a wall clock: the two parents' devices need not share a timezone, and the
  *   read/delivered marks it is compared against are epoch millis too. The UI formats it in the
  *   reading device's own zone, which is what a reader wants to see.
- * @property messageType Type of message (TEXT, IMAGE, VOICE, EVENT_LINK)
+ * @property messageType Type of message (TEXT, IMAGE, VOICE, EVENT_LINK, ACTIVITY)
  * @property attachments List of attachment URLs
  * @property isRead Whether the message has been read by the recipient
  * @property replyToMessageId Optional ID of the message being replied to
  * @property syncedToFirestore Whether the message has been synced to Firestore
+ * @property activity The structured payload behind an [MessageType.ACTIVITY] card, or null for
+ *   every other kind of message. The reader's device renders it in its own language; [content]
+ *   carries a plain-text fallback so a build that knows nothing about `ACTIVITY` still shows
+ *   something. See [com.coparently.app.domain.activity.ActivityAnnouncement].
  */
 data class Message(
     val id: String,
@@ -31,7 +37,8 @@ data class Message(
     val isRead: Boolean = false,
     val replyToMessageId: String? = null,
     val syncedToFirestore: Boolean = false,
-    val status: MessageSendStatus = MessageSendStatus.SENT
+    val status: MessageSendStatus = MessageSendStatus.SENT,
+    val activity: ActivityAnnouncement? = null
 )
 
 /**
@@ -41,7 +48,17 @@ enum class MessageType {
     TEXT,
     IMAGE,
     VOICE,
-    EVENT_LINK
+    EVENT_LINK,
+
+    /**
+     * A change announced to the co-parent, carrying [Message.activity] rather than a sentence.
+     *
+     * Forward-compatible by construction: every reader parses the type through
+     * `runCatching { valueOf(...) }.getOrDefault(TEXT)`, so a co-parent on a build that predates
+     * this member sees the message's `content` fallback as an ordinary text bubble instead of an
+     * empty one. That degradation is pinned by a test rather than assumed.
+     */
+    ACTIVITY
 }
 
 /**

@@ -1,7 +1,16 @@
 package com.coparently.app.data.repository
 
+import com.coparently.app.domain.activity.ActivityAnnouncement
+import com.coparently.app.domain.activity.ActivityEntityType
+import com.coparently.app.domain.activity.ActivityKind
 import com.coparently.app.domain.model.Message
+import com.coparently.app.domain.activity.ActivityAnnouncement
+import com.coparently.app.domain.activity.ActivityEntityType
+import com.coparently.app.domain.activity.ActivityKind
 import com.coparently.app.domain.model.MessageSendStatus
+import com.coparently.app.domain.activity.ActivityAnnouncement
+import com.coparently.app.domain.activity.ActivityEntityType
+import com.coparently.app.domain.activity.ActivityKind
 import com.coparently.app.domain.model.MessageType
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -132,4 +141,89 @@ class ChatMappersWireFormatTest {
         /** 2026-08-01T10:00:00Z, which is 12:00 at UTC+2. */
         const val SENT_AT_MILLIS = 1_785_578_400_000L
     }
+
+    @Test
+    fun `an activity payload survives the Firestore round trip`() {
+        val announcement = ActivityAnnouncement(
+            kind = ActivityKind.EXPENSE_ADDED,
+            entityType = ActivityEntityType.EXPENSE,
+            entityId = "x1",
+            title = "School trip",
+            amount = "250 Kc",
+            currency = "CZK"
+        )
+        val message = Message(
+            id = "m1",
+            conversationId = "c1",
+            senderId = "uid-mom",
+            senderName = "Olya",
+            content = "New expense: School trip",
+            sentAtMillis = 1_785_565_800_000L,
+            messageType = MessageType.ACTIVITY,
+            activity = announcement
+        )
+
+        val document = message.toFirestoreMap()
+        @Suppress("UNCHECKED_CAST")
+        val read = (document as Map<String, Any>).toMessageOrNull()
+
+        assertEquals(announcement, read?.activity)
+        assertEquals(MessageType.ACTIVITY, read?.messageType)
+    }
+
+    @Test
+    fun `an ordinary message carries no activity key at all`() {
+        // Omitted rather than written as null, matching every other optional in this schema —
+        // and so a build that predates the field is not handed a key it will not understand.
+        val message = Message(
+            id = "m1",
+            conversationId = "c1",
+            senderId = "uid-mom",
+            senderName = "Olya",
+            content = "hello",
+            sentAtMillis = 1_785_565_800_000L
+        )
+
+        assertEquals(false, message.toFirestoreMap().containsKey("activity"))
+    }
+
+    @Test
+    fun `a build that has never heard of ACTIVITY reads it as a plain text bubble`() {
+        // This is the whole reason `content` carries a fallback sentence. An older co-parent's
+        // phone parses the type it does not know, degrades to TEXT, and shows the fallback rather
+        // than an empty bubble. Pinned rather than assumed, because it is what stops this change
+        // breaking a phone nobody has upgraded.
+        val document = mapOf<String, Any>(
+            "id" to "m1",
+            "conversationId" to "c1",
+            "senderId" to "uid-mom",
+            "senderName" to "Olya",
+            "content" to "New expense: School trip",
+            "timestamp" to 1_785_565_800_000L,
+            "messageType" to "SOMETHING_NEWER_STILL"
+        )
+
+        val read = document.toMessageOrNull()
+
+        assertEquals(MessageType.TEXT, read?.messageType)
+        assertEquals("New expense: School trip", read?.content)
+        assertNull(read?.activity)
+    }
+
+    @Test
+    fun `a Room row whose type this build does not know degrades the same way`() {
+        // The Room reader used to call `valueOf` unguarded, so one such row threw on the path
+        // that draws the whole thread rather than degrading like its Firestore counterpart.
+        val row = Message(
+            id = "m1",
+            conversationId = "c1",
+            senderId = "uid-mom",
+            senderName = "Olya",
+            content = "New expense: School trip",
+            sentAtMillis = 1_785_565_800_000L
+        ).toEntity().copy(messageType = "SOMETHING_NEWER_STILL")
+
+        assertEquals(MessageType.TEXT, row.toDomain().messageType)
+    }
+
 }

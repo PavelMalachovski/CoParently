@@ -43,6 +43,9 @@ function eventDoc(overrides) {
     lastModifiedBy: ALICE,
     permissions: 'read_write',
     imageUrl: '',
+    acceptance: 'NOT_REQUIRED',
+    acceptedBy: '',
+    acceptedAt: '',
   }, overrides);
 }
 
@@ -154,6 +157,57 @@ describe('Part 1d: events', () => {
       await seed(env, {'events/event-1': eventDoc({})});
       const db = env.authenticatedContext(CAROL).firestore();
       await assertFails(db.doc('events/event-1').update({title: 'Renamed by Carol'}));
+    });
+
+    describe('acceptance', () => {
+      // No rule was added for these fields: they live on a document the audience already reads,
+      // and the update rule already requires `createdByFirebaseUid` to be unchanged, which
+      // permits the recipient. That is exactly why it is pinned — "it should already work" is
+      // the kind of belief CLAUDE.md forbids checking on a phone.
+
+      it('lets the recipient accept an event they did not create', async () => {
+        await seed(env, {
+          'events/event-1': eventDoc({acceptance: 'PENDING'}),
+        });
+        const db = env.authenticatedContext(BOB).firestore();
+        await assertSucceeds(db.doc('events/event-1').update({
+          acceptance: 'ACCEPTED',
+          acceptedBy: BOB,
+          acceptedAt: '2026-08-05T12:00:00',
+        }));
+      });
+
+      it('lets the recipient decline one too', async () => {
+        await seed(env, {
+          'events/event-1': eventDoc({acceptance: 'PENDING'}),
+        });
+        const db = env.authenticatedContext(BOB).firestore();
+        await assertSucceeds(db.doc('events/event-1').update({
+          acceptance: 'DECLINED',
+          acceptedBy: BOB,
+          acceptedAt: '2026-08-05T12:00:00',
+        }));
+      });
+
+      it('still denies a stranger, who is in nobody\'s audience', async () => {
+        await seed(env, {
+          'events/event-1': eventDoc({acceptance: 'PENDING'}),
+        });
+        const db = env.authenticatedContext(CAROL).firestore();
+        await assertFails(db.doc('events/event-1').update({
+          acceptance: 'ACCEPTED', acceptedBy: CAROL,
+        }));
+      });
+
+      it('denies a read_only recipient, same as any other field', async () => {
+        await seed(env, {
+          'events/event-1': eventDoc({acceptance: 'PENDING', permissions: 'read_only'}),
+        });
+        const db = env.authenticatedContext(BOB).firestore();
+        await assertFails(db.doc('events/event-1').update({
+          acceptance: 'ACCEPTED', acceptedBy: BOB,
+        }));
+      });
     });
   });
 

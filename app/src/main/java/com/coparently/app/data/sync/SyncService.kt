@@ -129,7 +129,10 @@ class SyncService @Inject constructor(
                 "sharedWith" to audience,
                 "lastModifiedBy" to entity.lastModifiedBy,
                 "permissions" to entity.permissions,
-                "imageUrl" to entity.imageUrl
+                "imageUrl" to entity.imageUrl,
+                "acceptance" to entity.acceptance,
+                "acceptedBy" to entity.acceptedBy,
+                "acceptedAt" to entity.acceptedAt?.format(formatter)
             )
 
             val result = firestoreEventDataSource.insertEvent(entity.id, eventData)
@@ -183,7 +186,10 @@ class SyncService @Inject constructor(
                                 "updatedAt" to LocalDateTime.now().format(formatter),
                                 "createdByFirebaseUid" to localEntity.createdByFirebaseUid,
                                 "lastModifiedBy" to userId,
-                                "imageUrl" to localEntity.imageUrl
+                                "imageUrl" to localEntity.imageUrl,
+                                "acceptance" to localEntity.acceptance,
+                                "acceptedBy" to localEntity.acceptedBy,
+                                "acceptedAt" to localEntity.acceptedAt?.format(formatter)
                             )
                             firestoreEventDataSource.updateEvent(localEntity.id, localData)
                             eventDao.markAsSynced(localEntity.id)
@@ -576,7 +582,13 @@ class SyncService @Inject constructor(
             sharedWithJson = gson.toJson(this["sharedWith"] ?: emptyList<String>()),
             lastModifiedBy = this["lastModifiedBy"] as? String,
             permissions = this["permissions"] as? String ?: "read_write",
-            imageUrl = (this["imageUrl"] as? String)?.ifBlank { null }
+            imageUrl = (this["imageUrl"] as? String)?.ifBlank { null },
+            // Absent reads as NOT_REQUIRED: every document written before this field existed was
+            // created without an acceptance step, and defaulting the other way would hide it.
+            acceptance = (this["acceptance"] as? String)?.ifBlank { null } ?: "NOT_REQUIRED",
+            acceptedBy = (this["acceptedBy"] as? String)?.ifBlank { null },
+            acceptedAt = (this["acceptedAt"] as? String)?.ifBlank { null }
+                ?.let { LocalDateTime.parse(it, formatter) }
         )
     }
 

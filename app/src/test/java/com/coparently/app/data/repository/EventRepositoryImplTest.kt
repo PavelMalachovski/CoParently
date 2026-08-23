@@ -6,6 +6,8 @@ import com.coparently.app.data.local.entity.EventEntity
 import com.coparently.app.data.local.entity.UserEntity
 import com.coparently.app.data.remote.firebase.FirebaseAuthService
 import com.coparently.app.data.remote.firebase.FirestoreEventDataSource
+import com.coparently.app.domain.activity.ActivityAnnouncer
+import com.coparently.app.domain.events.EventAcceptance
 import com.coparently.app.domain.model.Event
 import com.google.firebase.auth.FirebaseUser
 import com.google.gson.Gson
@@ -15,6 +17,8 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.Before
 import org.junit.Test
@@ -37,6 +41,7 @@ class EventRepositoryImplTest {
     private lateinit var userDao: UserDao
     private lateinit var firebaseAuthService: FirebaseAuthService
     private lateinit var firestoreEventDataSource: FirestoreEventDataSource
+    private lateinit var activityAnnouncer: ActivityAnnouncer
     private lateinit var repository: EventRepositoryImpl
 
     private val now = LocalDateTime.of(2026, 7, 23, 10, 0)
@@ -50,7 +55,14 @@ class EventRepositoryImplTest {
         // No signed-in user -> insert/update stay local, so the Firestore path doesn't
         // interfere with what we assert about the persisted entity.
         every { firebaseAuthService.getCurrentUser() } returns null
-        repository = EventRepositoryImpl(eventDao, userDao, firebaseAuthService, firestoreEventDataSource)
+        activityAnnouncer = mockk(relaxed = true)
+        repository = EventRepositoryImpl(
+            eventDao,
+            userDao,
+            firebaseAuthService,
+            firestoreEventDataSource,
+            activityAnnouncer
+        )
     }
 
     @Test
@@ -262,6 +274,86 @@ class EventRepositoryImplTest {
             partnerId = partnerId
         )
     }
+
+    @Test
+    fun `a range query hides an event still waiting on the co-parent`() = runTest {
+        every { eventDao.getSingleEventsByDateRange(any(), any()) } returns flowOf(
+            listOf(
+                baseEntity().copy(id = "ordinary"),
+                baseEntity().copy(id = "pending", acceptance = "PENDING"),
+                baseEntity().copy(id = "declined", acceptance = "DECLINED"),
+                baseEntity().copy(id = "accepted", acceptance = "ACCEPTED")
+            )
+        )
+        every { eventDao.getRecurringEventsStartedBefore(any()) } returns flowOf(emptyList())
+
+        val events = repository.getEventsByDateRange(now.minusDays(1), now.plusDays(1)).first()
+
+        // This is the one query the month grid, the week view and the day view all read from, so
+        // one filter here is what keeps three views from disagreeing about the same event.
+        assertEquals(listOf("ordinary", "accepted"), events.map { it.id })
+    }
+
+    @Test
+    fun `a recurring series waiting on the co-parent produces no occurrences at all`() = runTest {
+        // Filtered before expansion, not after: occurrences share their master's id and carry
+        // nothing of their own, so there is no per-occurrence status to filter on later.
+        every { eventDao.getSingleEventsByDateRange(any(), any()) } returns flowOf(emptyList())
+        every { eventDao.getRecurringEventsStartedBefore(any()) } returns flowOf(
+            listOf(
+                baseEntity().copy(
+                    id = "weekly",
+                    isRecurring = true,
+                    recurrencePattern = "weekly",
+                    acceptance = "PENDING"
+                )
+            )
+        )
+
+        val events = repository.getEventsByDateRange(now.minusDays(1), now.plusDays(30)).first()
+
+        assertEquals(emptyList(), events)
+    }
+
+    @Test
+    fun `a single day query applies the same rule as the range query`() = runTest {
+        every { eventDao.getEventsByDate(any()) } returns flowOf(
+            listOf(
+                baseEntity().copy(id = "ordinary"),
+                baseEntity().copy(id = "pending", acceptance = "PENDING")
+            )
+        )
+
+        val events = repository.getEventsByDate(now).first()
+
+        assertEquals(listOf("ordinary"), events.map { it.id })
+    }
+
+    @Test
+    fun `the mappers round-trip acceptance through Room`() = runTest {
+        val entity = baseEntity().copy(
+            acceptance = "ACCEPTED",
+            acceptedBy = "uid-dad",
+            acceptedAt = now
+        )
+        coEvery { eventDao.getEventById("e1") } returns entity
+
+        val event = repository.getEventById("e1")
+
+        assertEquals(EventAcceptance.ACCEPTED, event?.acceptance)
+        assertEquals("uid-dad", event?.acceptedBy)
+        assertEquals(now, event?.acceptedAt)
+    }
+
+    @Test
+    fun `an unrecognised status from a newer build reads as not required, rather than throwing`() =
+        runTest {
+            // The safe direction: the worst case is an event that shows when a newer build would
+            // have hidden it, against a crash on the path that draws the grid.
+            coEvery { eventDao.getEventById("e1") } returns baseEntity().copy(acceptance = "SOMEDAY")
+
+            assertEquals(EventAcceptance.NOT_REQUIRED, repository.getEventById("e1")?.acceptance)
+        }
 
     private fun baseEntity() = EventEntity(
         id = "e1",
