@@ -409,6 +409,16 @@ async function acceptPairingInvitationImpl(db, acceptingUserId, acceptingEmail, 
   const inviteRef = await findInvitation(db, ref);
   const invite = (await inviteRef.get()).data();
 
+  // The dangerous direction of the two-callable split. A guest invitation redeemed here
+  // would run `assignSlots` and write `partnerId` on both users, turning a grandmother into
+  // a co-parent with a parent colour and a full view of the family. Refused outright rather
+  // than downgraded: the client already knows which kind of code it holds in the ordinary
+  // case, and the reason below tells it when it does not.
+  if (invite.kind === GUEST_INVITATION) {
+    throw new functions.https.HttpsError(
+        'failed-precondition', 'This is a guest invitation, not a co-parent invitation',
+        {reason: 'guest-invitation'});
+  }
   if (invite.status !== 'pending') {
     throw new functions.https.HttpsError(
         'failed-precondition', 'Invitation is no longer pending',
@@ -510,6 +520,211 @@ exports.acceptPairingInvitation = functions.https.onCall(async (data, context) =
   }
 
   return acceptPairingInvitationImpl(
+      admin.firestore(), context.auth.uid, context.auth.token.email || '', {code, invitationId});
+});
+
+/**
+ * The `kind` marking an invitation as a guest invitation rather than a co-parent one.
+ *
+ * Absent means co-parent: every invitation written before guests existed carries no `kind`
+ * at all, and those must keep pairing. So the guest path tests for this value explicitly and
+ * the pairing path refuses only this value — neither treats "unrecognised" as its own.
+ */
+const GUEST_INVITATION = 'guest';
+exports.GUEST_INVITATION = GUEST_INVITATION;
+
+/**
+ * Body of the `acceptGuestInvitation` callable — lets somebody read one child's record
+ * without becoming a parent.
+ *
+ * **A deliberate second function rather than a branch in `acceptPairingInvitationImpl`.**
+ * That one assigns parent slots and writes `partnerId` on two user documents; a `kind`
+ * branch inside it is a mistake waiting for a tired evening, and the mistake's outcome is a
+ * grandmother holding a parent slot and reading every event, expense and message in the
+ * family. Two functions cannot be confused by accident, and `pairing-guard` above makes the
+ * refusal explicit in the other direction too.
+ *
+ * What this writes, and nothing else: one entry in the child record's `guests` map, and the
+ * guest's uid appended to that record's `sharedWith`. No user document is touched at all.
+ *
+ * The grant's end comes from the invitation (`guestExpiresAt`, epoch millis, chosen by the
+ * parent when they made it) and must still be in the future — an invitation redeemed after
+ * its window elapsed grants nothing. There is deliberately no fallback duration here: the
+ * one default this feature must never have is "forever", and a server that quietly supplies
+ * thirty days for a malformed invitation is a server that would also supply them for a
+ * `guestExpiresAt` some future change forgets to write.
+ *
+ * @param {FirebaseFirestore.Firestore} db Firestore instance.
+ * @param {string} acceptingUserId The signed-in caller's UID.
+ * @param {string} acceptingEmail The signed-in caller's email, or ''.
+ * @param {{code: ?string, invitationId: ?string}} ref Exactly one identifier.
+ * @return {Promise<{childInfoId: string, expiresAtMillis: number}>} The record the caller may
+ *   now read, and the instant their access ends.
+ */
+async function acceptGuestInvitationImpl(db, acceptingUserId, acceptingEmail, ref) {
+  const inviteRef = await findInvitation(db, ref);
+  const invite = (await inviteRef.get()).data();
+
+  if (invite.kind !== GUEST_INVITATION) {
+    throw new functions.https.HttpsError(
+        'failed-precondition', 'This is not a guest invitation',
+        {reason: 'not-a-guest-invitation'});
+  }
+  if (invite.status !== 'pending') {
+    throw new functions.https.HttpsError(
+        'failed-precondition', 'Invitation is no longer pending',
+        {reason: 'invitation-not-pending'});
+  }
+  if (typeof invite.expiresAt === 'number' && invite.expiresAt < Date.now()) {
+    throw new functions.https.HttpsError(
+        'failed-precondition', 'Invitation has expired',
+        {reason: 'invitation-expired'});
+  }
+  if (invite.fromUserId === acceptingUserId) {
+    throw new functions.https.HttpsError(
+        'invalid-argument', 'You cannot accept your own invitation',
+        {reason: 'self-pairing'});
+  }
+  if (invite.toEmail && invite.toEmail !== acceptingEmail) {
+    throw new functions.https.HttpsError(
+        'permission-denied', 'This invitation is addressed to somebody else',
+        {reason: 'wrong-recipient'});
+  }
+
+  const childInfoId = typeof invite.childInfoId === 'string' ? invite.childInfoId : '';
+  if (!childInfoId) {
+    throw new functions.https.HttpsError(
+        'failed-precondition', 'Invitation names no child record',
+        {reason: 'invitation-malformed'});
+  }
+  const expiresAtMillis = typeof invite.guestExpiresAt === 'number' ? invite.guestExpiresAt : 0;
+  if (expiresAtMillis <= Date.now()) {
+    throw new functions.https.HttpsError(
+        'failed-precondition', 'This guest access has already ended',
+        {reason: 'grant-expired'});
+  }
+
+  const childRef = db.collection('child_info').doc(childInfoId);
+  const accepterRef = db.collection('users').doc(acceptingUserId);
+  const grantedAtMillis = Date.now();
+
+  await db.runTransaction(async (tx) => {
+    const [childSnap, inviteSnap] = await Promise.all([tx.get(childRef), tx.get(inviteRef)]);
+    if (!childSnap.exists) {
+      throw new functions.https.HttpsError(
+          'not-found', 'Child record not found', {reason: 'not-found'});
+    }
+    // Re-read inside the transaction: two devices redeeming the same code at once would
+    // otherwise both pass the check above and the second grant would overwrite the first,
+    // silently moving somebody else's expiry.
+    if (inviteSnap.data().status !== 'pending') {
+      throw new functions.https.HttpsError(
+          'failed-precondition', 'Invitation is no longer pending',
+          {reason: 'invitation-not-pending'});
+    }
+
+    const child = childSnap.data();
+    const sharedWith = Array.isArray(child.sharedWith) ? child.sharedWith : [];
+    const guests = child.guests && typeof child.guests === 'object' ? child.guests : {};
+
+    // The inviter must hold the record as a **parent**. Membership of `sharedWith` alone is
+    // not enough: a guest is in it too, and a guest who can invite another guest is how a
+    // thirty-day grant becomes permanent — each hand-off restarts the clock and no parent
+    // ever sees who is really reading. Nothing stops a client writing an invitation that
+    // names somebody else's child id either; the rules shape that document, and this is what
+    // stops it meaning anything.
+    if (sharedWith.indexOf(invite.fromUserId) < 0 ||
+        Object.prototype.hasOwnProperty.call(guests, invite.fromUserId)) {
+      throw new functions.https.HttpsError(
+          'permission-denied', 'The inviter cannot grant access to this record',
+          {reason: 'inviter-not-entitled'});
+    }
+
+    tx.update(childRef, {
+      // Written whole rather than through a `guests.<uid>` field path so the read and the
+      // write are the same transaction's view of the map — a dotted update would be a blind
+      // write over whatever a concurrent revoke had just done.
+      guests: Object.assign({}, guests, {
+        [acceptingUserId]: {
+          name: await guestName(accepterRef, acceptingEmail),
+          grantedBy: invite.fromUserId,
+          grantedAtMillis,
+          expiresAtMillis,
+        },
+      }),
+      sharedWith: sharedWith.indexOf(acceptingUserId) < 0 ?
+        sharedWith.concat([acceptingUserId]) : sharedWith,
+    });
+    tx.update(inviteRef, {
+      status: 'accepted',
+      acceptedBy: acceptingUserId,
+      acceptedAt: grantedAtMillis,
+    });
+  });
+
+  await db.collection('notification_queue').add({
+    targetUserId: invite.fromUserId,
+    data: {
+      type: 'guest_accepted',
+      title: 'Guest access accepted',
+      body: `${await guestName(accepterRef, acceptingEmail)} can now see this child's record`,
+    },
+    status: 'pending',
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+
+  return {childInfoId, expiresAtMillis};
+}
+
+exports.acceptGuestInvitationImpl = acceptGuestInvitationImpl;
+
+/**
+ * A display name for the guest, never blank.
+ *
+ * `ChildInfoGuests.decode` on the Android side **drops a grant that has no name**, so a
+ * blank here would be a guest the rules keep serving and the parent's screen cannot show —
+ * access nobody can see to revoke. The email is the honest second choice; the constant is
+ * the third only because a Firebase account with neither is possible (phone sign-in).
+ *
+ * @param {FirebaseFirestore.DocumentReference} accepterRef The guest's user document.
+ * @param {string} acceptingEmail The signed-in caller's email, or ''.
+ * @return {Promise<string>} A non-empty name.
+ */
+async function guestName(accepterRef, acceptingEmail) {
+  const snap = await accepterRef.get();
+  const stored = snap.exists && snap.data() ? snap.data().name : '';
+  return (typeof stored === 'string' && stored.trim()) || acceptingEmail || 'Guest';
+}
+
+exports.guestName = guestName;
+
+/**
+ * Redeems a guest invitation identified either by its short code or by its document id.
+ *
+ * Runs server-side for the same reason the pairing callable does: it writes a child record
+ * the caller cannot yet read, let alone write. The `child_info` update rule requires the
+ * writer to already be in `sharedWith`, which the guest is not until this has run.
+ *
+ * @param {{code?: string, invitationId?: string}} data Exactly one identifier.
+ * @return {Promise<{childInfoId: string, expiresAtMillis: number}>} See
+ *   [acceptGuestInvitationImpl].
+ */
+exports.acceptGuestInvitation = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'Sign in first');
+  }
+
+  const code = data && data.code ? String(data.code).trim().toUpperCase() : null;
+  const invitationId = data && data.invitationId ? String(data.invitationId) : null;
+
+  if ((!code && !invitationId) || (code && invitationId)) {
+    throw new functions.https.HttpsError(
+        'invalid-argument',
+        'Provide exactly one of code or invitationId',
+    );
+  }
+
+  return acceptGuestInvitationImpl(
       admin.firestore(), context.auth.uid, context.auth.token.email || '', {code, invitationId});
 });
 

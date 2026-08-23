@@ -24,6 +24,28 @@ sealed interface PairingError {
     /** An email invitation addressed to somebody else. */
     data object WrongRecipient : PairingError
 
+    /**
+     * A guest invitation was offered to the co-parent pairing path.
+     *
+     * Not a malformed code: it is a perfectly good invitation of the other kind, and the
+     * message that goes with it says so rather than telling the user their code is wrong.
+     */
+    data object GuestInvitation : PairingError
+
+    /** A co-parent invitation was offered to the guest path — the same mistake, mirrored. */
+    data object NotGuestInvitation : PairingError
+
+    /**
+     * A guest invitation whose access window ended before it was redeemed.
+     *
+     * Distinct from [Expired], which is the *offer* running out. Both mean "too late", but
+     * only this one means the parent has to choose a new end date rather than just re-send.
+     */
+    data object GrantEnded : PairingError
+
+    /** The person who made the guest invitation may not grant access to that record. */
+    data object InviterNotEntitled : PairingError
+
     /** Offline, timeout or an unreachable backend. */
     data object Network : PairingError
 

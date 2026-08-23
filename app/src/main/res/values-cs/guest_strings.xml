@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Přístup pro hosta k záznamu jednoho dítěte. -->
+<resources>
+    <string name="guest_section_label">Přístup pro hosta</string>
+    <string name="guest_invite_row_title">Pozvat hosta</string>
+    <string name="guest_invite_row_supporting">Někdo, kdo potřebuje na čas vidět tento záznam</string>
+    <string name="guest_invite_title">Pozvat hosta</string>
+    <string name="guest_invite_scope">Host si může přečíst záznam tohoto dítěte — léky, alergie, poznámky a fotografie. Nevidí váš kalendář, výdaje ani zprávy a nemůže nic změnit.</string>
+    <string name="guest_invite_how_long">Na jak dlouho?</string>
+    <string name="guest_invite_duration_week">1 týden</string>
+    <string name="guest_invite_duration_month">30 dní</string>
+    <string name="guest_invite_duration_quarter">90 dní</string>
+    <string name="guest_invite_create">Vytvořit kód</string>
+    <string name="guest_invite_ends_on">Přístup končí %1$s</string>
+    <string name="guest_invite_share">Sdílet odkaz</string>
+    <string name="guest_invite_share_message">Otevřete tento odkaz a podívejte se na záznam dítěte v CoPlanly: %1$s</string>
+    <string name="guest_invite_error_unknown">Pozvánku se nepodařilo vytvořit. Zkuste to prosím znovu.</string>
+    <string name="guest_accept_title">Přístup pro hosta</string>
+    <string name="guest_accept_back">Zpět</string>
+    <string name="guest_accept_explainer">Zadejte kód, který vám poslal rodič. Až do konce přístupu si budete moci přečíst záznam jednoho dítěte — nic dalšího v aplikaci a nic, co byste mohli změnit.</string>
+    <string name="guest_accept_action">Přijmout</string>
+    <string name="guest_accept_done_title">Máte přístup</string>
+    <string name="guest_accept_done_until">Do %1$s</string>
+    <string name="guest_accept_done_scope">Můžete si přečíst záznam tohoto dítěte. Kalendář, výdaje a zprávy rodiny zůstávají soukromé.</string>
+    <string name="guest_accept_done_action">Hotovo</string>
+    <string name="guest_error_not_guest_invitation">Toto je pozvánka pro druhého rodiče, ne kód pro hosta. Požádejte rodiče o pozvánku pro hosta.</string>
+    <string name="guest_error_grant_ended">Tento přístup už skončil. Požádejte rodiče o novou pozvánku.</string>
+    <string name="guest_error_inviter_not_entitled">Ten, kdo poslal tento kód, nemůže k tomuto záznamu udělit přístup.</string>
+</resources>

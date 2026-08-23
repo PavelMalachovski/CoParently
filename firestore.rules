@@ -367,6 +367,30 @@ service cloud.firestore {
     // link. Redemption goes through the acceptPairingInvitation callable —
     // the Admin SDK there is what looks a code up, so clients never need to
     // read invitations addressed to somebody else.
+    // Shape check for the `kind` field that tells a guest invitation from a co-parent one.
+    //
+    // Absent means co-parent: every invitation written before guests existed carries no
+    // `kind`, and those must keep pairing. Any *other* value is refused outright rather than
+    // treated as co-parent — a document this file does not understand is not one it should
+    // let a callable act on later.
+    //
+    // A guest invitation additionally names the child record it opens and the instant the
+    // grant ends, and that instant must still be in the future when the document is written.
+    // None of this is the real gate: `acceptGuestInvitation` re-checks every one of these
+    // with Admin credentials, and it also checks the thing rules cannot cheaply check — that
+    // the inviter holds the named record as a parent rather than as a guest. This only stops
+    // a malformed invitation existing in the first place.
+    function validInvitationKind(data) {
+      return !data.keys().hasAny(['kind']) || (
+        data.kind == 'guest' &&
+        data.keys().hasAll(['childInfoId', 'guestExpiresAt']) &&
+        data.childInfoId is string &&
+        data.childInfoId.size() > 0 &&
+        data.guestExpiresAt is number &&
+        data.guestExpiresAt > request.time.toMillis()
+      );
+    }
+
     match /invitations/{invitationId} {
       allow read: if isAuthenticated() && (
         resource.data.fromUserId == request.auth.uid ||
@@ -378,7 +402,8 @@ service cloud.firestore {
                       request.resource.data.keys().hasAll(
                         ['code', 'toEmail', 'status', 'createdAt', 'expiresAt']) &&
                       isValidLength(request.resource.data.code, 6, 6) &&
-                      request.resource.data.status == 'pending';
+                      request.resource.data.status == 'pending' &&
+                      validInvitationKind(request.resource.data);
 
       // The inviter may withdraw their own invite (status -> cancelled); the
       // addressed recipient may decline it (status -> rejected). Accept goes

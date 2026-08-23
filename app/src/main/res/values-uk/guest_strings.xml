@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Гостьовий доступ до картки однієї дитини. -->
+<resources>
+    <string name="guest_section_label">Гостьовий доступ</string>
+    <string name="guest_invite_row_title">Запросити гостя</string>
+    <string name="guest_invite_row_supporting">Той, кому на час потрібно бачити цю картку</string>
+    <string name="guest_invite_title">Запросити гостя</string>
+    <string name="guest_invite_scope">Гість зможе читати картку цієї дитини — ліки, алергії, нотатки та фотографії. Календар, витрати й листування йому не видно, і змінити він нічого не може.</string>
+    <string name="guest_invite_how_long">На який строк?</string>
+    <string name="guest_invite_duration_week">1 тиждень</string>
+    <string name="guest_invite_duration_month">30 днів</string>
+    <string name="guest_invite_duration_quarter">90 днів</string>
+    <string name="guest_invite_create">Створити код</string>
+    <string name="guest_invite_ends_on">Доступ завершиться %1$s</string>
+    <string name="guest_invite_share">Надіслати посилання</string>
+    <string name="guest_invite_share_message">Відкрийте посилання, щоб побачити картку дитини в CoPlanly: %1$s</string>
+    <string name="guest_invite_error_unknown">Не вдалося створити запрошення. Спробуйте ще раз.</string>
+    <string name="guest_accept_title">Гостьовий доступ</string>
+    <string name="guest_accept_back">Назад</string>
+    <string name="guest_accept_explainer">Введіть код, який надіслав хтось із батьків. До завершення доступу ви зможете читати картку однієї дитини — більше нічого в застосунку і нічого, що можна змінити.</string>
+    <string name="guest_accept_action">Прийняти</string>
+    <string name="guest_accept_done_title">Доступ відкрито</string>
+    <string name="guest_accept_done_until">До %1$s</string>
+    <string name="guest_accept_done_scope">Ви можете читати картку цієї дитини. Календар, витрати й листування родини лишаються закритими.</string>
+    <string name="guest_accept_done_action">Готово</string>
+    <string name="guest_error_not_guest_invitation">Це запрошення для другого з батьків, а не гостьовий код. Попросіть надіслати гостьове запрошення.</string>
+    <string name="guest_error_grant_ended">Цей доступ уже завершився. Попросіть надіслати нове запрошення.</string>
+    <string name="guest_error_inviter_not_entitled">Той, хто надіслав цей код, не може відкрити доступ до цієї картки.</string>
+</resources>

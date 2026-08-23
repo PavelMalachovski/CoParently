@@ -45,6 +45,17 @@
                 <data android:scheme="coplanly" android:host="pair" />
             </intent-filter>
 
+            <!-- Guest-access deep link. A separate host from `pair`, not a query
+                 parameter on it: the two invitation kinds are redeemed by two
+                 different callables, and the link is what tells the app which
+                 one it is holding before it asks the server anything. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="coplanly" android:host="guest" />
+            </intent-filter>
+
             <!-- Chat deep link, opened by a chat-message push notification
                  (see CoPlanlyMessagingService). Same shape as the pairing link
                  above: a separate filter rather than a second <data> tag on it,

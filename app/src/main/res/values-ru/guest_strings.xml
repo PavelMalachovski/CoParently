@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Гостевой доступ к карточке одного ребёнка. -->
+<resources>
+    <string name="guest_section_label">Гостевой доступ</string>
+    <string name="guest_invite_row_title">Пригласить гостя</string>
+    <string name="guest_invite_row_supporting">Тот, кому на время нужно видеть эту карточку</string>
+    <string name="guest_invite_title">Пригласить гостя</string>
+    <string name="guest_invite_scope">Гость сможет читать карточку этого ребёнка — лекарства, аллергии, заметки и фотографии. Календарь, расходы и переписка ему не видны, и изменить он ничего не может.</string>
+    <string name="guest_invite_how_long">На какой срок?</string>
+    <string name="guest_invite_duration_week">1 неделя</string>
+    <string name="guest_invite_duration_month">30 дней</string>
+    <string name="guest_invite_duration_quarter">90 дней</string>
+    <string name="guest_invite_create">Создать код</string>
+    <string name="guest_invite_ends_on">Доступ закончится %1$s</string>
+    <string name="guest_invite_share">Отправить ссылку</string>
+    <string name="guest_invite_share_message">Откройте ссылку, чтобы увидеть карточку ребёнка в CoPlanly: %1$s</string>
+    <string name="guest_invite_error_unknown">Не удалось создать приглашение. Попробуйте ещё раз.</string>
+    <string name="guest_accept_title">Гостевой доступ</string>
+    <string name="guest_accept_back">Назад</string>
+    <string name="guest_accept_explainer">Введите код, который прислал родитель. До окончания доступа вы сможете читать карточку одного ребёнка — больше ничего в приложении и ничего, что можно изменить.</string>
+    <string name="guest_accept_action">Принять</string>
+    <string name="guest_accept_done_title">Доступ открыт</string>
+    <string name="guest_accept_done_until">До %1$s</string>
+    <string name="guest_accept_done_scope">Вы можете читать карточку этого ребёнка. Календарь, расходы и переписка семьи остаются закрытыми.</string>
+    <string name="guest_accept_done_action">Готово</string>
+    <string name="guest_error_not_guest_invitation">Это приглашение для второго родителя, а не гостевой код. Попросите родителя прислать гостевое приглашение.</string>
+    <string name="guest_error_grant_ended">Этот доступ уже закончился. Попросите родителя прислать новое приглашение.</string>
+    <string name="guest_error_inviter_not_entitled">Тот, кто прислал этот код, не может открыть доступ к этой карточке.</string>
+</resources>
