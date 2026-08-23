@@ -21,11 +21,13 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
-import androidx.compose.material.icons.automirrored.filled.ViewList
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Contacts
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Payments
+import androidx.compose.material.icons.filled.PriorityHigh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.Badge
@@ -37,7 +39,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -54,6 +55,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -61,10 +63,11 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.coparently.app.R
 import com.coparently.app.domain.custody.HandoverInfo
 import com.coparently.app.domain.expenses.CurrencyBalance
-import com.coparently.app.domain.model.Event
+import com.coparently.app.domain.home.WeekEntry
 import com.coparently.app.presentation.common.ParentNames
 import com.coparently.app.presentation.common.PillChip
 import com.coparently.app.presentation.common.SectionGroup
+import com.coparently.app.presentation.common.SectionRow
 import com.coparently.app.presentation.common.rememberParentNames
 import com.coparently.app.presentation.theme.ParentColors
 import java.text.NumberFormat
@@ -96,7 +99,7 @@ private const val SETTLED_EPSILON = 0.01
  *
  * @param onOpenEvent Opens an event by id
  * @param onOpenChangeRequests Opens the change-request inbox
- * @param onOpenWeeklySummary Opens the weekly summary dashboard
+ * @param onOpenContacts Opens the contacts list
  * @param onOpenSettings Opens settings
  * @param onNavigateToPairing Opens the pairing screen
  * @param onOpenExpenses Switches to the Expenses tab — the spend tile's deep link
@@ -111,21 +114,14 @@ private const val SETTLED_EPSILON = 0.01
 fun HomeScreen(
     onOpenEvent: (String) -> Unit,
     onOpenChangeRequests: () -> Unit,
-    onOpenWeeklySummary: () -> Unit,
+    onOpenContacts: () -> Unit,
     onOpenSettings: () -> Unit,
     onNavigateToPairing: () -> Unit,
     onOpenExpenses: () -> Unit,
     onOpenChat: () -> Unit,
     viewModel: HomeViewModel = hiltViewModel()
 ) {
-    val recentChanges by viewModel.recentChanges.collectAsState()
-    val paired by viewModel.paired.collectAsState()
-    val partner by viewModel.partner.collectAsState()
-    val nextHandover by viewModel.nextHandover.collectAsState()
-    val upcomingEvents by viewModel.upcomingEvents.collectAsState()
-    val monthSpend by viewModel.monthSpend.collectAsState()
-    val monthBalances by viewModel.monthBalances.collectAsState()
-    val unreadCount by viewModel.unreadCount.collectAsState()
+    val uiState by viewModel.uiState.collectAsState()
     val parentNames = rememberParentNames(viewModel.parents.collectAsState().value)
 
     Scaffold(
@@ -152,114 +148,213 @@ fun HomeScreen(
             )
         }
     ) { padding ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
-        ) {
-            // Pairing is where most value comes from — lead with a CTA when unpaired.
-            if (!paired) {
-                item { PairingCta(onNavigateToPairing) }
-            }
+        when (val state = uiState) {
+            HomeUiState.AskForCoParent -> PairingInvitation(
+                onNavigateToPairing = onNavigateToPairing,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+            )
 
-            nextHandover?.let { handover ->
-                item {
-                    HandoverHero(
-                        info = handover,
-                        parentNames = parentNames,
-                        onConfirm = onOpenChangeRequests
+            is HomeUiState.Dashboard -> Dashboard(
+                state = state,
+                parentNames = parentNames,
+                contentPadding = padding,
+                onOpenEvent = onOpenEvent,
+                onOpenChangeRequests = onOpenChangeRequests,
+                onOpenContacts = onOpenContacts,
+                onOpenExpenses = onOpenExpenses,
+                onOpenChat = onOpenChat
+            )
+        }
+    }
+}
+
+/**
+ * The whole unpaired page: a short explanation and one button.
+ *
+ * Everything else the dashboard shows depends on there being a second parent — there is no
+ * handover without one, no balance to settle, and no changes for them to have made — so the
+ * page says the one thing that would fill the rest instead of arranging hollow shells around it.
+ *
+ * @param onNavigateToPairing Opens the pairing screen
+ * @param modifier Modifier applied to the page
+ */
+@Composable
+private fun PairingInvitation(
+    onNavigateToPairing: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier.padding(24.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = stringResource(R.string.home_pairing_title),
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center
+        )
+        Text(
+            text = stringResource(R.string.home_pairing_prompt),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
+        )
+        Button(onClick = onNavigateToPairing, modifier = Modifier.fillMaxWidth()) {
+            Text(stringResource(R.string.home_pairing_cta))
+        }
+    }
+}
+
+/**
+ * The paired dashboard, in spec §3's order.
+ *
+ * @param state Everything the page draws
+ * @param parentNames Resolves a slot to that parent's name
+ * @param contentPadding The scaffold's own insets
+ * @param onOpenEvent Opens an event by id
+ * @param onOpenChangeRequests Opens the change-request inbox
+ * @param onOpenContacts Opens the contacts list
+ * @param onOpenExpenses Switches to the Expenses tab
+ * @param onOpenChat Switches to the Chat tab
+ */
+@Composable
+// One callback per navigation target; the body is one linear column of sections, so splitting
+// it would only move the length into a second file.
+@Suppress("LongParameterList", "LongMethod")
+private fun Dashboard(
+    state: HomeUiState.Dashboard,
+    parentNames: ParentNames,
+    contentPadding: PaddingValues,
+    onOpenEvent: (String) -> Unit,
+    onOpenChangeRequests: () -> Unit,
+    onOpenContacts: () -> Unit,
+    onOpenExpenses: () -> Unit,
+    onOpenChat: () -> Unit
+) {
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(contentPadding),
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        state.nextHandover?.let { handover ->
+            item {
+                HandoverHero(
+                    info = handover,
+                    parentNames = parentNames,
+                    onConfirm = onOpenChangeRequests
+                )
+            }
+        }
+
+        // The week leads, per spec §3: it is what a separated parent opens the app to see, and
+        // it is where the timeline rail already sat.
+        item { SectionHeader(stringResource(R.string.home_section_this_week)) }
+        if (state.week.isEmpty()) {
+            item {
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        text = stringResource(R.string.home_week_empty),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(16.dp)
                     )
                 }
             }
-
-            item {
-                StatTiles(
-                    spend = monthSpend,
-                    balances = monthBalances,
-                    unreadCount = unreadCount,
-                    onOpenExpenses = onOpenExpenses,
-                    onOpenChat = onOpenChat
+        } else {
+            itemsIndexed(
+                items = state.week,
+                // Recurring occurrences share the master event's id, so `HomeWeek` builds a key
+                // that carries the occurrence's own start time; the id alone collides.
+                key = { _, entry -> entry.key }
+            ) { index, entry ->
+                TimelineRow(
+                    entry = entry,
+                    parentNames = parentNames,
+                    isLast = index == state.week.lastIndex,
+                    onClick = { onOpenEvent(entry.event.id) }
                 )
             }
+        }
 
-            if (upcomingEvents.isNotEmpty()) {
-                item { SectionHeader(stringResource(R.string.home_section_this_week)) }
-                itemsIndexed(
-                    items = upcomingEvents,
-                    // Recurring occurrences share the master event's id, so the start time has
-                    // to be part of the key or two occurrences collide.
-                    key = { _, event -> "up_${event.id}_${event.startDateTime}" }
-                ) { index, event ->
-                    TimelineRow(
-                        event = event,
-                        parentNames = parentNames,
-                        isLast = index == upcomingEvents.lastIndex,
-                        onClick = { onOpenEvent(event.id) }
+        item {
+            // Deliberately `partner?.name` and not `parentNames`, which is what the hero and
+            // the timeline above use. The two answer different questions. This header names
+            // a *person* - the account this one is paired with - and that identity is known
+            // as soon as pairing resolves. The hero names whoever holds a *slot*, and on a
+            // pair whose two parents still share slot 1 nobody holds the other one, so it
+            // says "Parent" until the backfill separates them.
+            //
+            // So a legacy pair reads "Olya changed" here and "Today with Parent" above, and
+            // that is correct rather than an inconsistency to iron out: degrading this to
+            // "Parent" would throw away a fact we hold, and resolving the hero from the
+            // partner's name would assert a slot nobody has stored - the guess this whole
+            // branch exists to remove.
+            SectionHeader(
+                state.partner?.name?.takeIf { it.isNotBlank() }
+                    ?.let { stringResource(R.string.home_section_partner_changed, it) }
+                    ?: stringResource(R.string.home_section_recent_changes)
+            )
+        }
+
+        if (state.recentChanges.isEmpty()) {
+            item {
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        text = stringResource(R.string.home_recent_empty_paired),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(16.dp)
                     )
                 }
             }
-
+        } else {
             item {
-                // Deliberately `partner?.name` and not `parentNames`, which is what the hero and
-                // the timeline above use. The two answer different questions. This header names
-                // a *person* - the account this one is paired with - and that identity is known
-                // as soon as pairing resolves. The hero names whoever holds a *slot*, and on a
-                // pair whose two parents still share slot 1 nobody holds the other one, so it
-                // says "Parent" until the backfill separates them.
-                //
-                // So a legacy pair reads "Olya changed" here and "Today with Parent" above, and
-                // that is correct rather than an inconsistency to iron out: degrading this to
-                // "Parent" would throw away a fact we hold, and resolving the hero from the
-                // partner's name would assert a slot nobody has stored - the guess this whole
-                // branch exists to remove.
-                SectionHeader(
-                    partner?.name?.takeIf { it.isNotBlank() }
-                        ?.let { stringResource(R.string.home_section_partner_changed, it) }
-                        ?: stringResource(R.string.home_section_recent_changes)
+                ActivityGroup(
+                    items = state.recentChanges,
+                    onOpenChangeRequests = onOpenChangeRequests,
+                    onOpenEvent = onOpenEvent
                 )
             }
+        }
 
-            if (recentChanges.isEmpty()) {
-                item {
-                    Card(modifier = Modifier.fillMaxWidth()) {
-                        Text(
-                            text = if (paired) {
-                                stringResource(R.string.home_recent_empty_paired)
-                            } else {
-                                stringResource(R.string.home_recent_empty_unpaired)
-                            },
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(16.dp)
+        item {
+            // Item 16: the numbers worth finding in a hurry, behind one button. It sits here
+            // rather than in the top bar because it is a destination, not a screen action, and
+            // an unlabelled icon up there is exactly what the design refresh removed elsewhere.
+            SectionGroup {
+                SectionRow(
+                    title = stringResource(R.string.home_contacts),
+                    icon = Icons.Default.Contacts,
+                    supporting = stringResource(R.string.home_contacts_supporting),
+                    onClick = onOpenContacts,
+                    trailing = {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                }
-            } else {
-                item {
-                    ActivityGroup(
-                        items = recentChanges,
-                        onOpenChangeRequests = onOpenChangeRequests,
-                        onOpenEvent = onOpenEvent
-                    )
-                }
+                )
             }
+        }
 
-            item {
-                // Kept here deliberately. The refresh removed the unlabelled `view_list`
-                // action from the calendar header, so this is now the weekly summary's single
-                // entry point rather than one of two competing ones.
-                Spacer(modifier = Modifier.size(4.dp))
-                OutlinedButton(
-                    onClick = onOpenWeeklySummary,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Icon(Icons.AutoMirrored.Filled.ViewList, contentDescription = null)
-                    Spacer(modifier = Modifier.size(8.dp))
-                    Text(stringResource(R.string.home_weekly_summary))
-                }
-            }
+        item {
+            // Last, as spec §3 asks. The unread tile travels with it rather than being
+            // stranded alone at the top: the two are one row, and the Chat tab already
+            // carries its own unread badge, so nothing is lost by it sitting here.
+            Spacer(modifier = Modifier.size(4.dp))
+            StatTiles(
+                spend = state.monthSpend,
+                balances = state.monthBalances,
+                unreadCount = state.unreadCount,
+                onOpenExpenses = onOpenExpenses,
+                onOpenChat = onOpenChat
+            )
         }
     }
 }
@@ -271,25 +366,6 @@ private fun SectionHeader(text: String) {
         style = MaterialTheme.typography.titleSmall,
         fontWeight = FontWeight.SemiBold
     )
-}
-
-@Composable
-private fun PairingCta(onNavigateToPairing: () -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Text(
-                text = stringResource(R.string.home_pairing_prompt),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Button(onClick = onNavigateToPairing, modifier = Modifier.fillMaxWidth()) {
-                Text(stringResource(R.string.home_pairing_cta))
-            }
-        }
-    }
 }
 
 /**
@@ -520,21 +596,29 @@ private fun StatTile(
 }
 
 /**
- * One event on the "this week" timeline: a parent-coloured node on a vertical rail, with the
- * event beside it. Replaces the per-row Card, which made a three-item feed look like a stack
- * of unrelated panels.
+ * One row of the child's week: a parent-coloured node on a vertical rail, with the event beside
+ * it and an exclamation mark when the co-parent is expected.
  *
- * @param event The event
+ * **The colour and the words name the same parent** — the one whose custody day the event falls
+ * on, which is the question this row exists to answer. When no arrangement answers for that date
+ * the row falls back to the event's own owner rather than going colourless: a rail of grey dots
+ * says nothing, and the owner is a fact the app does hold. The words drop the "'s day" clause in
+ * that case, because that is the part that would be a guess.
+ *
+ * @param entry The row
+ * @param parentNames Resolves a slot to that parent's name
  * @param isLast Whether this is the final row, which drops the trailing connector
  * @param onClick Opens the event
  */
 @Composable
 private fun TimelineRow(
-    event: Event,
+    entry: WeekEntry,
     parentNames: ParentNames,
     isLast: Boolean,
     onClick: () -> Unit
 ) {
+    val event = entry.event
+    val dotSlot = entry.dayParent ?: event.parentOwner
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -550,7 +634,7 @@ private fun TimelineRow(
                     .padding(top = 4.dp)
                     .size(12.dp)
                     .clip(CircleShape)
-                    .background(ParentColors.fill(event.parentOwner))
+                    .background(ParentColors.fill(dotSlot))
             )
             if (!isLast) {
                 Box(
@@ -563,19 +647,34 @@ private fun TimelineRow(
             }
         }
         Column(modifier = Modifier.padding(bottom = 6.dp)) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // The mark carries its own description rather than none: an unexplained glyph
+                // is worse than no glyph for anyone not reading the screen, and what it means —
+                // that the co-parent is expected — is not guessable from an exclamation mark.
+                if (event.isImportant) {
+                    Icon(
+                        imageVector = Icons.Default.PriorityHigh,
+                        contentDescription = stringResource(R.string.event_important_mark_description),
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+                Text(
+                    text = event.title,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            val timeLabel = event.startDateTime.format(timelineFormatter)
             Text(
-                text = event.title,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Medium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Text(
-                text = stringResource(
-                    R.string.home_timeline_meta,
-                    event.startDateTime.format(timelineFormatter),
-                    parentNames.labelFor(event.parentOwner)
-                ),
+                text = entry.dayParent
+                    ?.let { stringResource(R.string.home_timeline_meta, timeLabel, parentNames.labelFor(it)) }
+                    ?: timeLabel,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

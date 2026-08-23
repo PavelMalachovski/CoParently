@@ -74,6 +74,7 @@ private const val DAYS_PER_WEEK = 7L
 /** Public-holiday tint strength, drawn over the cell's base fill. */
 private const val HOLIDAY_TINT_ALPHA = 0.10f
 
+
 /** Full-hue edge marking the first day of a custody run. */
 
 /**
@@ -90,6 +91,10 @@ private const val HOLIDAY_TINT_ALPHA = 0.10f
  *   index rather than the flat list is deliberate: `dayContent` runs for all 42 cells on every
  *   recomposition, so filtering the whole list per cell cost O(42·N) each time. The agenda card
  *   under the grid reads the same map, so the two cannot disagree.
+ * @param getProposedCustody What a **pending** custody proposal would make of a day, or null when
+ *   nothing is pending. Separate from [getCustody] for the same reason [pendingSwapDates] is: a
+ *   proposal has changed nothing yet. The days it *would* move are washed in the proposed
+ *   parent's hue at a lower alpha, over the agreed day, which keeps its full strength underneath.
  * @param pendingSwapDates Dates a one-off swap is being negotiated on. Deliberately separate from
  *   [getCustody]: a pending swap has changed nothing about whose day it is, and saying otherwise
  *   in the cell's colour would be a lie both parents act on.
@@ -104,6 +109,7 @@ fun MonthView(
     selectedDate: LocalDate? = null,
     eventsByDay: Map<LocalDate, List<Event>>,
     getCustody: (LocalDate) -> String?,
+    getProposedCustody: (LocalDate) -> String? = { null },
     parentNames: ParentNames,
     onDayClick: (LocalDate) -> Unit,
     onMonthChange: (YearMonth) -> Unit,
@@ -190,6 +196,7 @@ fun MonthView(
                         isSelected = selectedDate == day.date,
                         events = eventsByDay[day.date].orEmpty(),
                         getCustody = getCustody,
+                        getProposedCustody = getProposedCustody,
                         parentNames = parentNames,
                         onDayClick = onDayClick,
                         holiday = holidays[day.date],
@@ -273,6 +280,7 @@ private fun DayCell(
     isSelected: Boolean,
     events: List<Event>,
     getCustody: (LocalDate) -> String?,
+    getProposedCustody: (LocalDate) -> String?,
     parentNames: ParentNames,
     onDayClick: (LocalDate) -> Unit,
     holiday: Holiday? = null,
@@ -298,12 +306,14 @@ private fun DayCell(
     // full-cell fill at all (it used to drown custody colors); it renders as a thin strip at
     // the bottom instead.
     val previousCustody = getCustody(date.minusDays(1))
+    val proposedCustody = getProposedCustody(date)
     val fill = DayCellFills.monthCell(
         isWeekend = isWeekend,
         isCurrentMonth = isCurrentMonth,
         custody = custody,
         previousCustody = previousCustody,
-        isPublicHoliday = isPublicHoliday
+        isPublicHoliday = isPublicHoliday,
+        proposedCustody = proposedCustody
     )
     val baseColor = when (fill.base) {
         DayCellBase.WEEKEND ->
@@ -333,11 +343,29 @@ private fun DayCell(
         else -> null
     }
 
+    // A pending proposal's preview: the proposed parent's hue at a lower alpha than an agreed
+    // day, laid over the agreed fill rather than replacing it. Same colour, less of it — the
+    // meaning is "this is what it would become", and a different colour would read as a
+    // different parent. The two translucent hues blend into something that is neither, which is
+    // the honest rendering of a day nobody has agreed on; the cell's description says so in
+    // words.
+    val proposalColor = when (fill.pendingProposalFor) {
+        DayCellOverlay.CUSTODY_MOM -> CoPlanlyColors.MomPink.copy(alpha = CoPlanlyColors.PROPOSAL_TINT_ALPHA)
+        DayCellOverlay.CUSTODY_DAD -> CoPlanlyColors.DadBlue.copy(alpha = CoPlanlyColors.PROPOSAL_TINT_ALPHA)
+        else -> null
+    }
+
     // All localized pieces are resolved in composable scope; buildString itself is not one.
     val todayLabel = stringResource(R.string.calendar_day_desc_today)
     val outsideMonthLabel = stringResource(R.string.calendar_day_desc_outside_month)
     val custodyLabel = custody?.let {
         stringResource(R.string.calendar_day_desc_with_parent, parentNames.labelFor(it))
+    }
+    val proposalLabel = fill.pendingProposalFor?.let {
+        stringResource(
+            R.string.calendar_day_desc_proposal_pending,
+            parentNames.labelFor(proposedCustody.orEmpty())
+        )
     }
     val swapLabel = if (isSwapPending) {
         stringResource(R.string.calendar_day_desc_swap_pending)
@@ -375,6 +403,10 @@ private fun DayCell(
             append(it)
         }
         handoverLabel?.let {
+            append(", ")
+            append(it)
+        }
+        proposalLabel?.let {
             append(", ")
             append(it)
         }
@@ -442,6 +474,10 @@ private fun DayCell(
                     drawPath(triangle, baseColor)
                     drawPath(triangle, color)
                 }
+                // After the diagonal, deliberately: the preview is about the whole day, so a
+                // handover boundary drawn inside it must be previewed too rather than punching
+                // a hole in it.
+                proposalColor?.let { drawRect(it) }
             }
             // Long-press offers the day to the co-parent. A day from a neighbouring month is
             // excluded for the same reason it takes no overlay: it is shown for context, not to

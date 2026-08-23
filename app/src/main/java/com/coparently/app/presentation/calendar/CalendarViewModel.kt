@@ -8,6 +8,7 @@ import com.coparently.app.data.local.preferences.EncryptedPreferences
 import com.coparently.app.data.local.preferences.PreferenceKeys
 import com.coparently.app.data.repository.CustodyModelRepository
 import com.coparently.app.domain.custody.CustodyChangeAnnouncement
+import com.coparently.app.domain.custody.CustodyProposal
 import com.coparently.app.domain.custody.CustodyResolver
 import com.coparently.app.domain.custody.DayOverride
 import com.coparently.app.domain.custody.DayOverrideTransition
@@ -148,6 +149,28 @@ class CalendarViewModel @Inject constructor(
     ) { shared, currentParents, dismissedAt ->
         CustodyChangeAnnouncement.toAnnounce(shared, currentParents.me?.uid, currentParents.loaded, dismissedAt)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(HANDOVER_STOP_TIMEOUT_MS), null)
+
+    /**
+     * The custody pattern one parent has put to the other and nobody has answered yet, or null.
+     *
+     * PR #47 gave a proposal its own state on the shared document precisely so that saving one
+     * changes nobody's pattern until it is accepted. The grid simply did not draw it — so a
+     * parent who had proposed a change, and a parent who had one waiting, both saw a calendar
+     * that looked entirely settled. This is what lets the grid say "this is what it would
+     * become" without saying it already has.
+     *
+     * Shown to **both** parents, not only to the one who has to answer. The proposer needs to
+     * see what they asked for as much as the recipient needs to see what is being asked; and
+     * neither reading changes the days, because [getCustodyForDate] deliberately does not
+     * consult this.
+     *
+     * `WhileSubscribed`, matching [custodyChangeAnnouncement] and for its reason: this shares
+     * that flow's single Firestore listener, and an eager collector would hold it open for this
+     * ViewModel's whole lifetime whether or not a calendar is on screen.
+     */
+    val pendingProposal: StateFlow<CustodyProposal?> = custodyModelRepository.observeShared()
+        .map { it?.proposal }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(HANDOVER_STOP_TIMEOUT_MS), null)
 
     private val _viewMode = MutableStateFlow(CalendarViewMode.MONTH)
     val viewMode: StateFlow<CalendarViewMode> = _viewMode.asStateFlow()

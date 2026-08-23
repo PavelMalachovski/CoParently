@@ -3,6 +3,7 @@
 <resources>
     <string name="home_title">Start</string>
 
+    <string name="home_pairing_title">Teilen Sie das mit dem anderen Elternteil</string>
     <string name="home_pairing_prompt">Verbinden Sie sich mit dem anderen Elternteil, um Kalender, Ausgaben und Nachrichten zu teilen.</string>
     <string name="home_pairing_cta">Mit anderem Elternteil verbinden</string>
 
@@ -25,15 +26,17 @@
     <string name="home_stat_settled">Alles ausgeglichen →</string>
 
     <string name="home_section_this_week">Diese Woche</string>
+    <string name="home_week_empty">In den nächsten sieben Tagen steht nichts an.</string>
     <string name="home_section_recent_changes">Letzte Änderungen</string>
     <string name="home_section_partner_changed">Änderungen von %1$s</string>
 
     <string name="home_timeline_meta">%1$s · Tag von %2$s</string>
 
     <string name="home_recent_empty_paired">Noch nichts Neues vom anderen Elternteil. Änderungen erscheinen hier.</string>
-    <string name="home_recent_empty_unpaired">Nach dem Verbinden erscheinen hier die Änderungen des anderen Elternteils.</string>
 
-    <string name="home_weekly_summary">Wochenübersicht anzeigen</string>
+    <!-- Contacts: item 16's one button, between the changes feed and the spend tile. -->
+    <string name="home_contacts">Kontakte</string>
+    <string name="home_contacts_supporting">Großeltern, Ärzte, die Eltern eines Freundes</string>
 
     <string name="home_activity_event_created">Hinzugefügt: %1$s</string>
     <string name="home_activity_event_updated">Geändert: %1$s</string>

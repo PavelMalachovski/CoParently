@@ -102,6 +102,23 @@ Either way the file must end with **one** decision function covering weekend bas
 
 **Device checks:** unpaired, the home screen shows one card and one button; the Contacts button dials; an important event carries its mark on home and in the day agenda; and — with two devices — a pending custody proposal draws translucent on the parent who has not agreed yet, while the agreed pattern still shows at full strength.
 
+### What was run, 23 August 2026
+
+Implemented on `claude/start-e-schemas-docs-3kn5c6`, cut from `main` @ `2e04828` (B2, C and D
+already in). The full ledger — every decision, deviation and limitation — is
+`docs/superpowers/plans/2026-08-23-home-screen-PROGRESS.md`.
+
+| Check | Result |
+|---|---|
+| Firestore rules, on the emulator | **237 passing, 0 failing**; eslint clean. No rule change needed: the `events` block validates by presence, so `isImportant` is accepted as-is. |
+| Pure-Kotlin unit tests, standalone `kotlinc` 2.1 + JUnit | **293 passing** across 32 classes, including `HomeWeekTest` (8), `ContactDirectoryTest` (7) and `DayCellFillsTest` (16 → 24). |
+| Locales | All **15** new keys in exactly five files each, no duplicates; both deleted keys gone and unreferenced. |
+| Summary removal | `grep -rn "WeeklySummary" app/src` — no output. |
+| Line length | Nothing new over 120; the four existing offenders are unmoved. |
+| Build (`assembleDebug testDebugUnitTest lint detekt`) | **Not run** — no Android SDK and no route to Google's Maven host in this container. No Compose or Android-dependent file has been compiled. |
+| Instrumented migration test (18→19) | **Not run** — same reason. |
+| Device checks | **Not run.** All five are outstanding, and the two-device proposal check is the one that cannot be substituted for. |
+
 ## 7. Deliberately not in E
 
 - **Enforcing "the co-parent is expected".** §3 — that is D's machinery, pointed at a different question.

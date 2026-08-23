@@ -469,6 +469,40 @@ class CoPlanlyDatabaseMigrationTest {
         }
     }
 
+    /**
+     * 18-to-19 marks an event as one the co-parent is expected at, and marks nothing existing.
+     *
+     * False on every existing row is not merely the safe default but the true one: the flag is
+     * set when an event is created, and none of these were. The opposite default would put an
+     * exclamation mark on every event the app has ever stored.
+     */
+    @Test
+    fun migration18To19_leavesEveryExistingEventUnmarked() {
+        val db = helper.createDatabase(TEST_DB, VERSION_18)
+        db.execSQL(
+            """
+            INSERT INTO events (id, title, startDateTime, eventType, parentOwner, isRecurring,
+                                createdAt, updatedAt, syncedToFirestore, sharedWithJson,
+                                permissions, isPrivate, acceptance)
+            VALUES ('e1', 'Football', '2026-09-01T16:00:00', 'training', 'dad', 0,
+                    '2026-08-01T09:00:00', '2026-08-01T09:00:00', 1, '["uid-dad"]',
+                    'read_write', 0, 'NOT_REQUIRED')
+            """.trimIndent()
+        )
+        db.close()
+
+        val migrated = helper.runMigrationsAndValidate(
+            TEST_DB, VERSION_19, true, DatabaseMigrations.MIGRATION_18_19
+        )
+
+        migrated.query("SELECT title, acceptance, isImportant FROM events").use {
+            assertTrue(it.moveToFirst())
+            assertEquals("Football", it.getString(0))
+            assertEquals("NOT_REQUIRED", it.getString(1))
+            assertEquals("an event created before the flag existed was never marked", 0, it.getInt(2))
+        }
+    }
+
     private companion object {
         const val TEST_DB = "coplanly-migration-test.db"
         const val VERSION_11 = 11
@@ -479,6 +513,7 @@ class CoPlanlyDatabaseMigrationTest {
         const val VERSION_16 = 16
         const val VERSION_17 = 17
         const val VERSION_18 = 18
+        const val VERSION_19 = 19
 
         /** 2026-08-01T12:00:00 at UTC+05:30, i.e. 06:30:00Z. */
         const val NOON_AT_PLUS_FIVE_THIRTY_MILLIS = 1_785_565_800_000L

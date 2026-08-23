@@ -49,6 +49,7 @@
     <string name="calendar_day_desc_with_parent">V péči: %1$s</string>
     <string name="calendar_day_desc_handover">Předání od %1$s k %2$s</string>
     <string name="calendar_day_desc_swap_pending">Výměna dne čeká na odpověď</string>
+    <string name="calendar_day_desc_proposal_pending">Navrženo pro %1$s, zatím neodsouhlaseno</string>
     <plurals name="calendar_day_desc_events">
         <item quantity="one">%1$d událost</item>
         <item quantity="few">%1$d události</item>

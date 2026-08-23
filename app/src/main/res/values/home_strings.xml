@@ -6,6 +6,7 @@
     <string name="home_title">Home</string>
 
     <!-- Pairing call-to-action, shown while the account is not yet paired. -->
+    <string name="home_pairing_title">Share this with your co-parent</string>
     <string name="home_pairing_prompt">Pair with your co-parent to share the calendar, expenses and messages.</string>
     <string name="home_pairing_cta">Pair with your co-parent</string>
 
@@ -32,17 +33,20 @@
 
     <!-- Section headers. %1$s = the co-parent's name. -->
     <string name="home_section_this_week">This week</string>
+    <string name="home_week_empty">Nothing in the next seven days.</string>
     <string name="home_section_recent_changes">Recent changes</string>
     <string name="home_section_partner_changed">%1$s changed</string>
 
     <!-- Timeline row. %1$s = day and time, %2$s = the parent whose day it is. -->
     <string name="home_timeline_meta">%1$s · %2$s\'s day</string>
 
-    <!-- Recent-changes empty states. -->
+    <!-- Recent-changes empty state. Only the paired one survives: the unpaired page now
+         renders the invitation alone, so there is no feed there to be empty. -->
     <string name="home_recent_empty_paired">Nothing new from your co-parent yet. Changes they make will show up here.</string>
-    <string name="home_recent_empty_unpaired">Once you pair, changes your co-parent makes will show up here.</string>
 
-    <string name="home_weekly_summary">View weekly summary</string>
+    <!-- Contacts: item 16's one button, between the changes feed and the spend tile. -->
+    <string name="home_contacts">Contacts</string>
+    <string name="home_contacts_supporting">Grandparents, doctors, a friend's parents</string>
 
     <!-- Activity feed. %1$s = event title; the section header already names who made the
          change, so the row states the action rather than repeating "Co-parent". -->

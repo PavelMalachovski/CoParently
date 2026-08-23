@@ -3,6 +3,7 @@
 <resources>
     <string name="home_title">Головна</string>
 
+    <string name="home_pairing_title">Розділіть це з іншим із батьків</string>
     <string name="home_pairing_prompt">З’єднайтеся з іншим із батьків, щоб ділити календар, витрати та повідомлення.</string>
     <string name="home_pairing_cta">З’єднатися з іншим із батьків</string>
 
@@ -29,15 +30,17 @@
     <string name="home_stat_settled">Усе врегульовано →</string>
 
     <string name="home_section_this_week">Цього тижня</string>
+    <string name="home_week_empty">У найближчі сім днів нічого немає.</string>
     <string name="home_section_recent_changes">Останні зміни</string>
     <string name="home_section_partner_changed">Зміни: %1$s</string>
 
     <string name="home_timeline_meta">%1$s · день, коли дитина з %2$s</string>
 
     <string name="home_recent_empty_paired">Поки нічого нового від іншого з батьків. Їхні зміни з’являться тут.</string>
-    <string name="home_recent_empty_unpaired">Після з’єднання зміни іншого з батьків з’являться тут.</string>
 
-    <string name="home_weekly_summary">Переглянути тижневий підсумок</string>
+    <!-- Contacts: item 16's one button, between the changes feed and the spend tile. -->
+    <string name="home_contacts">Контакти</string>
+    <string name="home_contacts_supporting">Бабусі й дідусі, лікарі, батьки друга</string>
 
     <string name="home_activity_event_created">Додано: %1$s</string>
     <string name="home_activity_event_updated">Змінено: %1$s</string>

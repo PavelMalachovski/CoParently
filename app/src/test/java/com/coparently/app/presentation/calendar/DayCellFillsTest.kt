@@ -229,4 +229,135 @@ class DayCellFillsTest {
         )
     }
 
+    @Test
+    fun `a day a pending proposal would move draws as a preview over the agreed day`() {
+        // The agreed pattern keeps its full strength underneath: `overlay` is still the parent
+        // whose day it is *now*. A grid that showed only the proposal would tell a parent their
+        // days had changed when they had not.
+        val fill = DayCellFills.monthCell(
+            isWeekend = false,
+            isCurrentMonth = true,
+            custody = "mom",
+            previousCustody = "mom",
+            isPublicHoliday = false,
+            proposedCustody = "dad"
+        )
+
+        assertEquals(DayCellOverlay.CUSTODY_MOM, fill.overlay)
+        assertEquals(DayCellOverlay.CUSTODY_DAD, fill.pendingProposalFor)
+    }
+
+    @Test
+    fun `the same day with no proposal draws at full strength and nothing else`() {
+        val fill = DayCellFills.monthCell(
+            isWeekend = false,
+            isCurrentMonth = true,
+            custody = "mom",
+            previousCustody = "mom",
+            isPublicHoliday = false
+        )
+
+        assertEquals(DayCellOverlay.CUSTODY_MOM, fill.overlay)
+        assertNull(fill.pendingProposalFor)
+    }
+
+    @Test
+    fun `an accepted proposal is indistinguishable from an ordinary agreed day`() {
+        // Accepting makes the proposal the agreed pattern and clears it from the document, so
+        // the lookup answers "dad" and nothing is pending. Nothing about the cell should say a
+        // proposal was ever involved.
+        val accepted = DayCellFills.monthCell(
+            isWeekend = false,
+            isCurrentMonth = true,
+            custody = "dad",
+            previousCustody = "dad",
+            isPublicHoliday = false,
+            proposedCustody = null
+        )
+        val ordinary = DayCellFills.monthCell(
+            isWeekend = false,
+            isCurrentMonth = true,
+            custody = "dad",
+            previousCustody = "dad",
+            isPublicHoliday = false
+        )
+
+        assertEquals(ordinary, accepted)
+    }
+
+    @Test
+    fun `a day the proposal does not move is not marked`() {
+        // A proposal is a whole pattern, and most of its days agree with the agreed one. Marking
+        // those too would wash the month and say nothing.
+        val fill = DayCellFills.monthCell(
+            isWeekend = false,
+            isCurrentMonth = true,
+            custody = "mom",
+            previousCustody = "mom",
+            isPublicHoliday = false,
+            proposedCustody = "mom"
+        )
+
+        assertNull(fill.pendingProposalFor)
+    }
+
+    @Test
+    fun `a day nothing answers for is never previewed`() {
+        // Previewing a move away from nothing would invent the arrangement it claims to preview.
+        val fill = DayCellFills.monthCell(
+            isWeekend = false,
+            isCurrentMonth = true,
+            custody = null,
+            previousCustody = null,
+            isPublicHoliday = false,
+            proposedCustody = "dad"
+        )
+
+        assertNull(fill.pendingProposalFor)
+    }
+
+    @Test
+    fun `a neighbouring month's day is never previewed, matching its dimmed number`() {
+        val fill = DayCellFills.monthCell(
+            isWeekend = false,
+            isCurrentMonth = false,
+            custody = "mom",
+            previousCustody = "mom",
+            isPublicHoliday = false,
+            proposedCustody = "dad"
+        )
+
+        assertNull(fill.pendingProposalFor)
+    }
+
+    @Test
+    fun `the week view previews the same day the month grid does`() {
+        // The week is the one view a parent renegotiating a specific week is looking at, and a
+        // pending proposal has no other form in this layout — unlike a handover, which the week
+        // already shows as the boundary between two runs of its custody band.
+        val fill = DayCellFills.weekHourCell(
+            isWeekend = false,
+            isToday = false,
+            custody = "mom",
+            proposedCustody = "dad"
+        )
+
+        assertEquals(DayCellOverlay.CUSTODY_MOM, fill.overlay)
+        assertEquals(DayCellOverlay.CUSTODY_DAD, fill.pendingProposalFor)
+    }
+
+    @Test
+    fun `an unknown slot in a proposal is not treated as a parent`() {
+        val fill = DayCellFills.monthCell(
+            isWeekend = false,
+            isCurrentMonth = true,
+            custody = "mom",
+            previousCustody = "mom",
+            isPublicHoliday = false,
+            proposedCustody = "guardian"
+        )
+
+        assertNull(fill.pendingProposalFor)
+    }
+
 }

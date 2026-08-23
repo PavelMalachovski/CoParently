@@ -190,8 +190,8 @@ fun NavGraph(
                     onOpenChangeRequests = {
                         navController.navigate(Screen.ChangeRequests.createRoute())
                     },
-                    onOpenWeeklySummary = {
-                        navController.navigate(Screen.WeeklySummary.route)
+                    onOpenContacts = {
+                        navController.navigate(Screen.Contacts.route)
                     },
                     onOpenSettings = {
                         navController.navigate(Screen.Settings.route)
@@ -317,24 +317,17 @@ fun NavGraph(
                 )
             }
 
-            // Weekly summary dashboard (MVP 2)
+            // Contacts — the numbers worth finding in a hurry. A detail screen, deliberately
+            // not a tab: it is opened rarely and urgently, not browsed.
             composable(
-                route = Screen.WeeklySummary.route,
+                route = Screen.Contacts.route,
                 enterTransition = { slideInFromRight() },
                 exitTransition = { slideOutToLeft() },
                 popEnterTransition = { slideInFromLeft() },
                 popExitTransition = { slideOutToRight() }
             ) {
-                com.coparently.app.presentation.summary.WeeklySummaryScreen(
-                    onBack = {
-                        navController.popBackStack()
-                    },
-                    onEventClick = { eventId ->
-                        navController.navigate(Screen.EditEvent.createRoute(eventId))
-                    },
-                    onOpenChangeRequests = {
-                        navController.navigate(Screen.ChangeRequests.createRoute())
-                    }
+                com.coparently.app.presentation.contacts.ContactsScreen(
+                    onNavigateUp = { navController.popBackStack() }
                 )
             }
 
@@ -996,7 +989,14 @@ sealed class Screen(val route: String) {
     }
     data object Budgets : Screen("budgets")
 
-    data object WeeklySummary : Screen("weekly_summary")
+    /**
+     * Important phone numbers, one tap from the dialler.
+     *
+     * A detail screen, not in [BottomNavDestination.topLevelRoutes]: the bottom bar hides and
+     * an up-arrow appears, the same as every other screen reached from a row rather than a tab.
+     */
+    data object Contacts : Screen("contacts")
+
     data object ChangeRequests : Screen("change_requests?eventId={eventId}") {
         const val ARG_EVENT_ID = "eventId"
 

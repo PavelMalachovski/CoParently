@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Kontakte-Bildschirm: die Nummern, die man in Eile findet. -->
+<resources>
+    <string name="contacts_title">Kontakte</string>
+    <string name="contacts_back">Zurück</string>
+
+    <!-- Trailing action on a contact row. Opens the dialler pre-filled; it never places the
+         call itself, so no permission is asked for. -->
+    <string name="contacts_call">Anrufen</string>
+
+    <string name="contacts_empty">Noch keine Kontakte.</string>
+    <string name="contacts_empty_hint">Fügen Sie Großeltern, Ärzte oder die Eltern eines Freundes zu den Angaben des Kindes hinzu — hier sind sie dann einen Tipp entfernt.</string>
+
+    <!-- Shown when there is no dialler to open — rare, but a silent no-op looks like a broken
+         button. -->
+    <string name="contacts_no_dialer">Dieses Gerät hat keine Telefon-App.</string>
+</resources>

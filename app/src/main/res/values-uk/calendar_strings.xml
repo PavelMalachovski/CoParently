@@ -37,6 +37,7 @@
     <string name="calendar_day_desc_with_parent">З ким: %1$s</string>
     <string name="calendar_day_desc_handover">Передача від %1$s до %2$s</string>
     <string name="calendar_day_desc_swap_pending">Обмін днями чекає на відповідь</string>
+    <string name="calendar_day_desc_proposal_pending">Запропоновано для %1$s, ще не погоджено</string>
     <plurals name="calendar_day_desc_events">
         <item quantity="one">%1$d подія</item>
         <item quantity="few">%1$d події</item>

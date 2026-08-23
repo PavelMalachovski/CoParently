@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Obrazovka kontaktů: čísla, která je třeba najít ve spěchu. -->
+<resources>
+    <string name="contacts_title">Kontakty</string>
+    <string name="contacts_back">Zpět</string>
+
+    <!-- Trailing action on a contact row. Opens the dialler pre-filled; it never places the
+         call itself, so no permission is asked for. -->
+    <string name="contacts_call">Zavolat</string>
+
+    <string name="contacts_empty">Zatím žádné kontakty.</string>
+    <string name="contacts_empty_hint">Přidejte prarodiče, lékaře nebo rodiče kamaráda k údajům dítěte a zde je budete mít na jedno klepnutí.</string>
+
+    <!-- Shown when there is no dialler to open — rare, but a silent no-op looks like a broken
+         button. -->
+    <string name="contacts_no_dialer">Toto zařízení nemá telefon.</string>
+</resources>

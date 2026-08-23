@@ -64,6 +64,13 @@ data class EventEntity(
     /** Firebase UID of whoever answered, or null while unanswered. */
     val acceptedBy: String? = null,
     /** When they answered, or null while unanswered. */
-    val acceptedAt: LocalDateTime? = null
+    val acceptedAt: LocalDateTime? = null,
+    /**
+     * Whether the co-parent is expected at this event — see
+     * [com.coparently.app.domain.model.Event.isImportant]. Defaulted to false so every row that
+     * predates the column is correct without being rewritten, which is also the honest reading:
+     * an event created before the flag existed was never marked.
+     */
+    val isImportant: Boolean = false
 )
 
