@@ -200,7 +200,8 @@ class SyncService @Inject constructor(
                                 "acceptance" to localEntity.acceptance,
                                 "acceptedBy" to localEntity.acceptedBy,
                                 "acceptedAt" to localEntity.acceptedAt?.format(formatter),
-                                "isImportant" to localEntity.isImportant
+                                "isImportant" to localEntity.isImportant,
+                                "reminderMinutes" to localEntity.reminderMinutes
                             )
                             firestoreEventDataSource.updateEvent(localEntity.id, localData)
                             eventDao.markAsSynced(localEntity.id)
@@ -614,7 +615,9 @@ class SyncService @Inject constructor(
             // Absent reads as false: a document written before this field existed carries no
             // such expectation, and inventing one would put an exclamation mark on somebody
             // else's ordinary event.
-            isImportant = this["isImportant"] as? Boolean ?: false
+            isImportant = this["isImportant"] as? Boolean ?: false,
+            // Firestore returns numbers as Long; null when the document predates the field.
+            reminderMinutes = (this["reminderMinutes"] as? Number)?.toInt()
         )
     }
 

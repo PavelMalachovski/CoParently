@@ -140,6 +140,7 @@ class PairingRepositoryImpl @Inject constructor(
             .await()
             .documents
             .filter { it.getString("toEmail").orEmpty().isEmpty() }
+            .filter { it.getString("kind") != KIND_GUEST }
             .forEach { it.reference.update("status", STATUS_CANCELLED).await() }
     }
 
@@ -411,6 +412,7 @@ class PairingRepositoryImpl @Inject constructor(
         val now = System.currentTimeMillis()
         return this
             .filter { it.getString("toEmail").orEmpty().isEmpty() }
+            .filter { it.getString("kind") != KIND_GUEST }
             .filter { (it.getLong("expiresAt") ?: 0L) > now }
             .sortedByDescending { it.getLong("createdAt") ?: 0L }
             .mapNotNull { it.toInvite() }
@@ -448,5 +450,17 @@ class PairingRepositoryImpl @Inject constructor(
         const val CODE_TTL_MILLIS = 24L * 60 * 60 * 1000
         const val EMAIL_TTL_MILLIS = 7L * 24 * 60 * 60 * 1000
         val EMAIL_REGEX = Regex("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$")
+
+        /**
+         * Wire value marking a guest invitation, matching `GuestRepositoryImpl.KIND_GUEST`.
+         *
+         * A co-parent code invite writes no `kind` field at all, so a guest invitation — which
+         * also has an empty `toEmail` — is the only pending invite that must be excluded from
+         * the "current co-parent code" lookups. Without this filter, `createOrReuseInviteCode`
+         * handed a co-parent the grandparent's guest code (which the accept callable then
+         * rejects), the pairing screen showed it as "your invite", and `revokeActiveInvite`
+         * silently cancelled the outstanding guest invitation too.
+         */
+        const val KIND_GUEST = "guest"
     }
 }

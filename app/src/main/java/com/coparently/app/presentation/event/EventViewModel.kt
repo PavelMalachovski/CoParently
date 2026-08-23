@@ -274,13 +274,16 @@ class EventViewModel @Inject constructor(
                 val previousHour = event.startDateTime.hour
                 lastMoveUndoInfo = PreviousEventPosition(eventId, previousDate, previousHour)
 
-                val duration = Duration.between(event.startDateTime, event.endDateTime)
+                // An event with no end time keeps none: Duration.between(start, null) is an NPE
+                // (a platform-type Java call Kotlin lets through), and an all-day Google import
+                // is exactly such an event.
+                val duration = event.endDateTime?.let { Duration.between(event.startDateTime, it) }
                 val newTime = targetStartMinuteOfDay
                     ?.coerceIn(0, 24 * 60 - 1)
                     ?.let { LocalTime.of(it / 60, it % 60) }
                     ?: event.startDateTime.toLocalTime()
                 val newStart = targetDate.atTime(newTime)
-                val newEnd = newStart.plus(duration)
+                val newEnd = duration?.let { newStart.plus(it) }
                 val updatedEvent = event.copy(
                     startDateTime = newStart,
                     endDateTime = newEnd
@@ -312,11 +315,12 @@ class EventViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val event = eventUseCases.getEvents.getById(undoInfo.eventId) ?: return@launch
-                val duration = Duration.between(event.startDateTime, event.endDateTime)
+                // Same null-end guard as moveEvent: keep no end time rather than NPE.
+                val duration = event.endDateTime?.let { Duration.between(event.startDateTime, it) }
                 val originalTime = event.startDateTime.toLocalTime()
                 val previousTime = undoInfo.previousHour?.let { originalTime.withHour(it) } ?: originalTime
                 val previousStart = undoInfo.previousDate.atTime(previousTime)
-                val previousEnd = previousStart.plus(duration)
+                val previousEnd = duration?.let { previousStart.plus(it) }
                 val restoredEvent = event.copy(
                     startDateTime = previousStart,
                     endDateTime = previousEnd

@@ -49,8 +49,9 @@ class CalendarSyncRepository @Inject constructor(
             // row); the equivalent UI-layer helper is `ParentsSource.signedInSlot()`, which this
             // class used to reach for instead, across a layer boundary it had no business
             // crossing. Resolved once per sync, not once per event.
-            val ownerSlot = userRepository.getCurrentUserId()
-                ?.let { uid -> userRepository.getUserById(uid) }
+            val ownerUid = userRepository.getCurrentUserId()
+                ?: throw IllegalStateException("Not signed in. Please sign in to CoPlanly.")
+            val ownerSlot = userRepository.getUserById(ownerUid)
                 ?.role
                 ?: throw IllegalStateException("Not signed in. Please sign in to CoPlanly.")
 
@@ -70,7 +71,7 @@ class CalendarSyncRepository @Inject constructor(
             val eventsToInsert = mutableListOf<EventEntity>()
 
             googleEvents.forEach { googleEvent ->
-                val eventEntity = googleEvent.toEventEntity(ownerSlot)
+                val eventEntity = googleEvent.toEventEntity(ownerSlot, ownerUid)
                 eventsToInsert.add(eventEntity)
             }
 
@@ -96,11 +97,11 @@ class CalendarSyncRepository @Inject constructor(
                 else -> "Google Calendar API error: ${e.statusCode} - ${e.message ?: "Unknown error"}"
             }
             emit(SyncResult.Error(errorMsg))
-        } catch (e: java.io.IOException) {
-            android.util.Log.e("CalendarSync", "Network error: ${e.message}", e)
-            emit(SyncResult.Error("Network error: ${e.message ?: "Unable to connect to Google Calendar. Please check your internet connection."}"))
         } catch (e: com.google.api.client.http.HttpResponseException) {
-            // HTTP response errors
+            // HTTP response errors. This MUST precede the IOException branch below —
+            // HttpResponseException extends IOException, so the reverse order (which shipped)
+            // made every 401/403/404/500 here unreachable and surfaced as a generic
+            // "Network error". Kotlin does not flag an unreachable catch the way Java does.
             android.util.Log.e("CalendarSync", "HTTP error: ${e.statusCode} - ${e.message}", e)
             val errorMsg = when (e.statusCode) {
                 401 -> "Authentication failed. Please sign in again."
@@ -110,6 +111,9 @@ class CalendarSyncRepository @Inject constructor(
                 else -> "HTTP error ${e.statusCode}: ${e.message ?: "Unknown error"}"
             }
             emit(SyncResult.Error(errorMsg))
+        } catch (e: java.io.IOException) {
+            android.util.Log.e("CalendarSync", "Network error: ${e.message}", e)
+            emit(SyncResult.Error("Network error: ${e.message ?: "Unable to connect to Google Calendar. Please check your internet connection."}"))
         } catch (e: Exception) {
             // Log full error for debugging
             android.util.Log.e("CalendarSync", "Unexpected error: ${e.javaClass.simpleName} - ${e.message}", e)
@@ -168,11 +172,11 @@ class CalendarSyncRepository @Inject constructor(
                 else -> "Google Calendar API error: ${e.statusCode} - ${e.message ?: "Unknown error"}"
             }
             emit(SyncResult.Error(errorMsg))
-        } catch (e: java.io.IOException) {
-            android.util.Log.e("CalendarSync", "Network error: ${e.message}", e)
-            emit(SyncResult.Error("Network error: ${e.message ?: "Unable to connect to Google Calendar. Please check your internet connection."}"))
         } catch (e: com.google.api.client.http.HttpResponseException) {
-            // HTTP response errors
+            // HTTP response errors. This MUST precede the IOException branch below —
+            // HttpResponseException extends IOException, so the reverse order (which shipped)
+            // made every 401/403/404/500 here unreachable and surfaced as a generic
+            // "Network error". Kotlin does not flag an unreachable catch the way Java does.
             android.util.Log.e("CalendarSync", "HTTP error: ${e.statusCode} - ${e.message}", e)
             val errorMsg = when (e.statusCode) {
                 401 -> "Authentication failed. Please sign in again."
@@ -182,6 +186,9 @@ class CalendarSyncRepository @Inject constructor(
                 else -> "HTTP error ${e.statusCode}: ${e.message ?: "Unknown error"}"
             }
             emit(SyncResult.Error(errorMsg))
+        } catch (e: java.io.IOException) {
+            android.util.Log.e("CalendarSync", "Network error: ${e.message}", e)
+            emit(SyncResult.Error("Network error: ${e.message ?: "Unable to connect to Google Calendar. Please check your internet connection."}"))
         } catch (e: Exception) {
             // Log full error for debugging
             android.util.Log.e("CalendarSync", "Unexpected error: ${e.javaClass.simpleName} - ${e.message}", e)
@@ -205,21 +212,22 @@ class CalendarSyncRepository @Inject constructor(
      *
      * @param ownerSlot This device's own slot, attributed to the import - see the call site in
      *   [syncFromGoogle] for why it isn't looked up per event.
+     * @param ownerUid This device's Firebase UID, stamped as `createdByFirebaseUid` so the
+     *   imported row can actually be uploaded: the Firestore create rule requires
+     *   `createdByFirebaseUid == auth.uid`, and a null here made every import a doomed write
+     *   that `getUnsyncedEvents()` retried on every sync forever.
      */
-    private fun GoogleEvent.toEventEntity(ownerSlot: String): EventEntity {
-        val startDateTime = start?.dateTime?.value?.let {
-            LocalDateTime.ofInstant(
-                java.time.Instant.ofEpochMilli(it),
-                ZoneId.systemDefault()
-            )
-        } ?: LocalDateTime.now()
+    private fun GoogleEvent.toEventEntity(ownerSlot: String, ownerUid: String): EventEntity {
+        // An all-day event carries its date in `date`, not `dateTime`. Reading only `dateTime`
+        // and falling back to now() stamped a birthday, a school holiday or an all-day custody
+        // note onto today's cell and lost its real date. `date` is a date-only value at UTC
+        // midnight, so it is read in UTC (not the system zone, which could shift the day).
+        val startDateTime = start?.dateTime?.value?.let { epochMillisToLocal(it) }
+            ?: start?.date?.value?.let { utcMillisToLocalDate(it) }
+            ?: LocalDateTime.now()
 
-        val endDateTime = end?.dateTime?.value?.let {
-            LocalDateTime.ofInstant(
-                java.time.Instant.ofEpochMilli(it),
-                ZoneId.systemDefault()
-            )
-        }
+        val endDateTime = end?.dateTime?.value?.let { epochMillisToLocal(it) }
+            ?: end?.date?.value?.let { utcMillisToLocalDate(it) }
 
         return EventEntity(
             id = id ?: java.util.UUID.randomUUID().toString(),
@@ -232,9 +240,21 @@ class CalendarSyncRepository @Inject constructor(
             isRecurring = recurrence != null,
             recurrencePattern = recurrence?.firstOrNull()?.toString(),
             createdAt = LocalDateTime.now(),
-            updatedAt = LocalDateTime.now()
+            updatedAt = LocalDateTime.now(),
+            createdByFirebaseUid = ownerUid
         )
     }
+
+    /** A timed event's epoch millis as a local date-time in this device's zone. */
+    private fun epochMillisToLocal(millis: Long): LocalDateTime =
+        LocalDateTime.ofInstant(java.time.Instant.ofEpochMilli(millis), ZoneId.systemDefault())
+
+    /** An all-day event's UTC-midnight millis as the start of that calendar day. */
+    private fun utcMillisToLocalDate(millis: Long): LocalDateTime =
+        java.time.Instant.ofEpochMilli(millis)
+            .atZone(java.time.ZoneOffset.UTC)
+            .toLocalDate()
+            .atStartOfDay()
 }
 
 
