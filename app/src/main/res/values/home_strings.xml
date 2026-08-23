@@ -44,8 +44,6 @@
          renders the invitation alone, so there is no feed there to be empty. -->
     <string name="home_recent_empty_paired">Nothing new from your co-parent yet. Changes they make will show up here.</string>
 
-    <string name="home_weekly_summary">View weekly summary</string>
-
     <!-- Activity feed. %1$s = event title; the section header already names who made the
          change, so the row states the action rather than repeating "Co-parent". -->
     <string name="home_activity_event_created">Added %1$s</string>

@@ -38,8 +38,6 @@
 
     <string name="home_recent_empty_paired">Пока ничего нового от второго родителя. Их изменения появятся здесь.</string>
 
-    <string name="home_weekly_summary">Сводка за неделю</string>
-
     <string name="home_activity_event_created">Добавлено: %1$s</string>
     <string name="home_activity_event_updated">Изменено: %1$s</string>
     <string name="home_activity_pickup_confirmed">Подтверждён приём: %1$s</string>

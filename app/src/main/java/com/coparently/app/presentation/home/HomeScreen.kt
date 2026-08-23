@@ -21,7 +21,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
-import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Edit
@@ -38,7 +37,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -98,7 +96,6 @@ private const val SETTLED_EPSILON = 0.01
  *
  * @param onOpenEvent Opens an event by id
  * @param onOpenChangeRequests Opens the change-request inbox
- * @param onOpenWeeklySummary Opens the weekly summary dashboard
  * @param onOpenSettings Opens settings
  * @param onNavigateToPairing Opens the pairing screen
  * @param onOpenExpenses Switches to the Expenses tab — the spend tile's deep link
@@ -113,7 +110,6 @@ private const val SETTLED_EPSILON = 0.01
 fun HomeScreen(
     onOpenEvent: (String) -> Unit,
     onOpenChangeRequests: () -> Unit,
-    onOpenWeeklySummary: () -> Unit,
     onOpenSettings: () -> Unit,
     onNavigateToPairing: () -> Unit,
     onOpenExpenses: () -> Unit,
@@ -161,7 +157,6 @@ fun HomeScreen(
                 contentPadding = padding,
                 onOpenEvent = onOpenEvent,
                 onOpenChangeRequests = onOpenChangeRequests,
-                onOpenWeeklySummary = onOpenWeeklySummary,
                 onOpenExpenses = onOpenExpenses,
                 onOpenChat = onOpenChat
             )
@@ -215,7 +210,6 @@ private fun PairingInvitation(
  * @param contentPadding The scaffold's own insets
  * @param onOpenEvent Opens an event by id
  * @param onOpenChangeRequests Opens the change-request inbox
- * @param onOpenWeeklySummary Opens the weekly summary dashboard
  * @param onOpenExpenses Switches to the Expenses tab
  * @param onOpenChat Switches to the Chat tab
  */
@@ -229,7 +223,6 @@ private fun Dashboard(
     contentPadding: PaddingValues,
     onOpenEvent: (String) -> Unit,
     onOpenChangeRequests: () -> Unit,
-    onOpenWeeklySummary: () -> Unit,
     onOpenExpenses: () -> Unit,
     onOpenChat: () -> Unit
 ) {
@@ -333,21 +326,6 @@ private fun Dashboard(
                 onOpenExpenses = onOpenExpenses,
                 onOpenChat = onOpenChat
             )
-        }
-
-        item {
-            // Kept here deliberately. The refresh removed the unlabelled `view_list`
-            // action from the calendar header, so this is now the weekly summary's single
-            // entry point rather than one of two competing ones.
-            Spacer(modifier = Modifier.size(4.dp))
-            OutlinedButton(
-                onClick = onOpenWeeklySummary,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Icon(Icons.AutoMirrored.Filled.ViewList, contentDescription = null)
-                Spacer(modifier = Modifier.size(8.dp))
-                Text(stringResource(R.string.home_weekly_summary))
-            }
         }
     }
 }

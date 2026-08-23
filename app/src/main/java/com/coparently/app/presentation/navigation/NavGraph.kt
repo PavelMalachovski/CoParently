@@ -190,9 +190,6 @@ fun NavGraph(
                     onOpenChangeRequests = {
                         navController.navigate(Screen.ChangeRequests.createRoute())
                     },
-                    onOpenWeeklySummary = {
-                        navController.navigate(Screen.WeeklySummary.route)
-                    },
                     onOpenSettings = {
                         navController.navigate(Screen.Settings.route)
                     },
@@ -313,27 +310,6 @@ fun NavGraph(
                     },
                     onRequestChange = { id ->
                         navController.navigate(Screen.RequestChange.createRoute(id))
-                    }
-                )
-            }
-
-            // Weekly summary dashboard (MVP 2)
-            composable(
-                route = Screen.WeeklySummary.route,
-                enterTransition = { slideInFromRight() },
-                exitTransition = { slideOutToLeft() },
-                popEnterTransition = { slideInFromLeft() },
-                popExitTransition = { slideOutToRight() }
-            ) {
-                com.coparently.app.presentation.summary.WeeklySummaryScreen(
-                    onBack = {
-                        navController.popBackStack()
-                    },
-                    onEventClick = { eventId ->
-                        navController.navigate(Screen.EditEvent.createRoute(eventId))
-                    },
-                    onOpenChangeRequests = {
-                        navController.navigate(Screen.ChangeRequests.createRoute())
                     }
                 )
             }
@@ -996,7 +972,6 @@ sealed class Screen(val route: String) {
     }
     data object Budgets : Screen("budgets")
 
-    data object WeeklySummary : Screen("weekly_summary")
     data object ChangeRequests : Screen("change_requests?eventId={eventId}") {
         const val ARG_EVENT_ID = "eventId"
 

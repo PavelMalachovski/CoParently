@@ -34,8 +34,6 @@
 
     <string name="home_recent_empty_paired">Noch nichts Neues vom anderen Elternteil. Änderungen erscheinen hier.</string>
 
-    <string name="home_weekly_summary">Wochenübersicht anzeigen</string>
-
     <string name="home_activity_event_created">Hinzugefügt: %1$s</string>
     <string name="home_activity_event_updated">Geändert: %1$s</string>
     <string name="home_activity_pickup_confirmed">Abholung bestätigt: %1$s</string>

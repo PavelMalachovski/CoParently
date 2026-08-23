@@ -38,8 +38,6 @@
 
     <string name="home_recent_empty_paired">Zatím nic nového od druhého rodiče. Jeho změny se zobrazí zde.</string>
 
-    <string name="home_weekly_summary">Zobrazit týdenní přehled</string>
-
     <string name="home_activity_event_created">Přidáno: %1$s</string>
     <string name="home_activity_event_updated">Upraveno: %1$s</string>
     <string name="home_activity_pickup_confirmed">Potvrzeno vyzvednutí: %1$s</string>
