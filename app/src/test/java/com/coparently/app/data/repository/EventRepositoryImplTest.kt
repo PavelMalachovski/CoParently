@@ -6,6 +6,7 @@ import com.coparently.app.data.local.entity.EventEntity
 import com.coparently.app.data.local.entity.UserEntity
 import com.coparently.app.data.remote.firebase.FirebaseAuthService
 import com.coparently.app.data.remote.firebase.FirestoreEventDataSource
+import com.coparently.app.domain.activity.ActivityAnnouncer
 import com.coparently.app.domain.events.EventAcceptance
 import com.coparently.app.domain.model.Event
 import com.google.firebase.auth.FirebaseUser
@@ -40,6 +41,7 @@ class EventRepositoryImplTest {
     private lateinit var userDao: UserDao
     private lateinit var firebaseAuthService: FirebaseAuthService
     private lateinit var firestoreEventDataSource: FirestoreEventDataSource
+    private lateinit var activityAnnouncer: ActivityAnnouncer
     private lateinit var repository: EventRepositoryImpl
 
     private val now = LocalDateTime.of(2026, 7, 23, 10, 0)
@@ -53,7 +55,14 @@ class EventRepositoryImplTest {
         // No signed-in user -> insert/update stay local, so the Firestore path doesn't
         // interfere with what we assert about the persisted entity.
         every { firebaseAuthService.getCurrentUser() } returns null
-        repository = EventRepositoryImpl(eventDao, userDao, firebaseAuthService, firestoreEventDataSource)
+        activityAnnouncer = mockk(relaxed = true)
+        repository = EventRepositoryImpl(
+            eventDao,
+            userDao,
+            firebaseAuthService,
+            firestoreEventDataSource,
+            activityAnnouncer
+        )
     }
 
     @Test

@@ -47,7 +47,13 @@ class ExpenseRepositoryImplTest {
         userDao = mockk()
         firebaseAuthService = mockk()
         firestoreExpenseDataSource = mockk()
-        repository = ExpenseRepositoryImpl(expenseDao, userDao, firebaseAuthService, firestoreExpenseDataSource)
+        repository = ExpenseRepositoryImpl(
+            expenseDao,
+            userDao,
+            firebaseAuthService,
+            firestoreExpenseDataSource,
+            mockk(relaxed = true)
+        )
     }
 
     @Test

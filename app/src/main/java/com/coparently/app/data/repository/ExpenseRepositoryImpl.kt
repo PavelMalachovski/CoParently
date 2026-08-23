@@ -5,6 +5,10 @@ import com.coparently.app.data.local.dao.UserDao
 import com.coparently.app.data.local.entity.ExpenseEntity
 import com.coparently.app.data.remote.firebase.FirebaseAuthService
 import com.coparently.app.data.remote.firebase.FirestoreExpenseDataSource
+import com.coparently.app.domain.activity.ActivityAnnouncement
+import com.coparently.app.domain.activity.ActivityAnnouncer
+import com.coparently.app.domain.activity.ActivityEntityType
+import com.coparently.app.domain.activity.ActivityKind
 import com.coparently.app.domain.model.Expense
 import com.coparently.app.domain.model.ExpenseCategory
 import com.coparently.app.domain.model.ExpenseSummary
@@ -26,7 +30,8 @@ class ExpenseRepositoryImpl @Inject constructor(
     private val expenseDao: ExpenseDao,
     private val userDao: UserDao,
     private val firebaseAuthService: FirebaseAuthService,
-    private val firestoreExpenseDataSource: FirestoreExpenseDataSource
+    private val firestoreExpenseDataSource: FirestoreExpenseDataSource,
+    private val activityAnnouncer: ActivityAnnouncer
 ) : ExpenseRepository {
 
     private val gson = Gson()
@@ -83,6 +88,8 @@ class ExpenseRepositoryImpl @Inject constructor(
         // lost, even if the Firestore push below fails.
         expenseDao.insertExpense(expense.toEntity())
 
+        announce(expense, ActivityKind.EXPENSE_ADDED)
+
         val firebaseUser = firebaseAuthService.getCurrentUser() ?: return
         // A brand-new document has no prior owner, so the current user is the owner.
         pushToFirestore(expense, ownerUid = firebaseUser.uid)
@@ -90,6 +97,7 @@ class ExpenseRepositoryImpl @Inject constructor(
 
     override suspend fun updateExpense(expense: Expense) {
         expenseDao.insertExpense(expense.toEntity())
+        announce(expense, ActivityKind.EXPENSE_UPDATED)
 
         val firebaseUser = firebaseAuthService.getCurrentUser() ?: return
         try {
@@ -151,7 +159,11 @@ class ExpenseRepositoryImpl @Inject constructor(
     )
 
     override suspend fun deleteExpense(expenseId: String) {
+        // Read before deleting: the announcement names the expense, and after the row is gone
+        // there is nothing left to name it with.
+        val deleted = expenseDao.getExpenseById(expenseId)?.toDomain()
         expenseDao.deleteExpense(expenseId)
+        deleted?.let { announce(it, ActivityKind.EXPENSE_DELETED) }
 
         val firebaseUser = firebaseAuthService.getCurrentUser()
         if (firebaseUser != null) {
@@ -210,6 +222,36 @@ class ExpenseRepositoryImpl @Inject constructor(
                     expenseDao.insertExpense(expense.toEntity())
                 }
             }
+    }
+
+    /**
+     * Tells the co-parent about an expense.
+     *
+     * Nothing is suppressed here: an expense is a shared fact by construction — there is no
+     * private expense, and the pair's balance is the reason both parents opened the app. That is
+     * the difference from `EventRepositoryImpl`, which must suppress a private event.
+     *
+     * The amount is passed already formatted, with its currency beside it. The app never converts
+     * between currencies (CLAUDE.md), so a reader must be able to group by currency without
+     * parsing the formatted string back apart.
+     *
+     * Never throws — see `ActivityAnnouncer`. A parent's expense must not fail to save because
+     * their co-parent's chat listener is down.
+     */
+    private suspend fun announce(expense: Expense, kind: ActivityKind) {
+        val myUid = firebaseAuthService.getCurrentUser()?.uid ?: return
+        activityAnnouncer.announce(
+            announcement = ActivityAnnouncement(
+                kind = kind,
+                entityType = ActivityEntityType.EXPENSE,
+                entityId = expense.id,
+                title = expense.title,
+                whenIso = expense.date.format(dateFormatter),
+                amount = "${expense.amount} ${expense.currency}",
+                currency = expense.currency
+            ),
+            senderName = userDao.getUserById(myUid)?.name.orEmpty()
+        )
     }
 
     private fun ExpenseEntity.toDomain(): Expense {

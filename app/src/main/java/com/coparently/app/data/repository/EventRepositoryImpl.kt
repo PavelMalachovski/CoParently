@@ -5,6 +5,10 @@ import com.coparently.app.data.local.dao.UserDao
 import com.coparently.app.data.local.entity.EventEntity
 import com.coparently.app.data.remote.firebase.FirebaseAuthService
 import com.coparently.app.data.remote.firebase.FirestoreEventDataSource
+import com.coparently.app.domain.activity.ActivityAnnouncement
+import com.coparently.app.domain.activity.ActivityAnnouncer
+import com.coparently.app.domain.activity.ActivityEntityType
+import com.coparently.app.domain.activity.ActivityKind
 import com.coparently.app.domain.events.CalendarVisibility
 import com.coparently.app.domain.events.EventAcceptance
 import com.coparently.app.domain.events.EventAcceptanceTransition
@@ -32,7 +36,8 @@ class EventRepositoryImpl @Inject constructor(
     private val eventDao: EventDao,
     private val userDao: UserDao,
     private val firebaseAuthService: FirebaseAuthService,
-    private val firestoreEventDataSource: FirestoreEventDataSource
+    private val firestoreEventDataSource: FirestoreEventDataSource,
+    private val activityAnnouncer: ActivityAnnouncer
 ) : EventRepository {
 
     private val dateFormatter = DateTimeFormatter.ISO_LOCAL_DATE_TIME
@@ -120,6 +125,8 @@ class EventRepositoryImpl @Inject constructor(
             )
             eventDao.updateEvent(syncedEvent.toEntity())
         }
+
+        announce(stamped, ActivityKind.EVENT_CREATED)
     }
 
     override suspend fun updateEvent(event: Event) {
@@ -143,6 +150,8 @@ class EventRepositoryImpl @Inject constructor(
                 eventDao.updateEvent(event.copy(sharedWith = audience).toEntity())
             }
         }
+
+        announce(event, event.acceptanceKind() ?: ActivityKind.EVENT_UPDATED)
     }
 
     override suspend fun deleteEvent(event: Event) {
@@ -159,6 +168,8 @@ class EventRepositoryImpl @Inject constructor(
                 android.util.Log.w("EventRepo", "Event Firestore delete failed", e)
             }
         }
+
+        announce(event, ActivityKind.EVENT_DELETED)
     }
 
     override suspend fun deleteEventById(id: String) {
@@ -226,6 +237,44 @@ class EventRepositoryImpl @Inject constructor(
      * event already carrying a decision — a re-inserted row, an undo restoring a captured event —
      * keeps it, so nothing re-asks a question that has been answered.
      */
+    /**
+     * Tells the co-parent about [event], unless there is a reason not to.
+     *
+     * Suppressed for a **private** event, which never reaches Firestore at all — announcing one
+     * would leak it through a channel the sync path is careful to close, which is a worse
+     * disclosure than the calendar entry itself would have been.
+     *
+     * Suppressed for an event this device did not create: a change arriving from sync must not be
+     * echoed back to the parent who made it. The repository's write paths run for both, so the
+     * check belongs here rather than in each caller.
+     *
+     * Never throws — see [ActivityAnnouncer]. An announcement that fails is logged and dropped,
+     * because a parent's event must not fail to save because chat is down.
+     */
+    private suspend fun announce(event: Event, kind: ActivityKind) {
+        val myUid = firebaseAuthService.getCurrentUser()?.uid ?: return
+        val mine = event.lastModifiedBy?.takeIf { it.isNotBlank() }
+            ?: event.createdByFirebaseUid
+        activityAnnouncer.announce(
+            announcement = ActivityAnnouncement(
+                kind = kind,
+                entityType = ActivityEntityType.EVENT,
+                entityId = event.id,
+                title = event.title,
+                whenIso = event.startDateTime.format(dateFormatter)
+            ),
+            senderName = userDao.getUserById(myUid)?.name.orEmpty(),
+            suppress = event.isPrivate || (mine != null && mine != myUid)
+        )
+    }
+
+    /** The announcement an acceptance decision deserves, or null when this was an ordinary edit. */
+    private fun Event.acceptanceKind(): ActivityKind? = when (acceptance) {
+        EventAcceptance.ACCEPTED -> ActivityKind.EVENT_ACCEPTED
+        EventAcceptance.DECLINED -> ActivityKind.EVENT_DECLINED
+        EventAcceptance.NOT_REQUIRED, EventAcceptance.PENDING -> null
+    }
+
     private suspend fun withAcceptance(event: Event, currentUid: String?): Event {
         if (currentUid == null || event.acceptance != EventAcceptance.NOT_REQUIRED) return event
         val me = userDao.getUserById(currentUid)
