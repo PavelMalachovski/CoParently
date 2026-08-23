@@ -1,0 +1,344 @@
+package com.coparently.app.presentation.expenses
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import com.coparently.app.R
+import com.coparently.app.domain.expenses.CategorySlice
+import com.coparently.app.domain.expenses.CurrencyBreakdown
+import com.coparently.app.presentation.common.ParentNames
+import com.coparently.app.presentation.common.PillChip
+import com.coparently.app.presentation.common.SectionGroup
+import java.text.NumberFormat
+import java.util.Locale
+
+/** Width of the amount column, wide enough for a five-figure sum with its symbol. */
+private val AMOUNT_COLUMN_WIDTH = 96.dp
+
+/** Width of the share column, wide enough for "100%". */
+private val SHARE_COLUMN_WIDTH = 52.dp
+
+/** The colour swatch that ties a table row to its arc. */
+private val SWATCH_SIZE = 12.dp
+
+/**
+ * Where the month's money went: a pie by category, and beneath it the same figures as a table
+ * sorted with the largest first.
+ *
+ * **The table is not a second view of the chart, it is the primary one.** Nine categorical hues
+ * cannot be made distinguishable in every pairing — see [CategoryPalette], which measured it —
+ * so this screen never asks anyone to tell two slices apart by colour. Every row carries the
+ * category's name as text and its figures as numbers; the swatch is a pointer back to the arc,
+ * not the encoding. That also makes the table the chart's legend, which is why there is no
+ * separate one: two lists of the same nine categories, side by side, would be the "two answers
+ * to one question" this design language removes elsewhere.
+ *
+ * **One currency at a time, never a mixed pie.** [ExpenseViewModel.selectedBreakdown] hands out
+ * exactly one currency's figures; the chip row above only chooses between them.
+ *
+ * @param breakdown The currency being shown, or null when the month has nothing in it.
+ * @param currencies Every currency the month holds, for the chip row. A single-currency month —
+ *   the usual case — gets no chips: it should not pay for the unusual one.
+ * @param payers The two uids the payer filter offers, or empty when the filter must be hidden.
+ * @param selectedPayer The uid currently filtered to, or null for everyone.
+ * @param parentNames Resolves a uid to that parent's own name.
+ * @param onSelectCurrency Picks a currency to draw.
+ * @param onSelectPayer Filters to one parent's spending, or to everyone's with null.
+ * @param modifier Modifier applied to the view.
+ */
+@Composable
+@Suppress("LongParameterList") // stateless view: its inputs and callbacks are its whole API
+fun ExpenseAnalytics(
+    breakdown: CurrencyBreakdown?,
+    currencies: List<String>,
+    payers: List<String>,
+    selectedPayer: String?,
+    parentNames: ParentNames,
+    onSelectCurrency: (String) -> Unit,
+    onSelectPayer: (String?) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        if (payers.isNotEmpty()) {
+            PayerFilter(
+                payers = payers,
+                selectedPayer = selectedPayer,
+                parentNames = parentNames,
+                onSelectPayer = onSelectPayer
+            )
+        }
+
+        // Only when the month actually mixes currencies. A pie of two currencies is the one
+        // thing this feature must never draw, so the chips are how a parent sees the second
+        // one — not a control they have to meet on every ordinary month.
+        if (currencies.size > 1) {
+            CurrencyChips(
+                currencies = currencies,
+                selected = breakdown?.currency,
+                onSelectCurrency = onSelectCurrency
+            )
+        }
+
+        if (breakdown == null) {
+            Text(
+                text = if (selectedPayer == null) {
+                    stringResource(R.string.expense_analytics_empty)
+                } else {
+                    // A different sentence, because it has a different remedy: the month is not
+                    // empty, the filter is. Saying "nothing spent this month" under a filter the
+                    // user just set would read as a bug.
+                    stringResource(R.string.expense_analytics_empty_filtered)
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(vertical = 24.dp)
+            )
+            return@Column
+        }
+
+        CategoryPieChart(
+            slices = breakdown.slices,
+            modifier = Modifier.padding(horizontal = 32.dp, vertical = 8.dp)
+        )
+
+        BreakdownTable(breakdown = breakdown)
+    }
+}
+
+/**
+ * Everyone, or one parent — named with that parent's own name, never "Mom" or "Dad".
+ *
+ * Shown only when both parents are known. The caller decides that; this composable is not
+ * reached otherwise.
+ */
+@Composable
+private fun PayerFilter(
+    payers: List<String>,
+    selectedPayer: String?,
+    parentNames: ParentNames,
+    onSelectPayer: (String?) -> Unit
+) {
+    val label = stringResource(R.string.expense_analytics_payer_label)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .semantics { contentDescription = label },
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        FilterChip(
+            label = stringResource(R.string.expense_analytics_payer_everyone),
+            selected = selectedPayer == null,
+            onClick = { onSelectPayer(null) }
+        )
+        payers.forEach { uid ->
+            FilterChip(
+                label = parentNames.labelForUid(uid),
+                selected = selectedPayer == uid,
+                onClick = { onSelectPayer(uid) }
+            )
+        }
+    }
+}
+
+/** One chip per currency the month holds. Absent entirely when there is only one. */
+@Composable
+private fun CurrencyChips(
+    currencies: List<String>,
+    selected: String?,
+    onSelectCurrency: (String) -> Unit
+) {
+    val label = stringResource(R.string.expense_analytics_currency_label)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .semantics { contentDescription = label },
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        currencies.forEach { currency ->
+            FilterChip(
+                label = currency,
+                selected = currency == selected,
+                onClick = { onSelectCurrency(currency) }
+            )
+        }
+    }
+}
+
+/**
+ * A selected/unselected chip.
+ *
+ * Uses the theme's neutral secondary container for the selected state, never a parent hue and
+ * never a category's slice colour: a control is not a series, and borrowing a series colour for
+ * one is how a reader starts believing the filter is part of the data.
+ */
+@Composable
+private fun FilterChip(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    PillChip(
+        label = label,
+        container = if (selected) MaterialTheme.colorScheme.secondaryContainer else null,
+        contentColor = if (selected) {
+            MaterialTheme.colorScheme.onSecondaryContainer
+        } else {
+            MaterialTheme.colorScheme.onSurfaceVariant
+        },
+        onClick = onClick
+    )
+}
+
+/**
+ * The figures, largest first — which is the whole point: the question is "what is eating the
+ * money", so the answer is the first row.
+ *
+ * Amount and share are text in text colours, never in the series colour. Only the swatch wears
+ * the category's hue.
+ */
+@Composable
+private fun BreakdownTable(breakdown: CurrencyBreakdown) {
+    val total = remember(breakdown) { currencyFormat(breakdown.currency).format(breakdown.total) }
+
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 16.dp + SWATCH_SIZE + 12.dp, end = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            ColumnHeader(stringResource(R.string.expense_analytics_column_category), Modifier.weight(1f))
+            ColumnHeader(
+                stringResource(R.string.expense_analytics_column_amount),
+                Modifier.width(AMOUNT_COLUMN_WIDTH),
+                TextAlign.End
+            )
+            ColumnHeader(
+                stringResource(R.string.expense_analytics_column_share),
+                Modifier.width(SHARE_COLUMN_WIDTH),
+                TextAlign.End
+            )
+        }
+        SectionGroup {
+            breakdown.slices.forEachIndexed { index, slice ->
+                BreakdownRow(slice = slice, currency = breakdown.currency)
+                if (index != breakdown.slices.lastIndex) Divider()
+            }
+        }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                text = stringResource(R.string.expense_analytics_total),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = total,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
+    }
+}
+
+/** One column heading, in the muted text token every other header on this screen uses. */
+@Composable
+private fun ColumnHeader(
+    text: String,
+    modifier: Modifier = Modifier,
+    textAlign: TextAlign = TextAlign.Start
+) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        textAlign = textAlign,
+        modifier = modifier
+    )
+}
+
+/** One category: its swatch, its name, its amount and its share. */
+@Composable
+private fun BreakdownRow(slice: CategorySlice, currency: String) {
+    val name = stringResource(slice.category.labelRes)
+    val amount = currencyFormat(currency).format(slice.amount)
+    val share = formatShare(slice.share)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 12.dp)
+            // One description for the whole row: a screen reader reading "swatch, Food, 25.50,
+            // 34%" as four separate nodes is the table read sideways.
+            .semantics(mergeDescendants = true) { contentDescription = "$name, $amount, $share" },
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(SWATCH_SIZE)
+                .clip(CircleShape)
+                .background(slice.category.sliceColor())
+        )
+        Text(
+            text = name,
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.weight(1f)
+        )
+        Text(
+            text = amount,
+            style = MaterialTheme.typography.bodyMedium,
+            textAlign = TextAlign.End,
+            modifier = Modifier.width(AMOUNT_COLUMN_WIDTH)
+        )
+        Text(
+            text = share,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.End,
+            modifier = Modifier.width(SHARE_COLUMN_WIDTH)
+        )
+    }
+}
+
+/** "34%" — rounded, because a pie slice is not a figure anyone reads to a decimal place. */
+private fun formatShare(share: Double): String {
+    val format = NumberFormat.getPercentInstance(Locale.getDefault())
+    format.maximumFractionDigits = 0
+    return format.format(share)
+}

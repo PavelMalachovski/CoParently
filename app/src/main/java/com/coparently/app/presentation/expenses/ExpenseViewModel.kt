@@ -3,6 +3,8 @@ package com.coparently.app.presentation.expenses
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.coparently.app.domain.expenses.CurrencyBalance
+import com.coparently.app.domain.expenses.CurrencyBreakdown
+import com.coparently.app.domain.expenses.breakdownByCurrency
 import com.coparently.app.domain.expenses.calculateExpenseBalancesByCurrency
 import com.coparently.app.domain.model.Expense
 import com.coparently.app.domain.model.ExpenseCategory
@@ -175,6 +177,90 @@ class ExpenseViewModel @Inject constructor(
         SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS),
         emptyList()
     )
+
+    /**
+     * Whose spending the analytics view is showing: a Firebase uid, or null for everyone.
+     *
+     * A uid rather than a slot, because [Expense.paidBy] is a uid and going via a slot would
+     * attribute both parents' spending to one of them on a pair whose slots have not been
+     * separated yet — the same trap [com.coparently.app.presentation.common.ParentNames.labelForUid]
+     * exists to keep callers out of.
+     */
+    private val _analyticsPayer = MutableStateFlow<String?>(null)
+    val analyticsPayer: StateFlow<String?> = _analyticsPayer.asStateFlow()
+
+    /** The currency the user picked from the chip row, or null while they have picked none. */
+    private val _pickedCurrency = MutableStateFlow<String?>(null)
+
+    /**
+     * The selected month's spending by category, one entry per currency.
+     *
+     * Derived from [monthExpenses] rather than from a second repository read, so the chart and
+     * the list below it can never be looking at different months.
+     */
+    val breakdowns: StateFlow<List<CurrencyBreakdown>> = combine(
+        monthExpenses,
+        _analyticsPayer
+    ) { expenses, payer ->
+        breakdownByCurrency(expenses, payer)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), emptyList())
+
+    /**
+     * The one breakdown the chart and the table draw, or null when the month has nothing in it.
+     *
+     * **One currency at a time, always.** The app does no FX conversion, and a pie is a single
+     * total cut into slices — so there is no honest way to draw two currencies in one chart, and
+     * this deliberately hands out exactly one.
+     *
+     * The user's pick wins, but only while it is still on offer. Changing the payer filter, or
+     * the month, can remove the currency they had selected; falling back then is what stops the
+     * screen going blank while a chip row sits above it showing something else. The fallback is
+     * the app's default currency when the month contains it, and otherwise the currency with the
+     * largest total — [breakdownByCurrency] already orders them that way.
+     */
+    val selectedBreakdown: StateFlow<CurrencyBreakdown?> = combine(
+        breakdowns,
+        _pickedCurrency,
+        defaultCurrency
+    ) { available, picked, fallbackCurrency ->
+        available.firstOrNull { it.currency == picked }
+            ?: available.firstOrNull { it.currency == fallbackCurrency.code }
+            ?: available.firstOrNull()
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), null)
+
+    /**
+     * The two uids the payer filter offers, or empty when it must not be shown at all.
+     *
+     * Empty while unpaired, before the two profiles resolve, and on a pair whose parents still
+     * share a slot — the same condition [com.coparently.app.domain.expenses.ExpenseBalance.splitKnown]
+     * models, and for the same reason. A filter offering "Parent" and "Parent" is worse than no
+     * filter: it invites a choice the app cannot honour.
+     */
+    val analyticsPayers: StateFlow<List<String>> = parents
+        .map { known ->
+            listOfNotNull(known.me?.uid, known.coParent?.uid)
+                .filter { it.isNotBlank() }
+                .distinct()
+                .takeIf { it.size == 2 }
+                .orEmpty()
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), emptyList())
+
+    /**
+     * Shows only [uid]'s spending, or everyone's when null.
+     *
+     * The currency selection is deliberately left alone: [selectedBreakdown] already falls back
+     * when the picked currency stops being available, and clearing it here would also throw away
+     * a still-valid choice every time the filter moved.
+     */
+    fun selectAnalyticsPayer(uid: String?) {
+        _analyticsPayer.value = uid
+    }
+
+    /** Draws [currency] instead of the default. */
+    fun selectAnalyticsCurrency(currency: String) {
+        _pickedCurrency.value = currency
+    }
 
     private val _saveState = MutableStateFlow<ExpenseSaveState>(ExpenseSaveState.Idle)
     val saveState: StateFlow<ExpenseSaveState> = _saveState.asStateFlow()
