@@ -1,5 +1,8 @@
 package com.coparently.app.utils
 
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
 import androidx.compose.ui.graphics.Color
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -274,4 +277,26 @@ fun Float.coerceInRange(min: Float, max: Float): Float = coerceIn(min, max)
  * @return 1 if true, 0 if false
  */
 fun Boolean.toInt(): Int = if (this) 1 else 0
+
+// ==================== Context Extensions ====================
+
+/**
+ * Walks down a `Context` chain to the [Activity] hosting it.
+ *
+ * Needed because Credential Manager renders its UI on an `Activity` and refuses an application
+ * context, while Compose hands a composable whatever context its tree was built with — often a
+ * `ContextWrapper` wrapping the `Activity` rather than the `Activity` itself.
+ *
+ * @return the hosting [Activity], or null when this context is not attached to one.
+ */
+fun Context.findActivity(): Activity? {
+    var current: Context = this
+    while (true) {
+        when {
+            current is Activity -> return current
+            current is ContextWrapper -> current = current.baseContext
+            else -> return null
+        }
+    }
+}
 

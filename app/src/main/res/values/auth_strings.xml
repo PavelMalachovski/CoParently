@@ -23,4 +23,17 @@
     <string name="auth_no_account_question">Don\'t have an account?</string>
     <string name="auth_have_account_question">Already have an account?</string>
     <string name="auth_forgot_password_link">Forgot Password?</string>
+    <string name="auth_saved_password_sign_in">Sign in with saved password</string>
+    <string name="auth_error_empty_fields">Please fill in both fields</string>
+    <string name="auth_error_invalid_credentials">Wrong email or password</string>
+    <string name="auth_error_email_already_in_use">This email already has an account</string>
+    <string name="auth_error_weak_password">Password is too weak — use at least 6 characters</string>
+    <string name="auth_error_invalid_email">That is not a valid email address</string>
+    <string name="auth_error_user_disabled">This account has been disabled</string>
+    <string name="auth_error_network">No connection. Check your network and try again.</string>
+    <string name="auth_error_too_many_requests">Too many attempts. Try again in a few minutes.</string>
+    <string name="auth_error_interrupted">Sign-in was interrupted. Please try again.</string>
+    <string name="auth_error_no_google_account">No Google account was chosen</string>
+    <string name="auth_error_no_saved_password">No saved password for CoPlanly yet</string>
+    <string name="auth_error_unknown">Something went wrong. Please try again.</string>
 </resources>

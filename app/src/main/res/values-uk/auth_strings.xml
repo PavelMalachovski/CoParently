@@ -21,4 +21,17 @@
     <string name="auth_no_account_question">Немає акаунта?</string>
     <string name="auth_have_account_question">Уже маєте акаунт?</string>
     <string name="auth_forgot_password_link">Забули пароль?</string>
+    <string name="auth_saved_password_sign_in">Увійти збереженим паролем</string>
+    <string name="auth_error_empty_fields">Заповніть обидва поля</string>
+    <string name="auth_error_invalid_credentials">Неправильна пошта або пароль</string>
+    <string name="auth_error_email_already_in_use">На цю пошту вже є акаунт</string>
+    <string name="auth_error_weak_password">Пароль надто простий — потрібно щонайменше 6 символів</string>
+    <string name="auth_error_invalid_email">Це не схоже на адресу електронної пошти</string>
+    <string name="auth_error_user_disabled">Цей акаунт заблоковано</string>
+    <string name="auth_error_network">Немає зʼєднання. Перевірте мережу та спробуйте ще раз.</string>
+    <string name="auth_error_too_many_requests">Забагато спроб. Спробуйте за кілька хвилин.</string>
+    <string name="auth_error_interrupted">Вхід перервано. Спробуйте ще раз.</string>
+    <string name="auth_error_no_google_account">Акаунт Google не вибрано</string>
+    <string name="auth_error_no_saved_password">Для CoPlanly ще немає збережених паролів</string>
+    <string name="auth_error_unknown">Щось пішло не так. Спробуйте ще раз.</string>
 </resources>

@@ -21,4 +21,17 @@
     <string name="auth_no_account_question">Noch kein Konto?</string>
     <string name="auth_have_account_question">Bereits ein Konto?</string>
     <string name="auth_forgot_password_link">Passwort vergessen?</string>
+    <string name="auth_saved_password_sign_in">Mit gespeichertem Passwort anmelden</string>
+    <string name="auth_error_empty_fields">Bitte fülle beide Felder aus</string>
+    <string name="auth_error_invalid_credentials">Falsche E-Mail oder falsches Passwort</string>
+    <string name="auth_error_email_already_in_use">Für diese E-Mail gibt es bereits ein Konto</string>
+    <string name="auth_error_weak_password">Passwort zu schwach — mindestens 6 Zeichen</string>
+    <string name="auth_error_invalid_email">Das ist keine gültige E-Mail-Adresse</string>
+    <string name="auth_error_user_disabled">Dieses Konto wurde deaktiviert</string>
+    <string name="auth_error_network">Keine Verbindung. Prüfe dein Netzwerk und versuche es erneut.</string>
+    <string name="auth_error_too_many_requests">Zu viele Versuche. Versuche es in ein paar Minuten erneut.</string>
+    <string name="auth_error_interrupted">Die Anmeldung wurde unterbrochen. Bitte versuche es erneut.</string>
+    <string name="auth_error_no_google_account">Es wurde kein Google-Konto ausgewählt</string>
+    <string name="auth_error_no_saved_password">Für CoPlanly ist noch kein Passwort gespeichert</string>
+    <string name="auth_error_unknown">Etwas ist schiefgelaufen. Bitte versuche es erneut.</string>
 </resources>

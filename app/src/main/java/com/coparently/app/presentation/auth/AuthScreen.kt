@@ -31,6 +31,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -39,8 +41,10 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.coparently.app.R
 import com.coparently.app.presentation.theme.CoPlanlyColors
 import com.coparently.app.presentation.theme.dimensions
+import com.coparently.app.utils.findActivity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
@@ -60,6 +64,9 @@ fun AuthScreen(
     val uiState by viewModel.uiState.collectAsState()
     val dims = dimensions()
     val coroutineScope = rememberCoroutineScope()
+    // Credential Manager hosts its UI on an Activity and refuses an application context.
+    // Compose may hand this composable a ContextWrapper, so unwrap rather than cast.
+    val activity = LocalContext.current.findActivity()
 
     // Gradient background
     Box(
@@ -103,7 +110,7 @@ fun AuthScreen(
 
                 Icon(
                     imageVector = Icons.Default.ChildCare,
-                    contentDescription = "CoPlanly Logo",
+                    contentDescription = stringResource(R.string.auth_cd_logo),
                     modifier = Modifier
                         .size(dims.iconSize * 3.33f) // ~80dp for compact
                         .graphicsLayer {
@@ -123,7 +130,7 @@ fun AuthScreen(
                 )
 
                 Text(
-                    text = "Shared Calendar for Co-Parenting",
+                    text = stringResource(R.string.auth_tagline),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center
@@ -144,16 +151,20 @@ fun AuthScreen(
                 ) {
                     // Title
                     Text(
-                        text = if (uiState.isSignInMode) "Welcome Back!" else "Create Your Account",
+                        text = if (uiState.isSignInMode) {
+                            stringResource(R.string.auth_welcome_back)
+                        } else {
+                            stringResource(R.string.auth_create_your_account)
+                        },
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold
                     )
 
                     Text(
                         text = if (uiState.isSignInMode) {
-                            "Sign in to continue managing your co-parenting schedule"
+                            stringResource(R.string.auth_sign_in_subtitle)
                         } else {
-                            "Join thousands of parents working together"
+                            stringResource(R.string.auth_sign_up_subtitle)
                         },
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -165,8 +176,8 @@ fun AuthScreen(
                     OutlinedTextField(
                         value = uiState.email,
                         onValueChange = viewModel::updateEmail,
-                        label = { Text("Email Address") },
-                        placeholder = { Text("your@email.com") },
+                        label = { Text(stringResource(R.string.auth_email_label)) },
+                        placeholder = { Text(stringResource(R.string.auth_email_placeholder)) },
                         leadingIcon = {
                             Icon(
                                 imageVector = Icons.Default.Email,
@@ -189,8 +200,8 @@ fun AuthScreen(
                     OutlinedTextField(
                         value = uiState.password,
                         onValueChange = viewModel::updatePassword,
-                        label = { Text("Password") },
-                        placeholder = { Text("Enter your password") },
+                        label = { Text(stringResource(R.string.auth_password_label)) },
+                        placeholder = { Text(stringResource(R.string.auth_password_placeholder)) },
                         leadingIcon = {
                             Icon(
                                 imageVector = Icons.Default.Lock,
@@ -206,9 +217,9 @@ fun AuthScreen(
                                         Icons.Default.Visibility
                                     },
                                     contentDescription = if (passwordVisible) {
-                                        "Hide password"
+                                        stringResource(R.string.auth_hide_password)
                                     } else {
-                                        "Show password"
+                                        stringResource(R.string.auth_show_password)
                                     }
                                 )
                             }
@@ -229,8 +240,11 @@ fun AuthScreen(
                     )
 
                     // Error Message
+                    // Resolved outside the block: AnimatedVisibility still runs its content
+                    // while the card animates out, when the error is already null.
+                    val errorRes = uiState.error?.messageRes()
                     AnimatedVisibility(
-                        visible = uiState.errorMessage != null,
+                        visible = errorRes != null,
                         enter = slideInVertically() + fadeIn(),
                         exit = slideOutVertically() + fadeOut()
                     ) {
@@ -255,7 +269,7 @@ fun AuthScreen(
                                     modifier = Modifier.size(20.dp)
                                 )
                                 Text(
-                                    text = uiState.errorMessage ?: "",
+                                    text = errorRes?.let { stringResource(it) }.orEmpty(),
                                     color = MaterialTheme.colorScheme.onErrorContainer,
                                     style = MaterialTheme.typography.bodySmall
                                 )
@@ -268,15 +282,8 @@ fun AuthScreen(
                     // Google Sign-In Button
                     OutlinedButton(
                         onClick = {
-                            coroutineScope.launch {
-                                viewModel.signInWithGoogle().fold(
-                                    onSuccess = {
-                                        // Google Sign-In successful, navigation handled by AuthViewModel
-                                    },
-                                    onFailure = { error ->
-                                        viewModel.updateErrorMessage(error.message ?: "Google Sign-In failed")
-                                    }
-                                )
+                            activity?.let { host ->
+                                coroutineScope.launch { viewModel.signInWithGoogle(host) }
                             }
                         },
                         modifier = Modifier
@@ -289,10 +296,31 @@ fun AuthScreen(
                         )
                     ) {
                         Text(
-                            text = "Sign in with Google",
+                            text = stringResource(R.string.auth_google_sign_in),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Medium
                         )
+                    }
+
+                    // Sign-in only: offering a stored password while creating an account is
+                    // nonsense. Deliberately a button rather than a sheet that opens with the
+                    // screen - the system UI stays behind an explicit request, which matters
+                    // most right after a deliberate sign-out.
+                    if (uiState.isSignInMode) {
+                        TextButton(
+                            onClick = {
+                                activity?.let { host ->
+                                    coroutineScope.launch { viewModel.signInWithSavedPassword(host) }
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            enabled = !uiState.isLoading
+                        ) {
+                            Text(
+                                text = stringResource(R.string.auth_saved_password_sign_in),
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
                     }
 
                     // Divider with "or"
@@ -304,7 +332,7 @@ fun AuthScreen(
                     ) {
                         HorizontalDivider(modifier = Modifier.weight(1f))
                         Text(
-                            text = "or",
+                            text = stringResource(R.string.auth_divider_or),
                             modifier = Modifier.padding(horizontal = 16.dp),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -315,10 +343,12 @@ fun AuthScreen(
                     // Primary Action Button
                     Button(
                         onClick = {
-                            if (uiState.isSignInMode) {
-                                viewModel.signIn(onAuthSuccess)
-                            } else {
-                                viewModel.signUp(onAuthSuccess)
+                            activity?.let { host ->
+                                if (uiState.isSignInMode) {
+                                    viewModel.signIn(host, onAuthSuccess)
+                                } else {
+                                    viewModel.signUp(host, onAuthSuccess)
+                                }
                             }
                         },
                         modifier = Modifier
@@ -340,7 +370,11 @@ fun AuthScreen(
                             )
                         } else {
                             Text(
-                                text = if (uiState.isSignInMode) "Sign In" else "Create Account",
+                                text = if (uiState.isSignInMode) {
+                                    stringResource(R.string.auth_action_sign_in)
+                                } else {
+                                    stringResource(R.string.auth_action_create_account)
+                                },
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold
                             )
@@ -358,9 +392,9 @@ fun AuthScreen(
             ) {
                 Text(
                     text = if (uiState.isSignInMode) {
-                        "Don't have an account?"
+                        stringResource(R.string.auth_no_account_question)
                     } else {
-                        "Already have an account?"
+                        stringResource(R.string.auth_have_account_question)
                     },
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -368,22 +402,13 @@ fun AuthScreen(
 
                 TextButton(onClick = { viewModel.toggleSignInMode() }) {
                     Text(
-                        text = if (uiState.isSignInMode) "Sign Up" else "Sign In",
+                        text = if (uiState.isSignInMode) {
+                            stringResource(R.string.auth_action_sign_up)
+                        } else {
+                            stringResource(R.string.auth_action_sign_in)
+                        },
                         fontWeight = FontWeight.Bold,
                         color = CoPlanlyColors.BrandPrimary
-                    )
-                }
-            }
-
-            // Forgot Password
-            if (uiState.isSignInMode) {
-                TextButton(
-                    onClick = { /* TODO: Implement password reset */ },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(
-                        text = "Forgot Password?",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
