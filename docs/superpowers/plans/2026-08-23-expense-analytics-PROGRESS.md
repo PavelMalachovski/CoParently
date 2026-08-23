@@ -36,7 +36,7 @@ end of package E on this same branch: 237 passing, eslint clean.)
 
 ## Ledger
 
-Task 1 (the aggregation): `300be47`. Pure, 13 tests.
+Task 1 (the aggregation): `9af6391`. Pure, 13 tests.
   - The plan's second test — two currencies never producing a combined total — is the one to read
     first, and it has a **subtler sibling the plan did not name**: two separate totals sharing one
     denominator. That draws a chart that lies just as badly, and it is the version an
@@ -49,7 +49,7 @@ Task 1 (the aggregation): `300be47`. Pure, 13 tests.
     payer with nothing this month yields no breakdown at all rather than a zero-total entry the
     currency chip row would then offer.
 
-Task 2 (the palette): `4d30ec8`. **The plan's premise here is wrong, and measurement is what
+Task 2 (the palette): `b0e46c5`. **The plan's premise here is wrong, and measurement is what
 showed it.**
   - The plan says "nine categories need nine distinguishable fills". They cannot have them. Nine
     hues at a fixed lightness fail immediately — ΔE 1.0 under deuteranopia, and 8.5 even for
@@ -76,7 +76,7 @@ showed it.**
   - The Compose accessor went into `ExpenseCategoryLabel.kt` beside `labelRes` and `iconVector`,
     per that file's own KDoc, rather than into a second file.
 
-Task 3 (the chart): `965afa2`.
+Task 3 (the chart): `1c7d854`.
   - DEVIATION. Arcs are drawn in **category order, not by amount**. Only neighbouring arcs touch,
     and the palette's whole design is that neighbouring *categories* are far apart on the wheel —
     sorting by amount would seat an arbitrary colour pair together on every filter change, which
@@ -90,7 +90,7 @@ Task 3 (the chart): `965afa2`.
     neighbour* — a wrong chart rather than a missing one.
   - Semantics are **cleared**, not merely set to null, so the `Canvas` cannot leak anything.
 
-Task 4 (the analytics view): `5f5a956`.
+Task 4 (the analytics view): `ece9f66`.
   - DEVIATION, and it follows from Task 2. **There is no separate legend.** The table under the
     chart carries a colour swatch, the category name, the amount and the share on every row, so
     it already is the legend — and a separate one would be a second list of the same nine
