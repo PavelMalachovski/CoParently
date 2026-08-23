@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Strings for the parent profile screen (own, editable; co-parent's, read-only) and its two
+     Settings entry points. -->
+<resources>
+    <string name="profile_my_title">My details</string>
+    <string name="profile_coparent_title">Co-parent</string>
+    <string name="profile_name_label">Name</string>
+    <string name="profile_dob_label">Date of birth</string>
+    <string name="profile_phone_label">Phone</string>
+    <string name="profile_allergies_label">Allergies</string>
+    <string name="profile_save">Save</string>
+    <string name="profile_saved">Saved</string>
+    <string name="profile_readonly_note">Only %1$s can change these details</string>
+    <string name="profile_coparent_empty">Your co-parent has not filled this in yet</string>
+    <string name="profile_not_paired">Link a co-parent to see their details</string>
+    <string name="profile_load_failed">Couldn\'t load your profile</string>
+    <string name="settings_my_profile_title">My details</string>
+    <string name="settings_my_profile_description">Your contact and medical details</string>
+    <string name="settings_coparent_profile_title">Co-parent details</string>
+    <string name="settings_coparent_profile_description">What your co-parent has shared</string>
+</resources>

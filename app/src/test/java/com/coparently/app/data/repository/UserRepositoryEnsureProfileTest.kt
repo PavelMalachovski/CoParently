@@ -8,6 +8,7 @@ import com.coparently.app.data.remote.firebase.FirebaseAuthService
 import com.coparently.app.data.remote.firebase.FirestoreUserDataSource
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.UserInfo
+import com.google.gson.Gson
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -208,7 +209,14 @@ class UserRepositoryEnsureProfileTest {
         signedIn(displayName = "Alice Novak", email = "alice@example.com")
         coEvery { firestoreUserDataSource.getUserById(UID) } returns mapOf(
             "fcmToken" to "token-1",
-            "partnerId" to PARTNER
+            "partnerId" to PARTNER,
+            "dateOfBirth" to "1988-04-17",
+            "phone" to "+420123456789",
+            "allergies" to listOf("peanuts"),
+            "medicalProfile" to mapOf(
+                "bloodType" to "AB_POSITIVE",
+                "vaccinations" to listOf(mapOf("name" to "MMR", "date" to "2020-01-01"))
+            )
         )
 
         repository.ensureProfile()
@@ -221,6 +229,19 @@ class UserRepositoryEnsureProfileTest {
         // Seeded from the remote document, so `SyncService` and the expense/budget filters
         // do not have to wait for the next download to learn about the pairing.
         assertEquals(PARTNER, row.captured.partnerId)
+        // C2: this fresh-row branch used to leave dateOfBirth/phone/allergies/medicalProfile
+        // at the entity's empty defaults even though the remote document already carried real
+        // values - so a reinstall created an empty row, and the very next unrelated field edit
+        // pushed that emptiness back over Firestore via `updateUser`'s `set(merge)`, permanently
+        // erasing data nothing else in the app ever writes on its own.
+        assertEquals("1988-04-17", row.captured.dateOfBirth)
+        assertEquals("+420123456789", row.captured.phone)
+        assertEquals("""["peanuts"]""", row.captured.allergiesJson)
+        val storedProfile = Gson().fromJson(row.captured.medicalProfileJson, Map::class.java)
+        assertEquals("AB_POSITIVE", storedProfile["bloodType"])
+        val vaccination = (storedProfile["vaccinations"] as List<*>).single() as Map<*, *>
+        assertEquals("MMR", vaccination["name"])
+        assertEquals("2020-01-01", vaccination["date"])
     }
 
     @Test

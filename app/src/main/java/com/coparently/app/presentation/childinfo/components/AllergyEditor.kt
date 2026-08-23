@@ -11,7 +11,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.coparently.app.R
 
 /**
  * Editor for managing a list of allergies.
@@ -54,7 +56,7 @@ fun AllergyEditor(
                             ) {
                                 Icon(
                                     Icons.Default.Close,
-                                    contentDescription = "Remove",
+                                    contentDescription = stringResource(R.string.childinfo_remove),
                                     modifier = Modifier.size(16.dp)
                                 )
                             }
@@ -78,8 +80,8 @@ fun AllergyEditor(
                 OutlinedTextField(
                     value = newAllergy,
                     onValueChange = { newAllergy = it },
-                    label = { Text("Allergy") },
-                    placeholder = { Text("e.g., Peanuts, Lactose") },
+                    label = { Text(stringResource(R.string.childinfo_allergy_label)) },
+                    placeholder = { Text(stringResource(R.string.childinfo_allergy_placeholder)) },
                     modifier = Modifier.weight(1f),
                     singleLine = true
                 )
@@ -94,7 +96,7 @@ fun AllergyEditor(
                     },
                     enabled = newAllergy.isNotBlank()
                 ) {
-                    Text("Add")
+                    Text(stringResource(R.string.childinfo_add))
                 }
             }
         }
@@ -105,9 +107,9 @@ fun AllergyEditor(
                 onClick = { isAddingNew = true },
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Icon(Icons.Default.Add, contentDescription = "Add")
+                Icon(Icons.Default.Add, contentDescription = stringResource(R.string.childinfo_add))
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Add Allergy")
+                Text(stringResource(R.string.childinfo_add_allergy))
             }
         }
     }

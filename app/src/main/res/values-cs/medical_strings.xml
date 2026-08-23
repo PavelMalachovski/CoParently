@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="medical_section_title">Zdravotní údaje</string>
+    <string name="medical_blood_type_label">Krevní skupina</string>
+    <string name="medical_blood_type_not_set">Neuvedeno</string>
+    <string name="medical_blood_type_a_positive">A+</string>
+    <string name="medical_blood_type_a_negative">A−</string>
+    <string name="medical_blood_type_b_positive">B+</string>
+    <string name="medical_blood_type_b_negative">B−</string>
+    <string name="medical_blood_type_ab_positive">AB+</string>
+    <string name="medical_blood_type_ab_negative">AB−</string>
+    <string name="medical_blood_type_o_positive">0+</string>
+    <string name="medical_blood_type_o_negative">0−</string>
+    <string name="medical_intolerances_label">Intolerance</string>
+    <string name="medical_intolerances_hint">Laktóza, lepek, lék…</string>
+    <string name="medical_hereditary_label">Dědičná onemocnění</string>
+    <string name="medical_hereditary_hint">Onemocnění, která se v rodině opakují</string>
+    <string name="medical_vaccinations_label">Očkování</string>
+    <string name="medical_vaccination_name_label">Vakcína</string>
+    <string name="medical_vaccination_date_label">Datum (nepovinné)</string>
+    <string name="medical_vaccination_no_date">Datum neuvedeno</string>
+    <string name="medical_vaccination_add">Přidat očkování</string>
+    <string name="medical_vaccination_remove">Odebrat očkování</string>
+    <string name="medical_item_add">Přidat</string>
+    <string name="medical_item_remove">Odebrat</string>
+    <string name="medical_empty">Zatím nic neuvedeno</string>
+</resources>

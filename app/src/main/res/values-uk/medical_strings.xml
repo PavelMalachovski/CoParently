@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="medical_section_title">Медичні дані</string>
+    <string name="medical_blood_type_label">Група крові</string>
+    <string name="medical_blood_type_not_set">Не вказана</string>
+    <string name="medical_blood_type_a_positive">A(II) Rh+</string>
+    <string name="medical_blood_type_a_negative">A(II) Rh−</string>
+    <string name="medical_blood_type_b_positive">B(III) Rh+</string>
+    <string name="medical_blood_type_b_negative">B(III) Rh−</string>
+    <string name="medical_blood_type_ab_positive">AB(IV) Rh+</string>
+    <string name="medical_blood_type_ab_negative">AB(IV) Rh−</string>
+    <string name="medical_blood_type_o_positive">0(I) Rh+</string>
+    <string name="medical_blood_type_o_negative">0(I) Rh−</string>
+    <string name="medical_intolerances_label">Непереносимості</string>
+    <string name="medical_intolerances_hint">Лактоза, глютен, ліки…</string>
+    <string name="medical_hereditary_label">Спадкові захворювання</string>
+    <string name="medical_hereditary_hint">Захворювання, які є в родині</string>
+    <string name="medical_vaccinations_label">Щеплення</string>
+    <string name="medical_vaccination_name_label">Вакцина</string>
+    <string name="medical_vaccination_date_label">Дата (необовʼязково)</string>
+    <string name="medical_vaccination_no_date">Дата не вказана</string>
+    <string name="medical_vaccination_add">Додати щеплення</string>
+    <string name="medical_vaccination_remove">Видалити щеплення</string>
+    <string name="medical_item_add">Додати</string>
+    <string name="medical_item_remove">Видалити</string>
+    <string name="medical_empty">Поки нічого не вказано</string>
+</resources>

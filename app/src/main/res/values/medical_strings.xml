@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Medical profile, shared by the parent's own profile and the child's. -->
+<resources>
+    <string name="medical_section_title">Medical details</string>
+    <string name="medical_blood_type_label">Blood type</string>
+    <string name="medical_blood_type_not_set">Not recorded</string>
+    <string name="medical_blood_type_a_positive">A+</string>
+    <string name="medical_blood_type_a_negative">A−</string>
+    <string name="medical_blood_type_b_positive">B+</string>
+    <string name="medical_blood_type_b_negative">B−</string>
+    <string name="medical_blood_type_ab_positive">AB+</string>
+    <string name="medical_blood_type_ab_negative">AB−</string>
+    <string name="medical_blood_type_o_positive">O+</string>
+    <string name="medical_blood_type_o_negative">O−</string>
+    <string name="medical_intolerances_label">Intolerances</string>
+    <string name="medical_intolerances_hint">Lactose, gluten, a medicine…</string>
+    <string name="medical_hereditary_label">Hereditary conditions</string>
+    <string name="medical_hereditary_hint">Conditions that run in the family</string>
+    <string name="medical_vaccinations_label">Vaccinations</string>
+    <string name="medical_vaccination_name_label">Vaccine</string>
+    <string name="medical_vaccination_date_label">Date (optional)</string>
+    <string name="medical_vaccination_no_date">Date not recorded</string>
+    <string name="medical_vaccination_add">Add vaccination</string>
+    <string name="medical_vaccination_remove">Remove vaccination</string>
+    <string name="medical_item_add">Add</string>
+    <string name="medical_item_remove">Remove</string>
+    <string name="medical_empty">Nothing recorded yet</string>
+</resources>

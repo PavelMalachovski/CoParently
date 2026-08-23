@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Russian translations of profile_strings.xml. -->
+<resources>
+    <string name="profile_my_title">Мои данные</string>
+    <string name="profile_coparent_title">Второй родитель</string>
+    <string name="profile_name_label">Имя</string>
+    <string name="profile_dob_label">Дата рождения</string>
+    <string name="profile_phone_label">Телефон</string>
+    <string name="profile_allergies_label">Аллергии</string>
+    <string name="profile_save">Сохранить</string>
+    <string name="profile_saved">Сохранено</string>
+    <string name="profile_readonly_note">Эти данные может менять только %1$s</string>
+    <string name="profile_coparent_empty">Второй родитель пока ничего не заполнил</string>
+    <string name="profile_not_paired">Свяжитесь со вторым родителем, чтобы увидеть его данные</string>
+    <string name="profile_load_failed">Не удалось загрузить ваш профиль</string>
+    <string name="settings_my_profile_title">Мои данные</string>
+    <string name="settings_my_profile_description">Ваши контакты и медицинские данные</string>
+    <string name="settings_coparent_profile_title">Данные второго родителя</string>
+    <string name="settings_coparent_profile_description">Что второй родитель указал о себе</string>
+</resources>

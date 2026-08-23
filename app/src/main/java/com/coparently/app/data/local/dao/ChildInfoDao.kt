@@ -105,5 +105,19 @@ interface ChildInfoDao {
      */
     @Query("UPDATE child_info SET syncedToFirestore = 1 WHERE id = :id")
     suspend fun markAsSynced(id: String)
+
+    /**
+     * Re-queues this user's own child-info rows for upload, so their audience is recomputed.
+     *
+     * Mirrors `EventDao.markOwnEventsUnsynced`. Rows whose `createdByFirebaseUid` is null are
+     * deliberately not matched: nothing distinguishes this user's un-stamped row from anybody
+     * else's, and re-publishing a stranger's row under this user's audience would be worse than
+     * leaving it alone.
+     *
+     * @param myUid Firebase UID of the signed-in user.
+     * @return How many rows were re-queued.
+     */
+    @Query("UPDATE child_info SET syncedToFirestore = 0 WHERE createdByFirebaseUid = :myUid")
+    suspend fun markOwnChildInfoUnsynced(myUid: String): Int
 }
 

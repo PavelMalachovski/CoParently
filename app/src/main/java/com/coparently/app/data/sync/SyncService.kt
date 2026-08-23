@@ -11,12 +11,14 @@ import com.coparently.app.data.remote.firebase.FirebaseAuthService
 import com.coparently.app.data.remote.firebase.FirestoreChildInfoDataSource
 import com.coparently.app.data.remote.firebase.FirestoreEventDataSource
 import com.coparently.app.data.remote.firebase.FirestoreUserDataSource
+import com.coparently.app.data.repository.LocalDateJsonAdapter
 import com.coparently.app.data.repository.ParentSlotMigrator
-import com.google.gson.Gson
+import com.google.gson.GsonBuilder
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import javax.inject.Inject
@@ -45,7 +47,13 @@ class SyncService @Inject constructor(
     private val parentSlotMigrator: ParentSlotMigrator,
     private val encryptedPreferences: EncryptedPreferences
 ) {
-    private val gson = Gson()
+    // `LocalDate::class.java` needs the same adapter `ChildInfoRepositoryImpl` and
+    // `UserRepositoryImpl` register: `Vaccination.date` is a `LocalDate`, and a document read
+    // back through a Gson without this adapter would fail to parse it back out of the ISO
+    // string the repositories already write - see `medicalProfile` handling below.
+    private val gson = GsonBuilder()
+        .registerTypeAdapter(LocalDate::class.java, LocalDateJsonAdapter())
+        .create()
     private val formatter = DateTimeFormatter.ISO_LOCAL_DATE_TIME
 
     private val _syncStatus = MutableStateFlow<SyncStatus>(SyncStatus.Idle)
@@ -247,6 +255,44 @@ class SyncService @Inject constructor(
     }
 
     /**
+     * Re-publishes this user's own child info once per co-parent, so rows written before pairing
+     * become readable by that co-parent.
+     *
+     * Without this, item 5 fails silently in the one case that matters most: a parent fills in
+     * everything about their child, *then* invites the other parent, and the other parent sees an
+     * empty screen with no error.
+     *
+     * Two rules are copied deliberately from [backfillAudienceForPartner] rather than simplified:
+     *
+     * - The marker stores the **partner's UID**, not a flag. A flag never re-arms when the same
+     *   two people pair again after an unpair, and the pair then looks correctly linked while
+     *   everything from before stays invisible to one of them.
+     * - When unpaired the marker is **blanked**, not left alone. Leaving it naming an ex-partner
+     *   means re-pairing with that same person finds it already equal and skips the backfill.
+     *   `EncryptedPreferences` has no generic remove, and a blank value can never equal a real
+     *   UID, so it re-arms exactly as an absent marker does.
+     */
+    private suspend fun backfillChildInfoAudienceForPartner(userId: String, partnerId: String?) {
+        val key = "${PreferenceKeys.CHILD_INFO_AUDIENCE_BACKFILL_PREFIX}$userId"
+
+        if (partnerId == null) {
+            if (!encryptedPreferences.getString(key).isNullOrBlank()) {
+                encryptedPreferences.putString(key, "")
+            }
+            return
+        }
+        if (encryptedPreferences.getString(key) == partnerId) return
+
+        val requeued = childInfoDao.markOwnChildInfoUnsynced(userId)
+        encryptedPreferences.putString(key, partnerId)
+        Log.i(
+            TAG,
+            "Child-info audience backfill for $userId with partner $partnerId: " +
+                "re-queued $requeued row(s)"
+        )
+    }
+
+    /**
      * Resolves the `sharedWith` audience for an event upload.
      *
      * The audience is the entitled set derived from live state — the uploader, the
@@ -289,6 +335,9 @@ class SyncService @Inject constructor(
      * Syncs child information between local database and Firestore.
      */
     private suspend fun syncChildInfo(userId: String) {
+        val partnerId = userDao.getUserById(userId)?.partnerId?.takeIf { it.isNotBlank() }
+        backfillChildInfoAudienceForPartner(userId, partnerId)
+
         // Upload unsynced local child info
         val unsyncedChildInfo = childInfoDao.getUnsyncedChildInfo()
 
@@ -303,17 +352,16 @@ class SyncService @Inject constructor(
                 "medicalNotes" to entity.medicalNotes,
                 "emergencyContacts" to gson.fromJson(entity.emergencyContactsJson, List::class.java),
                 "schoolInfo" to entity.schoolInfoJson?.let { gson.fromJson(it, Map::class.java) },
+                "medicalProfile" to gson.fromJson(entity.medicalProfileJson, Map::class.java),
                 "createdAt" to entity.createdAt.format(formatter),
                 "updatedAt" to entity.updatedAt.format(formatter),
                 "createdByFirebaseUid" to entity.createdByFirebaseUid,
                 "lastModifiedBy" to entity.lastModifiedBy,
-                // SEPARATE CONCERN, deliberately not changed here: the co-parent is never
-                // added, so a paired parent cannot see child info the other created. That is
-                // a missing-visibility feature needing an audience policy of its own (the
-                // entitled-set `shareTargets` above is the shape it would take), not the
-                // data-corruption bug the UseLocal branch below fixes. Widening it silently
-                // would also change what the unpair sweep has to undo.
-                "sharedWith" to listOfNotNull(entity.createdByFirebaseUid, entity.lastModifiedBy).distinct()
+                "sharedWith" to ChildInfoAudience.entitled(
+                    userId = userId,
+                    creatorUid = entity.createdByFirebaseUid,
+                    partnerId = partnerId
+                )
             )
 
             val result = firestoreChildInfoDataSource.upsertChildInfo(entity.id, childInfoData)
@@ -321,8 +369,6 @@ class SyncService @Inject constructor(
                 childInfoDao.markAsSynced(entity.id)
 
                 // Notify partner
-                val localUser = userDao.getUserById(userId)
-                val partnerId = localUser?.partnerId
                 if (partnerId != null && partnerId != userId) {
                     notifyChildInfoUpdate(partnerId, entity.id, entity.childName)
                 }
@@ -364,6 +410,7 @@ class SyncService @Inject constructor(
                                 "medicalNotes" to localEntity.medicalNotes,
                                 "emergencyContacts" to gson.fromJson(localEntity.emergencyContactsJson, List::class.java),
                                 "schoolInfo" to localEntity.schoolInfoJson?.let { gson.fromJson(it, Map::class.java) },
+                                "medicalProfile" to gson.fromJson(localEntity.medicalProfileJson, Map::class.java),
                                 "createdAt" to localEntity.createdAt.format(formatter),
                                 "updatedAt" to LocalDateTime.now().format(formatter),
                                 "createdByFirebaseUid" to localEntity.createdByFirebaseUid,
@@ -548,6 +595,7 @@ class SyncService @Inject constructor(
             medicalNotes = this["medicalNotes"] as? String,
             emergencyContactsJson = gson.toJson(this["emergencyContacts"] ?: emptyList<Any>()),
             schoolInfoJson = (this["schoolInfo"] as? Map<*, *>)?.let { gson.toJson(it) },
+            medicalProfileJson = gson.toJson(this["medicalProfile"] ?: emptyMap<String, Any?>()),
             createdAt = LocalDateTime.parse(this["createdAt"] as String, formatter),
             updatedAt = LocalDateTime.parse(this["updatedAt"] as String, formatter),
             createdByFirebaseUid = this["createdByFirebaseUid"] as? String,

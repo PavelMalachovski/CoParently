@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="medical_section_title">Medizinische Angaben</string>
+    <string name="medical_blood_type_label">Blutgruppe</string>
+    <string name="medical_blood_type_not_set">Nicht erfasst</string>
+    <string name="medical_blood_type_a_positive">A+</string>
+    <string name="medical_blood_type_a_negative">A−</string>
+    <string name="medical_blood_type_b_positive">B+</string>
+    <string name="medical_blood_type_b_negative">B−</string>
+    <string name="medical_blood_type_ab_positive">AB+</string>
+    <string name="medical_blood_type_ab_negative">AB−</string>
+    <string name="medical_blood_type_o_positive">0+</string>
+    <string name="medical_blood_type_o_negative">0−</string>
+    <string name="medical_intolerances_label">Unverträglichkeiten</string>
+    <string name="medical_intolerances_hint">Laktose, Gluten, ein Medikament…</string>
+    <string name="medical_hereditary_label">Erbkrankheiten</string>
+    <string name="medical_hereditary_hint">Krankheiten, die in der Familie vorkommen</string>
+    <string name="medical_vaccinations_label">Impfungen</string>
+    <string name="medical_vaccination_name_label">Impfstoff</string>
+    <string name="medical_vaccination_date_label">Datum (optional)</string>
+    <string name="medical_vaccination_no_date">Datum nicht erfasst</string>
+    <string name="medical_vaccination_add">Impfung hinzufügen</string>
+    <string name="medical_vaccination_remove">Impfung entfernen</string>
+    <string name="medical_item_add">Hinzufügen</string>
+    <string name="medical_item_remove">Entfernen</string>
+    <string name="medical_empty">Noch nichts erfasst</string>
+</resources>

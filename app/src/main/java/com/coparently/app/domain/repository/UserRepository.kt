@@ -7,12 +7,15 @@ import kotlinx.coroutines.flow.Flow
  * Repository interface for managing users.
  * Part of the domain layer in Clean Architecture.
  *
- * Over detekt's `TooManyFunctions` threshold by one, and deliberately so: the eleventh is
+ * Over detekt's `TooManyFunctions` threshold, and deliberately so. The eleventh is
  * [observeCurrentUserId], the reactive counterpart of [getCurrentUserId]. Both are needed —
  * a suspending call site wants the snapshot, a ViewModel wants the stream, and offering
  * only the snapshot is what let `ChatViewModel` freeze a session identity in `init` and
- * leave the co-parent action dead. Splitting the interface to satisfy the threshold would
- * move that judgement into the type system for no benefit.
+ * leave the co-parent action dead. The twelfth is [getRemoteUserProfile]: Room holds a
+ * `users` row for the signed-in user only (see that function's doc), so answering "what does
+ * the co-parent's profile say" needs a distinct, Firestore-backed read rather than a variant
+ * of [getUserById]. Splitting the interface to satisfy the threshold would move that
+ * judgement into the type system for no benefit.
  */
 @Suppress("TooManyFunctions")
 interface UserRepository {
@@ -25,6 +28,18 @@ interface UserRepository {
      * Gets a user by ID.
      */
     suspend fun getUserById(id: String): User?
+
+    /**
+     * Observes a user by ID, re-emitting whenever the row changes.
+     *
+     * Emits null while no row exists yet: the profile row is written by [ensureProfile]
+     * shortly after sign-in, so a fresh session legitimately observes nothing for a moment.
+     * A one-shot [getUserById] read taken inside that window returns null and never
+     * refreshes — this is what [ProfileViewModel][com.coparently.app.presentation.profile.ProfileViewModel]
+     * waits on instead, so a screen opened during the race still receives the row once
+     * [ensureProfile] finishes writing it.
+     */
+    fun observeUserById(id: String): Flow<User?>
 
     /**
      * Gets a user by email.
@@ -94,5 +109,26 @@ interface UserRepository {
      * Updates the FCM token for the current user.
      */
     suspend fun updateFcmToken(token: String)
+
+    /**
+     * Reads a profile straight from that user's `users/{uid}` Firestore document, bypassing
+     * Room entirely.
+     *
+     * This exists for exactly one case: showing the **co-parent's** profile. Room stores a
+     * `users` row for the signed-in user only — nothing writes one for the other parent — so
+     * [getUserById] can never answer "what does the co-parent's record say", the same gap
+     * `ParentsSource`'s class doc records for [PartnerSummary][com.coparently.app.domain.model.PartnerSummary].
+     * The co-parent's slot-limited summary already exists there; this is the fuller read a
+     * profile screen needs (birth date, phone, allergies, medical profile) without hanging
+     * those fields on `PartnerSummary`, which every screen that only wants a name also loads.
+     *
+     * `firestore.rules` allows any paired partner to `get` (not list) the other's document —
+     * pinned in `firestore-tests/rules/users-profile.test.js` — so this is a permitted read,
+     * not a workaround.
+     *
+     * @param uid The other user's Firebase UID.
+     * @return The profile, or null when the document does not exist or the read fails.
+     */
+    suspend fun getRemoteUserProfile(uid: String): User?
 }
 

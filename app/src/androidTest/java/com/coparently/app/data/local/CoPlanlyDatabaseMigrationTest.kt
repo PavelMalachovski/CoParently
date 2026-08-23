@@ -273,6 +273,62 @@ class CoPlanlyDatabaseMigrationTest {
         migrated.close()
     }
 
+    /**
+     * A pre-existing `child_info` row must survive 13-to-14 with `allergiesJson` untouched — the
+     * migration is purely additive and never reads or rewrites that column — and the new
+     * `medicalProfileJson` column defaulted to `{}`.
+     */
+    @Test
+    fun migration13To14_keepsChildInfoAndDefaultsTheNewColumns() {
+        val db = helper.createDatabase(TEST_DB, 13)
+        db.execSQL(
+            """
+            INSERT INTO child_info
+                (id, childName, dateOfBirth, medicationsJson, activitiesJson, allergiesJson,
+                 medicalNotes, emergencyContactsJson, schoolInfoJson, createdAt, updatedAt,
+                 createdByFirebaseUid, lastModifiedBy, syncedToFirestore)
+            VALUES ('c1', 'Anya', NULL, '[]', '[]', '["peanuts"]', NULL, '[]', NULL,
+                    '2026-08-01T09:00:00', '2026-08-01T09:00:00', 'uid-1', 'uid-1', 1)
+            """.trimIndent()
+        )
+        db.close()
+
+        val migrated = helper.runMigrationsAndValidate(
+            TEST_DB, 14, true, DatabaseMigrations.MIGRATION_13_14
+        )
+
+        migrated.query("SELECT childName, allergiesJson, medicalProfileJson FROM child_info").use {
+            assertTrue(it.moveToFirst())
+            assertEquals("Anya", it.getString(0))
+            // The pre-existing allergy survives: MedicalProfile deliberately does not absorb it,
+            // so this column is never read or rewritten by the migration.
+            assertEquals("[\"peanuts\"]", it.getString(1))
+            assertEquals("{}", it.getString(2))
+        }
+    }
+
+    /**
+     * `medical_records`, `allergies`, `grades` and `school_events` were never reachable — no
+     * repository binding ever wrote to them — and 13-to-14 drops all four outright.
+     */
+    @Test
+    fun migration13To14_dropsTheSubsystemThatNeverRan() {
+        val db = helper.createDatabase(TEST_DB, 13)
+        db.close()
+
+        val migrated = helper.runMigrationsAndValidate(
+            TEST_DB, 14, true, DatabaseMigrations.MIGRATION_13_14
+        )
+
+        for (table in listOf("medical_records", "allergies", "grades", "school_events")) {
+            migrated.query(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name=?", arrayOf(table)
+            ).use {
+                assertFalse("$table survived the migration", it.moveToFirst())
+            }
+        }
+    }
+
     private companion object {
         const val TEST_DB = "coplanly-migration-test.db"
         const val VERSION_11 = 11

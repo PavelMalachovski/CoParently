@@ -32,6 +32,8 @@ import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Payments
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.PersonOutline
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.AlertDialog
@@ -100,6 +102,8 @@ private val syncTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
  * @param onNavigateToChildInfo Opens child information
  * @param onNavigateToPairing Opens co-parent pairing
  * @param onNavigateToCustodySetup Opens custody schedule setup
+ * @param onNavigateToMyProfile Opens the signed-in user's own profile, editable
+ * @param onNavigateToCoParentProfile Opens the co-parent's profile, read-only
  * @param onStartGoogleSignIn Launches the Google Sign-In activity
  * @param onSignOut Called after the user signs out of the app
  * @param syncViewModel Sync operations
@@ -116,6 +120,8 @@ fun SettingsScreen(
     onNavigateToChildInfo: (() -> Unit)? = null,
     onNavigateToPairing: (() -> Unit)? = null,
     onNavigateToCustodySetup: (() -> Unit)? = null,
+    onNavigateToMyProfile: (() -> Unit)? = null,
+    onNavigateToCoParentProfile: (() -> Unit)? = null,
     onStartGoogleSignIn: ((android.content.Intent) -> Unit)? = null,
     onSignOut: (() -> Unit)? = null,
     syncViewModel: SyncViewModel = hiltViewModel(),
@@ -208,6 +214,32 @@ fun SettingsScreen(
                             icon = Icons.Default.DateRange,
                             title = stringResource(R.string.settings_custody_title),
                             supporting = stringResource(R.string.settings_custody_description),
+                            onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                navigate()
+                            },
+                            trailing = { Chevron() }
+                        )
+                        Divider()
+                    }
+                    onNavigateToMyProfile?.let { navigate ->
+                        SectionRow(
+                            icon = Icons.Default.Person,
+                            title = stringResource(R.string.settings_my_profile_title),
+                            supporting = stringResource(R.string.settings_my_profile_description),
+                            onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                navigate()
+                            },
+                            trailing = { Chevron() }
+                        )
+                        Divider()
+                    }
+                    onNavigateToCoParentProfile?.let { navigate ->
+                        SectionRow(
+                            icon = Icons.Default.PersonOutline,
+                            title = stringResource(R.string.settings_coparent_profile_title),
+                            supporting = stringResource(R.string.settings_coparent_profile_description),
                             onClick = {
                                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                 navigate()

@@ -1,15 +1,19 @@
 package com.coparently.app.data.repository
 
 import com.coparently.app.data.local.dao.ChildInfoDao
+import com.coparently.app.data.local.dao.UserDao
 import com.coparently.app.data.local.entity.ChildInfoEntity
 import com.coparently.app.data.remote.firebase.FirebaseAuthService
 import com.coparently.app.data.remote.firebase.FirestoreChildInfoDataSource
+import com.coparently.app.data.sync.ChildInfoAudience
 import com.coparently.app.domain.model.ChildInfo
+import com.coparently.app.domain.model.MedicalProfile
 import com.coparently.app.domain.repository.ChildInfoRepository
-import com.google.gson.Gson
+import com.google.gson.GsonBuilder
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
+import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import javax.inject.Inject
@@ -22,11 +26,14 @@ import javax.inject.Singleton
 @Singleton
 class ChildInfoRepositoryImpl @Inject constructor(
     private val childInfoDao: ChildInfoDao,
+    private val userDao: UserDao,
     private val firebaseAuthService: FirebaseAuthService,
     private val firestoreChildInfoDataSource: FirestoreChildInfoDataSource
 ) : ChildInfoRepository {
 
-    private val gson = Gson()
+    private val gson = GsonBuilder()
+        .registerTypeAdapter(LocalDate::class.java, LocalDateJsonAdapter())
+        .create()
     private val formatter = DateTimeFormatter.ISO_LOCAL_DATE_TIME
 
     override fun getAllChildInfo(): Flow<List<ChildInfo>> {
@@ -50,14 +57,33 @@ class ChildInfoRepositoryImpl @Inject constructor(
         // Sync to Firestore if authenticated
         val firebaseUser = firebaseAuthService.getCurrentUser()
         if (firebaseUser != null) {
-            val childInfoData = childInfo.toFirestoreMap()
-            firestoreChildInfoDataSource.upsertChildInfo(childInfo.id, childInfoData)
+            val audience = ChildInfoAudience.entitled(
+                userId = firebaseUser.uid,
+                creatorUid = childInfo.createdByFirebaseUid,
+                partnerId = currentPartnerId(firebaseUser.uid)
+            )
+            val childInfoData = childInfo.toFirestoreMap(audience)
+            val result = firestoreChildInfoDataSource.upsertChildInfo(childInfo.id, childInfoData)
 
-            // Mark as synced
-            val syncedEntity = entity.copy(syncedToFirestore = true)
-            childInfoDao.updateChildInfo(syncedEntity)
+            // Mark as synced only when the remote write actually succeeded. Marking it
+            // unconditionally (the previous behaviour) stranded a failed write out of
+            // `getUnsyncedChildInfo()`'s retry path forever, with nothing left to say the
+            // document never reached Firestore.
+            if (result.isSuccess) {
+                val syncedEntity = entity.copy(syncedToFirestore = true)
+                childInfoDao.updateChildInfo(syncedEntity)
+            }
         }
     }
+
+    /**
+     * The signed-in user's current co-parent, or null when unpaired.
+     *
+     * Shared by [upsertChildInfo] and [syncWithFirestore] so both writers ask the same
+     * question the same way before handing the answer to [ChildInfoAudience.entitled].
+     */
+    private suspend fun currentPartnerId(userId: String): String? =
+        userDao.getUserById(userId)?.partnerId?.takeIf { it.isNotBlank() }
 
     override suspend fun deleteChildInfo(childInfo: ChildInfo) {
         childInfoDao.deleteChildInfoById(childInfo.id)
@@ -71,6 +97,7 @@ class ChildInfoRepositoryImpl @Inject constructor(
 
     override suspend fun syncWithFirestore() {
         val firebaseUser = firebaseAuthService.getCurrentUser() ?: return
+        val partnerId = currentPartnerId(firebaseUser.uid)
 
         // Get unsynced local child info
         val unsyncedChildInfo = childInfoDao.getUnsyncedChildInfo()
@@ -78,7 +105,12 @@ class ChildInfoRepositoryImpl @Inject constructor(
         // Upload to Firestore
         for (entity in unsyncedChildInfo) {
             val childInfo = entity.toDomain()
-            val childInfoData = childInfo.toFirestoreMap()
+            val audience = ChildInfoAudience.entitled(
+                userId = firebaseUser.uid,
+                creatorUid = entity.createdByFirebaseUid,
+                partnerId = partnerId
+            )
+            val childInfoData = childInfo.toFirestoreMap(audience)
             val result = firestoreChildInfoDataSource.upsertChildInfo(entity.id, childInfoData)
 
             if (result.isSuccess) {
@@ -112,6 +144,9 @@ class ChildInfoRepositoryImpl @Inject constructor(
             medicalNotes = medicalNotes,
             emergencyContacts = gson.fromJson(emergencyContactsJson, Array<com.coparently.app.domain.model.EmergencyContact>::class.java).toList(),
             schoolInfo = schoolInfoJson?.let { gson.fromJson(it, com.coparently.app.domain.model.SchoolInfo::class.java) },
+            medicalProfile = (
+                gson.fromJson(medicalProfileJson, MedicalProfile::class.java) ?: MedicalProfile()
+                ).withSanitizedVaccinationNames(),
             createdAt = createdAt,
             updatedAt = updatedAt,
             createdByFirebaseUid = createdByFirebaseUid,
@@ -134,6 +169,7 @@ class ChildInfoRepositoryImpl @Inject constructor(
             medicalNotes = medicalNotes,
             emergencyContactsJson = gson.toJson(emergencyContacts),
             schoolInfoJson = schoolInfo?.let { gson.toJson(it) },
+            medicalProfileJson = gson.toJson(medicalProfile),
             createdAt = createdAt,
             updatedAt = updatedAt,
             createdByFirebaseUid = createdByFirebaseUid,
@@ -143,9 +179,14 @@ class ChildInfoRepositoryImpl @Inject constructor(
     }
 
     /**
-     * Converts ChildInfo to Firestore map.
+     * Converts ChildInfo to a Firestore map.
+     *
+     * @param audience The `sharedWith` UIDs this write should publish to, from
+     *   [ChildInfoAudience.entitled]. Taken as a parameter rather than derived in here so
+     *   both callers ([upsertChildInfo] and [syncWithFirestore]) go through the single
+     *   policy instead of each computing their own.
      */
-    private fun ChildInfo.toFirestoreMap(): Map<String, Any?> {
+    private fun ChildInfo.toFirestoreMap(audience: List<String>): Map<String, Any?> {
         return mapOf(
             "id" to id,
             "childName" to childName,
@@ -179,11 +220,12 @@ class ChildInfoRepositoryImpl @Inject constructor(
                 "teacherEmail" to it.teacherEmail,
                 "grade" to it.grade
             )},
+            "medicalProfile" to gson.fromJson(gson.toJson(medicalProfile), Map::class.java),
             "createdAt" to createdAt.format(formatter),
             "updatedAt" to updatedAt.format(formatter),
             "createdByFirebaseUid" to createdByFirebaseUid,
             "lastModifiedBy" to lastModifiedBy,
-            "sharedWith" to listOfNotNull(createdByFirebaseUid, lastModifiedBy).distinct()
+            "sharedWith" to audience
         )
     }
 
@@ -233,6 +275,11 @@ class ChildInfoRepositoryImpl @Inject constructor(
                     grade = it["grade"] as? String
                 )
             },
+            medicalProfile = (
+                (this["medicalProfile"] as? Map<*, *>)?.let {
+                    gson.fromJson(gson.toJson(it), MedicalProfile::class.java)
+                } ?: MedicalProfile()
+                ).withSanitizedVaccinationNames(),
             createdAt = LocalDateTime.parse(this["createdAt"] as String, formatter),
             updatedAt = LocalDateTime.parse(this["updatedAt"] as String, formatter),
             createdByFirebaseUid = this["createdByFirebaseUid"] as? String,

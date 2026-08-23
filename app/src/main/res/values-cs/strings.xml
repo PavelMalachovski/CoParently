@@ -99,7 +99,6 @@
     <string name="child_info_activities">Aktivity</string>
     <string name="child_info_allergies">Alergie</string>
     <string name="child_info_emergency_contacts">Nouzové kontakty</string>
-    <string name="child_info_school">Informace o škole</string>
     <string name="child_info_empty">Zatím nejsou přidány žádné děti</string>
 
     <!-- Medication Editor -->

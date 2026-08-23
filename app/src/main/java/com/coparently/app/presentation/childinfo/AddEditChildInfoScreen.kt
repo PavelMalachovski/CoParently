@@ -16,8 +16,10 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.coparently.app.R
 import com.coparently.app.domain.model.*
 import com.coparently.app.presentation.childinfo.components.*
+import com.coparently.app.presentation.common.MedicalProfileEditor
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
+import java.util.UUID
 
 /**
  * Screen for adding or editing child information.
@@ -45,6 +47,7 @@ fun AddEditChildInfoScreen(
     var medicalNotes by remember { mutableStateOf("") }
     var emergencyContacts by remember { mutableStateOf<List<EmergencyContact>>(emptyList()) }
     var schoolInfo by remember { mutableStateOf<SchoolInfo?>(null) }
+    var medicalProfile by remember { mutableStateOf(MedicalProfile()) }
     var isSaving by remember { mutableStateOf(false) }
     var showDatePicker by remember { mutableStateOf(false) }
     var saveCompleted by remember { mutableStateOf(false) }
@@ -70,6 +73,7 @@ fun AddEditChildInfoScreen(
             medicalNotes = info.medicalNotes ?: ""
             emergencyContacts = info.emergencyContacts
             schoolInfo = info.schoolInfo
+            medicalProfile = info.medicalProfile
         }
     }
 
@@ -249,6 +253,27 @@ fun AddEditChildInfoScreen(
                 }
             }
 
+            // Medical Profile Section (blood type, intolerances, hereditary conditions, vaccinations)
+            Card(
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = stringResource(R.string.medical_section_title),
+                        style = MaterialTheme.typography.titleMedium
+                    )
+
+                    MedicalProfileEditor(
+                        profile = medicalProfile,
+                        onChange = { medicalProfile = it },
+                        enabled = !isSaving
+                    )
+                }
+            }
+
             // Medical Notes Section
             Card(
                 modifier = Modifier.fillMaxWidth()
@@ -335,8 +360,23 @@ fun AddEditChildInfoScreen(
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                     if (childName.isNotBlank()) {
                         isSaving = true
-                        viewModel.upsertChildInfo(
-                            id = if (childInfoId == "new") null else childInfoId,
+                        // Preserve sync/ownership fields of the loaded child when editing;
+                        // rebuilding from defaults would wipe createdByFirebaseUid/medicalProfile
+                        // (the same trap AddEditEventScreen avoids for Event via existingEvent).
+                        val isNewChild = childInfoId == null || childInfoId == "new"
+                        val base = currentChildInfo.takeIf { !isNewChild }
+                        val now = LocalDateTime.now()
+                        val resolvedId = base?.id ?: childInfoId?.takeIf { it != "new" }
+                            ?: UUID.randomUUID().toString()
+                        val childInfo = (
+                            base ?: ChildInfo(
+                                id = resolvedId,
+                                childName = childName,
+                                dateOfBirth = dateOfBirth,
+                                createdAt = now,
+                                updatedAt = now
+                            )
+                            ).copy(
                             childName = childName,
                             dateOfBirth = dateOfBirth,
                             medications = medications,
@@ -344,8 +384,11 @@ fun AddEditChildInfoScreen(
                             allergies = allergies,
                             medicalNotes = medicalNotes.ifBlank { null },
                             emergencyContacts = emergencyContacts,
-                            schoolInfo = schoolInfo
+                            schoolInfo = schoolInfo,
+                            medicalProfile = medicalProfile,
+                            updatedAt = now
                         )
+                        viewModel.upsertChildInfo(childInfo, isNewChild)
                         saveCompleted = true
                     }
                 },

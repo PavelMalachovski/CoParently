@@ -376,6 +376,201 @@ class SyncServiceTest {
     }
 
     @Test
+    fun `uploading unsynced child info carries the medical profile with vaccination dates intact`() =
+        runTest {
+            // C1: `medicalProfile` was omitted from this map entirely, so every background sync
+            // republished the document without it - deleting a parent's recorded blood type,
+            // intolerances, hereditary conditions and vaccinations the moment a co-parent's own
+            // unrelated edit went through `updateChildInfo`, or a full re-upload ran via
+            // `upsertChildInfo`'s `.set()`. The vaccination date is the sharpest edge: it must
+            // survive as the ISO string the repository already writes, not as Gson's reflected
+            // internal fields (`{"year":...,"month":...}`) or a thrown exception.
+            pairWith(partnerId = BOB)
+            val medicalProfileJson =
+                """{"bloodType":"A_POSITIVE","vaccinations":[{"name":"MMR","date":"2020-01-01"}]}"""
+            coEvery { childInfoDao.getUnsyncedChildInfo() } returns listOf(
+                childInfoEntity(updatedAt = now, synced = false)
+                    .copy(medicalProfileJson = medicalProfileJson)
+            )
+            val uploaded = slot<Map<String, Any?>>()
+            coEvery { firestoreChildInfoDataSource.upsertChildInfo(any(), capture(uploaded)) } returns
+                Result.success(Unit)
+
+            syncService.performFullSync()
+
+            val medicalProfile = uploaded.captured["medicalProfile"] as Map<*, *>
+            assertEquals("A_POSITIVE", medicalProfile["bloodType"])
+            val vaccination = (medicalProfile["vaccinations"] as List<*>).single() as Map<*, *>
+            assertEquals("MMR", vaccination["name"])
+            assertEquals("2020-01-01", vaccination["date"])
+        }
+
+    @Test
+    fun `the child info UseLocal branch carries the medical profile into the partial update`() =
+        runTest {
+            // The third C1 site: the `UseLocal` branch's own map, separate from the ordinary
+            // upload above. Missing here, a local medical-profile edit resolved `UseLocal` never
+            // reached Firestore at all, even though the branch otherwise "won" the conflict.
+            pairWith(partnerId = BOB)
+            val medicalProfileJson = """{"bloodType":"B_NEGATIVE","vaccinations":[]}"""
+            val local = childInfoEntity(updatedAt = now.plusHours(1), synced = false)
+                .copy(medicalProfileJson = medicalProfileJson)
+            every { firestoreChildInfoDataSource.getChildInfoForParent(ALICE) } returns
+                flowOf(listOf(remoteChildInfoMap(updatedAt = now)))
+            coEvery { childInfoDao.getChildInfoById(CHILD_ID) } returns local
+
+            val updated = slot<Map<String, Any?>>()
+            coEvery {
+                firestoreChildInfoDataSource.updateChildInfo(CHILD_ID, capture(updated))
+            } returns Result.success(Unit)
+
+            syncService.performFullSync()
+
+            val medicalProfile = updated.captured["medicalProfile"] as Map<*, *>
+            assertEquals("B_NEGATIVE", medicalProfile["bloodType"])
+        }
+
+    @Test
+    fun `a downloaded child info document's medical profile survives into the Room entity`() =
+        runTest {
+            // The second C1 site: `toChildInfoEntity()` omitted `medicalProfileJson` entirely,
+            // so `ChildInfoEntity`'s `"{}"` default applied and `ChildInfoDao.insertChildInfo`'s
+            // REPLACE strategy reset the local row to empty on every download - including on the
+            // very device that had just uploaded the real data, once its own document came back
+            // down through this same path.
+            pairWith(partnerId = null)
+            val remoteMedicalProfile = mapOf(
+                "bloodType" to "O_NEGATIVE",
+                "vaccinations" to listOf(mapOf("name" to "MMR", "date" to "2020-01-01"))
+            )
+            every { firestoreChildInfoDataSource.getChildInfoForParent(ALICE) } returns
+                flowOf(listOf(remoteChildInfoMap(updatedAt = now) + ("medicalProfile" to remoteMedicalProfile)))
+            coEvery { childInfoDao.getChildInfoById(CHILD_ID) } returns null
+            val inserted = slot<ChildInfoEntity>()
+            coEvery { childInfoDao.insertChildInfo(capture(inserted)) } returns Unit
+
+            syncService.performFullSync()
+
+            val storedProfile = gson.fromJson(inserted.captured.medicalProfileJson, Map::class.java)
+            assertEquals("O_NEGATIVE", storedProfile["bloodType"])
+            val vaccination = (storedProfile["vaccinations"] as List<*>).single() as Map<*, *>
+            assertEquals("MMR", vaccination["name"])
+            assertEquals("2020-01-01", vaccination["date"])
+        }
+
+    @Test
+    fun `a child info document with no medical profile at all downloads as the empty default`() =
+        runTest {
+            // `medicalProfile` defaults to an empty profile, never null (see `ChildInfo`'s own
+            // doc) - a legacy document written before this field existed, or one from a co-parent
+            // still on an older build, must not crash `toChildInfoEntity()` or store a JSON `null`
+            // that `ChildInfoRepositoryImpl.toDomain()` cannot parse back into `MedicalProfile`.
+            pairWith(partnerId = null)
+            every { firestoreChildInfoDataSource.getChildInfoForParent(ALICE) } returns
+                flowOf(listOf(remoteChildInfoMap(updatedAt = now)))
+            coEvery { childInfoDao.getChildInfoById(CHILD_ID) } returns null
+            val inserted = slot<ChildInfoEntity>()
+            coEvery { childInfoDao.insertChildInfo(capture(inserted)) } returns Unit
+
+            syncService.performFullSync()
+
+            assertEquals("{}", inserted.captured.medicalProfileJson)
+        }
+
+    @Test
+    fun `the child-info audience backfill re-queues this user's rows the first time a partner appears`() =
+        runTest {
+            // Mirrors the event backfill's own first-time test: a round-1 review found the
+            // wiring for child info had no coverage of its own, only the extracted
+            // `ChildInfoAudience.entitled` policy — so a slip inside `syncChildInfo` (wrong
+            // argument order, or the backfill called after `getUnsyncedChildInfo()` instead
+            // of before) would not have been caught.
+            pairWith(partnerId = BOB)
+
+            syncService.performFullSync()
+
+            coVerify(exactly = 1) { childInfoDao.markOwnChildInfoUnsynced(ALICE) }
+        }
+
+    @Test
+    fun `the child-info audience backfill runs again for a different partner`() = runTest {
+        // Alice unpaired from Bob and re-paired with Carol: Carol has never received any of
+        // Alice's child-info history, so the marker must re-arm rather than read as "done".
+        pairWith(partnerId = CAROL)
+        every {
+            encryptedPreferences.getString(
+                "${PreferenceKeys.CHILD_INFO_AUDIENCE_BACKFILL_PREFIX}$ALICE"
+            )
+        } returns BOB
+
+        syncService.performFullSync()
+
+        coVerify(exactly = 1) { childInfoDao.markOwnChildInfoUnsynced(ALICE) }
+        verify {
+            encryptedPreferences.putString(
+                "${PreferenceKeys.CHILD_INFO_AUDIENCE_BACKFILL_PREFIX}$ALICE",
+                CAROL
+            )
+        }
+    }
+
+    @Test
+    fun `unpairing blanks the child-info marker instead of leaving it, so a re-pair backfills again`() =
+        runTest {
+            pairWith(partnerId = null)
+            every {
+                encryptedPreferences.getString(
+                    "${PreferenceKeys.CHILD_INFO_AUDIENCE_BACKFILL_PREFIX}$ALICE"
+                )
+            } returns BOB
+
+            syncService.performFullSync()
+
+            verify {
+                encryptedPreferences.putString(
+                    "${PreferenceKeys.CHILD_INFO_AUDIENCE_BACKFILL_PREFIX}$ALICE",
+                    ""
+                )
+            }
+            // Nothing is re-queued while unpaired - there is nobody to publish to.
+            coVerify(exactly = 0) { childInfoDao.markOwnChildInfoUnsynced(any()) }
+        }
+
+    @Test
+    fun `re-pairing with the same co-parent after an unpair re-runs the child-info backfill`() =
+        runTest {
+            // The other half of the transition: once disarmed (see the test above), the very
+            // same uid must read as a change again rather than as "already done for Bob".
+            pairWith(partnerId = BOB)
+            every {
+                encryptedPreferences.getString(
+                    "${PreferenceKeys.CHILD_INFO_AUDIENCE_BACKFILL_PREFIX}$ALICE"
+                )
+            } returns ""
+
+            syncService.performFullSync()
+
+            coVerify(exactly = 1) { childInfoDao.markOwnChildInfoUnsynced(ALICE) }
+        }
+
+    @Test
+    fun `uploading unsynced child info shares it with the current co-parent`() = runTest {
+        // The wiring test: the co-parent must actually reach the uploaded document, not just
+        // the extracted policy function in isolation.
+        pairWith(partnerId = BOB)
+        coEvery { childInfoDao.getUnsyncedChildInfo() } returns listOf(
+            childInfoEntity(updatedAt = now, synced = false)
+        )
+        val uploaded = slot<Map<String, Any?>>()
+        coEvery { firestoreChildInfoDataSource.upsertChildInfo(any(), capture(uploaded)) } returns
+            Result.success(Unit)
+
+        syncService.performFullSync()
+
+        assertEquals(listOf(ALICE, BOB), uploaded.captured["sharedWith"])
+    }
+
+    @Test
     fun `syncUserData persists the role a remote document carries`() = runTest {
         pairWith(partnerId = BOB)
         coEvery { firestoreUserDataSource.getUserById(ALICE) } returns mapOf("role" to "dad")

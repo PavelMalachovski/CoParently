@@ -2,7 +2,6 @@ package com.coparently.app.presentation.childinfo
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
@@ -10,6 +9,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
@@ -19,7 +19,17 @@ import com.coparently.app.R
 import com.coparently.app.domain.model.Activity
 import com.coparently.app.domain.model.ChildInfo
 import com.coparently.app.domain.model.EmergencyContact
+import com.coparently.app.domain.model.MedicalProfile
 import com.coparently.app.domain.model.Medication
+import com.coparently.app.domain.model.SchoolInfo
+import com.coparently.app.domain.model.Vaccination
+import com.coparently.app.presentation.common.GroupLabel
+import com.coparently.app.presentation.common.SectionGroup
+import com.coparently.app.presentation.common.SectionGroupScope
+import com.coparently.app.presentation.common.SectionRow
+import com.coparently.app.presentation.common.labelRes
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
 
 /**
  * Screen for displaying and managing child information.
@@ -56,17 +66,8 @@ fun ChildInfoScreen(
                     }
                 },
                 actions = {
-                    if (currentChildInfo != null) {
-                        IconButton(onClick = {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            currentChildInfo?.let { onEditClick(it.id) }
-                        }) {
-                            Icon(
-                                Icons.Default.Edit,
-                                contentDescription = stringResource(R.string.childinfo_edit)
-                            )
-                        }
-                    }
+                    // The only manual sync trigger on this screen. Editing now happens by
+                    // tapping a section below, not through a top-bar pencil.
                     IconButton(onClick = {
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         viewModel.syncChildInfo()
@@ -136,7 +137,7 @@ fun ChildInfoScreen(
                         }
                     } else {
                         currentChildInfo?.let { childInfo ->
-                            ChildInfoContent(childInfo = childInfo)
+                            ChildInfoContent(childInfo = childInfo, onEditClick = onEditClick)
                         }
                     }
                 }
@@ -146,312 +147,248 @@ fun ChildInfoScreen(
 }
 
 /**
- * Content displaying detailed child information.
+ * Content displaying detailed child information as tappable, grouped sections.
+ *
+ * Every row opens the single editor for [childInfo] via [onEditClick] — this screen is a
+ * read-only summary, the pencil that used to hide editing in the top bar is gone. Each group
+ * mirrors one of the old `Card` + `SectionHeader` pairs, rebuilt on [GroupLabel] and
+ * [SectionGroup]/[SectionRow] from the shared design system.
  */
 @Composable
-fun ChildInfoContent(childInfo: ChildInfo) {
+private fun ChildInfoContent(childInfo: ChildInfo, onEditClick: (String) -> Unit) {
+    val haptic = LocalHapticFeedback.current
+    val onRowClick: () -> Unit = {
+        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        onEditClick(childInfo.id)
+    }
+
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Child Name
-        item {
-            Card(
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp)
-                ) {
-                    Text(
-                        text = childInfo.childName,
-                        style = MaterialTheme.typography.headlineMedium
-                    )
-                    childInfo.dateOfBirth?.let { dob ->
-                        Text(
-                            text = stringResource(R.string.childinfo_dob_value, dob.toLocalDate().toString()),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            }
-        }
+        item { BasicInfoGroup(childInfo = childInfo, onClick = onRowClick) }
 
-        // Medications
         if (childInfo.medications.isNotEmpty()) {
-            item {
-                SectionHeader(
-                    title = stringResource(R.string.childinfo_section_medications),
-                    icon = Icons.Default.Favorite
-                )
-            }
-            items(childInfo.medications) { medication ->
-                MedicationCard(medication = medication)
-            }
+            item { MedicationsGroup(medications = childInfo.medications, onClick = onRowClick) }
         }
-
-        // Activities
         if (childInfo.activities.isNotEmpty()) {
-            item {
-                SectionHeader(
-                    title = stringResource(R.string.childinfo_section_activities),
-                    icon = Icons.Default.Star
-                )
-            }
-            items(childInfo.activities) { activity ->
-                ActivityCard(activity = activity)
-            }
+            item { ActivitiesGroup(activities = childInfo.activities, onClick = onRowClick) }
         }
-
-        // Allergies
         if (childInfo.allergies.isNotEmpty()) {
-            item {
-                SectionHeader(
-                    title = stringResource(R.string.childinfo_section_allergies),
-                    icon = Icons.Default.Warning
-                )
-            }
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.errorContainer
-                    )
-                ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp)
-                    ) {
-                        childInfo.allergies.forEach { allergy ->
-                            Text(
-                                text = stringResource(R.string.childinfo_allergy_bullet, allergy),
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onErrorContainer
-                            )
-                        }
-                    }
-                }
-            }
+            item { AllergiesGroup(allergies = childInfo.allergies, onClick = onRowClick) }
         }
-
-        // Medical Notes
         childInfo.medicalNotes?.let { notes ->
-            item {
-                SectionHeader(
-                    title = stringResource(R.string.childinfo_section_medical_notes),
-                    icon = Icons.Default.Info
-                )
-            }
-            item {
-                Card(modifier = Modifier.fillMaxWidth()) {
-                    Text(
-                        text = notes,
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.padding(16.dp)
-                    )
-                }
-            }
+            item { MedicalNotesGroup(notes = notes, onClick = onRowClick) }
         }
-
-        // Emergency Contacts
         if (childInfo.emergencyContacts.isNotEmpty()) {
             item {
-                SectionHeader(
-                    title = stringResource(R.string.childinfo_section_emergency_contacts),
-                    icon = Icons.Default.Phone
-                )
-            }
-            items(childInfo.emergencyContacts) { contact ->
-                EmergencyContactCard(contact = contact)
+                EmergencyContactsGroup(contacts = childInfo.emergencyContacts, onClick = onRowClick)
             }
         }
-
-        // School Info
         childInfo.schoolInfo?.let { school ->
-            item {
-                SectionHeader(
-                    title = stringResource(R.string.childinfo_section_school),
-                    icon = Icons.Default.Place
+            item { SchoolGroup(schoolInfo = school, onClick = onRowClick) }
+        }
+        item { MedicalDetailsGroup(profile = childInfo.medicalProfile, onClick = onRowClick) }
+    }
+}
+
+/** The child's identity: name, and date of birth when recorded. */
+@Composable
+private fun BasicInfoGroup(childInfo: ChildInfo, onClick: () -> Unit) {
+    Column {
+        GroupLabel(stringResource(R.string.childinfo_section_basic))
+        SectionGroup {
+            SectionRow(
+                icon = Icons.Default.ChildCare,
+                title = childInfo.childName,
+                supporting = childInfo.dateOfBirth?.let { dob ->
+                    stringResource(R.string.childinfo_dob_value, dob.toLocalDate().toString())
+                },
+                onClick = onClick
+            )
+        }
+    }
+}
+
+/** One row per medication: its name as the title, dosage and frequency as the summary line. */
+@Composable
+private fun MedicationsGroup(medications: List<Medication>, onClick: () -> Unit) {
+    Column {
+        GroupLabel(stringResource(R.string.childinfo_section_medications))
+        SectionGroup {
+            medications.forEachIndexed { index, medication ->
+                SectionRow(
+                    icon = Icons.Default.Favorite,
+                    title = medication.name,
+                    supporting = stringResource(
+                        R.string.childinfo_medication_summary,
+                        medication.dosage,
+                        medication.frequency
+                    ),
+                    onClick = onClick
                 )
-            }
-            item {
-                SchoolInfoCard(schoolInfo = school)
+                if (index != medications.lastIndex) Divider()
             }
         }
     }
 }
 
+/** One row per activity: its name as the title, its schedule as the summary line. */
 @Composable
-fun SectionHeader(title: String, icon: androidx.compose.ui.graphics.vector.ImageVector) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary
+private fun ActivitiesGroup(activities: List<Activity>, onClick: () -> Unit) {
+    Column {
+        GroupLabel(stringResource(R.string.childinfo_section_activities))
+        SectionGroup {
+            activities.forEachIndexed { index, activity ->
+                SectionRow(
+                    icon = Icons.Default.Star,
+                    title = activity.name,
+                    supporting = activity.schedule,
+                    onClick = onClick
+                )
+                if (index != activities.lastIndex) Divider()
+            }
+        }
+    }
+}
+
+/** One row per known allergy. */
+@Composable
+private fun AllergiesGroup(allergies: List<String>, onClick: () -> Unit) {
+    Column {
+        GroupLabel(stringResource(R.string.childinfo_section_allergies))
+        SectionGroup {
+            allergies.forEachIndexed { index, allergy ->
+                SectionRow(icon = Icons.Default.Warning, title = allergy, onClick = onClick)
+                if (index != allergies.lastIndex) Divider()
+            }
+        }
+    }
+}
+
+/** The free-text medical notes field, as a single row. */
+@Composable
+private fun MedicalNotesGroup(notes: String, onClick: () -> Unit) {
+    Column {
+        GroupLabel(stringResource(R.string.childinfo_section_medical_notes))
+        SectionGroup {
+            SectionRow(icon = Icons.Default.Info, title = notes, onClick = onClick)
+        }
+    }
+}
+
+/** One row per emergency contact: their name as the title, phone number as the summary line. */
+@Composable
+private fun EmergencyContactsGroup(contacts: List<EmergencyContact>, onClick: () -> Unit) {
+    Column {
+        GroupLabel(stringResource(R.string.childinfo_section_emergency_contacts))
+        SectionGroup {
+            contacts.forEachIndexed { index, contact ->
+                SectionRow(
+                    icon = Icons.Default.Phone,
+                    title = contact.name,
+                    supporting = stringResource(R.string.childinfo_contact_phone_marker, contact.phone),
+                    onClick = onClick
+                )
+                if (index != contacts.lastIndex) Divider()
+            }
+        }
+    }
+}
+
+/** The school: its name as the title, address (falling back to grade) as the summary line. */
+@Composable
+private fun SchoolGroup(schoolInfo: SchoolInfo, onClick: () -> Unit) {
+    Column {
+        GroupLabel(stringResource(R.string.childinfo_section_school))
+        SectionGroup {
+            SectionRow(
+                icon = Icons.Default.Place,
+                title = schoolInfo.name,
+                supporting = schoolInfo.address ?: schoolInfo.grade,
+                onClick = onClick
+            )
+        }
+    }
+}
+
+/**
+ * The medical profile: blood type (always shown, falling back to "not recorded") plus
+ * intolerances, hereditary conditions and vaccinations, each skipped entirely when its list is
+ * empty. Never renders `BloodType.name` — the notation is locale-dependent, which is why the
+ * blood type goes through [labelRes] instead.
+ */
+@Composable
+private fun MedicalDetailsGroup(profile: MedicalProfile, onClick: () -> Unit) {
+    val dateFormatter = remember { DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM) }
+    val bloodTypeText = profile.bloodType?.let { stringResource(it.labelRes()) }
+        ?: stringResource(R.string.medical_blood_type_not_set)
+
+    Column {
+        GroupLabel(stringResource(R.string.medical_section_title))
+        SectionGroup {
+            SectionRow(
+                icon = Icons.Default.Bloodtype,
+                title = stringResource(R.string.medical_blood_type_label),
+                onClick = onClick,
+                trailing = {
+                    Text(
+                        text = bloodTypeText,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            )
+
+            if (profile.intolerances.isNotEmpty()) {
+                Divider()
+                StringListRows(items = profile.intolerances, icon = Icons.Default.NoFood, onClick = onClick)
+            }
+            if (profile.hereditaryConditions.isNotEmpty()) {
+                Divider()
+                StringListRows(
+                    items = profile.hereditaryConditions,
+                    icon = Icons.Default.FamilyRestroom,
+                    onClick = onClick
+                )
+            }
+            if (profile.vaccinations.isNotEmpty()) {
+                Divider()
+                VaccinationRows(vaccinations = profile.vaccinations, dateFormatter = dateFormatter, onClick = onClick)
+            }
+        }
+    }
+}
+
+/**
+ * One row per plain string entry (intolerances, hereditary conditions), split out of
+ * [MedicalDetailsGroup] to keep it under the project's method-length limit.
+ */
+@Composable
+private fun SectionGroupScope.StringListRows(items: List<String>, icon: ImageVector, onClick: () -> Unit) {
+    items.forEachIndexed { index, item ->
+        SectionRow(icon = icon, title = item, onClick = onClick)
+        if (index != items.lastIndex) Divider()
+    }
+}
+
+/** One row per vaccination: its name as the title, its date (or "not recorded") as the summary line. */
+@Composable
+private fun SectionGroupScope.VaccinationRows(
+    vaccinations: List<Vaccination>,
+    dateFormatter: DateTimeFormatter,
+    onClick: () -> Unit
+) {
+    vaccinations.forEachIndexed { index, vaccination ->
+        SectionRow(
+            icon = Icons.Default.Vaccines,
+            title = vaccination.name,
+            supporting = vaccination.date?.format(dateFormatter)
+                ?: stringResource(R.string.medical_vaccination_no_date),
+            onClick = onClick
         )
-        Spacer(modifier = Modifier.width(8.dp))
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleLarge,
-            color = MaterialTheme.colorScheme.primary
-        )
+        if (index != vaccinations.lastIndex) Divider()
     }
 }
-
-@Composable
-fun MedicationCard(medication: Medication) {
-    Card(
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
-        ) {
-            Text(
-                text = medication.name,
-                style = MaterialTheme.typography.titleMedium
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = "Dosage: ${medication.dosage}",
-                style = MaterialTheme.typography.bodyMedium
-            )
-            Text(
-                text = "Frequency: ${medication.frequency}",
-                style = MaterialTheme.typography.bodyMedium
-            )
-            medication.notes?.let { notes ->
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "Notes: $notes",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-    }
-}
-
-@Composable
-fun ActivityCard(activity: Activity) {
-    Card(
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
-        ) {
-            Text(
-                text = activity.name,
-                style = MaterialTheme.typography.titleMedium
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = "Schedule: ${activity.schedule}",
-                style = MaterialTheme.typography.bodyMedium
-            )
-            activity.location?.let { location ->
-                Text(
-                    text = "Location: $location",
-                    style = MaterialTheme.typography.bodyMedium
-                )
-            }
-            activity.contactPerson?.let { contact ->
-                Text(
-                    text = "Contact: $contact",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            activity.contactPhone?.let { phone ->
-                Text(
-                    text = "Phone: $phone",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-    }
-}
-
-@Composable
-fun EmergencyContactCard(contact: EmergencyContact) {
-    Card(
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
-        ) {
-            Text(
-                text = contact.name,
-                style = MaterialTheme.typography.titleMedium
-            )
-            Text(
-                text = "Relationship: ${contact.relationship}",
-                style = MaterialTheme.typography.bodyMedium
-            )
-            Text(
-                text = "Phone: ${contact.phone}",
-                style = MaterialTheme.typography.bodyMedium
-            )
-            contact.alternatePhone?.let { altPhone ->
-                Text(
-                    text = "Alt. Phone: $altPhone",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-    }
-}
-
-@Composable
-fun SchoolInfoCard(schoolInfo: com.coparently.app.domain.model.SchoolInfo) {
-    Card(
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
-        ) {
-            Text(
-                text = schoolInfo.name,
-                style = MaterialTheme.typography.titleMedium
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            schoolInfo.address?.let { address ->
-                Text(
-                    text = "Address: $address",
-                    style = MaterialTheme.typography.bodyMedium
-                )
-            }
-            schoolInfo.phone?.let { phone ->
-                Text(
-                    text = "Phone: $phone",
-                    style = MaterialTheme.typography.bodyMedium
-                )
-            }
-            schoolInfo.teacherName?.let { teacher ->
-                Text(
-                    text = "Teacher: $teacher",
-                    style = MaterialTheme.typography.bodyMedium
-                )
-            }
-            schoolInfo.teacherEmail?.let { email ->
-                Text(
-                    text = "Email: $email",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            schoolInfo.grade?.let { grade ->
-                Text(
-                    text = "Grade: $grade",
-                    style = MaterialTheme.typography.bodyMedium
-                )
-            }
-        }
-    }
-}
-

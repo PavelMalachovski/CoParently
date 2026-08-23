@@ -61,4 +61,19 @@ object PreferenceKeys {
      * would re-stamp records into the wrong parent's slot.
      */
     const val EVENT_AUDIENCE_BACKFILL_PREFIX = "event_audience_backfill_"
+
+    /**
+     * Prefix for the per-user key recording which co-parent this device has already re-published
+     * its own **child info** for — the actual key is this prefix plus the Firebase UID, and the
+     * value is the partner's UID.
+     *
+     * Separate from [EVENT_AUDIENCE_BACKFILL_PREFIX] rather than shared with it: the two backfills
+     * were introduced at different times, so on an install that already ran the events one a
+     * shared key would read as "child info is done too" and skip it forever.
+     *
+     * The value is the partner's UID and never a boolean, for the reason spelled out on
+     * [EVENT_AUDIENCE_BACKFILL_PREFIX]: a boolean never re-arms when the same two people pair
+     * again.
+     */
+    const val CHILD_INFO_AUDIENCE_BACKFILL_PREFIX = "child_info_audience_backfill_"
 }

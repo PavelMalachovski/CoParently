@@ -298,6 +298,42 @@ object DatabaseMigrations {
     private const val UNREADABLE_SENT_AT_MILLIS = 0L
 
     /**
+     * Adds the parent and child medical profiles, and removes a subsystem that never ran.
+     *
+     * Purely additive on the two live tables: `ALTER TABLE ... ADD COLUMN` with defaults, so no
+     * table is rebuilt and no stored value is read or rewritten. That is the whole reason
+     * `MedicalProfile` keeps `allergies` outside it — folding it into the JSON blob would have
+     * meant moving `child_info.allergiesJson` into a new column, and SQLite cannot drop the old
+     * one without recreating the table.
+     *
+     * The four `DROP TABLE`s remove `medical_records`, `allergies`, `grades` and `school_events`.
+     * `MedicalRepositoryImpl` and `EducationRepositoryImpl` were never bound in `RepositoryModule`
+     * and no ViewModel or use case ever referenced either interface, so these tables have only
+     * ever been empty — nothing has been able to write to them. `IF EXISTS` covers an install
+     * where a partially-applied earlier migration left one missing.
+     */
+    val MIGRATION_13_14 = object : Migration(13, 14) {
+        override fun migrate(database: SupportSQLiteDatabase) {
+            database.execSQL(
+                "ALTER TABLE child_info ADD COLUMN medicalProfileJson TEXT NOT NULL DEFAULT '{}'"
+            )
+            database.execSQL("ALTER TABLE users ADD COLUMN dateOfBirth TEXT")
+            database.execSQL("ALTER TABLE users ADD COLUMN phone TEXT")
+            database.execSQL(
+                "ALTER TABLE users ADD COLUMN allergiesJson TEXT NOT NULL DEFAULT '[]'"
+            )
+            database.execSQL(
+                "ALTER TABLE users ADD COLUMN medicalProfileJson TEXT NOT NULL DEFAULT '{}'"
+            )
+
+            database.execSQL("DROP TABLE IF EXISTS medical_records")
+            database.execSQL("DROP TABLE IF EXISTS allergies")
+            database.execSQL("DROP TABLE IF EXISTS grades")
+            database.execSQL("DROP TABLE IF EXISTS school_events")
+        }
+    }
+
+    /**
      * List of all migrations in order.
      */
     val ALL_MIGRATIONS = arrayOf(
@@ -308,6 +344,7 @@ object DatabaseMigrations {
         MIGRATION_9_10,
         MIGRATION_10_11,
         MIGRATION_11_12,
-        MIGRATION_12_13
+        MIGRATION_12_13,
+        MIGRATION_13_14
     )
 }

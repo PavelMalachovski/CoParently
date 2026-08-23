@@ -6,13 +6,16 @@ import com.coparently.app.data.remote.firebase.FcmService
 import com.coparently.app.data.remote.firebase.FirebaseAuthService
 import com.coparently.app.data.remote.firebase.FirestoreUserDataSource
 import com.coparently.app.data.session.ProfileIdentity
+import com.coparently.app.domain.model.MedicalProfile
 import com.coparently.app.domain.model.User
 import com.coparently.app.domain.repository.UserRepository
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.UserInfo
+import com.google.gson.GsonBuilder
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import java.time.LocalDate
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -21,7 +24,14 @@ import javax.inject.Singleton
  * Implementation of UserRepository.
  * Maps between domain models (User) and data layer entities (UserEntity).
  * Integrates Firebase Authentication and Firestore for multi-user support.
+ *
+ * At detekt's `TooManyFunctions` threshold: it must implement every [UserRepository] member —
+ * itself over that same threshold, deliberately, per its own class doc — plus the private
+ * mapping helpers ([toDomain], [toEntity], [toUser]) that keep Room, Firestore and the domain
+ * model in sync. Splitting those helpers out would not reduce the real complexity, only hide it
+ * behind another file.
  */
+@Suppress("TooManyFunctions")
 @Singleton
 class UserRepositoryImpl @Inject constructor(
     private val userDao: UserDao,
@@ -29,6 +39,10 @@ class UserRepositoryImpl @Inject constructor(
     private val firestoreUserDataSource: FirestoreUserDataSource,
     private val fcmService: FcmService
 ) : UserRepository {
+
+    private val gson = GsonBuilder()
+        .registerTypeAdapter(LocalDate::class.java, LocalDateJsonAdapter())
+        .create()
 
     override fun getAllUsers(): Flow<List<User>> {
         return userDao.getAllUsers().map { entities ->
@@ -39,6 +53,9 @@ class UserRepositoryImpl @Inject constructor(
     override suspend fun getUserById(id: String): User? {
         return userDao.getUserById(id)?.toDomain()
     }
+
+    override fun observeUserById(id: String): Flow<User?> =
+        userDao.observeUserById(id).map { it?.toDomain() }
 
     override suspend fun getUserByEmail(email: String): User? {
         return userDao.getUserByEmail(email)?.toDomain()
@@ -304,9 +321,19 @@ class UserRepositoryImpl @Inject constructor(
      * Mirrors the same identity into Room, so the local picture agrees with the remote one.
      *
      * An existing row is `copy()`-ed rather than rebuilt, so role, colour, calendar
-     * settings, `partnerId` and the FCM token survive the REPLACE insert. The photo is
-     * only overwritten when one was resolved, for the same no-downgrade reason as the
-     * remote patch.
+     * settings, `partnerId`, the FCM token, and this same fresh-row branch's own
+     * `dateOfBirth`/`phone`/`allergiesJson`/`medicalProfileJson` survive the REPLACE insert.
+     * The photo is only overwritten when one was resolved, for the same no-downgrade reason
+     * as the remote patch.
+     *
+     * The fresh-row branch seeds `dateOfBirth`, `phone`, `allergies` and `medicalProfile` from
+     * [remote] for the same reason it already seeds `partnerId`: a reinstall calls this before
+     * anything else has a chance to populate Room, and [toUser] — the mapper that *does* read
+     * these fields — is only ever used for [getRemoteUserProfile]'s read-only co-parent view,
+     * never to persist. Leaving them at the entity defaults here meant a reinstalled device
+     * created an empty local row, and the next unrelated field edit pushed that emptiness back
+     * over the real values in Firestore via `updateUser`'s `set(merge)` — permanent data loss
+     * for a field nothing else ever writes on its own.
      */
     private suspend fun writeLocalProfile(
         uid: String,
@@ -328,7 +355,16 @@ class UserRepositoryImpl @Inject constructor(
             googleCalendarSyncEnabled = remote?.get("googleCalendarSyncEnabled") as? Boolean ?: false,
             googleCalendarId = remote?.string("googleCalendarId"),
             partnerId = remote?.string("partnerId"),
-            fcmToken = remote?.string("fcmToken")
+            fcmToken = remote?.string("fcmToken"),
+            dateOfBirth = remote?.string("dateOfBirth"),
+            phone = remote?.string("phone"),
+            allergiesJson = (remote?.get("allergies") as? List<*>)
+                ?.mapNotNull { it as? String }
+                ?.let { gson.toJson(it) }
+                ?: DEFAULT_ALLERGIES_JSON,
+            medicalProfileJson = (remote?.get("medicalProfile") as? Map<*, *>)
+                ?.let { gson.toJson(it) }
+                ?: DEFAULT_MEDICAL_PROFILE_JSON
         )
         if (updated != local) userDao.insertUser(updated)
     }
@@ -375,7 +411,13 @@ class UserRepositoryImpl @Inject constructor(
                     "googleCalendarSyncEnabled" to user.googleCalendarSyncEnabled,
                     "googleCalendarId" to (user.googleCalendarId ?: ""),
                     "partnerId" to (user.partnerId ?: ""),
-                    "fcmToken" to (user.fcmToken ?: "")
+                    "fcmToken" to (user.fcmToken ?: ""),
+                    "dateOfBirth" to (user.dateOfBirth?.toString() ?: ""),
+                    "phone" to (user.phone ?: ""),
+                    "allergies" to user.allergies,
+                    "medicalProfile" to gson.fromJson(
+                        gson.toJson(user.medicalProfile), Map::class.java
+                    )
                 )
                 firestoreUserDataSource.updateUser(firebaseUser.uid, userData).getOrThrow()
             } catch (e: Exception) {
@@ -417,6 +459,19 @@ class UserRepositoryImpl @Inject constructor(
         updateUser(updatedUser)
     }
 
+    override suspend fun getRemoteUserProfile(uid: String): User? {
+        return try {
+            firestoreUserDataSource.getUserById(uid)?.toUser()
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (
+            @Suppress("TooGenericExceptionCaught") e: Exception
+        ) {
+            android.util.Log.e(TAG, "Failed to read the remote profile for $uid", e)
+            null
+        }
+    }
+
     /** This string unless it is blank, in which case null. */
     private fun String.nonBlank(): String? = takeIf { it.isNotBlank() }
 
@@ -437,7 +492,13 @@ class UserRepositoryImpl @Inject constructor(
             googleCalendarSyncEnabled = googleCalendarSyncEnabled,
             googleCalendarId = googleCalendarId,
             partnerId = partnerId,
-            fcmToken = fcmToken
+            fcmToken = fcmToken,
+            dateOfBirth = parseProfileDate(dateOfBirth),
+            phone = phone,
+            allergies = gson.fromJson(allergiesJson, Array<String>::class.java)?.toList().orEmpty(),
+            medicalProfile = (
+                gson.fromJson(medicalProfileJson, MedicalProfile::class.java) ?: MedicalProfile()
+                ).withSanitizedVaccinationNames()
         )
     }
 
@@ -455,7 +516,11 @@ class UserRepositoryImpl @Inject constructor(
             googleCalendarSyncEnabled = googleCalendarSyncEnabled,
             googleCalendarId = googleCalendarId,
             partnerId = partnerId,
-            fcmToken = fcmToken
+            fcmToken = fcmToken,
+            dateOfBirth = dateOfBirth?.toString(),
+            phone = phone,
+            allergiesJson = gson.toJson(allergies),
+            medicalProfileJson = gson.toJson(medicalProfile)
         )
     }
 
@@ -473,7 +538,15 @@ class UserRepositoryImpl @Inject constructor(
             googleCalendarSyncEnabled = this["googleCalendarSyncEnabled"] as? Boolean ?: false,
             googleCalendarId = this["googleCalendarId"] as? String,
             partnerId = this["partnerId"] as? String,
-            fcmToken = this["fcmToken"] as? String
+            fcmToken = this["fcmToken"] as? String,
+            dateOfBirth = parseProfileDate(this["dateOfBirth"] as? String),
+            phone = (this["phone"] as? String)?.takeIf { it.isNotBlank() },
+            allergies = (this["allergies"] as? List<*>)?.mapNotNull { it as? String }.orEmpty(),
+            medicalProfile = (
+                (this["medicalProfile"] as? Map<*, *>)?.let {
+                    gson.fromJson(gson.toJson(it), MedicalProfile::class.java)
+                } ?: MedicalProfile()
+                ).withSanitizedVaccinationNames()
         )
     }
 
@@ -483,6 +556,10 @@ class UserRepositoryImpl @Inject constructor(
         /** Same defaults [toUser] applies to a Firestore document that omits them. */
         const val DEFAULT_ROLE = "mom"
         const val DEFAULT_COLOR_CODE = "#FF4081"
+
+        /** Same defaults [UserEntity]'s own declaration applies; named here for [writeLocalProfile]. */
+        const val DEFAULT_ALLERGIES_JSON = "[]"
+        const val DEFAULT_MEDICAL_PROFILE_JSON = "{}"
     }
 }
 

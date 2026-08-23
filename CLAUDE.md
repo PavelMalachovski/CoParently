@@ -393,6 +393,39 @@ Data flow: UI → ViewModel → UseCase → Repository → Room (source of truth
   (they targeted long-gone APIs); rewrite them against the current constructors when
   touching those features.
 
+- **`ChildInfoViewModel` stays subscribed to the whole child list for the editor's entire
+  lifetime, and any emission can overwrite the wrong child's row.** `init` calls
+  `loadChildInfo()`, which collects `childInfoRepository.getAllChildInfo()` — a reactive
+  Room `Flow` — for as long as the ViewModel lives, and every single emission unconditionally
+  runs `_currentChildInfo.value = childInfoList.first()`, regardless of which child
+  `AddEditChildInfoScreen` was actually opened to edit. The damage is not the prefill, it is
+  the **save**: while a user is genuinely editing child B — not the first child in the
+  household — any write that touches the `child_info` table re-emits the list and clobbers
+  `_currentChildInfo` back to child A; `LaunchedEffect(currentChildInfo)` then silently
+  repopulates the visible form with child A's data. The trigger needs no user error at all —
+  a background Firestore sync tick is enough, and so is an unrelated edit to child A made
+  from another screen. The medical-profile editor added in this round
+  (`presentation/common/MedicalProfileEditor.kt`) made the blast radius concrete: the save
+  button's snapshot-and-`copy()` base is `currentChildInfo`, so at save time the base is
+  child A, and the write overwrites **child A's real row** — its id, `createdAt` and
+  `createdByFirebaseUid` included — with a mix of stale values and whatever child B's form
+  fields currently hold. The `isNewChild` guard added alongside that save
+  (`base = currentChildInfo.takeIf { !isNewChild }`) does not help here: it only forces a
+  fresh `ChildInfo` when adding a brand-new child, and `isNewChild` is `false` for a genuine
+  edit of an existing child, so this path runs through unguarded exactly as before. The
+  correct fix is for the editor to stop reading the head of a list it does not own: load the
+  one child actually being edited by id and observe that, the way `loadChildInfoById` already
+  does for the initial load — `ChildInfoDao.observeChildInfoById` (already wired through
+  `ChildInfoRepository.observeChildInfoById`) is the right subscription for the whole screen
+  lifetime, not `getAllChildInfo()`. `getAllChildInfo()`/`loadChildInfo()` belongs to the list
+  screen that owns showing every child, not to an editor that owns exactly one. Left unfixed
+  this round: it is pre-existing (present since before `ChildInfo.medicalProfile` did, and
+  therefore before this task), and fixing the ViewModel's subscription strategy is a change of
+  its own, not a rider on adding a field editor. Don't "fix" it by widening the `isNewChild`
+  guard — that guard's job is stopping a brand-new child from saving on top of an existing
+  row, and two *existing* children being confused for each other never involves `"new"` or a
+  `null` id in the first place, so no version of that check touches this path.
+
 ## Localization (i18n) — July 2026, keep consistent
 
 The app ships in 5 languages: **English (base `values/`), Czech, German, Russian,
