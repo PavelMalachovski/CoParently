@@ -710,8 +710,16 @@ fun NavGraph(
                     },
                     onSettleUp = { draft ->
                         // Carries the message to the thread the user opens and stops there:
-                        // sending it is theirs to do.
-                        navController.navigate(Screen.Conversations.createRoute(draft))
+                        // sending it is theirs to do. Same tab semantics as navigateToTab — a
+                        // plain navigate() here was the one path that pushed the Chat route
+                        // onto the Expenses tab's stack, so the next tab switch saved that
+                        // mixed stack and every later visit to Expenses restored the chat
+                        // screen on top of it instead of the expenses list.
+                        navController.navigate(Screen.Conversations.createRoute(draft)) {
+                            popUpTo(Screen.Home.route) { saveState = true }
+                            launchSingleTop = true
+                            restoreState = false
+                        }
                     }
                 )
             }
