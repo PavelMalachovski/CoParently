@@ -437,6 +437,38 @@ class CoPlanlyDatabaseMigrationTest {
         }
     }
 
+    /**
+     * 17-to-18 carries the payload behind an announced change, and touches no existing message.
+     *
+     * Null on every existing row is right: they are all ordinary messages, and `ChatMappers`
+     * renders a null payload as the message's own text.
+     */
+    @Test
+    fun migration17To18_addsTheActivityPayloadAsNull() {
+        val db = helper.createDatabase(TEST_DB, VERSION_17)
+        db.execSQL(
+            """
+            INSERT INTO messages (id, conversationId, senderId, senderName, content,
+                                  sentAtMillis, messageType, attachmentsJson, isRead,
+                                  syncedToFirestore, status)
+            VALUES ('m1', 'c1', 'uid-mom', 'Olya', 'hello', 1785565800000, 'TEXT', '[]', 0, 1,
+                    'SENT')
+            """.trimIndent()
+        )
+        db.close()
+
+        val migrated = helper.runMigrationsAndValidate(
+            TEST_DB, VERSION_18, true, DatabaseMigrations.MIGRATION_17_18
+        )
+
+        migrated.query("SELECT content, sentAtMillis, activityJson FROM messages").use {
+            assertTrue(it.moveToFirst())
+            assertEquals("hello", it.getString(0))
+            assertEquals(1_785_565_800_000L, it.getLong(1))
+            assertTrue("an ordinary message carries no payload", it.isNull(2))
+        }
+    }
+
     private companion object {
         const val TEST_DB = "coplanly-migration-test.db"
         const val VERSION_11 = 11
@@ -446,6 +478,7 @@ class CoPlanlyDatabaseMigrationTest {
         const val VERSION_15 = 15
         const val VERSION_16 = 16
         const val VERSION_17 = 17
+        const val VERSION_18 = 18
 
         /** 2026-08-01T12:00:00 at UTC+05:30, i.e. 06:30:00Z. */
         const val NOON_AT_PLUS_FIVE_THIRTY_MILLIS = 1_785_565_800_000L

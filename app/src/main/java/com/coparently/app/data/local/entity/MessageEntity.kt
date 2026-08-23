@@ -27,5 +27,11 @@ data class MessageEntity(
     val replyToMessageId: String? = null,
     val syncedToFirestore: Boolean = false,
     @ColumnInfo(defaultValue = "SENT")
-    val status: String? = null // Stored as string (SENDING, SENT, ERROR), nullable for migration compatibility
+    val status: String? = null, // Stored as string (SENDING, SENT, ERROR), nullable for migration compatibility
+    /**
+     * JSON object of [com.coparently.app.domain.activity.ActivityAnnouncement] for an `ACTIVITY`
+     * message, null for every other kind. One column rather than a table: it is read and written
+     * whole, exactly like `attachmentsJson` beside it.
+     */
+    val activityJson: String? = null
 )

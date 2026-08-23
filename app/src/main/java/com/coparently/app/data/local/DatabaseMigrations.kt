@@ -380,6 +380,18 @@ object DatabaseMigrations {
     }
 
     /**
+     * Carries the structured payload behind an announced change.
+     *
+     * One nullable column. Every existing message is null, which is exactly right: they are all
+     * ordinary messages, and `ChatMappers` renders a null payload as the message's own text.
+     */
+    val MIGRATION_17_18 = object : Migration(17, 18) {
+        override fun migrate(database: SupportSQLiteDatabase) {
+            database.execSQL("ALTER TABLE messages ADD COLUMN activityJson TEXT")
+        }
+    }
+
+    /**
      * List of all migrations in order.
      */
     val ALL_MIGRATIONS = arrayOf(
@@ -394,6 +406,7 @@ object DatabaseMigrations {
         MIGRATION_13_14,
         MIGRATION_14_15,
         MIGRATION_15_16,
-        MIGRATION_16_17
+        MIGRATION_16_17,
+        MIGRATION_17_18
     )
 }
