@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Fotos, die den medizinischen Notizen eines Kindes beigefügt sind. -->
+<resources>
+    <string name="medical_photos_title">Fotos</string>
+    <string name="medical_photos_add">Foto hinzufügen</string>
+    <string name="medical_photos_none">Noch keine Fotos.</string>
+    <string name="medical_photos_hint">Ein Rezept, ein Ausschlag, ein Impfpass — mit dem anderen Elternteil geteilt.</string>
+
+    <!-- Spoken descriptions. %1$d = this photograph's position, %2$d = how many there are. -->
+    <string name="medical_photos_thumbnail_description">Medizinisches Foto %1$d von %2$d</string>
+    <string name="medical_photos_remove">Foto entfernen</string>
+    <string name="medical_photos_open">Foto öffnen</string>
+    <string name="medical_photos_close">Schließen</string>
+
+    <!-- Failures. The two are opposite cases and say opposite things: a failed upload attached
+         nothing, while a failed delete left the photograph where it was — dropping the
+         reference anyway would leave an image nobody can see and nobody can delete. -->
+    <string name="medical_photos_upload_failed">Dieses Foto konnte nicht hochgeladen und daher nicht angehängt werden.</string>
+    <string name="medical_photos_delete_failed">Dieses Foto konnte nicht gelöscht werden und bleibt daher angehängt.</string>
+</resources>

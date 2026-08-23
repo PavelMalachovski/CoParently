@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Фотографії, прикріплені до медичних нотаток дитини. -->
+<resources>
+    <string name="medical_photos_title">Фотографії</string>
+    <string name="medical_photos_add">Додати фото</string>
+    <string name="medical_photos_none">Фотографій поки немає.</string>
+    <string name="medical_photos_hint">Рецепт, висип, щеплювальний сертифікат — видно іншому з батьків.</string>
+
+    <!-- Spoken descriptions. %1$d = this photograph's position, %2$d = how many there are. -->
+    <string name="medical_photos_thumbnail_description">Медичне фото %1$d з %2$d</string>
+    <string name="medical_photos_remove">Прибрати фото</string>
+    <string name="medical_photos_open">Відкрити фото</string>
+    <string name="medical_photos_close">Закрити</string>
+
+    <!-- Failures. The two are opposite cases and say opposite things: a failed upload attached
+         nothing, while a failed delete left the photograph where it was — dropping the
+         reference anyway would leave an image nobody can see and nobody can delete. -->
+    <string name="medical_photos_upload_failed">Це фото не вдалося завантажити, тому воно не прикріплене.</string>
+    <string name="medical_photos_delete_failed">Це фото не вдалося видалити, тому воно залишилося прикріпленим.</string>
+</resources>

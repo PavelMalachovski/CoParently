@@ -1,5 +1,8 @@
 package com.coparently.app.presentation.childinfo
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -48,9 +51,17 @@ fun AddEditChildInfoScreen(
     var emergencyContacts by remember { mutableStateOf<List<EmergencyContact>>(emptyList()) }
     var schoolInfo by remember { mutableStateOf<SchoolInfo?>(null) }
     var medicalProfile by remember { mutableStateOf(MedicalProfile()) }
+    // Photographs already on the record, those picked here and not yet uploaded, and those the
+    // user asked to remove. Three lists rather than one, because the three have different
+    // consequences on save: a picked URI is uploaded, a removed URL has its object deleted
+    // *before* the reference goes, and a kept URL is left alone.
+    var storedPhotos by remember { mutableStateOf<List<String>>(emptyList()) }
+    var pickedPhotos by remember { mutableStateOf<List<String>>(emptyList()) }
+    var removedPhotos by remember { mutableStateOf<List<String>>(emptyList()) }
     var isSaving by remember { mutableStateOf(false) }
     var showDatePicker by remember { mutableStateOf(false) }
     var saveCompleted by remember { mutableStateOf(false) }
+    val snackbarHostState = remember { SnackbarHostState() }
 
     // Load existing child info if editing
     LaunchedEffect(childInfoId) {
@@ -74,6 +85,32 @@ fun AddEditChildInfoScreen(
             emergencyContacts = info.emergencyContacts
             schoolInfo = info.schoolInfo
             medicalProfile = info.medicalProfile
+            storedPhotos = info.medicalPhotos
+        }
+    }
+
+    // The same picker the receipt and event-photo flows use. Nothing is uploaded here: the URI
+    // is held until save, so a parent who backs out leaves nothing behind in the bucket.
+    val photoPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        uri?.let { pickedPhotos = pickedPhotos + it.toString() }
+    }
+
+    // A failed upload or delete has to be said out loud: both leave the record in a state the
+    // user did not ask for, and one of them leaves the photograph still attached.
+    val photoError by viewModel.photoError.collectAsState()
+    val uploadFailed = stringResource(R.string.medical_photos_upload_failed)
+    val deleteFailed = stringResource(R.string.medical_photos_delete_failed)
+    LaunchedEffect(photoError) {
+        val message = when (photoError) {
+            MedicalPhotoError.UPLOAD_FAILED -> uploadFailed
+            MedicalPhotoError.DELETE_FAILED -> deleteFailed
+            null -> null
+        }
+        if (message != null) {
+            snackbarHostState.showSnackbar(message)
+            viewModel.clearPhotoError()
         }
     }
 
@@ -110,7 +147,8 @@ fun AddEditChildInfoScreen(
                     }
                 }
             )
-        }
+        },
+        snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { paddingValues ->
         Column(
             modifier = Modifier
@@ -297,6 +335,26 @@ fun AddEditChildInfoScreen(
                         minLines = 3,
                         maxLines = 5
                     )
+
+                    MedicalPhotoStrip(
+                        photos = storedPhotos.filterNot { it in removedPhotos } + pickedPhotos,
+                        onAdd = {
+                            photoPicker.launch(
+                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                            )
+                        },
+                        onRemove = { photo ->
+                            // A picked photograph is nowhere yet, so forgetting it is the whole
+                            // removal. A stored one is only marked here — the object is deleted
+                            // on save, before its URL leaves the record.
+                            if (photo in pickedPhotos) {
+                                pickedPhotos = pickedPhotos - photo
+                            } else {
+                                removedPhotos = removedPhotos + photo
+                            }
+                        },
+                        enabled = !isSaving
+                    )
                 }
             }
 
@@ -388,7 +446,12 @@ fun AddEditChildInfoScreen(
                             medicalProfile = medicalProfile,
                             updatedAt = now
                         )
-                        viewModel.upsertChildInfo(childInfo, isNewChild)
+                        viewModel.upsertChildInfoWithPhotos(
+                            childInfo = childInfo,
+                            isNewChild = isNewChild,
+                            newPhotoUris = pickedPhotos,
+                            removedPhotoUrls = removedPhotos
+                        )
                         saveCompleted = true
                     }
                 },
