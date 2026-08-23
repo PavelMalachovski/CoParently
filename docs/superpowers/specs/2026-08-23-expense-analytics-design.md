@@ -90,8 +90,8 @@ The budget chip strip belongs to the list and stays there.
 
 ### What was run, 23 August 2026
 
-Implemented on `claude/start-e-schemas-docs-3kn5c6`, alongside package E (PR #56). The full
-ledger — every decision, deviation and measurement — is
+Implemented on `claude/start-e-schemas-docs-3kn5c6`, on top of package E (merged as PR #56). The
+full ledger — every decision, deviation and measurement — is
 `docs/superpowers/plans/2026-08-23-expense-analytics-PROGRESS.md`.
 
 | Check | Result |

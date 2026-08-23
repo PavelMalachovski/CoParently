@@ -1,10 +1,12 @@
 # SDD ledger — plan: docs/superpowers/plans/2026-08-23-expense-analytics.md
 
-Branch: `claude/start-e-schemas-docs-3kn5c6` — **the same branch package E is on**, so PR #56 now
-carries E and F together. That was not a choice about scope: this session's branch is fixed, and
-E's pull request is open rather than merged. Splitting F onto its own branch is a `git branch` and
-a reset away if the owner would rather review them apart.
-Base: `main` @ `2e04828`, plus E's six commits.
+Branch: `claude/start-e-schemas-docs-3kn5c6`.
+Base: `main` @ `3122436` — the merge of PR #56, which is package **E**.
+
+F was written on top of E while E's pull request was still open, on the branch this session is
+fixed to. E merged first, so the branch was restarted from the new `main` and F's five commits
+rebased onto it: this branch and its pull request are now **F alone**, and every line of E in the
+diff is gone because it is in `main`.
 Tasks: 5. Tasks 1–4 implemented; Task 5 partly run.
 
 ## What was and was not verified here
