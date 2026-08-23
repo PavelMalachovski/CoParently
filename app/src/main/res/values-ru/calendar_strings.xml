@@ -1,16 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <string name="calendar_custody_today_with">Сегодня с %1$s</string>
-    <string name="calendar_custody_handover_tomorrow">→ %1$s завтра</string>
-    <plurals name="calendar_custody_handover_in_days">
-        <item quantity="one">→ %2$s через %1$d день</item>
-        <item quantity="few">→ %2$s через %1$d дня</item>
-        <item quantity="many">→ %2$s через %1$d дней</item>
-        <item quantity="other">→ %2$s через %1$d дня</item>
-    </plurals>
-    <string name="calendar_custody_ribbon_description">Сегодня ребёнок с %1$s</string>
-    <string name="calendar_custody_ribbon_description_handover">Сегодня ребёнок с %1$s. Опека перейдёт к %2$s через %3$d дн.</string>
 
     <string name="calendar_viewmode_month">Месяц</string>
     <string name="calendar_viewmode_week">Неделя</string>
@@ -45,6 +35,8 @@
     <string name="calendar_day_desc_today">Сегодня</string>
     <string name="calendar_day_desc_outside_month">Вне текущего месяца</string>
     <string name="calendar_day_desc_with_parent">С кем: %1$s</string>
+    <string name="calendar_day_desc_handover">Передача от %1$s к %2$s</string>
+    <string name="calendar_day_desc_swap_pending">Обмен днями ждёт ответа</string>
     <plurals name="calendar_day_desc_events">
         <item quantity="one">%1$d событие</item>
         <item quantity="few">%1$d события</item>
@@ -52,6 +44,7 @@
         <item quantity="other">%1$d события</item>
     </plurals>
     <string name="calendar_day_click_label">Показать события за %1$s</string>
+    <string name="calendar_day_long_click_label">Предложить этот день второму родителю</string>
 
     <string name="calendar_time_slot_description">Время %1$s, %2$s. Нажмите, чтобы добавить событие.</string>
     <string name="calendar_event_chip_description">Событие %1$s. %2$s</string>

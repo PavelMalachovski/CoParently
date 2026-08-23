@@ -38,6 +38,22 @@ function custodyDoc(overrides) {
 }
 
 /**
+ * One pending swap, as `FirestoreCustodyDataSource` writes it.
+ *
+ * @param {string} requestedBy Uid of the parent offering the day.
+ * @param {string} toParent Slot taking the day.
+ * @return {!Object} The sub-map stored under its ISO date.
+ */
+function pendingSwap(requestedBy, toParent) {
+  return {
+    toParent,
+    requestedBy,
+    requestedAt: '2026-08-23T10:00:00',
+    status: 'PENDING',
+  };
+}
+
+/**
  * Applies what `unpairCoParent` does to the pairing relationship, with security rules
  * disabled — the emulator cannot invoke the Cloud Function, so the effect is applied
  * directly, mirroring `unpair-revocation.test.js`'s `applyUnpairSweep`.
@@ -303,6 +319,178 @@ describe('custody_models', () => {
     await seed(env, {[PATH]: custodyDoc({})});
     const db = env.authenticatedContext(MOM).firestore();
     await assertFails(db.doc(PATH).update({participants: [MOM, DAD]}));
+  });
+
+  describe('one-off day swaps', () => {
+    // A swap is an agreement, so the rule has to enforce the one thing that makes it one: the
+    // parent who offered a day may not be the one who grants it. `DayOverrideTransition` refuses
+    // it client-side too, but a client is not where an adversarial counterparty is stopped.
+    const DATE = '2026-09-05';
+
+    it('lets a participant offer a day', async () => {
+      await seed(env, {[PATH]: custodyDoc({})});
+      const db = env.authenticatedContext(MOM).firestore();
+      await assertSucceeds(db.doc(PATH).update({
+        dayOverrides: {[DATE]: pendingSwap(MOM, 'dad')},
+        lastModifiedBy: MOM,
+        lastModifiedKind: 'SWAP',
+        lastSwapDate: DATE,
+      }));
+    });
+
+    it('lets the other parent decide a swap they did not request', async () => {
+      await seed(env, {
+        [PATH]: custodyDoc({dayOverrides: {[DATE]: pendingSwap(MOM, 'dad')}}),
+      });
+      const db = env.authenticatedContext(DAD).firestore();
+      await assertSucceeds(db.doc(PATH).update({
+        dayOverrides: {
+          [DATE]: Object.assign(pendingSwap(MOM, 'dad'), {
+            status: 'ACCEPTED', decidedBy: DAD, decidedAt: '2026-08-23T11:00:00',
+          }),
+        },
+        lastModifiedBy: DAD,
+        lastModifiedKind: 'SWAP',
+        lastSwapDate: DATE,
+      }));
+    });
+
+    it('refuses the requester deciding their own swap', async () => {
+      // The whole point. Without this either parent grants themselves a day and the other is
+      // merely told - which is an announcement, not an agreement.
+      await seed(env, {
+        [PATH]: custodyDoc({dayOverrides: {[DATE]: pendingSwap(MOM, 'dad')}}),
+      });
+      const db = env.authenticatedContext(MOM).firestore();
+      await assertFails(db.doc(PATH).update({
+        dayOverrides: {
+          [DATE]: Object.assign(pendingSwap(MOM, 'dad'), {
+            status: 'ACCEPTED', decidedBy: MOM, decidedAt: '2026-08-23T11:00:00',
+          }),
+        },
+        lastModifiedBy: MOM,
+        lastModifiedKind: 'SWAP',
+        lastSwapDate: DATE,
+      }));
+    });
+
+    it('refuses the requester declining their own swap too', async () => {
+      // Declining one's own offer looks harmless, but it writes the record the other parent
+      // reads: it would tell them they turned down something they were never shown.
+      await seed(env, {
+        [PATH]: custodyDoc({dayOverrides: {[DATE]: pendingSwap(MOM, 'dad')}}),
+      });
+      const db = env.authenticatedContext(MOM).firestore();
+      await assertFails(db.doc(PATH).update({
+        dayOverrides: {
+          [DATE]: Object.assign(pendingSwap(MOM, 'dad'), {
+            status: 'DECLINED', decidedBy: MOM, decidedAt: '2026-08-23T11:00:00',
+          }),
+        },
+        lastModifiedBy: MOM,
+        lastModifiedKind: 'SWAP',
+        lastSwapDate: DATE,
+      }));
+    });
+
+    it('refuses a decision that stamps the other parent as the decider', async () => {
+      // The mirror of the `lastModifiedBy` rule, one level down: an unvalidated `decidedBy`
+      // would let the requester grant themselves the day while crediting the co-parent.
+      await seed(env, {
+        [PATH]: custodyDoc({dayOverrides: {[DATE]: pendingSwap(MOM, 'dad')}}),
+      });
+      const db = env.authenticatedContext(DAD).firestore();
+      await assertFails(db.doc(PATH).update({
+        dayOverrides: {
+          [DATE]: Object.assign(pendingSwap(MOM, 'dad'), {
+            status: 'ACCEPTED', decidedBy: MOM, decidedAt: '2026-08-23T11:00:00',
+          }),
+        },
+        lastModifiedBy: DAD,
+        lastModifiedKind: 'SWAP',
+        lastSwapDate: DATE,
+      }));
+    });
+
+    it('refuses a swap write that names the wrong date', async () => {
+      // The named date is what the rule checks the entry at; Rules cannot iterate a map, so a
+      // lie here has to be self-defeating rather than merely useless.
+      await seed(env, {[PATH]: custodyDoc({})});
+      const db = env.authenticatedContext(MOM).firestore();
+      await assertFails(db.doc(PATH).update({
+        dayOverrides: {[DATE]: pendingSwap(MOM, 'dad')},
+        lastModifiedBy: MOM,
+        lastModifiedKind: 'SWAP',
+        lastSwapDate: '2026-09-06',
+      }));
+    });
+
+    it('refuses an offer that credits the co-parent as its author', async () => {
+      // `requestedBy` is what stops a parent deciding their own swap, so a forged author here
+      // would defeat the whole mechanism one level down: offer as "them", then accept as you.
+      await seed(env, {[PATH]: custodyDoc({})});
+      const db = env.authenticatedContext(MOM).firestore();
+      await assertFails(db.doc(PATH).update({
+        dayOverrides: {[DATE]: pendingSwap(DAD, 'mom')},
+        lastModifiedBy: MOM,
+        lastModifiedKind: 'SWAP',
+        lastSwapDate: DATE,
+      }));
+    });
+
+    it('refuses a pattern rewrite riding along on a write stamped as a swap', async () => {
+      // `CustodyChangeAnnouncement` suppresses the banner for a SWAP stamp. Without the
+      // only-the-swap clause, that stamp becomes a way to replace the co-parent's schedule in
+      // total silence - the same silencing the `lastModifiedBy` rule exists to prevent.
+      await seed(env, {[PATH]: custodyDoc({})});
+      const db = env.authenticatedContext(MOM).firestore();
+      await assertFails(db.doc(PATH).update({
+        dayOverrides: {[DATE]: pendingSwap(MOM, 'dad')},
+        momDayIndices: [7, 8, 9, 10, 11, 12, 13],
+        lastModifiedBy: MOM,
+        lastModifiedKind: 'SWAP',
+        lastSwapDate: DATE,
+      }));
+    });
+
+    it('refuses a swap write that re-dates the document', async () => {
+      // `lastModifiedAt` is what decides which phone's document survives, and the winner is
+      // re-pushed over the loser - so a swap that re-dated it would make this device win every
+      // future comparison.
+      await seed(env, {[PATH]: custodyDoc({})});
+      const db = env.authenticatedContext(MOM).firestore();
+      await assertFails(db.doc(PATH).update({
+        dayOverrides: {[DATE]: pendingSwap(MOM, 'dad')},
+        lastModifiedAt: '2026-09-01T08:00:00',
+        lastModifiedBy: MOM,
+        lastModifiedKind: 'SWAP',
+        lastSwapDate: DATE,
+      }));
+    });
+
+    it('refuses a create that bakes in an already-accepted swap', async () => {
+      // Whoever's client wins the race to create the deterministic-id document would otherwise
+      // grant themselves a day before any restriction on deciding one can apply.
+      const db = env.authenticatedContext(MOM).firestore();
+      await assertFails(db.doc(PATH).set(custodyDoc({
+        dayOverrides: {
+          [DATE]: Object.assign(pendingSwap(MOM, 'dad'), {status: 'ACCEPTED', decidedBy: DAD}),
+        },
+      })));
+    });
+
+    it('refuses a non-participant either half', async () => {
+      await seed(env, {
+        [PATH]: custodyDoc({dayOverrides: {[DATE]: pendingSwap(MOM, 'dad')}}),
+      });
+      const db = env.authenticatedContext(STRANGER).firestore();
+      await assertFails(db.doc(PATH).update({
+        dayOverrides: {[DATE]: pendingSwap(STRANGER, 'mom')},
+        lastModifiedBy: STRANGER,
+        lastModifiedKind: 'SWAP',
+        lastSwapDate: DATE,
+      }));
+    });
   });
 
   it('denies a list query, even one a participant could otherwise satisfy per-document',

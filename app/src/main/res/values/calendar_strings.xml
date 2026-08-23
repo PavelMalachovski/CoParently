@@ -9,14 +9,6 @@
     <!-- Parent names, used to compose custody and handover copy -->
 
     <!-- Custody ribbon -->
-    <string name="calendar_custody_today_with">Today with %1$s</string>
-    <string name="calendar_custody_handover_tomorrow">→ %1$s tomorrow</string>
-    <plurals name="calendar_custody_handover_in_days">
-        <item quantity="one">→ %2$s in %1$d day</item>
-        <item quantity="other">→ %2$s in %1$d days</item>
-    </plurals>
-    <string name="calendar_custody_ribbon_description">Today the child is with %1$s</string>
-    <string name="calendar_custody_ribbon_description_handover">Today the child is with %1$s. Custody passes to %2$s in %3$d days.</string>
 
     <!-- View mode switcher -->
     <string name="calendar_viewmode_month">Month</string>
@@ -62,12 +54,15 @@
     <string name="calendar_day_desc_outside_month">Outside current month</string>
     <!-- %1$s = that parent's name, resolved by presentation/common/ParentLabels.kt -->
     <string name="calendar_day_desc_with_parent">With %1$s</string>
+    <string name="calendar_day_desc_handover">Changes hands from %1$s to %2$s</string>
+    <string name="calendar_day_desc_swap_pending">A day swap is waiting for an answer</string>
     <plurals name="calendar_day_desc_events">
         <item quantity="one">%1$d event</item>
         <item quantity="other">%1$d events</item>
     </plurals>
     <!-- %1$s = formatted date, e.g. "July 30" -->
     <string name="calendar_day_click_label">View events for %1$s</string>
+    <string name="calendar_day_long_click_label">Offer this day to your co-parent</string>
 
     <!-- Day/week grid accessibility -->
     <!-- %1$s = time like 08:00, %2$s = formatted date -->

@@ -361,6 +361,42 @@ class CoPlanlyDatabaseMigrationTest {
         }
     }
 
+    /**
+     * 15-to-16 mirrors the pair's one-off day swaps, and touches nothing else.
+     *
+     * The stored pattern is asserted alongside the new column because this table is the one a
+     * separated parent's whole calendar is drawn from: a migration that quietly altered
+     * `momDaysPattern` or `startDate` would hand the child to the wrong parent on every screen,
+     * with nothing failing anywhere.
+     */
+    @Test
+    fun migration15To16_addsTheSwapMirrorAsNull() {
+        val db = helper.createDatabase(TEST_DB, VERSION_15)
+        db.execSQL(
+            """
+            INSERT INTO custody_models (id, modelType, patternDays, momDaysPattern, startDate,
+                                        isActive, repeatYearly, createdAt, lastModifiedAt)
+            VALUES ('pair-1', 'week_on_week_off', 14, '[0,1,2,3,4,5,6]', '2026-08-31',
+                    1, 1, '2026-08-01T09:00:00', '2026-08-20T18:30:00')
+            """.trimIndent()
+        )
+        db.close()
+
+        val migrated = helper.runMigrationsAndValidate(
+            TEST_DB, VERSION_16, true, DatabaseMigrations.MIGRATION_15_16
+        )
+
+        migrated.query(
+            "SELECT momDaysPattern, startDate, lastModifiedAt, dayOverridesJson FROM custody_models"
+        ).use {
+            assertTrue(it.moveToFirst())
+            assertEquals("[0,1,2,3,4,5,6]", it.getString(0))
+            assertEquals("2026-08-31", it.getString(1))
+            assertEquals("2026-08-20T18:30:00", it.getString(2))
+            assertTrue("the swap mirror must start null, not empty", it.isNull(3))
+        }
+    }
+
     private companion object {
         const val TEST_DB = "coplanly-migration-test.db"
         const val VERSION_11 = 11
@@ -368,6 +404,7 @@ class CoPlanlyDatabaseMigrationTest {
         const val VERSION_13 = 13
         const val VERSION_14 = 14
         const val VERSION_15 = 15
+        const val VERSION_16 = 16
 
         /** 2026-08-01T12:00:00 at UTC+05:30, i.e. 06:30:00Z. */
         const val NOON_AT_PLUS_FIVE_THIRTY_MILLIS = 1_785_565_800_000L

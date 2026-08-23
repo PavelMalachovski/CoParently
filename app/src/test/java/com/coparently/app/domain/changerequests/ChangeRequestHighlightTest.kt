@@ -9,6 +9,14 @@ import java.time.LocalDateTime
 
 class ChangeRequestHighlightTest {
 
+    /** A request whose only interesting property is its id. */
+    private fun anyRequest(id: String) = request(
+        id = id,
+        eventId = "e1",
+        status = ChangeRequestStatus.PENDING,
+        createdAt = LocalDateTime.of(2026, 8, 21, 9, 0)
+    )
+
     private fun request(
         id: String,
         eventId: String,
@@ -113,4 +121,32 @@ class ChangeRequestHighlightTest {
             ChangeRequestHighlight.indexInInbox(emptyList(), emptyList(), requestId = "nope")
         )
     }
+
+    @Test
+    fun `a day-swap section above the inbox shifts every index by its own size`() {
+        // The swap section is a header plus one card per swap. Nothing here looks inside it —
+        // this function is only ever asked about event change requests, because the highlight
+        // arrives from a chat card about an event — but getting the offset wrong scrolls the
+        // inbox to the wrong card, and nothing fails when it does.
+        val incoming = listOf(anyRequest("a"), anyRequest("b"))
+        val outgoing = listOf(anyRequest("c"))
+
+        assertEquals(
+            1 + ChangeRequestHighlight.indexInInbox(incoming, outgoing, "b"),
+            ChangeRequestHighlight.indexInInbox(incoming, outgoing, "b", precedingItems = 1)
+        )
+        assertEquals(
+            3 + ChangeRequestHighlight.indexInInbox(incoming, outgoing, "c"),
+            ChangeRequestHighlight.indexInInbox(incoming, outgoing, "c", precedingItems = 3)
+        )
+    }
+
+    @Test
+    fun `an offset never rescues a request that is in neither section`() {
+        assertEquals(
+            -1,
+            ChangeRequestHighlight.indexInInbox(emptyList(), emptyList(), "nope", precedingItems = 4)
+        )
+    }
+
 }

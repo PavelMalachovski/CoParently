@@ -8,8 +8,9 @@ import com.coparently.app.data.local.preferences.EncryptedPreferences
 import com.coparently.app.data.local.preferences.PreferenceKeys
 import com.coparently.app.data.repository.CustodyModelRepository
 import com.coparently.app.domain.custody.CustodyChangeAnnouncement
-import com.coparently.app.domain.custody.HandoverCalculator
-import com.coparently.app.domain.custody.HandoverInfo
+import com.coparently.app.domain.custody.CustodyResolver
+import com.coparently.app.domain.custody.DayOverride
+import com.coparently.app.domain.custody.DayOverrideTransition
 import com.coparently.app.domain.custody.SharedCustody
 import com.coparently.app.domain.model.CustodyModel
 import com.coparently.app.presentation.common.Parents
@@ -24,11 +25,28 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.YearMonth
 import javax.inject.Inject
 
-/** Keeps the handover flow warm across brief unsubscriptions (config changes). */
+/** Keeps the shared flows warm across brief unsubscriptions (config changes). */
 private const val HANDOVER_STOP_TIMEOUT_MS = 5_000L
+
+/**
+ * Why offering a one-off day swap did not work.
+ *
+ * A code, not a message: a ViewModel has no `Context` and must not acquire one to build
+ * user-facing text — the same rule that keeps `GoogleCalendarSyncState.message` on the
+ * localization follow-up list rather than being "fixed" with an injected `Context`. The screen
+ * resolves it to a string in composable scope.
+ */
+enum class SwapError {
+    /** No co-parent, or this device does not know who it is yet. Nobody could accept. */
+    NOT_READY,
+
+    /** The write was refused — by the transition's own rules, or by `firestore.rules`. */
+    REFUSED
+}
 
 /**
  * ViewModel for calendar screen.
@@ -64,17 +82,34 @@ class CalendarViewModel @Inject constructor(
         custodyScheduleDao.getAllActiveSchedules()
             .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
+    /**
+     * Why a swap could not be offered, or null when nothing is wrong.
+     *
+     * An enum rather than a message, because a ViewModel has no `Context` and must not acquire
+     * one to build a user-facing string — CLAUDE.md's standing rule, and the reason
+     * `GoogleCalendarSyncState.message` is still a tracked follow-up.
+     */
+    private val _swapError = MutableStateFlow<SwapError?>(null)
+    val swapError: StateFlow<SwapError?> = _swapError.asStateFlow()
+
     private val _custodyModel = MutableStateFlow<CustodyModel?>(null)
     val custodyModel: StateFlow<CustodyModel?> = _custodyModel.asStateFlow()
 
     /**
-     * Next custody handover, or null when no model is configured or custody never switches.
-     * Feeds the trailing half of the custody ribbon ("→ Pavel in 2 days"). Shares
-     * [HandoverCalculator] with the home dashboard so the two cannot disagree on the date.
+     * One-off day swaps, keyed by ISO date.
+     *
+     * Kept beside [custodyModel] rather than folded into it because they are different things:
+     * the model is the agreed *pattern*, a swap is a fact about the shared document. The two are
+     * joined by [com.coparently.app.domain.custody.CustodyResolver], which is the single place
+     * the precedence between them lives — an accepted swap wins, a pending or declined one
+     * changes nothing.
+     *
+     * `Eagerly`, matching [custodySchedules]: [getCustodyForDate] reads `.value` outside any
+     * collection, and a lazily-started flow would answer with the pattern alone on the first call.
      */
-    val nextHandover: StateFlow<HandoverInfo?> = _custodyModel
-        .map { model -> model?.let { HandoverCalculator.nextHandoverFrom(it, LocalDate.now()) } }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(HANDOVER_STOP_TIMEOUT_MS), null)
+    val dayOverrides: StateFlow<Map<String, DayOverride>> =
+        custodyModelRepository.observeDayOverrides()
+            .stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
 
     /**
      * The `lastModifiedAt` of the shared-custody change the user last dismissed the banner for,
@@ -99,7 +134,7 @@ class CalendarViewModel @Inject constructor(
      * before its own uid is known — announcing the user's own edit as the co-parent's, exactly
      * the failure this feature must not have, just pointed the other way.
      *
-     * `WhileSubscribed`, like [nextHandover], and not an eager collector: [parents] itself only
+     * `WhileSubscribed`, like the banner below, and not an eager collector: [parents] itself only
      * subscribes to [ParentsSource]'s pairing listener while something is collecting it, and
      * that stream is expensive to hold open (three Firestore listeners — see
      * [ParentsSource.observe]'s own doc). An always-on collector here would keep it attached for
@@ -176,6 +211,50 @@ class CalendarViewModel @Inject constructor(
     }
 
     /**
+     * Offers [date] to the other parent, as a one-off swap they have to agree to.
+     *
+     * The transition is applied to whatever the shared document holds *now*, not to the map this
+     * screen last collected: two parents negotiating a day are writing to one document, and a
+     * held snapshot would silently drop whatever the other one did in between.
+     *
+     * `lastModifiedAt` is deliberately not restamped — see
+     * [com.coparently.app.data.repository.CustodyModelRepository.applyDayOverrides].
+     *
+     * Failures are surfaced through [swapError] rather than swallowed: refusing a swap is a real
+     * outcome the parent has to see, and this is the one screen where a silent no-op would look
+     * exactly like success.
+     *
+     * @param date The day being offered.
+     * @param toParent The slot that would take it — `"mom"` or `"dad"`.
+     * @param note Optional free text; blank normalises to none.
+     */
+    fun offerDaySwap(date: LocalDate, toParent: String, note: String? = null) {
+        viewModelScope.launch {
+            val myUid = parents.value.me?.uid
+            if (myUid == null) {
+                _swapError.value = SwapError.NOT_READY
+                return@launch
+            }
+            val iso = date.toString()
+            custodyModelRepository.applyDayOverrides(iso) { current ->
+                DayOverrideTransition.offer(
+                    current = current,
+                    date = iso,
+                    toParent = toParent,
+                    byUid = myUid,
+                    atIso = LocalDateTime.now().toString(),
+                    note = note
+                )
+            }.onFailure { _swapError.value = SwapError.REFUSED }
+        }
+    }
+
+    /** Clears whatever [swapError] is showing, once the screen has shown it. */
+    fun clearSwapError() {
+        _swapError.value = null
+    }
+
+    /**
      * Dismisses the custody-changed banner for the change stamped with [lastModifiedAt].
      *
      * Persisted to [EncryptedPreferences] rather than kept only in memory: a change the user has
@@ -205,20 +284,23 @@ class CalendarViewModel @Inject constructor(
     }
 
     /**
-     * Gets custody for a specific date.
-     * Uses CustodyModel if available, falls back to legacy schedules.
+     * Whose day [date] is: an accepted one-off swap, then the active model, then the legacy
+     * schedules.
+     *
+     * Resolved through [CustodyResolver] rather than by reading the model directly, so this
+     * cannot drift from the grid's own lookup. CLAUDE.md already required one custody lookup —
+     * reading the legacy rows directly is what once made model-based custody invisible — and a
+     * second copy of the precedence would reintroduce the same class of bug with swaps.
      *
      * @param date The date to check
      * @return "mom", "dad", or null
      */
-    fun getCustodyForDate(date: LocalDate): String? {
-        _custodyModel.value?.let { model ->
-            return model.getCustodyFor(date)
-        }
-
-        val schedules = custodySchedules.value
-        return CustodyHelper.getCustodyForDate(date, schedules)
-    }
+    fun getCustodyForDate(date: LocalDate): String? = CustodyResolver.custodyFor(
+        model = _custodyModel.value,
+        overrides = dayOverrides.value,
+        legacy = { day -> CustodyHelper.getCustodyForDate(day, custodySchedules.value) },
+        date = date
+    )
 
     /**
      * Sets the calendar view mode.

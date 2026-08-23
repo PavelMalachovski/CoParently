@@ -178,10 +178,25 @@ class HomeViewModel @Inject constructor(
         .map { it is PairingState.Paired }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), false)
 
-    /** Next custody handover, or null when no custody model is configured. */
-    val nextHandover: StateFlow<HandoverInfo?> = custodyModelRepository.getActiveModel()
-        .map { model -> model?.let { HandoverCalculator.nextHandoverFrom(it, LocalDate.now()) } }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), null)
+    /**
+     * Next custody handover, or null when no custody model is configured.
+     *
+     * **Computed with the one-off swaps, not from the pattern alone.** A swap both creates a
+     * handover on the day it moves and removes the one it displaced, and a calculator that cannot
+     * see them fails at neither compile time nor run time — it simply tells this hero a date that
+     * is wrong, on exactly the days a swap touched, while the calendar beside it paints the swap
+     * correctly. This is the flow that failure would have shown up in.
+     *
+     * The hero says which **day** the child changes hands and to whom, never at what hour. There
+     * is no handover time anywhere in the schema — `CustodyModel` carries days, never hours — so
+     * an hour here would be invented, and a separated parent would plan around it.
+     */
+    val nextHandover: StateFlow<HandoverInfo?> = combine(
+        custodyModelRepository.getActiveModel(),
+        custodyModelRepository.observeDayOverrides()
+    ) { model, overrides ->
+        model?.let { HandoverCalculator.nextHandoverFrom(it, LocalDate.now(), overrides) }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), null)
 
     /**
      * The next [MAX_UPCOMING] events starting from now, within [LOOKAHEAD_DAYS] (private

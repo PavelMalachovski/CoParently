@@ -1,15 +1,9 @@
 package com.coparently.app.presentation.calendar
 
 import android.os.Build
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -55,14 +49,15 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.coparently.app.R
+import com.coparently.app.domain.custody.CustodyResolver
 import com.coparently.app.domain.holidays.CzechHolidays
 import com.coparently.app.domain.holidays.Holiday
 import com.coparently.app.domain.model.Event
 import com.coparently.app.presentation.calendar.components.CalendarHeader
 import com.coparently.app.presentation.calendar.components.ChangeRequestBanner
 import com.coparently.app.presentation.calendar.components.CustodyChangedBanner
-import com.coparently.app.presentation.calendar.components.CustodyRibbon
 import com.coparently.app.presentation.calendar.components.DayAgendaCard
+import com.coparently.app.presentation.calendar.components.DaySwapSheet
 import com.coparently.app.presentation.calendar.components.EventTypeFilterSheet
 import com.coparently.app.presentation.common.rememberParentNames
 import com.coparently.app.presentation.event.EventUiState
@@ -213,6 +208,8 @@ fun CalendarScreen(
     val events by eventViewModel.events.collectAsState()
     val custodySchedules by calendarViewModel.custodySchedules.collectAsState()
     val custodyModel by calendarViewModel.custodyModel.collectAsState()
+    val dayOverrides by calendarViewModel.dayOverrides.collectAsState()
+    val swapError by calendarViewModel.swapError.collectAsState()
     val viewMode by calendarViewModel.viewMode.collectAsState()
     val selectedDate by calendarViewModel.selectedDate.collectAsState()
     val displayedMonth by calendarViewModel.displayedMonth.collectAsState()
@@ -230,7 +227,6 @@ fun CalendarScreen(
     val hiddenEventTypes by calendarViewModel.hiddenEventTypes.collectAsState()
     val customEventTypes by calendarViewModel.customEventTypes.collectAsState()
     val showHolidays by calendarViewModel.showHolidays.collectAsState()
-    val nextHandover by calendarViewModel.nextHandover.collectAsState()
     val custodyChangeAnnouncement by calendarViewModel.custodyChangeAnnouncement.collectAsState()
 
     // Who the two parents are, resolved with the fallback strings once for the whole screen.
@@ -274,15 +270,30 @@ fun CalendarScreen(
     // Event preview sheet: a tap opens the read-only preview, Edit goes to the editor
     var previewEventId by remember { mutableStateOf<String?>(null) }
 
-    // Unified custody lookup: prefers the active CustodyModel (Custody Setup),
-    // falls back to legacy CustodyScheduleEntity rows. Views must use this —
-    // reading only the legacy schedules left model-based custody invisible.
-    val getCustody: (LocalDate) -> String? = remember(custodyModel, custodySchedules) {
-        {
-                date ->
-            custodyModel?.getCustodyFor(date)
-                ?: CustodyHelper.getCustodyForDate(date, custodySchedules)
+    // Day-swap sheet: a long-press on a day offers it to the co-parent.
+    var swapDate by remember { mutableStateOf<LocalDate?>(null) }
+
+    // Unified custody lookup: an accepted one-off swap, then the active CustodyModel (Custody
+    // Setup), then the legacy CustodyScheduleEntity rows. Views must use this — reading only the
+    // legacy schedules left model-based custody invisible, and the precedence between a swap and
+    // the pattern lives in exactly one place, `CustodyResolver`, for the same reason.
+    val getCustody: (LocalDate) -> String? =
+        remember(custodyModel, dayOverrides, custodySchedules) {
+            CustodyResolver.resolver(
+                model = custodyModel,
+                overrides = dayOverrides,
+                legacy = { date -> CustodyHelper.getCustodyForDate(date, custodySchedules) }
+            )
         }
+
+    // The dates a swap is being negotiated on. A pending swap has changed nothing about whose
+    // day it is, so it is deliberately not part of `getCustody` — the grid marks it separately.
+    val pendingSwapDates: Set<LocalDate> = remember(dayOverrides) {
+        dayOverrides
+            .filterValues { it.isPending }
+            .keys
+            .mapNotNull { iso -> runCatching { LocalDate.parse(iso) }.getOrNull() }
+            .toSet()
     }
 
     // Events filtered by parent view and hidden event types
@@ -514,38 +525,10 @@ fun CalendarScreen(
                     )
                 }
 
-                // Today's custody ribbon. Shown in month and day view; week view carries its own
-                // full-width custody band above the day headers instead.
-                if (viewMode != CalendarViewMode.WEEK) {
-                    val today = LocalDate.now()
-                    val todayCustody = getCustody(today)
-                    if (todayCustody != null) {
-                        key(todayCustody) {
-                            AnimatedContent(
-                                targetState = todayCustody,
-                                transitionSpec = {
-                                    slideInVertically(
-                                        animationSpec = tween(animationDuration),
-                                        initialOffsetY = { -it }
-                                    ) + fadeIn() togetherWith slideOutVertically(
-                                        animationSpec = tween(animationDuration),
-                                        targetOffsetY = { it }
-                                    ) + fadeOut()
-                                },
-                                modifier = Modifier.padding(
-                                    horizontal = dims.paddingMedium,
-                                    vertical = dims.paddingSmall / 2
-                                )
-                            ) { custody ->
-                                CustodyRibbon(
-                                    custody = custody,
-                                    handover = nextHandover,
-                                    parentNames = parentNames
-                                )
-                            }
-                        }
-                    }
-                }
+                // No "Today with X" ribbon here. The day cells already say whose day it is, in
+                // the colour that says it everywhere else, and the handover countdown the ribbon
+                // also carried lives on the home screen's hero. Two answers to one question is
+                // what the design refresh removed elsewhere.
 
                 // Calendar content based on view mode
                 Crossfade(
@@ -600,6 +583,15 @@ fun CalendarScreen(
                                     eventsByDay = eventsByDay,
                                     getCustody = getCustody,
                                     parentNames = parentNames,
+                                    pendingSwapDates = pendingSwapDates,
+                                    // Only a paired account may offer a swap: unpaired there is
+                                    // nobody to accept, and a swap that applies itself is just an
+                                    // edit the custody editor already does. Null here removes the
+                                    // long-press entirely rather than opening a sheet that would
+                                    // have to apologise.
+                                    onDayLongClick = parents.coParent?.let {
+                                        { date: LocalDate -> swapDate = date }
+                                    },
                                     // Selects the day so the agenda card below fills in.
                                     // Tapping used to jump straight into Day view, which was
                                     // the only way to read a cell's events at all — now the
@@ -709,6 +701,36 @@ fun CalendarScreen(
         } else {
             // Event disappeared (deleted/synced away) — close the sheet
             previewEventId = null
+        }
+    }
+
+    // Day-swap sheet
+    swapDate?.let { date ->
+        DaySwapSheet(
+            date = date,
+            currentCustody = getCustody(date),
+            parentNames = parentNames,
+            onOffer = { toParent, note ->
+                calendarViewModel.offerDaySwap(date, toParent, note)
+                swapDate = null
+            },
+            onDismiss = { swapDate = null }
+        )
+    }
+
+    // A refused swap has to be said out loud: the sheet closes optimistically, so without this a
+    // rejected write would look exactly like a successful one.
+    val swapRefusedMessage = stringResource(R.string.day_swap_error_refused)
+    val swapNotReadyMessage = stringResource(R.string.day_swap_error_not_ready)
+    LaunchedEffect(swapError) {
+        swapError?.let { error ->
+            snackbarHostState.showSnackbar(
+                when (error) {
+                    SwapError.NOT_READY -> swapNotReadyMessage
+                    SwapError.REFUSED -> swapRefusedMessage
+                }
+            )
+            calendarViewModel.clearSwapError()
         }
     }
 

@@ -21,12 +21,22 @@ enum class DayCellOverlay {
 }
 
 /**
- * A day cell's two fills: the [base] it starts from and the [overlay] drawn over it.
+ * A day cell's fills: the [base] it starts from, the [overlay] drawn over it, and — on a day the
+ * child changes hands — the parent the day is coming *from*.
  *
  * @property base Always decided by the weekday alone, so the weekend band is continuous.
  * @property overlay The cell's meaning — custody, holiday or today — or [DayCellOverlay.NONE].
+ * @property handoverFrom The parent who had the child *yesterday*, when the child changes hands
+ *   on this cell's morning; null on every other day. Only ever [DayCellOverlay.CUSTODY_MOM] or
+ *   [DayCellOverlay.CUSTODY_DAD]. It is a **shape**, not a fourth colour: the cell is split on a
+ *   diagonal with this parent in the top-left and [overlay]'s parent in the bottom-right, so the
+ *   weekend base still shows through both halves and this file's invariant survives.
  */
-data class DayCellFill(val base: DayCellBase, val overlay: DayCellOverlay)
+data class DayCellFill(
+    val base: DayCellBase,
+    val overlay: DayCellOverlay,
+    val handoverFrom: DayCellOverlay? = null
+)
 
 /**
  * Decides what a calendar day cell is filled with, kept out of Compose so the branching can be
@@ -55,6 +65,11 @@ object DayCellFills {
      *   dimmed day numbers.
      * @param custody `"mom"`, `"dad"`, or null when no custody model or legacy schedule applies.
      *   Any other value is treated as no custody rather than guessed at.
+     * @param previousCustody Whose day *yesterday* was, resolved through the same lookup. When it
+     *   differs from [custody] the child changes hands on this cell's morning, and the cell is
+     *   split diagonally — see [DayCellFill.handoverFrom]. A one-off swap therefore both creates
+     *   a split and removes the one it displaced, for free, because the lookup already accounts
+     *   for it.
      * @param isPublicHoliday A public holiday, not a school vacation — school vacation is a
      *   month-level banner and never a cell fill.
      */
@@ -62,6 +77,7 @@ object DayCellFills {
         isWeekend: Boolean,
         isCurrentMonth: Boolean,
         custody: String?,
+        previousCustody: String?,
         isPublicHoliday: Boolean
     ): DayCellFill = DayCellFill(
         base = baseFor(isWeekend),
@@ -70,8 +86,21 @@ object DayCellFills {
         } else {
             custodyOverlay(custody)
                 ?: if (isPublicHoliday) DayCellOverlay.PUBLIC_HOLIDAY else DayCellOverlay.NONE
-        }
+        },
+        handoverFrom = if (isCurrentMonth) handoverFrom(custody, previousCustody) else null
     )
+
+    /**
+     * The parent a handover on this day comes from, or null when there is no handover.
+     *
+     * Both days must resolve to something. An unanswered day is not a handover, it is an unknown,
+     * and splitting the cell for it would invent an arrangement neither parent agreed to — the
+     * same rule `CustodyResolver.isHandoverDay` applies, kept in step with it deliberately.
+     */
+    private fun handoverFrom(custody: String?, previousCustody: String?): DayCellOverlay? {
+        if (custody == null || previousCustody == null || custody == previousCustody) return null
+        return custodyOverlay(previousCustody)
+    }
 
     /**
      * The fill for one hour cell in the week or day view.

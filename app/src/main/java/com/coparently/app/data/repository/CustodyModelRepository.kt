@@ -5,6 +5,8 @@ import com.coparently.app.data.local.dao.CustodyModelDao
 import com.coparently.app.data.local.entity.CustodyModelEntity
 import com.coparently.app.data.remote.firebase.FirestoreCustodyDataSource
 import com.coparently.app.domain.custody.CustodyKey
+import com.coparently.app.domain.custody.CustodyWriteKind
+import com.coparently.app.domain.custody.DayOverride
 import com.coparently.app.domain.custody.SharedCustody
 import com.coparently.app.domain.custody.SharedCustodyRead
 import com.coparently.app.domain.model.CustodyModel
@@ -106,6 +108,25 @@ class CustodyModelRepository(
      */
     fun getActiveModel(): Flow<CustodyModel?> {
         val local = custodyModelDao.getActiveModel().map { entity -> entity?.toDomainModel() }
+        return merge(shared.mirrorOnly(), local)
+    }
+
+    /**
+     * The pair's one-off day swaps, keyed by ISO date.
+     *
+     * Read from Room, for the same reason [getActiveModel] is: Room is the source of truth and
+     * the calendar must paint the agreed days offline. The remote branch is merged in only for
+     * its mirroring side effect.
+     *
+     * Deliberately not folded onto [CustodyModel]. That type is the *pattern* — what the grid
+     * asks "whose day is this" — and a swap is a fact about the shared document, the same
+     * separation [SharedCustody] already draws for `lastModifiedBy` and `createdAt`. Callers join
+     * the two through `CustodyResolver`, which is the one place the precedence lives.
+     */
+    fun observeDayOverrides(): Flow<Map<String, DayOverride>> {
+        val local = custodyModelDao.getActiveModel()
+            .map { entity -> DayOverrideJson.decode(entity?.dayOverridesJson) }
+            .distinctUntilChanged()
         return merge(shared.mirrorOnly(), local)
     }
 
@@ -383,7 +404,8 @@ class CustodyModelRepository(
         val existing = custodyModelDao.getModelById(remote.model.id)
         val entity = remote.model.toEntity(
             createdAt = remote.createdAt.ifBlank { existing?.createdAt ?: nowIso() },
-            lastModifiedAt = remote.lastModifiedAt.ifBlank { existing?.lastModifiedAt ?: nowIso() }
+            lastModifiedAt = remote.lastModifiedAt.ifBlank { existing?.lastModifiedAt ?: nowIso() },
+            dayOverrides = remote.dayOverrides
         ).copy(isActive = true, repeatYearly = remote.repeatYearly)
         if (entity == existing) return
 
@@ -451,9 +473,8 @@ class CustodyModelRepository(
     private suspend fun pushToFirestore(model: CustodyModel, entity: CustodyModelEntity) {
         val pair = currentPair() ?: return
         guarded("write", pair.documentId) {
-            val existingCreatedAt = firestoreCustodyDataSource.getCustody(pair.documentId)
-                ?.createdAt
-                ?.takeIf { it.isNotBlank() }
+            val existing = firestoreCustodyDataSource.getCustody(pair.documentId)
+            val existingCreatedAt = existing?.createdAt?.takeIf { it.isNotBlank() }
             firestoreCustodyDataSource.setCustody(
                 documentId = pair.documentId,
                 participants = pair.participants,
@@ -462,9 +483,67 @@ class CustodyModelRepository(
                     lastModifiedBy = pair.myUid,
                     lastModifiedAt = entity.lastModifiedAt,
                     createdAt = existingCreatedAt ?: entity.createdAt,
-                    repeatYearly = entity.repeatYearly
+                    repeatYearly = entity.repeatYearly,
+                    // Carried over, not dropped. `setCustody` replaces the whole document, so a
+                    // pattern save that rebuilt this object from scratch would silently delete
+                    // every agreed swap — including from `republish`, which runs with no user
+                    // action behind it at all, during ordinary mirroring.
+                    dayOverrides = existing?.dayOverrides.orEmpty(),
+                    lastModifiedKind = CustodyWriteKind.PATTERN
                 )
             )
+        }
+    }
+
+    /**
+     * Applies [transform] to the pair's one-off day swaps and writes the result back.
+     *
+     * The whole document is re-sent — `setCustody` is a `set()` — so everything else it holds is
+     * read first and carried across unchanged. Two fields are handled deliberately:
+     *
+     * - **`lastModifiedAt` keeps the pattern's value.** It is what [isNewer] compares to decide
+     *   which phone's document survives, and the winner is then *re-pushed over the loser*.
+     *   Re-dating for a swap would make this device win every future comparison.
+     * - **`lastModifiedBy` becomes this device's uid**, because `firestore.rules` requires every
+     *   update to stamp it with the caller. [CustodyWriteKind.SWAP] is what stops the co-parent's
+     *   phone reading that stamp as a pattern change; see `CustodyChangeAnnouncement`.
+     *
+     * Refuses rather than silently no-ops when there is no pair or no shared document: a swap
+     * needs somebody to accept it, and an unpaired parent moving their own day is an edit the
+     * custody editor already does.
+     *
+     * @param date The ISO date this write touches. Named rather than derived because
+     *   `firestore.rules` requires the document to carry it: Rules cannot iterate a map, so the
+     *   write names its one date and the rule checks the diff affects only that key.
+     * @param transform The transition to apply, from [DayOverrideTransition].
+     * @return The applied map, or the transition's own failure.
+     */
+    suspend fun applyDayOverrides(
+        date: String,
+        transform: (Map<String, DayOverride>) -> Result<Map<String, DayOverride>>
+    ): Result<Map<String, DayOverride>> {
+        val pair = currentPair()
+            ?: return Result.failure(IllegalStateException("No co-parent to agree a swap with"))
+        val existing = firestoreCustodyDataSource.getCustody(pair.documentId)
+            ?: return Result.failure(IllegalStateException("The pair has no shared schedule yet"))
+
+        val next = transform(existing.dayOverrides).getOrElse { return Result.failure(it) }
+        val written = guarded("swap", pair.documentId) {
+            firestoreCustodyDataSource.setCustody(
+                documentId = pair.documentId,
+                participants = pair.participants,
+                custody = existing.copy(
+                    lastModifiedBy = pair.myUid,
+                    dayOverrides = next,
+                    lastSwapDate = date,
+                    lastModifiedKind = CustodyWriteKind.SWAP
+                )
+            )
+        }
+        return if (written == null) {
+            Result.failure(IllegalStateException("The swap could not be written"))
+        } else {
+            Result.success(next)
         }
     }
 
@@ -579,7 +658,8 @@ class CustodyModelRepository(
      */
     private fun CustodyModel.toEntity(
         createdAt: String = nowIso(),
-        lastModifiedAt: String = createdAt
+        lastModifiedAt: String = createdAt,
+        dayOverrides: Map<String, DayOverride> = emptyMap()
     ): CustodyModelEntity {
         val momDaysJson = momDayIndices.sorted().joinToString(",", "[", "]")
 
@@ -592,7 +672,11 @@ class CustodyModelRepository(
             isActive = isActive,
             repeatYearly = true,
             createdAt = createdAt,
-            lastModifiedAt = lastModifiedAt
+            lastModifiedAt = lastModifiedAt,
+            // Null rather than "{}" for none, so a row that has never carried a swap is
+            // byte-identical to one written before the column existed — which the equality
+            // guard in `mirrorIntoRoom` depends on to stay quiet.
+            dayOverridesJson = DayOverrideJson.encode(dayOverrides)
         )
     }
 

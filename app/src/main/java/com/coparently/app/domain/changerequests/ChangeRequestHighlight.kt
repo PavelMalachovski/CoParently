@@ -37,14 +37,20 @@ object ChangeRequestHighlight {
      * header + outgoing requests, and each header is an item, so a request's index is not its
      * index in its own section.
      *
+     * @param precedingItems Items rendered *above* the incoming header — the day-swap section,
+     *   which is header plus one card per swap, or zero when there are none. It is a count rather
+     *   than the list itself because nothing here needs to look inside it: this function is only
+     *   ever asked about event change requests, since the highlight arrives from a chat card
+     *   about an event. Getting it wrong scrolls the inbox to the wrong card, which is silent.
      * @return The item index, or -1 when the request is in neither section.
      */
     fun indexInInbox(
         incoming: List<ChangeRequest>,
         outgoing: List<ChangeRequest>,
-        requestId: String
+        requestId: String,
+        precedingItems: Int = 0
     ): Int {
-        val incomingHeader = if (incoming.isEmpty()) 0 else 1
+        val incomingHeader = precedingItems + if (incoming.isEmpty()) 0 else 1
         val inIncoming = incoming.indexOfFirst { it.id == requestId }
         if (inIncoming >= 0) return incomingHeader + inIncoming
 

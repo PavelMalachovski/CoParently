@@ -25,6 +25,18 @@ import com.coparently.app.domain.model.CustodyModel
  *   [CustodyProposalTransition].
  * @property lastDecision The most recent answer to a proposal, or null until the first one. Kept
  *   so the proposer learns the outcome; only the latest is retained.
+ * @property dayOverrides One-off day swaps keyed by ISO date. Absent from the document reads as
+ *   an empty map, never null: every document written before this field existed has no such key,
+ *   and a null would make every caller test for two shapes of "none". See [DayOverride].
+ * @property lastSwapDate The ISO date the last swap write touched, or null when the last write
+ *   was not a swap. It exists for `firestore.rules`: Rules cannot iterate a map, so a swap write
+ *   names the one date it changes and the rule then requires the diff to affect only that key —
+ *   which makes naming the wrong date self-defeating rather than merely useless.
+ * @property lastModifiedKind What the last write to this document actually changed. It exists
+ *   because `firestore.rules` requires every update to stamp [lastModifiedBy] with the caller,
+ *   so a swap write cannot leave the field alone — and without this marker the co-parent's
+ *   device would read that stamp as a pattern change and raise the "the schedule changed under
+ *   you" banner for a day nobody has agreed to yet. See [CustodyWriteKind].
  */
 data class SharedCustody(
     val model: CustodyModel,
@@ -33,5 +45,30 @@ data class SharedCustody(
     val createdAt: String,
     val repeatYearly: Boolean = true,
     val proposal: CustodyProposal? = null,
-    val lastDecision: CustodyDecision? = null
+    val lastDecision: CustodyDecision? = null,
+    val dayOverrides: Map<String, DayOverride> = emptyMap(),
+    val lastSwapDate: String? = null,
+    val lastModifiedKind: CustodyWriteKind = CustodyWriteKind.PATTERN
 )
+
+/**
+ * What a write to the shared custody document changed.
+ *
+ * Needed because two rules pull in opposite directions. `firestore.rules` requires every update
+ * to carry `lastModifiedBy == request.auth.uid`, so **no** write can leave that field as it was;
+ * meanwhile `CustodyChangeAnnouncement` reads exactly that field to decide whether the co-parent
+ * changed the agreed schedule. Without a marker, offering or answering a one-off swap — which
+ * changes no pattern at all — would raise "your co-parent changed the schedule" on the other
+ * phone, about a day neither parent has agreed to. A swap has its own channel: the inbox, and the
+ * arrows on the grid.
+ *
+ * [PATTERN] is the default, and that is the right default for a document written by a build that
+ * predates this field: those builds only ever wrote patterns.
+ */
+enum class CustodyWriteKind {
+    /** The agreed pattern itself changed. The banner's business. */
+    PATTERN,
+
+    /** Only [SharedCustody.dayOverrides] changed — an offer, or an answer to one. */
+    SWAP
+}

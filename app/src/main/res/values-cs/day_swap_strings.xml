@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Czech translations of day_swap_strings.xml. -->
+<resources>
+    <string name="day_swap_sheet_title">Vyměnit tento den</string>
+    <string name="day_swap_currently_with">Teď má tento den %1$s</string>
+    <string name="day_swap_would_go_to">Nabízíte ho: %1$s</string>
+    <string name="day_swap_note_label">Poznámka (nepovinné)</string>
+    <string name="day_swap_offer">Nabídnout výměnu</string>
+    <string name="day_swap_cancel">Teď ne</string>
+    <string name="day_swap_needs_coparent">Nejdřív se propojte s druhým rodičem — na výměně se domlouváte spolu.</string>
+    <string name="day_swap_error_refused">Výměnu se nepodařilo nabídnout</string>
+    <string name="day_swap_error_not_ready">Ještě zjišťujeme, kdo je druhý rodič — zkuste to za chvíli</string>
+    <string name="day_swap_inbox_section">Výměny dnů</string>
+    <string name="day_swap_inbox_offered_by_you">Tento den jste nabídli: %1$s</string>
+    <string name="day_swap_inbox_offered_to_you">%1$s vám nabízí tento den</string>
+    <string name="day_swap_inbox_accepted">Domluveno</string>
+    <string name="day_swap_inbox_declined">Odmítnuto</string>
+    <string name="day_swap_inbox_waiting">Čeká na odpověď</string>
+    <string name="day_swap_accept">Přijmout</string>
+    <string name="day_swap_decline">Odmítnout</string>
+</resources>

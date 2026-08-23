@@ -4,16 +4,6 @@
     <!-- Parent names, used to compose custody and handover copy -->
 
     <!-- Custody ribbon -->
-    <string name="calendar_custody_today_with">Dnes má %1$s</string>
-    <string name="calendar_custody_handover_tomorrow">→ zítra %1$s</string>
-    <plurals name="calendar_custody_handover_in_days">
-        <item quantity="one">→ %2$s za %1$d den</item>
-        <item quantity="few">→ %2$s za %1$d dny</item>
-        <item quantity="many">→ %2$s za %1$d dní</item>
-        <item quantity="other">→ %2$s za %1$d dní</item>
-    </plurals>
-    <string name="calendar_custody_ribbon_description">Dnes má dítě %1$s</string>
-    <string name="calendar_custody_ribbon_description_handover">Dnes má dítě %1$s. Za %3$d dní přebírá %2$s.</string>
 
     <!-- View mode switcher -->
     <string name="calendar_viewmode_month">Měsíc</string>
@@ -57,6 +47,8 @@
     <string name="calendar_day_desc_today">Dnes</string>
     <string name="calendar_day_desc_outside_month">Mimo aktuální měsíc</string>
     <string name="calendar_day_desc_with_parent">V péči: %1$s</string>
+    <string name="calendar_day_desc_handover">Předání od %1$s k %2$s</string>
+    <string name="calendar_day_desc_swap_pending">Výměna dne čeká na odpověď</string>
     <plurals name="calendar_day_desc_events">
         <item quantity="one">%1$d událost</item>
         <item quantity="few">%1$d události</item>
@@ -64,6 +56,7 @@
         <item quantity="other">%1$d událostí</item>
     </plurals>
     <string name="calendar_day_click_label">Zobrazit události pro %1$s</string>
+    <string name="calendar_day_long_click_label">Nabídnout tento den druhému rodiči</string>
 
     <!-- Day/week grid accessibility -->
     <string name="calendar_time_slot_description">Časový blok %1$s dne %2$s. Klepnutím přidáte událost.</string>

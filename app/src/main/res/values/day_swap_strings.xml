@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Offering the other parent a single day, and answering an offer. Never the words "Mom" or
+     "Dad": every parent label goes through ParentLabels and renders that person's name. -->
+<resources>
+    <string name="day_swap_sheet_title">Swap this day</string>
+    <string name="day_swap_currently_with">Right now this day is %1$s\'s</string>
+    <string name="day_swap_would_go_to">You are offering it to %1$s</string>
+    <string name="day_swap_note_label">Add a note (optional)</string>
+    <string name="day_swap_offer">Offer the swap</string>
+    <string name="day_swap_cancel">Not now</string>
+    <string name="day_swap_needs_coparent">Link a co-parent first — a swap is something the two of you agree.</string>
+    <string name="day_swap_error_refused">That swap could not be offered</string>
+    <string name="day_swap_error_not_ready">Still working out who your co-parent is — try again in a moment</string>
+    <string name="day_swap_inbox_section">Day swaps</string>
+    <string name="day_swap_inbox_offered_by_you">You offered this day to %1$s</string>
+    <string name="day_swap_inbox_offered_to_you">%1$s is offering you this day</string>
+    <string name="day_swap_inbox_accepted">Agreed</string>
+    <string name="day_swap_inbox_declined">Turned down</string>
+    <string name="day_swap_inbox_waiting">Waiting for an answer</string>
+    <string name="day_swap_accept">Accept</string>
+    <string name="day_swap_decline">Decline</string>
+</resources>

@@ -60,6 +60,81 @@ service cloud.firestore {
       return data.get(key, {}).keys().hasOnly([request.auth.uid]);
     }
 
+    // ---- One-off day swaps (custody_models.dayOverrides) ---------------
+    //
+    // A swap is an *agreement*, and these two functions are what make it one rather than an
+    // announcement. `DayOverrideTransition` refuses the same things client-side, but a client is
+    // not where an adversarial counterparty is stopped, and this product's premise is that the
+    // counterparty may be one.
+    //
+    // `get(..., {})` throughout: reading a missing key in Firestore Rules is an evaluation error,
+    // not null, and every document written before this field existed has no `dayOverrides` —
+    // the same hazard that already bit `isPartnerOf` in this file.
+
+    // True when a write changes `dayOverrides` in exactly the one date it names, in a way the
+    // caller is entitled to.
+    //
+    // The date comes from the document's own `lastSwapDate` because Rules cannot iterate a map:
+    // there is no way to ask "for every changed key ...". Naming the key and then requiring the
+    // diff to affect only that key makes a lie self-defeating — claim the wrong date and the
+    // `hasOnly` check fails on the date that actually changed.
+    //
+    // Three legitimate shapes, and nothing else:
+    //
+    // 1. **An offer.** No entry for that date yet; the new one is PENDING and credits the caller
+    //    as its author. `requestedBy` is what stops a parent deciding their own swap, so a forged
+    //    author here would defeat the whole mechanism one level down.
+    // 2. **A re-offer.** An entry exists and is being replaced by a fresh PENDING one, again
+    //    authored by the caller. One override per date is the semantics and the newest offer is
+    //    the live one, including a counter-offer over the co-parent's. It may replace an accepted
+    //    swap: renegotiating an agreed day has to be possible, and it is not silent — the other
+    //    parent sees the request in their inbox and the arrows on that date. The day does revert
+    //    to the pattern while the new offer is pending, which is the honest reading of "this day
+    //    is being renegotiated".
+    // 3. **An answer.** The entry was PENDING, the caller is *not* its author, the author is left
+    //    as it was, and the decision is credited to the caller. Without the `decidedBy` check the
+    //    requester could grant themselves the day while crediting the co-parent — the same
+    //    forgery `lastModifiedBy` is validated against, one level down.
+    function validDayOverrideWrite(before, after) {
+      return validDayOverrideAt(before, after, after.get('lastSwapDate', ''));
+    }
+
+    function validDayOverrideAt(before, after, date) {
+      return date is string && date.size() > 0 &&
+             after.get('dayOverrides', {}).diff(before.get('dayOverrides', {}))
+                  .affectedKeys().hasOnly([date]) &&
+             (
+               // 1 and 2: an offer, over nothing or over whatever was there.
+               (after.dayOverrides[date].status == 'PENDING' &&
+                after.dayOverrides[date].requestedBy == request.auth.uid)
+               ||
+               // 3: an answer to the co-parent's pending offer.
+               (date in before.get('dayOverrides', {}) &&
+                before.dayOverrides[date].status == 'PENDING' &&
+                before.dayOverrides[date].requestedBy != request.auth.uid &&
+                after.dayOverrides[date].requestedBy == before.dayOverrides[date].requestedBy &&
+                after.dayOverrides[date].decidedBy == request.auth.uid &&
+                (after.dayOverrides[date].status == 'ACCEPTED' ||
+                 after.dayOverrides[date].status == 'DECLINED'))
+             );
+    }
+
+    // True when a write that calls itself a swap changes nothing but the swap.
+    //
+    // Without this, a pattern rewrite could ride along on a write stamped `lastModifiedKind:
+    // 'SWAP'` — and `CustodyChangeAnnouncement` suppresses the banner for exactly that stamp, so
+    // the co-parent's schedule would be replaced with no banner at all. That is the same
+    // silencing the `lastModifiedBy` rule below exists to prevent, arriving through the door this
+    // package just added.
+    //
+    // `lastModifiedAt` is deliberately absent from the allowed set, which is what keeps a swap
+    // from re-dating the document: that field is what `CustodyModelRepository.isNewer` compares
+    // to decide which phone's document survives, and the winner is re-pushed over the loser.
+    function swapWriteTouchesOnlyTheSwap(before, after) {
+      return after.diff(before).affectedKeys()
+                  .hasOnly(['dayOverrides', 'lastSwapDate', 'lastModifiedBy', 'lastModifiedKind']);
+    }
+
     // The canonical pair id for a 2-element participants list — the same sorted-join formula
     // as Kotlin's `ConversationKey.of(uidA, uidB)` and `CustodyKey.of(uidA, uidB)`
     // (`listOf(uidA, uidB).sorted().joinToString("__")`). Shared by two collections:
@@ -389,12 +464,19 @@ service cloud.firestore {
       // the field. An update must therefore carry the field: a partial write that leaves a stale
       // author behind is the same silencing without the bad faith, and every client write goes
       // through `FirestoreCustodyDataSource.setCustody`, which always stamps the signed-in uid.
+      //
+      // `dayOverrides` must be empty on create, for the reason `noForeignMarksOnCreate` exists
+      // for `conversations`: without it, whoever's client wins the race to create the
+      // deterministic-id document could bake in an already-ACCEPTED swap, and every restriction
+      // the update rule places on deciding one would be moot. No client path needs it — a swap
+      // is offered against an existing shared schedule, never alongside the first one.
       allow create: if isAuthenticated() &&
                       request.resource.data.participants.size() == 2 &&
                       request.auth.uid in request.resource.data.participants &&
                       modelId == canonicalPairId(request.resource.data.participants) &&
                       request.resource.data.participants[0] < request.resource.data.participants[1] &&
                       request.resource.data.lastModifiedBy == request.auth.uid &&
+                      request.resource.data.get('dayOverrides', {}).keys().size() == 0 &&
                       (isPartnerOf(request.resource.data.participants[0]) ||
                        isPartnerOf(request.resource.data.participants[1]));
 
@@ -402,10 +484,25 @@ service cloud.firestore {
       // one out for a third account: they would still be in the array and it would still hold
       // two uids, but the document id - derived from the original pair - would no longer name
       // who it is shared with, and the co-parent would lose the schedule with no trace.
+      //
+      // Two more clauses, both about one-off day swaps:
+      //
+      // - A write that changes `dayOverrides` must be a legitimate swap — see
+      //   `validDayOverrideWrite`. Otherwise either parent could grant themselves a day and the
+      //   other would merely be told, which is an announcement, not an agreement.
+      // - A write that *calls itself* a swap must change nothing else — see
+      //   `swapWriteTouchesOnlyTheSwap`. The banner is suppressed for that stamp, so without
+      //   this a pattern rewrite could ride along on it and replace the co-parent's schedule
+      //   in silence.
       allow update: if isAuthenticated() &&
                       request.auth.uid in resource.data.participants &&
                       request.resource.data.participants == resource.data.participants &&
                       request.resource.data.lastModifiedBy == request.auth.uid &&
+                      (request.resource.data.get('dayOverrides', {}) ==
+                         resource.data.get('dayOverrides', {}) ||
+                       validDayOverrideWrite(resource.data, request.resource.data)) &&
+                      (request.resource.data.get('lastModifiedKind', 'PATTERN') != 'SWAP' ||
+                       swapWriteTouchesOnlyTheSwap(resource.data, request.resource.data)) &&
                       (isPartnerOf(resource.data.participants[0]) ||
                        isPartnerOf(resource.data.participants[1]));
 

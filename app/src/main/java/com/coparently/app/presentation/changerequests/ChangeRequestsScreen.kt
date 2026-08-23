@@ -29,6 +29,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -44,9 +45,15 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.coparently.app.R
 import com.coparently.app.domain.changerequests.ChangeRequestHighlight
+import com.coparently.app.domain.custody.DayOverrideStatus
+import com.coparently.app.domain.custody.DaySwap
+import com.coparently.app.domain.custody.DaySwapInbox
 import com.coparently.app.domain.model.ChangeRequest
 import com.coparently.app.domain.model.ChangeRequestStatus
+import com.coparently.app.presentation.common.ParentNames
+import com.coparently.app.presentation.common.rememberParentNames
 import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
 
 private val requestDateFormatter = DateTimeFormatter.ofPattern("EEE, MMM d · HH:mm")
 
@@ -87,6 +94,13 @@ fun ChangeRequestsScreen(
     val incoming = requests.filter { it.requestedTo == currentUserId }
     val outgoing = requests.filter { it.requestedBy == currentUserId }
 
+    val daySwaps by viewModel.daySwaps.collectAsState()
+    val parents by viewModel.parents.collectAsState()
+    val parentNames = rememberParentNames(parents)
+    // Header plus one card per swap, or nothing at all. `indexInInbox` needs the count because
+    // this section renders above the incoming one and every index below it shifts.
+    val swapItemCount = if (daySwaps.isEmpty()) 0 else 1 + daySwaps.size
+
     val highlighted = remember(requests, linkedEventId) {
         linkedEventId?.let { ChangeRequestHighlight.forEvent(requests, it) }
     }
@@ -117,7 +131,12 @@ fun ChangeRequestsScreen(
         if (target == null) {
             snackbarHostState.showSnackbar(missingMessage)
         } else {
-            val index = ChangeRequestHighlight.indexInInbox(incoming, outgoing, target.id)
+            val index = ChangeRequestHighlight.indexInInbox(
+                incoming = incoming,
+                outgoing = outgoing,
+                requestId = target.id,
+                precedingItems = swapItemCount
+            )
             if (index >= 0) listState.animateScrollToItem(index)
         }
     }
@@ -138,7 +157,7 @@ fun ChangeRequestsScreen(
             )
         }
     ) { padding ->
-        if (incoming.isEmpty() && outgoing.isEmpty()) {
+        if (incoming.isEmpty() && outgoing.isEmpty() && daySwaps.isEmpty()) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -167,6 +186,21 @@ fun ChangeRequestsScreen(
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
+                // Day swaps first: a pending swap is the most actionable thing the inbox can
+                // hold — a date is about to arrive whether or not it is answered — and unlike a
+                // change request it has no second home anywhere else in the app.
+                if (daySwaps.isNotEmpty()) {
+                    item { SectionHeader(stringResource(R.string.day_swap_inbox_section)) }
+                    items(daySwaps, key = { it.date.toString() }) { swap ->
+                        DaySwapCard(
+                            swap = swap,
+                            currentUserId = currentUserId,
+                            parentNames = parentNames,
+                            onAccept = { viewModel.acceptSwap(swap.date) },
+                            onDecline = { viewModel.declineSwap(swap.date) }
+                        )
+                    }
+                }
                 if (incoming.isNotEmpty()) {
                     item { SectionHeader(stringResource(R.string.change_request_incoming)) }
                     items(incoming, key = { it.id }) { request ->
@@ -193,6 +227,85 @@ fun ChangeRequestsScreen(
                             onCancel = { viewModel.cancel(request.id) },
                             isHighlighted = request.id == highlighted?.id
                         )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * One day swap in the inbox.
+ *
+ * Three states, and the difference between them is who is being asked. A swap the co-parent
+ * offered carries Accept and Decline; one this parent offered carries neither, because
+ * `DayOverrideTransition` and `firestore.rules` both refuse a parent deciding their own offer —
+ * rendering the buttons anyway would promise an action the server rejects. A swap that has been
+ * answered carries the answer, which is the whole reason an answered swap stays in this list.
+ *
+ * @param swap The day and where its offer stands.
+ * @param currentUserId This device's own uid, for telling "offered to you" from "offered by you".
+ * @param parentNames Resolves a uid or a slot to that person's name — never "Mom" or "Dad".
+ * @param onAccept Takes the offer up.
+ * @param onDecline Turns it down.
+ */
+@Composable
+private fun DaySwapCard(
+    swap: DaySwap,
+    currentUserId: String,
+    parentNames: ParentNames,
+    onAccept: () -> Unit,
+    onDecline: () -> Unit
+) {
+    val dateFormatter = remember { DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM) }
+    val awaitsMe = DaySwapInbox.awaitsAnswerFrom(swap, currentUserId)
+    val offeredByMe = swap.override.requestedBy == currentUserId
+
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = swap.date.format(dateFormatter),
+                style = MaterialTheme.typography.titleMedium
+            )
+            Text(
+                text = if (offeredByMe) {
+                    stringResource(
+                        R.string.day_swap_inbox_offered_by_you,
+                        parentNames.labelFor(swap.override.toParent)
+                    )
+                } else {
+                    stringResource(
+                        R.string.day_swap_inbox_offered_to_you,
+                        parentNames.labelForUid(swap.override.requestedBy)
+                    )
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            swap.override.note?.let { note ->
+                Text(text = note, style = MaterialTheme.typography.bodyMedium)
+            }
+            Text(
+                text = stringResource(
+                    when (swap.override.status) {
+                        DayOverrideStatus.ACCEPTED -> R.string.day_swap_inbox_accepted
+                        DayOverrideStatus.DECLINED -> R.string.day_swap_inbox_declined
+                        DayOverrideStatus.PENDING -> R.string.day_swap_inbox_waiting
+                    }
+                ),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            if (awaitsMe) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = onAccept) {
+                        Text(stringResource(R.string.day_swap_accept))
+                    }
+                    TextButton(onClick = onDecline) {
+                        Text(stringResource(R.string.day_swap_decline))
                     }
                 }
             }

@@ -1,16 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <string name="calendar_custody_today_with">Сьогодні з %1$s</string>
-    <string name="calendar_custody_handover_tomorrow">→ %1$s завтра</string>
-    <plurals name="calendar_custody_handover_in_days">
-        <item quantity="one">→ %2$s через %1$d день</item>
-        <item quantity="few">→ %2$s через %1$d дні</item>
-        <item quantity="many">→ %2$s через %1$d днів</item>
-        <item quantity="other">→ %2$s через %1$d дня</item>
-    </plurals>
-    <string name="calendar_custody_ribbon_description">Сьогодні дитина з %1$s</string>
-    <string name="calendar_custody_ribbon_description_handover">Сьогодні дитина з %1$s. Опіка перейде до %2$s через %3$d дн.</string>
 
     <string name="calendar_viewmode_month">Місяць</string>
     <string name="calendar_viewmode_week">Тиждень</string>
@@ -45,6 +35,8 @@
     <string name="calendar_day_desc_today">Сьогодні</string>
     <string name="calendar_day_desc_outside_month">Поза поточним місяцем</string>
     <string name="calendar_day_desc_with_parent">З ким: %1$s</string>
+    <string name="calendar_day_desc_handover">Передача від %1$s до %2$s</string>
+    <string name="calendar_day_desc_swap_pending">Обмін днями чекає на відповідь</string>
     <plurals name="calendar_day_desc_events">
         <item quantity="one">%1$d подія</item>
         <item quantity="few">%1$d події</item>
@@ -52,6 +44,7 @@
         <item quantity="other">%1$d події</item>
     </plurals>
     <string name="calendar_day_click_label">Показати події за %1$s</string>
+    <string name="calendar_day_long_click_label">Запропонувати цей день другому з батьків</string>
 
     <string name="calendar_time_slot_description">Час %1$s, %2$s. Натисніть, щоб додати подію.</string>
     <string name="calendar_event_chip_description">Подія %1$s. %2$s</string>

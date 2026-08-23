@@ -155,9 +155,43 @@ class CustodyChangeAnnouncementTest {
         assertEquals(shared, result)
     }
 
+    @Test
+    fun `a one-off swap is not announced as a schedule change`() {
+        // `firestore.rules` requires every update to stamp `lastModifiedBy` with its caller, so a
+        // swap write cannot leave the field alone. Without the kind marker this is
+        // indistinguishable from the co-parent rewriting the agreed pattern, and the other phone
+        // would announce a schedule change for a day nobody has agreed to.
+        val shared = custodyOf(lastModifiedBy = CO_PARENT_UID, kind = CustodyWriteKind.SWAP)
+
+        val result = CustodyChangeAnnouncement.toAnnounce(
+            shared = shared,
+            myUid = MY_UID,
+            parentsLoaded = true,
+            dismissedLastModifiedAt = null
+        )
+
+        assertNull(result)
+    }
+
+    @Test
+    fun `a pattern change after a swap is still announced`() {
+        // The marker is per-write, not sticky: the next real pattern change must come through.
+        val shared = custodyOf(lastModifiedBy = CO_PARENT_UID, kind = CustodyWriteKind.PATTERN)
+
+        val result = CustodyChangeAnnouncement.toAnnounce(
+            shared = shared,
+            myUid = MY_UID,
+            parentsLoaded = true,
+            dismissedLastModifiedAt = null
+        )
+
+        assertEquals(shared, result)
+    }
+
     private fun custodyOf(
         lastModifiedBy: String,
-        lastModifiedAt: String = MODIFIED_AT
+        lastModifiedAt: String = MODIFIED_AT,
+        kind: CustodyWriteKind = CustodyWriteKind.PATTERN
     ) = SharedCustody(
         model = CustodyModel(
             id = "model-1",
@@ -168,7 +202,8 @@ class CustodyChangeAnnouncementTest {
         ),
         lastModifiedBy = lastModifiedBy,
         lastModifiedAt = lastModifiedAt,
-        createdAt = "2026-01-01T00:00:00"
+        createdAt = "2026-01-01T00:00:00",
+        lastModifiedKind = kind
     )
 
     private companion object {
