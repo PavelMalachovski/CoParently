@@ -249,6 +249,26 @@ class OnboardingViewModelTest {
     }
 
     @Test
+    fun `a step's save and the completion marker cannot overwrite each other`() =
+        runTest(dispatcher) {
+            // Both follow the same read-modify-write shape against the same row. Interleaved,
+            // whichever wrote second would silently drop the other's field - and losing the
+            // marker means the wizard reappears on the next launch over data already entered.
+            var stored = storedUser
+            coEvery { userRepository.getCurrentUser() } answers { stored }
+            coEvery { userRepository.updateUser(any()) } answers { stored = firstArg() }
+
+            viewModel.next()
+            viewModel.updateName("Olya")
+            viewModel.next()
+            viewModel.finish()
+            advanceUntilIdle()
+
+            assertEquals("Olya", stored.name)
+            assertTrue(stored.onboardingCompletedAt?.isNotBlank() == true)
+        }
+
+    @Test
     fun `an account that already has answers does not have to retype them`() = runTest(dispatcher) {
         coEvery { userRepository.getCurrentUser() } returns storedUser.copy(
             name = "Olya",

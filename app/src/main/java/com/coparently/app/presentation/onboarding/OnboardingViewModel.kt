@@ -16,6 +16,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.util.UUID
@@ -127,6 +129,19 @@ class OnboardingViewModel @Inject constructor(
      * duplicating it.
      */
     private var childInfoId: String? = null
+
+    /**
+     * Serializes every write this wizard makes, so a read-modify-write cannot interleave with
+     * another.
+     *
+     * All of them follow the same shape — read the current row, copy this form's fields onto it,
+     * write it back — and two of them touch the same row: the profile step's save and [finish]'s
+     * marker. Without this, a parent moving quickly from the profile step to the end could have
+     * both read the pre-marker row, and whichever wrote second would silently drop the other's
+     * field. The marker is the one that matters: losing it means the wizard reappears on the
+     * next launch over data the parent has already entered.
+     */
+    private val writeLock = Mutex()
 
     init {
         prefill()
@@ -272,11 +287,13 @@ class OnboardingViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isSaving = true) }
             try {
-                val fresh = userRepository.getCurrentUser()
-                if (fresh != null) {
-                    userRepository.updateUser(
-                        fresh.copy(onboardingCompletedAt = LocalDateTime.now().toString())
-                    )
+                writeLock.withLock {
+                    val fresh = userRepository.getCurrentUser()
+                    if (fresh != null) {
+                        userRepository.updateUser(
+                            fresh.copy(onboardingCompletedAt = LocalDateTime.now().toString())
+                        )
+                    }
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -312,7 +329,7 @@ class OnboardingViewModel @Inject constructor(
     private fun persist(block: suspend () -> Unit) {
         viewModelScope.launch {
             try {
-                block()
+                writeLock.withLock { block() }
             } catch (e: CancellationException) {
                 throw e
             } catch (
