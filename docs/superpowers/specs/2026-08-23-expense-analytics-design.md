@@ -115,6 +115,36 @@ because only neighbouring arcs touch. The rest is carried by the table: §3 alre
 accessible representation, and this makes that load-bearing rather than a courtesy. Nothing on
 this screen asks a reader to tell two slices apart by colour.
 
+### The Gradle half, attempted again on the merged base
+
+Package F merged as PR #57; `main` is now `2e3a7c2`. A second session went back for the four
+items the first could not run. **Three of the four are still outstanding, and for the same
+reason as before** — the container has no Android SDK, and Google's Maven host is refused by the
+egress policy. This is now a measured fact rather than an inference: the build was run and it
+fails before compiling anything.
+
+| Check | Result |
+|---|---|
+| Build (`clean assembleDebug testDebugUnitTest lint detekt`) | **Ran, failed at plugin resolution.** Gradle 8.13 downloads, then: `Plugin [id: 'com.android.application', version: '8.10.1'] was not found … could not resolve plugin artifact`. `dl.google.com` answers 403 to CONNECT (organization egress policy); `maven.google.com` 301-redirects to it. No source file was reached, so this says nothing about the code. |
+| `app/schemas/15.json`…`19.json` | **Not generated.** They are Room annotation-processor output, so they cannot exist without the build above. Package E's outstanding item, still outstanding. |
+| Seven device checks | **Not run.** No device, no emulator, no SDK. |
+| `@Preview CategoryPieChartAllNinePreview`, light and dark | **Not rendered** — same reason. The fold-the-tail question stays open, undecided rather than settled. |
+
+What the second session *did* establish, on the merged base:
+
+| Check | Result |
+|---|---|
+| Pure-Kotlin unit tests, whole tree | **312 passing, 0 failing**, across the same 34 classes — reproduced on `main` @ `2e3a7c2` under a standalone Kotlin 2.1.20 compiler, with 87 pure main sources on the classpath. |
+| Aggregation (`CategoryBreakdownTest`) | **13 passing**, unchanged. |
+| Palette (`CategoryPaletteTest`) | **6 passing**, unchanged — so the theme's primary has not moved and the validated hexes still hold. This is the check that was told to fail loudly rather than be adjusted; it did not fail. |
+| Locales | 12 keys in exactly five files each; all 29 `R.string` references in this package's files resolve in base `values/`. |
+| No dependency added | `git diff 3122436..HEAD -- app/build.gradle.kts` is empty. |
+| Line length | nothing over 120 in any file this package touches. |
+| The four named compile risks | **Reviewed by hand, not compiled.** `SingleChoiceSegmentedButtonRow` / `SegmentedButton` / `SegmentedButtonDefaults.itemShape` are used with the M3 1.4 signatures and are opted in via `@OptIn(ExperimentalMaterial3Api::class)`; `ExpenseCategory.entries` is a Kotlin 2.1 enum accessor over a nine-constant enum; `clearAndSetSemantics` is imported from `androidx.compose.ui.semantics`; `ExpenseAnalytics.kt`'s `width`/`size` come from `androidx.compose.foundation.layout`. Every project symbol the package references resolves — `PillChip`, `SectionGroup`, `ParentNames.labelForUid`, `SupportedCurrency.code`, the locally-defined `FilterChip`, `LightDarkPreviews`. **A reading is not a compile**, and the Compose compiler plugin is exactly what a reading cannot stand in for. |
+
+So the package's arithmetic is verified and its Compose layer is not, unchanged from the first
+session. The gate remains a machine with an Android SDK.
+
 ## 8. Deliberately not in F
 
 - **FX conversion.** §2. It is a recorded product decision, not an oversight.
