@@ -64,6 +64,7 @@ import com.coparently.app.R
 import com.coparently.app.domain.custody.HandoverInfo
 import com.coparently.app.domain.expenses.CurrencyBalance
 import com.coparently.app.domain.home.WeekEntry
+import com.coparently.app.presentation.calendar.components.DayAgendaCard
 import com.coparently.app.presentation.common.ParentNames
 import com.coparently.app.presentation.common.PillChip
 import com.coparently.app.presentation.common.SectionGroup
@@ -249,6 +250,21 @@ private fun Dashboard(
                     onConfirm = onOpenChangeRequests
                 )
             }
+        }
+
+        // Today's agenda — the day card that used to sit under the calendar's month grid,
+        // moved here so the grid fills its screen. Same composable, so the two surfaces can
+        // never drift into different ideas of what a day looks like: date, whose custody day
+        // it is, and the whole day's events (a 9:00 appointment is still part of today at
+        // 9:05, which is why this is not just the week's first rows repeated).
+        item {
+            DayAgendaCard(
+                date = state.today.date,
+                events = state.today.events,
+                custody = state.today.dayParent,
+                parentNames = parentNames,
+                onEventClick = onOpenEvent
+            )
         }
 
         // The week leads, per spec §3: it is what a separated parent opens the app to see, and

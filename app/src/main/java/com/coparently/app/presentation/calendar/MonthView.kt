@@ -1,8 +1,11 @@
 package com.coparently.app.presentation.calendar
 
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -28,10 +31,13 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
@@ -46,17 +52,22 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Velocity
 import com.coparently.app.R
 import com.coparently.app.domain.holidays.Holiday
 import com.coparently.app.domain.model.Event
 import com.coparently.app.presentation.common.ParentNames
 import com.coparently.app.presentation.theme.CoPlanlyColors
 import com.coparently.app.presentation.theme.dimensions
+import com.kizitonwose.calendar.compose.CalendarState
 import com.kizitonwose.calendar.compose.HorizontalCalendar
 import com.kizitonwose.calendar.compose.rememberCalendarState
 import com.kizitonwose.calendar.core.CalendarDay
 import com.kizitonwose.calendar.core.DayPosition
 import com.kizitonwose.calendar.core.OutDateStyle
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.YearMonth
@@ -89,8 +100,7 @@ private const val HOLIDAY_TINT_ALPHA = 0.10f
  *   descriptions — the grid says the colour out loud for anyone not reading it.
  * @param eventsByDay Events pre-bucketed per day by `eventsByDay` in `CalendarScreen`. Taking the
  *   index rather than the flat list is deliberate: `dayContent` runs for all 42 cells on every
- *   recomposition, so filtering the whole list per cell cost O(42·N) each time. The agenda card
- *   under the grid reads the same map, so the two cannot disagree.
+ *   recomposition, so filtering the whole list per cell cost O(42·N) each time.
  * @param getProposedCustody What a **pending** custody proposal would make of a day, or null when
  *   nothing is pending. Separate from [getCustody] for the same reason [pendingSwapDates] is: a
  *   proposal has changed nothing yet. The days it *would* move are washed in the proposed
@@ -102,7 +112,9 @@ private const val HOLIDAY_TINT_ALPHA = 0.10f
  *   to — an unpaired account gets no long-press at all, because a swap that applies itself is
  *   just an edit and the custody editor already does that.
  */
-@Suppress("LongParameterList") // screen-level composable: callbacks are its API surface
+// Callbacks are this screen-level composable's API surface; the body carries the pager's
+// anchor/settle wiring beside the grid itself.
+@Suppress("LongParameterList", "LongMethod")
 @Composable
 fun MonthView(
     selectedMonth: YearMonth,
@@ -142,14 +154,17 @@ fun MonthView(
         outDateStyle = OutDateStyle.EndOfGrid
     )
 
-    // Propagate to the ViewModel only once the pager has fully settled. Reacting to
-    // mid-fling month flips fed selectedMonth back into the effect below and kicked
-    // off a programmatic scroll on top of the in-flight fling — which is what made
-    // swiping one way animate differently from the other.
+    // Propagate to the ViewModel only once the pager has fully settled *on a month
+    // boundary*. Reacting to mid-fling month flips fed selectedMonth back into the effect
+    // below and kicked off a programmatic scroll on top of the in-flight fling — which is
+    // what made swiping one way animate differently from the other. The boundary check
+    // matters with the custom settle below: between the finger lifting and the settle
+    // animation starting there is one idle frame, and reporting the half-scrolled first
+    // month in that gap would move the header title mid-animation.
     LaunchedEffect(calendarState) {
         snapshotFlow { calendarState.isScrollInProgress }
             .collect { scrolling ->
-                if (!scrolling) {
+                if (!scrolling && calendarState.isSettledOnBoundary()) {
                     val visibleMonth = calendarState.firstVisibleMonth.yearMonth
                     if (visibleMonth != selectedMonth) {
                         onMonthChange(visibleMonth)
@@ -186,9 +201,39 @@ fun MonthView(
                 if (calculated < 48.dp) 48.dp else calculated
             }
 
+            // The settle animation is ours, not the library's. `calendarScrollPaged = true`
+            // snaps with an internal spring whose feel cannot be configured and, in practice,
+            // did not read the same in both directions. So paging is taken over: the drag
+            // still follows the finger (a CLAUDE.md invariant), but the release velocity is
+            // consumed in onPreFling and the page settles with one explicit tween — the same
+            // duration and easing whichever way the user swiped.
+            val settleScope = rememberCoroutineScope()
+            val settleConnection = remember(calendarState) {
+                object : NestedScrollConnection {
+                    private var settleJob: Job? = null
+
+                    override suspend fun onPreFling(available: Velocity): Velocity {
+                        settleJob?.cancel()
+                        settleJob = settleScope.launch {
+                            // The gesture's own (now zero-velocity) fling still holds the
+                            // scroll mutex for a frame; starting our animation under it would
+                            // get the animation cancelled at UserInput priority. Wait it out.
+                            snapshotFlow { calendarState.isScrollInProgress }.first { !it }
+                            calendarState.settleToNearestMonth(available.x)
+                        }
+                        return available
+                    }
+                }
+            }
+
             HorizontalCalendar(
                 state = calendarState,
-                modifier = Modifier.fillMaxSize(),
+                // Not the library's paged snapping — the nestedScroll connection above
+                // settles instead, with a direction-independent animation.
+                calendarScrollPaged = false,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .nestedScroll(settleConnection),
                 dayContent = { day ->
                     DayCell(
                         day = day,
@@ -606,6 +651,48 @@ private fun eventDotColor(parentOwner: String, isCurrentMonth: Boolean): Color {
     }
     return if (isCurrentMonth) base else base.copy(alpha = OUTSIDE_MONTH_DOT_ALPHA)
 }
+
+/**
+ * Settles the pager onto a month boundary with one deliberate, direction-independent tween.
+ *
+ * The fling velocity decides *which* month wins — a real fling turns the page the way it was
+ * thrown, a slow release goes to whichever month holds more of the screen — but never *how*
+ * the page gets there: the animation is the same [MONTH_SETTLE_MS] tween either way, which is
+ * the whole point of taking snapping away from the library.
+ *
+ * Offsets are LTR-only, which every shipped locale (en/cs/de/ru/uk) is.
+ */
+private suspend fun CalendarState.settleToNearestMonth(velocityX: Float) {
+    val visible = layoutInfo.visibleMonthsInfo
+    if (visible.isEmpty()) return
+    val first = visible.first()
+    val target = when {
+        // Finger flung left -> the next month (negative velocity scrolls content forward).
+        velocityX < -MONTH_SETTLE_FLING_THRESHOLD -> visible.getOrNull(1) ?: first
+        // Finger flung right -> back to the month peeking in at the start edge.
+        velocityX > MONTH_SETTLE_FLING_THRESHOLD -> first
+        // No real fling: the month holding more than half the viewport wins.
+        else -> if (first.offset < -first.size / 2) visible.getOrNull(1) ?: first else first
+    }
+    // target.offset is the signed distance from the viewport's start edge, so scrolling by
+    // exactly it aligns the month flush — forward for a positive offset, back for a negative.
+    animateScrollBy(
+        value = target.offset.toFloat(),
+        animationSpec = tween(durationMillis = MONTH_SETTLE_MS, easing = FastOutSlowInEasing)
+    )
+}
+
+/** Whether the first visible month sits flush with the viewport's start edge. */
+private fun CalendarState.isSettledOnBoundary(): Boolean {
+    val first = layoutInfo.visibleMonthsInfo.firstOrNull() ?: return false
+    return kotlin.math.abs(first.offset) <= 1
+}
+
+/** How long a month page takes to settle, in either direction — the calm, deliberate slide. */
+private const val MONTH_SETTLE_MS = 500
+
+/** Release velocity (px/s) below which a swipe settles to the nearest month, not the thrown one. */
+private const val MONTH_SETTLE_FLING_THRESHOLD = 300f
 
 /** Most event dots a cell shows before collapsing the rest into a "+". */
 private const val MAX_EVENT_DOTS = 3

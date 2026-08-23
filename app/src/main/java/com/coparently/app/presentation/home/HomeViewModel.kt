@@ -13,6 +13,7 @@ import com.coparently.app.domain.custody.HandoverInfo
 import com.coparently.app.domain.expenses.CurrencyBalance
 import com.coparently.app.domain.expenses.calculateExpenseBalancesByCurrency
 import com.coparently.app.domain.home.HomeWeek
+import com.coparently.app.domain.home.TodayAgenda
 import com.coparently.app.domain.home.WeekEntry
 import com.coparently.app.domain.model.CustodyModel
 import com.coparently.app.domain.model.Event
@@ -140,6 +141,8 @@ sealed interface HomeUiState {
      *
      * @property partner The linked co-parent, used to name the changes feed.
      * @property nextHandover When the child next changes hands, or null with no custody model.
+     * @property today Today's agenda — the card that used to sit under the calendar's month
+     *   grid, moved here so the grid can fill its screen.
      * @property week The child's next seven days, each row naming the parent whose day it
      *   falls on.
      * @property recentChanges What the co-parent changed, newest first.
@@ -150,6 +153,7 @@ sealed interface HomeUiState {
     data class Dashboard(
         val partner: PartnerSummary?,
         val nextHandover: HandoverInfo?,
+        val today: TodayAgenda,
         val week: List<WeekEntry>,
         val recentChanges: List<ActivityItem>,
         val monthSpend: MonthSpend,
@@ -266,38 +270,57 @@ class HomeViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), null)
 
     /**
-     * The child's week: every event in the next [HomeWeek.DAYS] days, each row naming the parent
-     * whose day it falls on.
+     * Today's agenda and the child's week, from one event subscription.
      *
-     * This is the screen's centre of gravity now, so it is not capped: it used to show the next
+     * The week is the screen's centre of gravity, so it is not capped: it used to show the next
      * three events under a header that said "this week", which on a busy Monday meant the week
      * ended on Tuesday with nothing saying so. A week of a child's events is a list a parent can
-     * read.
+     * read. The today card is the day-agenda that used to sit under the calendar's month grid,
+     * moved here so the grid can fill its screen.
      *
-     * The window arithmetic, the private-event filter and the collision-free keys live in the
-     * pure [HomeWeek] so they can be tested without a clock or a repository. Custody is resolved
-     * through [CustodyResolver], the same lookup the calendar grid uses.
+     * One combine for both sections, deliberately: they read the same Room query, and computing
+     * them together makes it structurally impossible for the today card and the week rows to
+     * disagree about the same day. The window arithmetic, the private-event filter and the
+     * collision-free keys live in the pure [HomeWeek] so they can be tested without a clock or
+     * a repository. Custody is resolved through [CustodyResolver], the same lookup the calendar
+     * grid uses.
      */
-    private val week: StateFlow<List<WeekEntry>> = combine(
+    private val agenda: StateFlow<AgendaSections> = combine(
         eventRepository.getEventsByDateRange(
-            LocalDateTime.now(),
+            // Start of today, not now: the today card covers the whole day (a 9:00
+            // appointment does not stop having happened at 9:05), while HomeWeek.of still
+            // opens the week's own window at `now` when it filters below.
+            LocalDate.now().atStartOfDay(),
             LocalDateTime.now().plusDays(HomeWeek.DAYS)
         ),
         custody,
         _userId
     ) { events, (model, overrides), userId ->
-        HomeWeek.of(
-            events = events,
-            now = LocalDateTime.now(),
-            userId = userId,
-            // No legacy fallback, deliberately: this ViewModel has never had one — the handover
-            // hero above resolves from the model and the swaps alone — and adding a Room DAO
-            // here to answer for accounts that never migrated off `custody_schedules` would put
-            // a second custody lookup on the screen. An unanswered day leaves the row's parent
-            // unknown, which the row renders as no parent rather than as a guess.
-            custodyFor = CustodyResolver.resolver(model, overrides, legacy = { null })
+        // No legacy fallback, deliberately: this ViewModel has never had one — the handover
+        // hero above resolves from the model and the swaps alone — and adding a Room DAO
+        // here to answer for accounts that never migrated off `custody_schedules` would put
+        // a second custody lookup on the screen. An unanswered day leaves the row's parent
+        // unknown, which the row renders as no parent rather than as a guess.
+        val custodyFor = CustodyResolver.resolver(model, overrides, legacy = { null })
+        AgendaSections(
+            today = HomeWeek.todayOf(
+                events = events,
+                today = LocalDate.now(),
+                userId = userId,
+                custodyFor = custodyFor
+            ),
+            week = HomeWeek.of(
+                events = events,
+                now = LocalDateTime.now(),
+                userId = userId,
+                custodyFor = custodyFor
+            )
         )
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), emptyList())
+    }.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS),
+        AgendaSections(EMPTY_TODAY, emptyList())
+    )
 
     /**
      * Expenses dated in the current calendar month. Shared by [monthSpend] and
@@ -442,18 +465,19 @@ class HomeViewModel @Inject constructor(
      * to pair. Each source seeding itself keeps that from happening.
      */
     private val dashboard: StateFlow<HomeUiState.Dashboard> = combine(
-        combine(partner, nextHandover, week) { coParent, handover, weekRows ->
-            Triple(coParent, handover, weekRows)
+        combine(partner, nextHandover, agenda) { coParent, handover, sections ->
+            Triple(coParent, handover, sections)
         },
         combine(monthSpend, monthBalances, unreadCount) { spend, balances, unread ->
             Triple(spend, balances, unread)
         },
         recentChanges
-    ) { (coParent, handover, weekRows), (spend, balances, unread), changes ->
+    ) { (coParent, handover, sections), (spend, balances, unread), changes ->
         HomeUiState.Dashboard(
             partner = coParent,
             nextHandover = handover,
-            week = weekRows,
+            today = sections.today,
+            week = sections.week,
             recentChanges = changes,
             monthSpend = spend,
             monthBalances = balances,
@@ -505,6 +529,13 @@ class HomeViewModel @Inject constructor(
     }
 
     private companion object {
+        /** Today's agenda before any repository has answered: today, empty, no custody. */
+        val EMPTY_TODAY = TodayAgenda(
+            date = LocalDate.now(),
+            events = emptyList(),
+            dayParent = null
+        )
+
         /**
          * What the dashboard holds before any repository has answered. Only ever visible to a
          * paired account, and only for the frame or two the Room queries take.
@@ -512,6 +543,7 @@ class HomeViewModel @Inject constructor(
         val EMPTY_DASHBOARD = HomeUiState.Dashboard(
             partner = null,
             nextHandover = null,
+            today = EMPTY_TODAY,
             week = emptyList(),
             recentChanges = emptyList(),
             monthSpend = MonthSpend(listOf(CurrencyAmount(SupportedCurrency.DEFAULT.code, 0.0))),
@@ -525,3 +557,12 @@ class HomeViewModel @Inject constructor(
         val NEAR_THRESHOLD: Duration = Duration.ofSeconds(2)
     }
 }
+
+/**
+ * The two agenda-shaped sections of the dashboard, computed together from one event
+ * subscription so the today card and the week rows can never disagree about the same day.
+ */
+private data class AgendaSections(
+    val today: TodayAgenda,
+    val week: List<WeekEntry>
+)

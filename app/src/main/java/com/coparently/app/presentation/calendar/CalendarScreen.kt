@@ -56,7 +56,6 @@ import com.coparently.app.domain.model.Event
 import com.coparently.app.presentation.calendar.components.CalendarHeader
 import com.coparently.app.presentation.calendar.components.ChangeRequestBanner
 import com.coparently.app.presentation.calendar.components.CustodyChangedBanner
-import com.coparently.app.presentation.calendar.components.DayAgendaCard
 import com.coparently.app.presentation.calendar.components.DaySwapSheet
 import com.coparently.app.presentation.calendar.components.EventTypeFilterSheet
 import com.coparently.app.presentation.common.rememberParentNames
@@ -608,11 +607,10 @@ fun CalendarScreen(
                                     onDayLongClick = parents.coParent?.let {
                                         { date: LocalDate -> swapDate = date }
                                     },
-                                    // Selects the day so the agenda card below fills in.
-                                    // Tapping used to jump straight into Day view, which was
-                                    // the only way to read a cell's events at all — now the
-                                    // month view answers that itself, and Day is a deliberate
-                                    // choice from the title menu.
+                                    // Selects the day (highlight ring). Tapping used to jump
+                                    // straight into Day view; Day remains a deliberate choice
+                                    // from the title menu, and the day's titles live on the
+                                    // home screen's today card and in the event preview.
                                     onDayClick = { clickedDate ->
                                         calendarViewModel.setSelectedDate(clickedDate)
                                     },
@@ -628,30 +626,10 @@ fun CalendarScreen(
                     }
                 }
 
-                // The selected day's events, under the grid. This is the other half of
-                // replacing per-cell event chips with dots: the dots give the count, this
-                // gives the titles — and it replaces the legend, whose Mom/Dad/vacation
-                // keys are now spelled out in words by this card and the vacation banner.
-                if (viewMode == CalendarViewMode.MONTH) {
-                    selectedDate?.let { chosenDay ->
-                        // The same buckets the grid's dots come from: one index, so a title in
-                        // the card and a dot in the cell can never describe different days.
-                        val agendaEvents = eventsByDay[chosenDay].orEmpty()
-                        DayAgendaCard(
-                            date = chosenDay,
-                            events = agendaEvents,
-                            custody = getCustody(chosenDay),
-                            parentNames = parentNames,
-                            onEventClick = { eventId -> previewEventId = eventId },
-                            modifier = Modifier.padding(
-                                start = dims.paddingMedium,
-                                // Clears the FAB, which floats over the end side.
-                                end = 72.dp,
-                                bottom = dims.paddingMedium
-                            )
-                        )
-                    }
-                }
+                // No day-agenda card under the grid any more: it moved to the home screen
+                // (the "today" card), so the month grid fills its screen. A day's titles are
+                // one tap away — selecting a day still works, and the preview sheet opens an
+                // event from any view.
             }
         }
     }
