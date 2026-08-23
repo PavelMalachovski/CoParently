@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Ukrainian translations of day_swap_strings.xml. -->
+<resources>
+    <string name="day_swap_sheet_title">Обмінятися цим днем</string>
+    <string name="day_swap_currently_with">Зараз цей день — %1$s</string>
+    <string name="day_swap_would_go_to">Ви пропонуєте його: %1$s</string>
+    <string name="day_swap_note_label">Коментар (необов\'язково)</string>
+    <string name="day_swap_offer">Запропонувати обмін</string>
+    <string name="day_swap_cancel">Не зараз</string>
+    <string name="day_swap_needs_coparent">Спершу з\'єднайтеся з другим із батьків — обмін ви узгоджуєте вдвох.</string>
+    <string name="day_swap_error_refused">Не вдалося запропонувати обмін</string>
+    <string name="day_swap_error_not_ready">Ще з\'ясовуємо, хто другий з батьків, — спробуйте за мить</string>
+    <string name="day_swap_inbox_section">Обмін днями</string>
+    <string name="day_swap_inbox_offered_by_you">Ви запропонували цей день: %1$s</string>
+    <string name="day_swap_inbox_offered_to_you">%1$s пропонує вам цей день</string>
+    <string name="day_swap_inbox_accepted">Погоджено</string>
+    <string name="day_swap_inbox_declined">Відхилено</string>
+    <string name="day_swap_inbox_waiting">Чекає на відповідь</string>
+    <string name="day_swap_accept">Прийняти</string>
+    <string name="day_swap_decline">Відхилити</string>
+</resources>

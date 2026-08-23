@@ -10,6 +10,7 @@ import com.coparently.app.data.repository.CustodyModelRepository
 import com.coparently.app.domain.custody.CustodyChangeAnnouncement
 import com.coparently.app.domain.custody.CustodyResolver
 import com.coparently.app.domain.custody.DayOverride
+import com.coparently.app.domain.custody.DayOverrideTransition
 import com.coparently.app.domain.custody.SharedCustody
 import com.coparently.app.domain.model.CustodyModel
 import com.coparently.app.presentation.common.Parents
@@ -24,11 +25,28 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.YearMonth
 import javax.inject.Inject
 
 /** Keeps the shared flows warm across brief unsubscriptions (config changes). */
 private const val HANDOVER_STOP_TIMEOUT_MS = 5_000L
+
+/**
+ * Why offering a one-off day swap did not work.
+ *
+ * A code, not a message: a ViewModel has no `Context` and must not acquire one to build
+ * user-facing text — the same rule that keeps `GoogleCalendarSyncState.message` on the
+ * localization follow-up list rather than being "fixed" with an injected `Context`. The screen
+ * resolves it to a string in composable scope.
+ */
+enum class SwapError {
+    /** No co-parent, or this device does not know who it is yet. Nobody could accept. */
+    NOT_READY,
+
+    /** The write was refused — by the transition's own rules, or by `firestore.rules`. */
+    REFUSED
+}
 
 /**
  * ViewModel for calendar screen.
@@ -63,6 +81,16 @@ class CalendarViewModel @Inject constructor(
     val custodySchedules: StateFlow<List<CustodyScheduleEntity>> =
         custodyScheduleDao.getAllActiveSchedules()
             .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    /**
+     * Why a swap could not be offered, or null when nothing is wrong.
+     *
+     * An enum rather than a message, because a ViewModel has no `Context` and must not acquire
+     * one to build a user-facing string — CLAUDE.md's standing rule, and the reason
+     * `GoogleCalendarSyncState.message` is still a tracked follow-up.
+     */
+    private val _swapError = MutableStateFlow<SwapError?>(null)
+    val swapError: StateFlow<SwapError?> = _swapError.asStateFlow()
 
     private val _custodyModel = MutableStateFlow<CustodyModel?>(null)
     val custodyModel: StateFlow<CustodyModel?> = _custodyModel.asStateFlow()
@@ -180,6 +208,50 @@ class CalendarViewModel @Inject constructor(
                 _custodyModel.value = model
             }
         }
+    }
+
+    /**
+     * Offers [date] to the other parent, as a one-off swap they have to agree to.
+     *
+     * The transition is applied to whatever the shared document holds *now*, not to the map this
+     * screen last collected: two parents negotiating a day are writing to one document, and a
+     * held snapshot would silently drop whatever the other one did in between.
+     *
+     * `lastModifiedAt` is deliberately not restamped — see
+     * [com.coparently.app.data.repository.CustodyModelRepository.applyDayOverrides].
+     *
+     * Failures are surfaced through [swapError] rather than swallowed: refusing a swap is a real
+     * outcome the parent has to see, and this is the one screen where a silent no-op would look
+     * exactly like success.
+     *
+     * @param date The day being offered.
+     * @param toParent The slot that would take it — `"mom"` or `"dad"`.
+     * @param note Optional free text; blank normalises to none.
+     */
+    fun offerDaySwap(date: LocalDate, toParent: String, note: String? = null) {
+        viewModelScope.launch {
+            val myUid = parents.value.me?.uid
+            if (myUid == null) {
+                _swapError.value = SwapError.NOT_READY
+                return@launch
+            }
+            val iso = date.toString()
+            custodyModelRepository.applyDayOverrides(iso) { current ->
+                DayOverrideTransition.offer(
+                    current = current,
+                    date = iso,
+                    toParent = toParent,
+                    byUid = myUid,
+                    atIso = LocalDateTime.now().toString(),
+                    note = note
+                )
+            }.onFailure { _swapError.value = SwapError.REFUSED }
+        }
+    }
+
+    /** Clears whatever [swapError] is showing, once the screen has shown it. */
+    fun clearSwapError() {
+        _swapError.value = null
     }
 
     /**

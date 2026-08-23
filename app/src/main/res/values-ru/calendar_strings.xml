@@ -44,6 +44,7 @@
         <item quantity="other">%1$d события</item>
     </plurals>
     <string name="calendar_day_click_label">Показать события за %1$s</string>
+    <string name="calendar_day_long_click_label">Предложить этот день второму родителю</string>
 
     <string name="calendar_time_slot_description">Время %1$s, %2$s. Нажмите, чтобы добавить событие.</string>
     <string name="calendar_event_chip_description">Событие %1$s. %2$s</string>

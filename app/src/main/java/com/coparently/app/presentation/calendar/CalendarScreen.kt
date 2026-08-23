@@ -57,6 +57,7 @@ import com.coparently.app.presentation.calendar.components.CalendarHeader
 import com.coparently.app.presentation.calendar.components.ChangeRequestBanner
 import com.coparently.app.presentation.calendar.components.CustodyChangedBanner
 import com.coparently.app.presentation.calendar.components.DayAgendaCard
+import com.coparently.app.presentation.calendar.components.DaySwapSheet
 import com.coparently.app.presentation.calendar.components.EventTypeFilterSheet
 import com.coparently.app.presentation.common.rememberParentNames
 import com.coparently.app.presentation.event.EventUiState
@@ -208,6 +209,7 @@ fun CalendarScreen(
     val custodySchedules by calendarViewModel.custodySchedules.collectAsState()
     val custodyModel by calendarViewModel.custodyModel.collectAsState()
     val dayOverrides by calendarViewModel.dayOverrides.collectAsState()
+    val swapError by calendarViewModel.swapError.collectAsState()
     val viewMode by calendarViewModel.viewMode.collectAsState()
     val selectedDate by calendarViewModel.selectedDate.collectAsState()
     val displayedMonth by calendarViewModel.displayedMonth.collectAsState()
@@ -267,6 +269,9 @@ fun CalendarScreen(
 
     // Event preview sheet: a tap opens the read-only preview, Edit goes to the editor
     var previewEventId by remember { mutableStateOf<String?>(null) }
+
+    // Day-swap sheet: a long-press on a day offers it to the co-parent.
+    var swapDate by remember { mutableStateOf<LocalDate?>(null) }
 
     // Unified custody lookup: an accepted one-off swap, then the active CustodyModel (Custody
     // Setup), then the legacy CustodyScheduleEntity rows. Views must use this — reading only the
@@ -579,6 +584,14 @@ fun CalendarScreen(
                                     getCustody = getCustody,
                                     parentNames = parentNames,
                                     pendingSwapDates = pendingSwapDates,
+                                    // Only a paired account may offer a swap: unpaired there is
+                                    // nobody to accept, and a swap that applies itself is just an
+                                    // edit the custody editor already does. Null here removes the
+                                    // long-press entirely rather than opening a sheet that would
+                                    // have to apologise.
+                                    onDayLongClick = parents.coParent?.let {
+                                        { date: LocalDate -> swapDate = date }
+                                    },
                                     // Selects the day so the agenda card below fills in.
                                     // Tapping used to jump straight into Day view, which was
                                     // the only way to read a cell's events at all — now the
@@ -688,6 +701,36 @@ fun CalendarScreen(
         } else {
             // Event disappeared (deleted/synced away) — close the sheet
             previewEventId = null
+        }
+    }
+
+    // Day-swap sheet
+    swapDate?.let { date ->
+        DaySwapSheet(
+            date = date,
+            currentCustody = getCustody(date),
+            parentNames = parentNames,
+            onOffer = { toParent, note ->
+                calendarViewModel.offerDaySwap(date, toParent, note)
+                swapDate = null
+            },
+            onDismiss = { swapDate = null }
+        )
+    }
+
+    // A refused swap has to be said out loud: the sheet closes optimistically, so without this a
+    // rejected write would look exactly like a successful one.
+    val swapRefusedMessage = stringResource(R.string.day_swap_error_refused)
+    val swapNotReadyMessage = stringResource(R.string.day_swap_error_not_ready)
+    LaunchedEffect(swapError) {
+        swapError?.let { error ->
+            snackbarHostState.showSnackbar(
+                when (error) {
+                    SwapError.NOT_READY -> swapNotReadyMessage
+                    SwapError.REFUSED -> swapRefusedMessage
+                }
+            )
+            calendarViewModel.clearSwapError()
         }
     }
 

@@ -62,6 +62,7 @@
     </plurals>
     <!-- %1$s = formatted date, e.g. "July 30" -->
     <string name="calendar_day_click_label">View events for %1$s</string>
+    <string name="calendar_day_long_click_label">Offer this day to your co-parent</string>
 
     <!-- Day/week grid accessibility -->
     <!-- %1$s = time like 08:00, %2$s = formatted date -->

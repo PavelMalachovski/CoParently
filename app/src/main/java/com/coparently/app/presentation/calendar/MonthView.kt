@@ -1,7 +1,8 @@
 package com.coparently.app.presentation.calendar
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -92,6 +93,9 @@ private const val HOLIDAY_TINT_ALPHA = 0.10f
  * @param pendingSwapDates Dates a one-off swap is being negotiated on. Deliberately separate from
  *   [getCustody]: a pending swap has changed nothing about whose day it is, and saying otherwise
  *   in the cell's colour would be a lie both parents act on.
+ * @param onDayLongClick Offers that day to the co-parent. Null when there is nobody to offer it
+ *   to — an unpaired account gets no long-press at all, because a swap that applies itself is
+ *   just an edit and the custody editor already does that.
  */
 @Suppress("LongParameterList") // screen-level composable: callbacks are its API surface
 @Composable
@@ -104,7 +108,8 @@ fun MonthView(
     onDayClick: (LocalDate) -> Unit,
     onMonthChange: (YearMonth) -> Unit,
     holidays: Map<LocalDate, Holiday> = emptyMap(),
-    pendingSwapDates: Set<LocalDate> = emptySet()
+    pendingSwapDates: Set<LocalDate> = emptySet(),
+    onDayLongClick: ((LocalDate) -> Unit)? = null
 ) {
     val firstDayOfWeek = remember { DayOfWeek.MONDAY }
 
@@ -188,7 +193,8 @@ fun MonthView(
                         parentNames = parentNames,
                         onDayClick = onDayClick,
                         holiday = holidays[day.date],
-                        isSwapPending = day.date in pendingSwapDates
+                        isSwapPending = day.date in pendingSwapDates,
+                        onDayLongClick = onDayLongClick
                     )
                 }
             )
@@ -259,6 +265,7 @@ private fun WeekdayHeader(firstDayOfWeek: DayOfWeek) {
 // A day cell renders many orthogonal visual states (today/selected/custody/
 // holiday/vacation/events) — the branching is inherent to the design.
 @Suppress("LongParameterList", "LongMethod", "CyclomaticComplexMethod")
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun DayCell(
     day: CalendarDay,
@@ -269,7 +276,8 @@ private fun DayCell(
     parentNames: ParentNames,
     onDayClick: (LocalDate) -> Unit,
     holiday: Holiday? = null,
-    isSwapPending: Boolean = false
+    isSwapPending: Boolean = false,
+    onDayLongClick: ((LocalDate) -> Unit)? = null
 ) {
     val dims = dimensions()
     val date = day.date
@@ -384,6 +392,7 @@ private fun DayCell(
         }
     }
 
+    val swapClickLabel = stringResource(R.string.calendar_day_long_click_label)
     val clickLabel = stringResource(
         R.string.calendar_day_click_label,
         date.format(DateTimeFormatter.ofPattern("MMMM d", Locale.getDefault()))
@@ -434,7 +443,17 @@ private fun DayCell(
                     drawPath(triangle, color)
                 }
             }
-            .clickable(onClick = { onDayClick(date) }, onClickLabel = clickLabel)
+            // Long-press offers the day to the co-parent. A day from a neighbouring month is
+            // excluded for the same reason it takes no overlay: it is shown for context, not to
+            // be acted on, and its dimmed number already says so.
+            .combinedClickable(
+                onClick = { onDayClick(date) },
+                onClickLabel = clickLabel,
+                onLongClick = onDayLongClick
+                    ?.takeIf { isCurrentMonth }
+                    ?.let { offer -> { offer(date) } },
+                onLongClickLabel = swapClickLabel
+            )
             .padding(dims.paddingSmall / 2),
         contentAlignment = Alignment.TopCenter
     ) {
