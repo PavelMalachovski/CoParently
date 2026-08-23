@@ -20,6 +20,8 @@ import java.time.LocalDate
  * @property phone The parent's own phone number, free text, or null until recorded
  * @property allergies Allergy strings for the parent, in the same shape as `ChildInfo.allergies`
  * @property medicalProfile The parent's own emergency medical profile
+ * @property onboardingCompletedAt ISO date-time at which this parent finished (or skipped
+ * through) first-run onboarding; null while the wizard has not been completed
  */
 data class User(
     val id: String,
@@ -35,6 +37,12 @@ data class User(
     val dateOfBirth: LocalDate? = null,
     val phone: String? = null,
     val allergies: List<String> = emptyList(),
-    val medicalProfile: MedicalProfile = MedicalProfile()
+    val medicalProfile: MedicalProfile = MedicalProfile(),
+    /**
+     * ISO date-time at which this parent finished (or skipped through) first-run onboarding.
+     * Null means the wizard has not been completed. A string rather than a converted type
+     * because that is how every date crosses this Firestore schema.
+     */
+    val onboardingCompletedAt: String? = null
 )
 

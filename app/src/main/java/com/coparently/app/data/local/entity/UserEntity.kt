@@ -21,6 +21,8 @@ import androidx.room.PrimaryKey
  * @property allergiesJson JSON array of allergy strings; `[]` when none
  * @property medicalProfileJson JSON object of [com.coparently.app.domain.model.MedicalProfile];
  * `{}` when never filled
+ * @property onboardingCompletedAt ISO date-time at which this user finished (or skipped
+ * through) first-run onboarding; null while the wizard has not been completed
  */
 @Entity(tableName = "users")
 data class UserEntity(
@@ -42,6 +44,12 @@ data class UserEntity(
     /** JSON array of allergy strings; `[]` when none. Mirrors `ChildInfoEntity.allergiesJson`. */
     val allergiesJson: String = "[]",
     /** JSON object of [com.coparently.app.domain.model.MedicalProfile]; `{}` when never filled. */
-    val medicalProfileJson: String = "{}"
+    val medicalProfileJson: String = "{}",
+    /**
+     * ISO date-time at which this user finished (or skipped through) first-run onboarding.
+     * Null means the wizard has not been completed. A string rather than a converted type
+     * because that is how every date crosses this Firestore schema.
+     */
+    val onboardingCompletedAt: String? = null
 )
 

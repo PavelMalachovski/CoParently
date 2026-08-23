@@ -334,6 +334,20 @@ object DatabaseMigrations {
     }
 
     /**
+     * Records when a user finished first-run onboarding.
+     *
+     * A single nullable column, so the migration cannot lose anything it does not touch. Null on
+     * every existing row is the correct starting state: `OnboardingState` treats an account that
+     * already has a profile name and a child as complete regardless, so no existing user is
+     * handed a questionnaire about data they already entered.
+     */
+    val MIGRATION_14_15 = object : Migration(14, 15) {
+        override fun migrate(database: SupportSQLiteDatabase) {
+            database.execSQL("ALTER TABLE users ADD COLUMN onboardingCompletedAt TEXT")
+        }
+    }
+
+    /**
      * List of all migrations in order.
      */
     val ALL_MIGRATIONS = arrayOf(
@@ -345,6 +359,7 @@ object DatabaseMigrations {
         MIGRATION_10_11,
         MIGRATION_11_12,
         MIGRATION_12_13,
-        MIGRATION_13_14
+        MIGRATION_13_14,
+        MIGRATION_14_15
     )
 }
