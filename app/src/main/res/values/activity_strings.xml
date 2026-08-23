@@ -18,4 +18,7 @@
     <string name="activity_day_swap_offered">Day swap offered: %1$s</string>
     <string name="activity_day_swap_accepted">Day swap agreed: %1$s</string>
     <string name="activity_day_swap_declined">Day swap turned down: %1$s</string>
+    <string name="activity_custody_proposed">New custody schedule proposed</string>
+    <string name="activity_custody_accepted">New custody schedule agreed</string>
+    <string name="activity_custody_declined">Custody proposal turned down</string>
 </resources>

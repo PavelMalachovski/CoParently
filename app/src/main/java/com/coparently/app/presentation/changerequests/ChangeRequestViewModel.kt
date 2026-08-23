@@ -3,6 +3,7 @@ package com.coparently.app.presentation.changerequests
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.coparently.app.data.repository.CustodyModelRepository
+import com.coparently.app.domain.custody.CustodyProposal
 import com.coparently.app.domain.custody.DayOverride
 import com.coparently.app.domain.custody.DayOverrideTransition
 import com.coparently.app.domain.custody.DaySwap
@@ -243,6 +244,42 @@ class ChangeRequestViewModel @Inject constructor(
                 transition(current, uid, now)
             }.onFailure { e ->
                 _errorMessage.value = e.message ?: "The swap could not be answered"
+            }
+        }
+    }
+
+    /**
+     * The custody-pattern proposal this parent must answer, or null when there is none.
+     *
+     * Only the co-parent's proposal surfaces here — a parent never decides their own (the
+     * transition and `firestore.rules` both refuse it). The proposer sees theirs as the
+     * calendar's preview overlay and a "waiting" banner instead.
+     */
+    val pendingProposal: StateFlow<CustodyProposal?> = combine(
+        custodyModelRepository.observeShared(),
+        _currentUserId
+    ) { shared, uid ->
+        shared?.proposal?.takeIf { uid.isNotEmpty() && it.proposedBy != uid }
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = null
+    )
+
+    /** Accepts the co-parent's pending custody proposal; it becomes the agreed pattern. */
+    fun acceptProposal() {
+        viewModelScope.launch {
+            custodyModelRepository.acceptProposal().onFailure { e ->
+                _errorMessage.value = e.message ?: "The proposal could not be accepted"
+            }
+        }
+    }
+
+    /** Declines the co-parent's pending custody proposal; the agreed pattern is untouched. */
+    fun declineProposal() {
+        viewModelScope.launch {
+            custodyModelRepository.declineProposal().onFailure { e ->
+                _errorMessage.value = e.message ?: "The proposal could not be declined"
             }
         }
     }

@@ -57,7 +57,10 @@ private const val BANNER_TINT_ALPHA = 0.14f
 fun ChangeRequestBanner(
     pendingCount: Int,
     onReview: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    // When set, replaces the pluralised "N requests" line — used for the custody-proposal
+    // banner, which names the proposer rather than counting rows.
+    message: String? = null
 ) {
     Row(
         modifier = modifier
@@ -76,7 +79,7 @@ fun ChangeRequestBanner(
             modifier = Modifier.size(18.dp)
         )
         Text(
-            text = pluralStringResource(
+            text = message ?: pluralStringResource(
                 R.plurals.calendar_change_requests_banner,
                 pendingCount,
                 pendingCount

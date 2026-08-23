@@ -501,4 +501,73 @@ describe('custody_models', () => {
             db.collection('custody_models')
                 .where('participants', 'array-contains', MOM).get());
       });
+
+  describe('custody-pattern proposals (item 7)', () => {
+    const proposal = (by) => ({
+      modelType: 'WEEK_ON_WEEK_OFF',
+      patternDays: 14,
+      momDayIndices: [7, 8, 9, 10, 11, 12, 13],
+      startDate: '2026-08-03',
+      repeatYearly: true,
+      proposedBy: by,
+      proposedAt: '2026-08-24T10:00:00',
+    });
+
+    it('lets a participant put a proposal without stamping lastModifiedBy', async () => {
+      await seed(env, {[PATH]: custodyDoc({})});
+      const db = env.authenticatedContext(DAD).firestore();
+      // A proposal-only write: the agreed pattern and lastModifiedBy are untouched.
+      await assertSucceeds(db.doc(PATH).update({proposal: proposal(DAD)}));
+    });
+
+    it('refuses a proposal write that also rewrites the agreed pattern', async () => {
+      await seed(env, {[PATH]: custodyDoc({})});
+      const db = env.authenticatedContext(DAD).firestore();
+      await assertFails(db.doc(PATH).update({
+        proposal: proposal(DAD),
+        momDayIndices: [7, 8, 9, 10, 11, 12, 13],
+      }));
+    });
+
+    it('lets the co-parent accept: a pattern write that stamps them as author', async () => {
+      await seed(env, {[PATH]: custodyDoc({proposal: proposal(DAD)})});
+      const db = env.authenticatedContext(MOM).firestore();
+      await assertSucceeds(db.doc(PATH).update({
+        momDayIndices: [7, 8, 9, 10, 11, 12, 13],
+        lastModifiedBy: MOM,
+        lastModifiedAt: '2026-08-24T11:00:00',
+        proposal: null,
+        lastDecision: {outcome: 'ACCEPTED', by: MOM, at: '2026-08-24T11:00:00',
+          proposalAt: '2026-08-24T10:00:00'},
+      }));
+    });
+
+    it('lets the co-parent decline: a proposal-only write clearing it', async () => {
+      await seed(env, {[PATH]: custodyDoc({proposal: proposal(DAD)})});
+      const db = env.authenticatedContext(MOM).firestore();
+      await assertSucceeds(db.doc(PATH).update({
+        proposal: null,
+        lastDecision: {outcome: 'DECLINED', by: MOM, at: '2026-08-24T11:00:00',
+          proposalAt: '2026-08-24T10:00:00'},
+      }));
+    });
+
+    it('refuses a stranger touching the proposal', async () => {
+      await seed(env, {[PATH]: custodyDoc({})});
+      const db = env.authenticatedContext(STRANGER).firestore();
+      await assertFails(db.doc(PATH).update({proposal: proposal(STRANGER)}));
+    });
+
+    it('refuses a pattern rewrite disguised under a proposal accept without stamping the author',
+        async () => {
+          await seed(env, {[PATH]: custodyDoc({proposal: proposal(DAD)})});
+          const db = env.authenticatedContext(MOM).firestore();
+          // Changing the model must stamp lastModifiedBy; leaving MOM's own... here the doc's
+          // author is MOM already, so stamping DAD (not the caller) must fail.
+          await assertFails(db.doc(PATH).update({
+            momDayIndices: [1, 2, 3],
+            lastModifiedBy: DAD,
+          }));
+        });
+  });
 });

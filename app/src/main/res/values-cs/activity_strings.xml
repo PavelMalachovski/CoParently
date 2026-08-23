@@ -15,4 +15,7 @@
     <string name="activity_day_swap_offered">Nabídnuta výměna dne: %1$s</string>
     <string name="activity_day_swap_accepted">Výměna dne domluvena: %1$s</string>
     <string name="activity_day_swap_declined">Výměna dne odmítnuta: %1$s</string>
+    <string name="activity_custody_proposed">Navržen nový rozvrh péče</string>
+    <string name="activity_custody_accepted">Nový rozvrh péče schválen</string>
+    <string name="activity_custody_declined">Návrh péče zamítnut</string>
 </resources>

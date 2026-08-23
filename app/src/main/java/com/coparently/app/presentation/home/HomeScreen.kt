@@ -138,6 +138,7 @@ fun HomeScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val parentNames = rememberParentNames(viewModel.parents.collectAsState().value)
+    val pendingProposal by changeRequestViewModel.pendingProposal.collectAsState()
 
     Scaffold(
         topBar = {
@@ -175,6 +176,7 @@ fun HomeScreen(
                 Dashboard(
                     state = state,
                     parentNames = parentNames,
+                    hasPendingProposal = pendingProposal != null,
                     contentPadding = padding,
                     onOpenEvent = onOpenEvent,
                     onOpenChangeRequests = onOpenChangeRequests,
@@ -187,8 +189,11 @@ fun HomeScreen(
                 AwaitingDialogs(
                     state = state,
                     parentNames = parentNames,
+                    pendingProposal = pendingProposal,
                     onAcceptSwap = changeRequestViewModel::acceptSwap,
                     onDeclineSwap = changeRequestViewModel::declineSwap,
+                    onAcceptProposal = changeRequestViewModel::acceptProposal,
+                    onDeclineProposal = changeRequestViewModel::declineProposal,
                     onOpenChangeRequests = onOpenChangeRequests
                 )
             }
@@ -210,13 +215,54 @@ fun HomeScreen(
 private fun AwaitingDialogs(
     state: HomeUiState.Dashboard,
     parentNames: ParentNames,
+    pendingProposal: com.coparently.app.domain.custody.CustodyProposal?,
     onAcceptSwap: (LocalDate) -> Unit,
     onDeclineSwap: (LocalDate) -> Unit,
+    onAcceptProposal: () -> Unit,
+    onDeclineProposal: () -> Unit,
     onOpenChangeRequests: () -> Unit
 ) {
     // rememberSaveable so a rotation mid-"Later" does not resurrect the dialog; a List because
     // a Set has no built-in saver.
     var dismissed by rememberSaveable { mutableStateOf(listOf<String>()) }
+
+    // A custody proposal is the largest ask and leads. Keyed on proposedAt so a fresh proposal
+    // (or a re-proposal) re-opens the dialog even after the last was put off.
+    if (pendingProposal != null) {
+        val key = "proposal_${pendingProposal.proposedAt}"
+        if (key !in dismissed) {
+            AlertDialog(
+                onDismissRequest = { dismissed = dismissed + key },
+                title = { Text(stringResource(R.string.custody_proposal_inbox_title)) },
+                text = {
+                    Text(
+                        stringResource(
+                            R.string.custody_proposal_inbox_body,
+                            parentNames.labelForUid(pendingProposal.proposedBy)
+                        )
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        dismissed = dismissed + key
+                        onAcceptProposal()
+                    }) { Text(stringResource(R.string.custody_proposal_accept)) }
+                },
+                dismissButton = {
+                    Row {
+                        TextButton(onClick = { dismissed = dismissed + key }) {
+                            Text(stringResource(R.string.home_dialog_later))
+                        }
+                        TextButton(onClick = {
+                            dismissed = dismissed + key
+                            onDeclineProposal()
+                        }) { Text(stringResource(R.string.custody_proposal_decline)) }
+                    }
+                }
+            )
+            return
+        }
+    }
 
     val swap = state.awaitingSwaps.firstOrNull { "swap_${it.date}" !in dismissed }
     if (swap != null) {
@@ -344,6 +390,7 @@ private fun PairingInvitation(
 private fun Dashboard(
     state: HomeUiState.Dashboard,
     parentNames: ParentNames,
+    hasPendingProposal: Boolean,
     contentPadding: PaddingValues,
     onOpenEvent: (String) -> Unit,
     onOpenChangeRequests: () -> Unit,
@@ -396,7 +443,8 @@ private fun Dashboard(
         // Items 4/13 (Aug 2026 walkthrough): whatever waits on this parent's answer — a day
         // swap, an event change, a pending event — must be visible on the main page, with one
         // tap into the inbox that answers it. Day swaps were previously reachable from nowhere.
-        val awaitingCount = state.awaitingSwaps.size + state.awaitingRequestCount
+        val awaitingCount = state.awaitingSwaps.size + state.awaitingRequestCount +
+            if (hasPendingProposal) 1 else 0
         if (awaitingCount > 0) {
             item {
                 SectionGroup {

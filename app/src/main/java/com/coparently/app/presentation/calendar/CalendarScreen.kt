@@ -421,6 +421,13 @@ fun CalendarScreen(
     }
     val pendingInboxCount = pendingChangeRequests + pendingSwapsAwaitingMe
 
+    // A custody-pattern proposal draws two different banners (item 7): the parent who must
+    // answer gets a Review into the inbox; the one who proposed it gets a passive "waiting".
+    // `pendingProposal` (CalendarViewModel) is either party's; `proposalAwaitingMe`
+    // (ChangeRequestViewModel) is only the co-parent's, so the difference tells them apart.
+    val proposalAwaitingMe by changeRequestViewModel.pendingProposal.collectAsState()
+    val proposerWaiting = pendingProposal != null && proposalAwaitingMe == null
+
     Scaffold(
         topBar = {
             CalendarHeader(
@@ -538,6 +545,37 @@ fun CalendarScreen(
                 // month, vacation or not, or it will reintroduce exactly this defect.
                 // `VacationBanner` itself is left in `CalendarBanners.kt`; the label helper
                 // that fed it is recoverable from this commit's parent.
+
+                // A custody proposal the co-parent must answer: a Review banner into the inbox.
+                proposalAwaitingMe?.let { proposal ->
+                    if (onChangeRequestsClick != null) {
+                        ChangeRequestBanner(
+                            pendingCount = 1,
+                            message = stringResource(
+                                R.string.custody_proposal_review,
+                                parentNames.labelForUid(proposal.proposedBy)
+                            ),
+                            onReview = onChangeRequestsClick,
+                            modifier = Modifier.padding(
+                                horizontal = dims.paddingMedium,
+                                vertical = dims.paddingSmall / 2
+                            )
+                        )
+                    }
+                }
+
+                // The proposer's own view: a passive note that the change is not live yet.
+                if (proposerWaiting) {
+                    Text(
+                        text = stringResource(R.string.custody_proposal_waiting),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(
+                            horizontal = dims.paddingMedium,
+                            vertical = dims.paddingSmall
+                        )
+                    )
+                }
 
                 // Change requests as a labelled banner rather than a badged glyph in the bar.
                 // The count folds in day swaps awaiting this parent — see pendingSwapsAwaitingMe.

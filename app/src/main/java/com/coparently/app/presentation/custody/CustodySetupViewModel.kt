@@ -139,34 +139,32 @@ class CustodySetupViewModel @Inject constructor(
 
         viewModelScope.launch {
             try {
-                when (state.selectedModelType) {
-                    CustodyModelType.WEEK_ON_WEEK_OFF -> {
-                        custodyModelRepository.createWeekOnWeekOff(
-                            startDate = state.startDate,
-                            momFirst = state.momFirst
-                        )
-                    }
-                    CustodyModelType.TWO_TWO_THREE -> {
-                        custodyModelRepository.createTwoTwoThree(
-                            startDate = state.startDate,
-                            momStartsFirst = state.momFirst
-                        )
-                    }
-                    CustodyModelType.THREE_FOUR_FOUR_THREE -> {
-                        custodyModelRepository.createThreeFourFourThree(
-                            startDate = state.startDate,
-                            momStartsFirst = state.momFirst
-                        )
-                    }
-                    CustodyModelType.CUSTOM -> {
-                        custodyModelRepository.createCustom(
-                            startDate = state.startDate,
-                            patternDays = state.customPatternDays,
-                            momDayIndices = state.customMomDays
-                        )
-                    }
+                val submission = when (state.selectedModelType) {
+                    CustodyModelType.WEEK_ON_WEEK_OFF -> custodyModelRepository.createWeekOnWeekOff(
+                        startDate = state.startDate,
+                        momFirst = state.momFirst
+                    )
+                    CustodyModelType.TWO_TWO_THREE -> custodyModelRepository.createTwoTwoThree(
+                        startDate = state.startDate,
+                        momStartsFirst = state.momFirst
+                    )
+                    CustodyModelType.THREE_FOUR_FOUR_THREE -> custodyModelRepository.createThreeFourFourThree(
+                        startDate = state.startDate,
+                        momStartsFirst = state.momFirst
+                    )
+                    CustodyModelType.CUSTOM -> custodyModelRepository.createCustom(
+                        startDate = state.startDate,
+                        patternDays = state.customPatternDays,
+                        momDayIndices = state.customMomDays
+                    )
                 }
-                _uiState.value = state.copy(isLoading = false, isSaved = true)
+                _uiState.value = state.copy(
+                    isLoading = false,
+                    isSaved = true,
+                    // Item 7: when paired with an agreed schedule the change is a proposal the
+                    // co-parent must accept — the screen says so instead of implying it applied.
+                    proposedForApproval = submission == PatternSubmission.PROPOSED
+                )
                 onSuccess()
             } catch (e: Exception) {
                 _uiState.value = state.copy(
@@ -196,6 +194,8 @@ data class CustodySetupUiState(
     val customMomDays: Set<Int> = emptySet(),
     val isLoading: Boolean = false,
     val isSaved: Boolean = false,
+    /** True when the save was sent to the co-parent as a proposal rather than applied. */
+    val proposedForApproval: Boolean = false,
     val error: String? = null
 ) {
     /**

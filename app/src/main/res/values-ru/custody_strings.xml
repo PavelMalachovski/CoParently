@@ -52,4 +52,10 @@
     <string name="custody_conflict_keep_local">Оставить график этого телефона</string>
     <string name="custody_conflict_use_shared">Использовать общий график</string>
     <string name="custody_conflict_save_failed">График не удалось сохранить. Попробуйте ещё раз.</string>
+    <string name="custody_proposal_inbox_title">Предложено новое расписание опеки</string>
+    <string name="custody_proposal_inbox_body">%1$s предлагает новое расписание опеки. Ваш календарь не изменится, пока вы не примете его.</string>
+    <string name="custody_proposal_accept">Принять</string>
+    <string name="custody_proposal_decline">Отклонить</string>
+    <string name="custody_proposal_waiting">Ожидание, пока второй родитель одобрит новое расписание</string>
+    <string name="custody_proposal_review">%1$s предлагает новое расписание опеки</string>
 </resources>

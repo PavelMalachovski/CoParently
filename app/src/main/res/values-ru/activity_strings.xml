@@ -15,4 +15,7 @@
     <string name="activity_day_swap_offered">Предложен обмен днями: %1$s</string>
     <string name="activity_day_swap_accepted">Обмен днями согласован: %1$s</string>
     <string name="activity_day_swap_declined">Обмен днями отклонён: %1$s</string>
+    <string name="activity_custody_proposed">Предложено новое расписание опеки</string>
+    <string name="activity_custody_accepted">Новое расписание опеки принято</string>
+    <string name="activity_custody_declined">Предложение по опеке отклонено</string>
 </resources>

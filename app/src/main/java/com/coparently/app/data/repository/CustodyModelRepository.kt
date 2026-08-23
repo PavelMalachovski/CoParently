@@ -10,6 +10,7 @@ import com.coparently.app.domain.activity.ActivityAnnouncer
 import com.coparently.app.domain.activity.ActivityEntityType
 import com.coparently.app.domain.activity.ActivityKind
 import com.coparently.app.domain.custody.CustodyKey
+import com.coparently.app.domain.custody.CustodyProposalTransition
 import com.coparently.app.domain.custody.CustodyWriteKind
 import com.coparently.app.domain.custody.DayOverride
 import com.coparently.app.domain.custody.DayOverrideStatus
@@ -57,6 +58,15 @@ import javax.inject.Singleton
  * pattern helpers, which are one-liners over [saveAndActivate] and belong beside it. Splitting
  * the class to satisfy the count would separate the write path from the patterns it writes.
  */
+/**
+ * Whether a submitted custody pattern took effect immediately or is waiting for the co-parent.
+ *
+ * [ACTIVATED] on an unpaired account or a pair's very first schedule (nobody to ask, nothing to
+ * protect); [PROPOSED] once a pair has an agreed pattern that a change must not overwrite without
+ * consent (owner decision, Aug 2026 walkthrough, item 7).
+ */
+enum class PatternSubmission { ACTIVATED, PROPOSED }
+
 @Singleton
 @Suppress("TooManyFunctions")
 class CustodyModelRepository(
@@ -234,6 +244,134 @@ class CustodyModelRepository(
     }
 
     /**
+     * Submits [model] the right way for the account's state (owner decision, Aug 2026
+     * walkthrough, item 7): a pattern change must not land on the co-parent's calendar until
+     * they agree to it.
+     *
+     * - **Paired, with a shared document already in place** → a *proposal*. The active pattern
+     *   stays in force on both phones; the co-parent gets an Accept/Decline. The proposer sees
+     *   their own proposal drawn as the calendar's preview overlay plus a "waiting" banner.
+     * - **Unpaired, or no shared document yet** → [saveAndActivate], because there is nobody to
+     *   ask and a schedule that waited forever for an approval that can never come is worse than
+     *   one that simply applies. The very first schedule of a pair also lands this way: there is
+     *   no agreed pattern to protect yet.
+     *
+     * @return whether the pattern was activated or merely proposed, so the UI can say which.
+     */
+    suspend fun submitPattern(model: CustodyModel): PatternSubmission {
+        val pair = currentPair()
+        val existing = pair?.let { firestoreCustodyDataSource.getCustody(it.documentId) }
+        if (pair == null || existing == null) {
+            saveAndActivate(model)
+            return PatternSubmission.ACTIVATED
+        }
+        val proposed = CustodyProposalTransition.propose(
+            current = existing,
+            model = model,
+            repeatYearly = model.toEntity().repeatYearly,
+            byUid = pair.myUid,
+            atIso = nowIso()
+        ).getOrElse { return PatternSubmission.ACTIVATED.also { saveAndActivate(model) } }
+
+        val written = guarded("propose", pair.documentId) {
+            firestoreCustodyDataSource.setCustody(pair.documentId, pair.participants, proposed)
+        }
+        if (written == null) {
+            // The proposal write was refused or failed. Fall back to a local-only save so the
+            // parent's work is not lost; the mirror settles the rest.
+            saveAndActivate(model)
+            return PatternSubmission.ACTIVATED
+        }
+        announceProposal(pair, ActivityKind.CUSTODY_PROPOSED)
+        notifyPartnerOfProposal(pair, "proposed")
+        return PatternSubmission.PROPOSED
+    }
+
+    /**
+     * Takes up the co-parent's pending proposal: it becomes the agreed pattern and is mirrored
+     * into Room so this device's calendar follows immediately, without waiting for the snapshot
+     * to round-trip.
+     */
+    suspend fun acceptProposal(): Result<Unit> = decideProposal { current, uid, now ->
+        CustodyProposalTransition.accept(current, uid, now)
+    }.onSuccess { announceDecision(ActivityKind.CUSTODY_ACCEPTED) }
+
+    /** Turns the co-parent's pending proposal down; the agreed pattern is untouched. */
+    suspend fun declineProposal(note: String? = null): Result<Unit> = decideProposal { current, uid, now ->
+        CustodyProposalTransition.decline(current, uid, now, note)
+    }.onSuccess { announceDecision(ActivityKind.CUSTODY_DECLINED) }
+
+    /** Withdraws this device's own pending proposal. Nothing is decided; the co-parent is told. */
+    suspend fun withdrawProposal(): Result<Unit> = decideProposal { current, uid, _ ->
+        CustodyProposalTransition.withdraw(current, uid)
+    }
+
+    /**
+     * Reads the shared document, applies [transform], writes it back, and — when the write moved
+     * the agreed pattern — mirrors the result into Room.
+     *
+     * The transform runs against whatever the document holds *now*, never a held snapshot: both
+     * parents write one document, and a stale snapshot would drop whatever the other just did.
+     */
+    private suspend fun decideProposal(
+        transform: (SharedCustody, String, String) -> Result<SharedCustody>
+    ): Result<Unit> {
+        val pair = currentPair()
+            ?: return Result.failure(IllegalStateException("No co-parent to agree with"))
+        val existing = firestoreCustodyDataSource.getCustody(pair.documentId)
+            ?: return Result.failure(IllegalStateException("The pair has no shared schedule yet"))
+        val next = transform(existing, pair.myUid, nowIso()).getOrElse { return Result.failure(it) }
+        val written = guarded("decide-proposal", pair.documentId) {
+            firestoreCustodyDataSource.setCustody(pair.documentId, pair.participants, next)
+        } ?: return Result.failure(IllegalStateException("The decision could not be written"))
+        mirrorIntoRoom(written)
+        return Result.success(Unit)
+    }
+
+    private suspend fun announceProposal(pair: CustodyPair, kind: ActivityKind) {
+        activityAnnouncer.announce(
+            announcement = ActivityAnnouncement(
+                kind = kind,
+                entityType = ActivityEntityType.CUSTODY_PROPOSAL,
+                entityId = pair.documentId,
+                title = pair.documentId,
+                whenIso = nowIso()
+            )
+        )
+    }
+
+    private suspend fun announceDecision(kind: ActivityKind) {
+        val pair = currentPair() ?: return
+        announceProposal(pair, kind)
+        notifyPartnerOfProposal(pair, if (kind == ActivityKind.CUSTODY_ACCEPTED) "accepted" else "declined")
+    }
+
+    /**
+     * Best-effort push to the parent who did not perform this proposal write — same mechanism
+     * and same hardcoded-English caveat as [notifyPartnerOfSwap].
+     */
+    private suspend fun notifyPartnerOfProposal(pair: CustodyPair, action: String) {
+        val partnerUid = pair.participants.firstOrNull { it != pair.myUid } ?: return
+        fcmService.queueNotificationForUser(
+            targetUserId = partnerUid,
+            notificationData = mapOf(
+                "type" to "custody_proposal_$action",
+                "title" to when (action) {
+                    "proposed" -> "Custody schedule proposed"
+                    "accepted" -> "Custody schedule agreed"
+                    else -> "Custody proposal turned down"
+                },
+                "body" to when (action) {
+                    "proposed" -> "Your co-parent proposes a new custody schedule"
+                    "accepted" -> "Your co-parent agreed to the new custody schedule"
+                    else -> "Your co-parent turned down the proposed schedule"
+                },
+                "timestamp" to System.currentTimeMillis().toString()
+            )
+        )
+    }
+
+    /**
      * Rewrites the active pattern in place: Room only, and without re-dating it.
      *
      * For a *re-expression* of an arrangement rather than a change to one — complementing a
@@ -293,37 +431,37 @@ class CustodyModelRepository(
      * @param startDate The anchor date for the pattern
      * @param momFirst If true, mom has the first week; if false, dad has the first week
      */
-    suspend fun createWeekOnWeekOff(startDate: LocalDate, momFirst: Boolean = true) {
+    suspend fun createWeekOnWeekOff(startDate: LocalDate, momFirst: Boolean = true): PatternSubmission {
         val model = CustodyModel.weekOnWeekOff(
             id = UUID.randomUUID().toString(),
             startDate = startDate,
             momFirst = momFirst
         )
-        saveAndActivate(model)
+        return submitPattern(model)
     }
 
     /**
      * Creates and saves a 2-2-3 custody model.
      */
-    suspend fun createTwoTwoThree(startDate: LocalDate, momStartsFirst: Boolean = true) {
+    suspend fun createTwoTwoThree(startDate: LocalDate, momStartsFirst: Boolean = true): PatternSubmission {
         val model = CustodyModel.twoTwoThree(
             id = UUID.randomUUID().toString(),
             startDate = startDate,
             momStartsFirst = momStartsFirst
         )
-        saveAndActivate(model)
+        return submitPattern(model)
     }
 
     /**
      * Creates and saves a 3-4-4-3 custody model.
      */
-    suspend fun createThreeFourFourThree(startDate: LocalDate, momStartsFirst: Boolean = true) {
+    suspend fun createThreeFourFourThree(startDate: LocalDate, momStartsFirst: Boolean = true): PatternSubmission {
         val model = CustodyModel.threeFourFourThree(
             id = UUID.randomUUID().toString(),
             startDate = startDate,
             momStartsFirst = momStartsFirst
         )
-        saveAndActivate(model)
+        return submitPattern(model)
     }
 
     /**
@@ -333,14 +471,14 @@ class CustodyModelRepository(
         startDate: LocalDate,
         patternDays: Int,
         momDayIndices: Set<Int>
-    ) {
+    ): PatternSubmission {
         val model = CustodyModel.custom(
             id = UUID.randomUUID().toString(),
             startDate = startDate,
             patternDays = patternDays,
             momDayIndices = momDayIndices
         )
-        saveAndActivate(model)
+        return submitPattern(model)
     }
 
     /**

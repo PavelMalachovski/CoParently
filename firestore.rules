@@ -135,6 +135,17 @@ service cloud.firestore {
                   .hasOnly(['dayOverrides', 'lastSwapDate', 'lastModifiedBy', 'lastModifiedKind']);
     }
 
+    // True when a write only puts, clears, or records the outcome of a custody *proposal* (item
+    // 7) — it never touches the agreed pattern, its dates, or `lastModifiedBy`. That is the whole
+    // safety property: a proposal write can never move anyone's calendar, so it is allowed
+    // without stamping `lastModifiedBy` (the transition deliberately leaves it, or
+    // `CustodyChangeAnnouncement` would read the pending pattern change as the proposer's own
+    // echo and swallow its banner). Accepting a proposal is a different write — it changes the
+    // model and stamps the accepter — and passes the normal pattern branch below, not this one.
+    function proposalWriteTouchesOnlyProposal(before, after) {
+      return after.diff(before).affectedKeys().hasOnly(['proposal', 'lastDecision']);
+    }
+
     // The canonical pair id for a 2-element participants list — the same sorted-join formula
     // as Kotlin's `ConversationKey.of(uidA, uidB)` and `CustodyKey.of(uidA, uidB)`
     // (`listOf(uidA, uidB).sorted().joinToString("__")`). Shared by two collections:
@@ -593,17 +604,30 @@ service cloud.firestore {
       //   `swapWriteTouchesOnlyTheSwap`. The banner is suppressed for that stamp, so without
       //   this a pattern rewrite could ride along on it and replace the co-parent's schedule
       //   in silence.
+      // Two shapes of update are allowed, and a participant of the pair must always be the
+      // caller:
+      //
+      // - a **proposal-only** write (put/withdraw/decline a proposal, or record its outcome),
+      //   which by `proposalWriteTouchesOnlyProposal` cannot move the agreed pattern and so does
+      //   not have to stamp `lastModifiedBy`; or
+      // - a **pattern or swap** write, which must stamp `lastModifiedBy` with the caller and obey
+      //   the day-override and swap-only constraints. Accepting a proposal is this shape.
       allow update: if isAuthenticated() &&
                       request.auth.uid in resource.data.participants &&
                       request.resource.data.participants == resource.data.participants &&
-                      request.resource.data.lastModifiedBy == request.auth.uid &&
-                      (request.resource.data.get('dayOverrides', {}) ==
-                         resource.data.get('dayOverrides', {}) ||
-                       validDayOverrideWrite(resource.data, request.resource.data)) &&
-                      (request.resource.data.get('lastModifiedKind', 'PATTERN') != 'SWAP' ||
-                       swapWriteTouchesOnlyTheSwap(resource.data, request.resource.data)) &&
                       (isPartnerOf(resource.data.participants[0]) ||
-                       isPartnerOf(resource.data.participants[1]));
+                       isPartnerOf(resource.data.participants[1])) &&
+                      (
+                        proposalWriteTouchesOnlyProposal(resource.data, request.resource.data) ||
+                        (
+                          request.resource.data.lastModifiedBy == request.auth.uid &&
+                          (request.resource.data.get('dayOverrides', {}) ==
+                             resource.data.get('dayOverrides', {}) ||
+                           validDayOverrideWrite(resource.data, request.resource.data)) &&
+                          (request.resource.data.get('lastModifiedKind', 'PATTERN') != 'SWAP' ||
+                           swapWriteTouchesOnlyTheSwap(resource.data, request.resource.data))
+                        )
+                      );
 
       allow delete: if isAuthenticated() &&
                       request.auth.uid in resource.data.participants;

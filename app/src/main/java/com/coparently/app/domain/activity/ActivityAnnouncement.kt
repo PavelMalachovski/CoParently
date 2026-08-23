@@ -92,7 +92,8 @@ enum class ActivityEntityType {
     EVENT,
     EXPENSE,
     CHANGE_REQUEST,
-    DAY_SWAP
+    DAY_SWAP,
+    CUSTODY_PROPOSAL
 }
 
 /**
@@ -116,5 +117,8 @@ enum class ActivityKind {
     EXPENSE_DELETED,
     DAY_SWAP_OFFERED,
     DAY_SWAP_ACCEPTED,
-    DAY_SWAP_DECLINED
+    DAY_SWAP_DECLINED,
+    CUSTODY_PROPOSED,
+    CUSTODY_ACCEPTED,
+    CUSTODY_DECLINED
 }
