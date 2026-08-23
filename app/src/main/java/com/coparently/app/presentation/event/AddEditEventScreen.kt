@@ -36,6 +36,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.PriorityHigh
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.Title
@@ -208,6 +209,7 @@ fun AddEditEventScreen(
     var showRecurrenceEndPicker by remember { mutableStateOf(false) }
     var reminderMinutes by remember { mutableStateOf<Int?>(null) }
     var isPrivate by remember { mutableStateOf(false) }
+    var isImportant by remember { mutableStateOf(false) }
     // Event photo: URL of an already-attached image, and a freshly picked local image
     // (not yet uploaded). Picking a new one supersedes the existing image on save.
     var existingImageUrl by remember { mutableStateOf<String?>(null) }
@@ -343,6 +345,7 @@ fun AddEditEventScreen(
                     recurrenceEndDate = it.recurrenceEndDate
                     reminderMinutes = it.reminderMinutes
                     isPrivate = it.isPrivate
+                    isImportant = it.isImportant
                     existingImageUrl = it.imageUrl
                 }
             }
@@ -390,6 +393,7 @@ fun AddEditEventScreen(
                 recurrenceEndDate = null
                 reminderMinutes = null
                 isPrivate = false
+                isImportant = false
                 viewModel.clearEventDraft()
             }
             draftRestored = false
@@ -485,6 +489,7 @@ fun AddEditEventScreen(
                     recurrenceEndDate = recurrenceEndDate,
                     reminderMinutes = reminderMinutes,
                     isPrivate = isPrivate,
+                    isImportant = isImportant,
                     imageUrl = finalImageUrl,
                     updatedAt = LocalDateTime.now()
                 )
@@ -1219,6 +1224,69 @@ fun AddEditEventScreen(
                             }
                         }
                     )
+                }
+            }
+
+            // Important Section. Deliberately a statement and not an obligation: the switch
+            // says the co-parent is expected, and nothing here blocks saving or chases them.
+            // The stronger reading — the co-parent must confirm attendance — is the event
+            // acceptance machinery pointed at a different question, and lives there.
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                )
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(dims.paddingMedium),
+                    verticalArrangement = Arrangement.spacedBy(dims.paddingSmall)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(dims.paddingSmall * 1.5f),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.PriorityHigh,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                            Column {
+                                Text(
+                                    text = stringResource(R.string.event_form_important_title),
+                                    style = MaterialTheme.typography.titleSmall
+                                )
+                                Text(
+                                    text = stringResource(R.string.event_form_important_description),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                        Switch(
+                            checked = isImportant,
+                            onCheckedChange = {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                isImportant = it
+                            }
+                        )
+                    }
+                    // Only once the switch is on: the helper says what the mark will mean, and
+                    // printing it while the flag is off would explain a state the event is not in.
+                    if (isImportant) {
+                        Text(
+                            text = stringResource(R.string.event_form_important_helper),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
 

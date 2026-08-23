@@ -34,6 +34,11 @@ import java.time.LocalDateTime
  * fact; see [com.coparently.app.domain.events.EventAcceptance].
  * @property acceptedBy Firebase UID of whoever answered, or null while unanswered
  * @property acceptedAt Timestamp of that answer, or null while unanswered
+ * @property isImportant Whether the co-parent is **expected** at this event. Set when the event
+ * is created and rendered as an exclamation mark beside the title. Deliberately a statement of
+ * expectation and not an obligation the app enforces: nothing blocks saving and nothing chases
+ * the other parent. Distinct from [acceptance], which asks the co-parent a question they must
+ * answer before the event counts at all — this one only says what the event means.
  */
 data class Event(
     val id: String,
@@ -60,6 +65,7 @@ data class Event(
     val imageUrl: String? = null,
     val acceptance: EventAcceptance = EventAcceptance.NOT_REQUIRED,
     val acceptedBy: String? = null,
-    val acceptedAt: LocalDateTime? = null
+    val acceptedAt: LocalDateTime? = null,
+    val isImportant: Boolean = false
 )
 

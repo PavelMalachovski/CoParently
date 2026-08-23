@@ -355,6 +355,40 @@ class EventRepositoryImplTest {
             assertEquals(EventAcceptance.NOT_REQUIRED, repository.getEventById("e1")?.acceptance)
         }
 
+    @Test
+    fun `the mappers round-trip the important flag through Room`() = runTest {
+        coEvery { eventDao.getEventById("e1") } returns baseEntity().copy(isImportant = true)
+
+        assertEquals(true, repository.getEventById("e1")?.isImportant)
+    }
+
+    @Test
+    fun `the important flag reaches the Firestore document`() = runTest {
+        // The flag lives at four map sites and missing one is silent — a field written by
+        // `toFirestoreMap` but absent from `SyncService`'s own maps is deleted on the next
+        // sync, which is exactly the defect package B1 shipped.
+        signIn(uid = "uidA", partnerId = "uidB")
+        val captured = slot<Map<String, Any?>>()
+        coEvery { firestoreEventDataSource.insertEvent(any(), capture(captured)) } returns Result.success(Unit)
+
+        repository.insertEvent(baseDomain().copy(isImportant = true))
+
+        assertEquals(true, captured.captured["isImportant"])
+    }
+
+    @Test
+    fun `an ordinary event is written unmarked, not omitted`() = runTest {
+        // Written as `false` rather than left out: a reader that treats an absent key as false
+        // and one that treats it as unknown would disagree, and only one of them is this app.
+        signIn(uid = "uidA", partnerId = "uidB")
+        val captured = slot<Map<String, Any?>>()
+        coEvery { firestoreEventDataSource.insertEvent(any(), capture(captured)) } returns Result.success(Unit)
+
+        repository.insertEvent(baseDomain())
+
+        assertEquals(false, captured.captured["isImportant"])
+    }
+
     private fun baseEntity() = EventEntity(
         id = "e1",
         title = "Soccer",

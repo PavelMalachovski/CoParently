@@ -322,7 +322,8 @@ class EventRepositoryImpl @Inject constructor(
             "imageUrl" to (imageUrl ?: ""),
             "acceptance" to acceptance.name,
             "acceptedBy" to (acceptedBy ?: ""),
-            "acceptedAt" to (acceptedAt?.format(dateFormatter) ?: "")
+            "acceptedAt" to (acceptedAt?.format(dateFormatter) ?: ""),
+            "isImportant" to isImportant
         )
     }
 
@@ -361,7 +362,8 @@ class EventRepositoryImpl @Inject constructor(
             acceptance = runCatching { EventAcceptance.valueOf(acceptance) }
                 .getOrDefault(EventAcceptance.NOT_REQUIRED),
             acceptedBy = acceptedBy,
-            acceptedAt = acceptedAt
+            acceptedAt = acceptedAt,
+            isImportant = isImportant
         )
     }
 
@@ -394,7 +396,8 @@ class EventRepositoryImpl @Inject constructor(
             imageUrl = imageUrl,
             acceptance = acceptance.name,
             acceptedBy = acceptedBy,
-            acceptedAt = acceptedAt
+            acceptedAt = acceptedAt,
+            isImportant = isImportant
         )
     }
 }

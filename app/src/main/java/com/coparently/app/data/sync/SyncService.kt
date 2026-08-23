@@ -132,7 +132,8 @@ class SyncService @Inject constructor(
                 "imageUrl" to entity.imageUrl,
                 "acceptance" to entity.acceptance,
                 "acceptedBy" to entity.acceptedBy,
-                "acceptedAt" to entity.acceptedAt?.format(formatter)
+                "acceptedAt" to entity.acceptedAt?.format(formatter),
+                "isImportant" to entity.isImportant
             )
 
             val result = firestoreEventDataSource.insertEvent(entity.id, eventData)
@@ -189,7 +190,8 @@ class SyncService @Inject constructor(
                                 "imageUrl" to localEntity.imageUrl,
                                 "acceptance" to localEntity.acceptance,
                                 "acceptedBy" to localEntity.acceptedBy,
-                                "acceptedAt" to localEntity.acceptedAt?.format(formatter)
+                                "acceptedAt" to localEntity.acceptedAt?.format(formatter),
+                                "isImportant" to localEntity.isImportant
                             )
                             firestoreEventDataSource.updateEvent(localEntity.id, localData)
                             eventDao.markAsSynced(localEntity.id)
@@ -588,7 +590,11 @@ class SyncService @Inject constructor(
             acceptance = (this["acceptance"] as? String)?.ifBlank { null } ?: "NOT_REQUIRED",
             acceptedBy = (this["acceptedBy"] as? String)?.ifBlank { null },
             acceptedAt = (this["acceptedAt"] as? String)?.ifBlank { null }
-                ?.let { LocalDateTime.parse(it, formatter) }
+                ?.let { LocalDateTime.parse(it, formatter) },
+            // Absent reads as false: a document written before this field existed carries no
+            // such expectation, and inventing one would put an exclamation mark on somebody
+            // else's ordinary event.
+            isImportant = this["isImportant"] as? Boolean ?: false
         )
     }
 

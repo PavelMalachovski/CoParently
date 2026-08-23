@@ -65,6 +65,10 @@
     <string name="event_reminder_1_hour">1 година</string>
     <string name="event_reminder_2_hours">2 години</string>
     <string name="event_reminder_1_day">1 день</string>
+    <string name="event_form_important_title">Важлива подія</string>
+    <string name="event_form_important_description">Позначте, якщо очікується інший з батьків</string>
+    <string name="event_form_important_helper">Очікується інший з батьків. Це повідомляє про це — але не запитує його.</string>
+    <string name="event_important_mark_description">Важливо: очікується інший з батьків</string>
     <string name="event_form_private_title">Приватна подія</string>
     <string name="event_form_private_description">Цю подію бачите лише ви</string>
     <string name="event_form_photo">Фото події</string>

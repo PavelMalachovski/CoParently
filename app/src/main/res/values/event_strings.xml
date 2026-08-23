@@ -75,6 +75,10 @@
     <string name="event_reminder_1_hour">1 hour</string>
     <string name="event_reminder_2_hours">2 hours</string>
     <string name="event_reminder_1_day">1 day</string>
+    <string name="event_form_important_title">Important event</string>
+    <string name="event_form_important_description">Mark this if the co-parent is expected</string>
+    <string name="event_form_important_helper">The co-parent is expected. This says so — it does not ask them.</string>
+    <string name="event_important_mark_description">Important: the co-parent is expected</string>
     <string name="event_form_private_title">Private event</string>
     <string name="event_form_private_description">Only you can see this event</string>
     <string name="event_form_photo">Event photo</string>

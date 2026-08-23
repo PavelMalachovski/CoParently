@@ -65,6 +65,10 @@
     <string name="event_reminder_1_hour">1 час</string>
     <string name="event_reminder_2_hours">2 часа</string>
     <string name="event_reminder_1_day">1 день</string>
+    <string name="event_form_important_title">Важное событие</string>
+    <string name="event_form_important_description">Отметьте, если ожидается второй родитель</string>
+    <string name="event_form_important_helper">Ожидается второй родитель. Это сообщает об этом — но не спрашивает его.</string>
+    <string name="event_important_mark_description">Важно: ожидается второй родитель</string>
     <string name="event_form_private_title">Личное событие</string>
     <string name="event_form_private_description">Это событие видите только вы</string>
     <string name="event_form_photo">Фото события</string>

@@ -65,6 +65,10 @@
     <string name="event_reminder_1_hour">1 hodina</string>
     <string name="event_reminder_2_hours">2 hodiny</string>
     <string name="event_reminder_1_day">1 den</string>
+    <string name="event_form_important_title">Důležitá událost</string>
+    <string name="event_form_important_description">Označte, pokud se očekává druhý rodič</string>
+    <string name="event_form_important_helper">Očekává se druhý rodič. Toto to říká — nežádá je to.</string>
+    <string name="event_important_mark_description">Důležité: očekává se druhý rodič</string>
     <string name="event_form_private_title">Soukromá událost</string>
     <string name="event_form_private_description">Tuto událost vidíte jen vy</string>
     <string name="event_form_photo">Fotka události</string>

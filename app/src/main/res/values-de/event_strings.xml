@@ -65,6 +65,10 @@
     <string name="event_reminder_1_hour">1 Stunde</string>
     <string name="event_reminder_2_hours">2 Stunden</string>
     <string name="event_reminder_1_day">1 Tag</string>
+    <string name="event_form_important_title">Wichtiger Termin</string>
+    <string name="event_form_important_description">Markieren Sie das, wenn der andere Elternteil erwartet wird</string>
+    <string name="event_form_important_helper">Der andere Elternteil wird erwartet. Das sagt es — es fragt ihn nicht.</string>
+    <string name="event_important_mark_description">Wichtig: der andere Elternteil wird erwartet</string>
     <string name="event_form_private_title">Privater Termin</string>
     <string name="event_form_private_description">Nur du kannst diesen Termin sehen</string>
     <string name="event_form_photo">Terminfoto</string>
