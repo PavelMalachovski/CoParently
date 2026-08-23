@@ -48,4 +48,11 @@
     <string name="home_activity_change_requested">Запрошено изменение: %1$s</string>
     <string name="home_activity_review">Посмотреть</string>
 
+    <string name="home_awaiting_title">Ожидают вашего ответа</string>
+    <string name="home_dialog_swap_title">Обмен днями</string>
+    <string name="home_dialog_swap_message">%1$s предлагает изменить, у кого будет ребёнок %2$s.</string>
+    <string name="home_dialog_requests_title">Запросы на изменение</string>
+    <string name="home_dialog_requests_message">Второй родитель ждёт вашего ответа на запросы.</string>
+    <string name="home_dialog_later">Позже</string>
+    <string name="home_dialog_review">Посмотреть</string>
 </resources>

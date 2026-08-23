@@ -649,6 +649,11 @@ fun NavGraph(
                     },
                     onOpenChangeRequest = { eventId ->
                         navController.navigate(Screen.ChangeRequests.createRoute(eventId))
+                    },
+                    // A day-swap chat card: the inbox with nothing highlighted — its
+                    // entity is a date the event-id argument would misread.
+                    onOpenInbox = {
+                        navController.navigate(Screen.ChangeRequests.createRoute())
                     }
                 )
             }
@@ -683,6 +688,11 @@ fun NavGraph(
                     },
                     onOpenChangeRequest = { eventId ->
                         navController.navigate(Screen.ChangeRequests.createRoute(eventId))
+                    },
+                    // A day-swap chat card: the inbox with nothing highlighted — its
+                    // entity is a date the event-id argument would misread.
+                    onOpenInbox = {
+                        navController.navigate(Screen.ChangeRequests.createRoute())
                     }
                 )
             }

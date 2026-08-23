@@ -3,6 +3,7 @@ package com.coparently.app.data.repository
 import android.util.Log
 import com.coparently.app.data.local.dao.CustodyModelDao
 import com.coparently.app.data.local.entity.CustodyModelEntity
+import com.coparently.app.data.remote.firebase.FcmService
 import com.coparently.app.data.remote.firebase.FirestoreCustodyDataSource
 import com.coparently.app.domain.activity.ActivityAnnouncement
 import com.coparently.app.domain.activity.ActivityAnnouncer
@@ -63,6 +64,7 @@ class CustodyModelRepository(
     private val userRepository: UserRepository,
     private val firestoreCustodyDataSource: FirestoreCustodyDataSource,
     private val activityAnnouncer: ActivityAnnouncer,
+    private val fcmService: FcmService,
     private val scope: CoroutineScope
 ) {
     /**
@@ -81,12 +83,14 @@ class CustodyModelRepository(
         custodyModelDao: CustodyModelDao,
         userRepository: UserRepository,
         firestoreCustodyDataSource: FirestoreCustodyDataSource,
-        activityAnnouncer: ActivityAnnouncer
+        activityAnnouncer: ActivityAnnouncer,
+        fcmService: FcmService
     ) : this(
         custodyModelDao,
         userRepository,
         firestoreCustodyDataSource,
         activityAnnouncer,
+        fcmService,
         defaultScope()
     )
 
@@ -575,8 +579,44 @@ class CustodyModelRepository(
                     whenIso = date
                 )
             )
+            notifyPartnerOfSwap(pair, date, entry.status)
         }
         return Result.success(next)
+    }
+
+    /**
+     * A best-effort push to the parent who did **not** perform this write, mirroring
+     * `ChangeRequestRepositoryImpl.notifyCounterparty`: the owner's walkthrough asked for a
+     * pop-up on the other phone (items 4/13), and the Cloud Function behind `notification_queue`
+     * already fans these out. Delivery is a nicety — the document write above is the record —
+     * and payload text is hardcoded English like every other service-layer payload (a tracked
+     * follow-up of the July 2026 localization pass).
+     */
+    private suspend fun notifyPartnerOfSwap(pair: CustodyPair, date: String, status: DayOverrideStatus) {
+        val partnerUid = pair.participants.firstOrNull { it != pair.myUid } ?: return
+        val action = when (status) {
+            DayOverrideStatus.PENDING -> "offered"
+            DayOverrideStatus.ACCEPTED -> "accepted"
+            DayOverrideStatus.DECLINED -> "declined"
+        }
+        fcmService.queueNotificationForUser(
+            targetUserId = partnerUid,
+            notificationData = mapOf(
+                "type" to "day_swap_$action",
+                "date" to date,
+                "title" to when (status) {
+                    DayOverrideStatus.PENDING -> "Day swap proposed"
+                    DayOverrideStatus.ACCEPTED -> "Day swap agreed"
+                    DayOverrideStatus.DECLINED -> "Day swap turned down"
+                },
+                "body" to when (status) {
+                    DayOverrideStatus.PENDING -> "Your co-parent proposes swapping $date"
+                    DayOverrideStatus.ACCEPTED -> "Your co-parent agreed to swap $date"
+                    DayOverrideStatus.DECLINED -> "Your co-parent turned down swapping $date"
+                },
+                "timestamp" to System.currentTimeMillis().toString()
+            )
+        )
     }
 
     /**

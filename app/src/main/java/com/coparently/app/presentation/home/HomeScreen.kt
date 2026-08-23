@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material.icons.filled.PriorityHigh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SwapHoriz
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
@@ -44,10 +45,14 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -67,6 +72,7 @@ import com.coparently.app.domain.custody.HandoverInfo
 import com.coparently.app.domain.expenses.CurrencyBalance
 import com.coparently.app.domain.home.WeekEntry
 import com.coparently.app.presentation.calendar.components.DayAgendaCard
+import com.coparently.app.presentation.changerequests.ChangeRequestViewModel
 import com.coparently.app.presentation.common.ParentNames
 import com.coparently.app.presentation.common.PillChip
 import com.coparently.app.presentation.common.SectionGroup
@@ -76,6 +82,7 @@ import com.coparently.app.presentation.theme.ParentColors
 import java.text.NumberFormat
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
 import java.util.Currency
 import java.util.Locale
 import kotlin.math.abs
@@ -126,7 +133,8 @@ fun HomeScreen(
     onNavigateToPairing: () -> Unit,
     onOpenExpenses: () -> Unit,
     onOpenChat: () -> Unit,
-    viewModel: HomeViewModel = hiltViewModel()
+    viewModel: HomeViewModel = hiltViewModel(),
+    changeRequestViewModel: ChangeRequestViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val parentNames = rememberParentNames(viewModel.parents.collectAsState().value)
@@ -163,21 +171,119 @@ fun HomeScreen(
                     .padding(padding)
             )
 
-            is HomeUiState.Dashboard -> Dashboard(
-                state = state,
-                parentNames = parentNames,
-                contentPadding = padding,
-                onOpenEvent = onOpenEvent,
-                onOpenChangeRequests = onOpenChangeRequests,
-                onOpenContacts = onOpenContacts,
-                onOpenChildInfo = onOpenChildInfo,
-                onOpenPets = onOpenPets,
-                onOpenExpenses = onOpenExpenses,
-                onOpenChat = onOpenChat
-            )
+            is HomeUiState.Dashboard -> {
+                Dashboard(
+                    state = state,
+                    parentNames = parentNames,
+                    contentPadding = padding,
+                    onOpenEvent = onOpenEvent,
+                    onOpenChangeRequests = onOpenChangeRequests,
+                    onOpenContacts = onOpenContacts,
+                    onOpenChildInfo = onOpenChildInfo,
+                    onOpenPets = onOpenPets,
+                    onOpenExpenses = onOpenExpenses,
+                    onOpenChat = onOpenChat
+                )
+                AwaitingDialogs(
+                    state = state,
+                    parentNames = parentNames,
+                    onAcceptSwap = changeRequestViewModel::acceptSwap,
+                    onDeclineSwap = changeRequestViewModel::declineSwap,
+                    onOpenChangeRequests = onOpenChangeRequests
+                )
+            }
         }
     }
 }
+
+/**
+ * The pop-up ask the owner walkthrough called for (items 4/13): what waits on this parent's
+ * answer confronts them on open, instead of hiding behind a row they may never tap.
+ *
+ * One dialog at a time, day swaps first — a swap carries enough context to answer right here
+ * (who, which day), so it gets real Accept/Decline buttons; event change requests carry times
+ * and notes, so their dialog routes to the inbox that can show them. "Later" (or tapping
+ * outside) puts the ask away for this screen instance only — it returns on the next visit,
+ * which is the level of insistence a request that blocks the other parent deserves.
+ */
+@Composable
+private fun AwaitingDialogs(
+    state: HomeUiState.Dashboard,
+    parentNames: ParentNames,
+    onAcceptSwap: (LocalDate) -> Unit,
+    onDeclineSwap: (LocalDate) -> Unit,
+    onOpenChangeRequests: () -> Unit
+) {
+    // rememberSaveable so a rotation mid-"Later" does not resurrect the dialog; a List because
+    // a Set has no built-in saver.
+    var dismissed by rememberSaveable { mutableStateOf(listOf<String>()) }
+
+    val swap = state.awaitingSwaps.firstOrNull { "swap_${it.date}" !in dismissed }
+    if (swap != null) {
+        val key = "swap_${swap.date}"
+        AlertDialog(
+            onDismissRequest = { dismissed = dismissed + key },
+            title = { Text(stringResource(R.string.home_dialog_swap_title)) },
+            text = {
+                Text(
+                    stringResource(
+                        R.string.home_dialog_swap_message,
+                        parentNames.labelForUid(swap.override.requestedBy),
+                        swap.date.format(DateTimeFormatter.ofLocalizedDate(FormatStyle.FULL))
+                    )
+                )
+            },
+            confirmButton = {
+                // Dismissed on tap as well: the answer's round trip through Firestore takes a
+                // moment, and the dialog must not sit there inviting a second tap meanwhile.
+                TextButton(onClick = {
+                    dismissed = dismissed + key
+                    onAcceptSwap(swap.date)
+                }) {
+                    Text(stringResource(R.string.day_swap_accept))
+                }
+            },
+            dismissButton = {
+                Row {
+                    TextButton(onClick = { dismissed = dismissed + key }) {
+                        Text(stringResource(R.string.home_dialog_later))
+                    }
+                    TextButton(onClick = {
+                        dismissed = dismissed + key
+                        onDeclineSwap(swap.date)
+                    }) {
+                        Text(stringResource(R.string.day_swap_decline))
+                    }
+                }
+            }
+        )
+        return
+    }
+
+    if (state.awaitingRequestCount > 0 && REQUESTS_DIALOG_KEY !in dismissed) {
+        AlertDialog(
+            onDismissRequest = { dismissed = dismissed + REQUESTS_DIALOG_KEY },
+            title = { Text(stringResource(R.string.home_dialog_requests_title)) },
+            text = { Text(stringResource(R.string.home_dialog_requests_message)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    dismissed = dismissed + REQUESTS_DIALOG_KEY
+                    onOpenChangeRequests()
+                }) {
+                    Text(stringResource(R.string.home_dialog_review))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { dismissed = dismissed + REQUESTS_DIALOG_KEY }) {
+                    Text(stringResource(R.string.home_dialog_later))
+                }
+            }
+        )
+    }
+}
+
+/** The one requests-summary dialog's dismissal key — swaps key on their date instead. */
+private const val REQUESTS_DIALOG_KEY = "requests"
 
 /**
  * The whole unpaired page: a short explanation and one button.
@@ -284,6 +390,30 @@ private fun Dashboard(
                     onClick = onOpenPets,
                     trailing = { HomeChevron() }
                 )
+            }
+        }
+
+        // Items 4/13 (Aug 2026 walkthrough): whatever waits on this parent's answer — a day
+        // swap, an event change, a pending event — must be visible on the main page, with one
+        // tap into the inbox that answers it. Day swaps were previously reachable from nowhere.
+        val awaitingCount = state.awaitingSwaps.size + state.awaitingRequestCount
+        if (awaitingCount > 0) {
+            item {
+                SectionGroup {
+                    SectionRow(
+                        title = stringResource(R.string.home_awaiting_title),
+                        icon = Icons.Default.SwapHoriz,
+                        onClick = onOpenChangeRequests,
+                        trailing = {
+                            Text(
+                                text = awaitingCount.toString(),
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    )
+                }
             }
         }
 

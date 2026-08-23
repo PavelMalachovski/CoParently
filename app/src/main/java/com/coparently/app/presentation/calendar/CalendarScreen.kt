@@ -50,6 +50,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.coparently.app.R
 import com.coparently.app.domain.custody.CustodyResolver
+import com.coparently.app.domain.custody.DaySwapInbox
 import com.coparently.app.domain.holidays.CzechHolidays
 import com.coparently.app.domain.holidays.Holiday
 import com.coparently.app.domain.model.Event
@@ -406,6 +407,20 @@ fun CalendarScreen(
 
     val pendingChangeRequests by changeRequestViewModel.pendingIncomingCount.collectAsState()
 
+    // Day swaps live on the custody document, not in `change_requests`, so the banner count
+    // must add them explicitly — an incoming swap used to raise no banner at all, leaving the
+    // co-parent no visible route to the inbox that answers it.
+    val inboxUserId by changeRequestViewModel.currentUserId.collectAsState()
+    val pendingSwapsAwaitingMe = remember(dayOverrides, inboxUserId) {
+        if (inboxUserId.isEmpty()) {
+            0
+        } else {
+            DaySwapInbox.visible(dayOverrides, LocalDate.now())
+                .count { DaySwapInbox.awaitsAnswerFrom(it, inboxUserId) }
+        }
+    }
+    val pendingInboxCount = pendingChangeRequests + pendingSwapsAwaitingMe
+
     Scaffold(
         topBar = {
             CalendarHeader(
@@ -525,9 +540,10 @@ fun CalendarScreen(
                 // that fed it is recoverable from this commit's parent.
 
                 // Change requests as a labelled banner rather than a badged glyph in the bar.
-                if (pendingChangeRequests > 0 && onChangeRequestsClick != null) {
+                // The count folds in day swaps awaiting this parent — see pendingSwapsAwaitingMe.
+                if (pendingInboxCount > 0 && onChangeRequestsClick != null) {
                     ChangeRequestBanner(
-                        pendingCount = pendingChangeRequests,
+                        pendingCount = pendingInboxCount,
                         onReview = onChangeRequestsClick,
                         modifier = Modifier.padding(
                             horizontal = dims.paddingMedium,

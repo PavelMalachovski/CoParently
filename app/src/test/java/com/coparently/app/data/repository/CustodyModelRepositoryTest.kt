@@ -77,6 +77,7 @@ class CustodyModelRepositoryTest {
             userRepository,
             firestoreCustodyDataSource,
             mockk(relaxed = true),
+            mockk(relaxed = true),
             CoroutineScope(dispatcher)
         )
 
