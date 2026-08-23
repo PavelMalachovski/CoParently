@@ -161,6 +161,30 @@ Plus: JVM tests for the expiry predicate and the sweep's selection; a functions 
 
 Device, two phones and a third account: invite a guest from A, accept on the guest's phone, confirm they see the child and nothing else, confirm the co-parent B sees the guest listed, revoke from A, and confirm access is gone on the next read.
 
+### What was actually run (branch `claude/package-g2-guest-access`)
+
+Every emulator case above exists and passes. **263 rules cases**, of which 26 are G2's: the six
+that prove audience membership no longer implies write, the eleven for the guest read and who may
+let a guest in, and the nine for the `kind` shape on `invitations`. Two of the eleven failed before
+the expiry gate was added to the read rule, which is the evidence that the gate does something.
+
+Beyond the list: **103 Cloud Functions cases** (32 new) with `eslint` clean — the guest-accept
+callable proving it writes no `partnerId` and no slot, in both directions, and the sweep's
+selection including the boundary instant and the fail-closed reading of a missing expiry. And
+**321 pure-Kotlin cases** (23 new) for the expiry predicate, the wire format, the deep-link host
+and the offered durations.
+
+**The device run was not performed.** This environment has no Android SDK and no route to Google's
+Maven host, so nothing Compose- or Hilt-shaped in G2 has been compiled, let alone installed on
+three accounts. `firebase deploy` has also **not** been run: the rules and both new functions are
+written and tested but not live, which means the Task 5 fix to the `child_info` update rule is not
+live either. Both are listed as outstanding in the ledger.
+
+One thing the emulator run added to this list rather than confirming from it: a **co-parent**
+redeeming a guest code. It passed every check, put a parent in `guests`, and would have had the
+sweep remove that parent from their own child's audience a month later. The callable now refuses
+it (`already-entitled`). Worth re-checking on the device run.
+
 ## 8. Deliberately not in G
 
 - **A guest seeing the calendar.** Item 15 says access to information about the child. A guest who can see the custody schedule can see both parents' movements, which is a different and larger consent.
