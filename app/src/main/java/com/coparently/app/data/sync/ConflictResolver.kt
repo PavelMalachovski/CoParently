@@ -156,6 +156,10 @@ class ConflictResolver @Inject constructor() {
         // anywhere. It is the eighth place this field has to be carried, and the only one that
         // is not a map.
         if (!childInfo.medicalPhotosJson.isNullOrBlank() && childInfo.medicalPhotosJson != "[]") count++
+        // Guests count for the same reason photographs do, and it matters more: a version
+        // holding a grant and one holding none must not score equal, or a grandparent's access
+        // is revoked by a conflict nobody sees rather than by a parent deciding to revoke it.
+        if (!childInfo.guestsJson.isNullOrBlank() && childInfo.guestsJson != "{}") count++
         return count
     }
 }

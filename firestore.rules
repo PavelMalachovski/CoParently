@@ -232,9 +232,39 @@ service cloud.firestore {
 
     // ---- Child info ----------------------------------------------------
     // Shared between a parent pair via the sharedWith list.
+    // True when `guests` names the caller and their grant has run out — or carries no usable
+    // expiry at all.
+    //
+    // **Fail closed, and read `GuestGrantPolicy` before changing this.** That file is the
+    // statement all three implementations of this question must agree with: the app, this rule,
+    // and `sweepExpiredGuests`. The comparison is a strict `<` against `expiresAtMillis`, so a
+    // grant expiring at noon is not active at noon in any of the three.
+    //
+    // Epoch millis rather than the ISO strings the rest of this schema uses, and that is not a
+    // stylistic slip: Rules cannot parse a string into a timestamp, so an ISO expiry could not be
+    // compared here at all and this rule could only ever check that a guest *is* a guest.
+    //
+    // A grant with no `expiresAtMillis`, or a non-positive one, is expired. `get(…, 0)` is what
+    // makes an absent field a value rather than an evaluation error — the hazard that has already
+    // bitten this file twice.
+    function guestGrantExpired(data) {
+      return data.get('guests', {}).keys().hasAny([request.auth.uid]) &&
+             (data.guests[request.auth.uid].get('expiresAtMillis', 0) <= 0 ||
+              data.guests[request.auth.uid].get('expiresAtMillis', 0) <= request.time.toMillis());
+    }
+
     match /child_info/{childInfoId} {
+      // A guest reads through `sharedWith` like anybody else — that is why they are put in it —
+      // but only while their grant stands. A parent is never in `guests`, so this costs them
+      // nothing.
+      //
+      // The rule is the weaker half of the expiry. It stops the read, but the uid stays in
+      // `sharedWith`, so the record keeps coming back from the audience query and the guest
+      // keeps appearing in the audience. `sweepExpiredGuests` is what actually removes them;
+      // this is what holds until it runs.
       allow read: if isAuthenticated() &&
-                    request.auth.uid in resource.data.sharedWith;
+                    request.auth.uid in resource.data.sharedWith &&
+                    !guestGrantExpired(resource.data);
 
       allow create: if isAuthenticated() &&
                       request.resource.data.createdByFirebaseUid == request.auth.uid &&
@@ -242,8 +272,21 @@ service cloud.firestore {
                       request.resource.data.keys().hasAll(['childName', 'createdByFirebaseUid', 'sharedWith']) &&
                       isValidLength(request.resource.data.childName, 1, 100);
 
+      // Being in the audience is not permission to write. `sharedWith` is what makes the
+      // document *readable*, and package G2 puts a guest — a grandparent, for a weekend — into
+      // it for exactly that reason. Under the old rule, which asked only for membership, that
+      // would have made them an editor of a child's medical record: notes, allergies, the
+      // medical profile and the photographs G1 added. A writer must be the creator or the
+      // creator's partner.
+      //
+      // Membership is still required on top, and deliberately: it is what keeps a document
+      // whose `sharedWith` has been stripped un-updatable rather than quietly writable by its
+      // creator again. Part 3 of `child-info.test.js` pins that, and it is the state that once
+      // could only be escaped by deleting the document.
       allow update: if isAuthenticated() &&
                       request.auth.uid in resource.data.sharedWith &&
+                      (resource.data.createdByFirebaseUid == request.auth.uid ||
+                       isPartnerOf(resource.data.createdByFirebaseUid)) &&
                       request.resource.data.createdByFirebaseUid == resource.data.createdByFirebaseUid;
 
       allow delete: if isAuthenticated() &&
@@ -324,6 +367,30 @@ service cloud.firestore {
     // link. Redemption goes through the acceptPairingInvitation callable —
     // the Admin SDK there is what looks a code up, so clients never need to
     // read invitations addressed to somebody else.
+    // Shape check for the `kind` field that tells a guest invitation from a co-parent one.
+    //
+    // Absent means co-parent: every invitation written before guests existed carries no
+    // `kind`, and those must keep pairing. Any *other* value is refused outright rather than
+    // treated as co-parent — a document this file does not understand is not one it should
+    // let a callable act on later.
+    //
+    // A guest invitation additionally names the child record it opens and the instant the
+    // grant ends, and that instant must still be in the future when the document is written.
+    // None of this is the real gate: `acceptGuestInvitation` re-checks every one of these
+    // with Admin credentials, and it also checks the thing rules cannot cheaply check — that
+    // the inviter holds the named record as a parent rather than as a guest. This only stops
+    // a malformed invitation existing in the first place.
+    function validInvitationKind(data) {
+      return !data.keys().hasAny(['kind']) || (
+        data.kind == 'guest' &&
+        data.keys().hasAll(['childInfoId', 'guestExpiresAt']) &&
+        data.childInfoId is string &&
+        data.childInfoId.size() > 0 &&
+        data.guestExpiresAt is number &&
+        data.guestExpiresAt > request.time.toMillis()
+      );
+    }
+
     match /invitations/{invitationId} {
       allow read: if isAuthenticated() && (
         resource.data.fromUserId == request.auth.uid ||
@@ -335,7 +402,8 @@ service cloud.firestore {
                       request.resource.data.keys().hasAll(
                         ['code', 'toEmail', 'status', 'createdAt', 'expiresAt']) &&
                       isValidLength(request.resource.data.code, 6, 6) &&
-                      request.resource.data.status == 'pending';
+                      request.resource.data.status == 'pending' &&
+                      validInvitationKind(request.resource.data);
 
       // The inviter may withdraw their own invite (status -> cancelled); the
       // addressed recipient may decline it (status -> rejected). Accept goes

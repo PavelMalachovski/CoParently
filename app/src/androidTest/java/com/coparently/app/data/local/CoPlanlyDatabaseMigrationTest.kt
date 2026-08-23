@@ -537,6 +537,40 @@ class CoPlanlyDatabaseMigrationTest {
         }
     }
 
+    /**
+     * 20-to-21 gives a child record somewhere to keep guest grants, and lets nobody in.
+     *
+     * `{}` on every existing row is the true answer: there was no way to grant access until now.
+     * The column is `NOT NULL`, so this asserts the default rather than assuming it — a row that
+     * arrived with a literal null would fail an insert rather than reach a screen, but a wrong
+     * default here would be a record the rules read as having a guest.
+     */
+    @Test
+    fun migration20To21_letsNobodyIntoAnExistingChildRecord() {
+        val db = helper.createDatabase(TEST_DB, VERSION_20)
+        db.execSQL(
+            """
+            INSERT INTO child_info (id, childName, medicationsJson, activitiesJson, allergiesJson,
+                                    emergencyContactsJson, medicalProfileJson, medicalPhotosJson,
+                                    createdAt, updatedAt, syncedToFirestore)
+            VALUES ('c1', 'Ema', '[]', '[]', '["pollen"]', '[]', '{}', '[]',
+                    '2026-08-01T09:00:00', '2026-08-01T09:00:00', 1)
+            """.trimIndent()
+        )
+        db.close()
+
+        val migrated = helper.runMigrationsAndValidate(
+            TEST_DB, VERSION_21, true, DatabaseMigrations.MIGRATION_20_21
+        )
+
+        migrated.query("SELECT childName, medicalPhotosJson, guestsJson FROM child_info").use {
+            assertTrue(it.moveToFirst())
+            assertEquals("Ema", it.getString(0))
+            assertEquals("[]", it.getString(1))
+            assertEquals("a record from before guests existed has let nobody in", "{}", it.getString(2))
+        }
+    }
+
     private companion object {
         const val TEST_DB = "coplanly-migration-test.db"
         const val VERSION_11 = 11
@@ -549,6 +583,7 @@ class CoPlanlyDatabaseMigrationTest {
         const val VERSION_18 = 18
         const val VERSION_19 = 19
         const val VERSION_20 = 20
+        const val VERSION_21 = 21
 
         /** 2026-08-01T12:00:00 at UTC+05:30, i.e. 06:30:00Z. */
         const val NOON_AT_PLUS_FIVE_THIRTY_MILLIS = 1_785_565_800_000L

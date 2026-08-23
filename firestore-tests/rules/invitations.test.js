@@ -185,6 +185,78 @@ describe('Part 1d: invitations', () => {
     });
   });
 
+  describe('Package G2: a guest invitation is a different shape, not a different value', () => {
+    /**
+     * A guest invitation as `PairingRepositoryImpl.writeGuestInvite` writes it.
+     *
+     * @param {!Object} overrides Fields to override.
+     * @return {!Object} The document data.
+     */
+    function guestInvite(overrides) {
+      return inviteDoc(Object.assign({
+        toEmail: '',
+        kind: 'guest',
+        childInfoId: 'child-1',
+        guestExpiresAt: Date.parse('2099-01-01T00:00:00Z'),
+      }, overrides));
+    }
+
+    it('allows a parent to mint one', async () => {
+      const db = asUser(env, ALICE, ALICE_EMAIL);
+      await assertSucceeds(db.doc('invitations/invite-1').set(guestInvite({})));
+    });
+
+    it('still allows an invitation carrying no kind at all', async () => {
+      // Every invitation written before guests existed. If this ever fails, pairing has
+      // stopped working for anybody upgrading with a code already in flight.
+      const db = asUser(env, ALICE, ALICE_EMAIL);
+      await assertSucceeds(db.doc('invitations/invite-1').set(inviteDoc({toEmail: ''})));
+    });
+
+    it('denies a kind this file does not understand', async () => {
+      // Fail closed on shape: an unrecognised kind must not fall through to "co-parent".
+      const db = asUser(env, ALICE, ALICE_EMAIL);
+      await assertFails(db.doc('invitations/invite-1').set(guestInvite({kind: 'sibling'})));
+    });
+
+    it('denies a guest invitation naming no child', async () => {
+      const db = asUser(env, ALICE, ALICE_EMAIL);
+      await assertFails(db.doc('invitations/invite-1').set(guestInvite({childInfoId: ''})));
+    });
+
+    it('denies a guest invitation with no child field at all', async () => {
+      const doc = guestInvite({});
+      delete doc.childInfoId;
+      const db = asUser(env, ALICE, ALICE_EMAIL);
+      await assertFails(db.doc('invitations/invite-1').set(doc));
+    });
+
+    it('denies a guest invitation with no end to the access', async () => {
+      // The one default this feature must never have is "forever".
+      const doc = guestInvite({});
+      delete doc.guestExpiresAt;
+      const db = asUser(env, ALICE, ALICE_EMAIL);
+      await assertFails(db.doc('invitations/invite-1').set(doc));
+    });
+
+    it('denies a guest invitation whose access already ended', async () => {
+      const db = asUser(env, ALICE, ALICE_EMAIL);
+      await assertFails(db.doc('invitations/invite-1').set(
+          guestInvite({guestExpiresAt: Date.parse('2020-01-01T00:00:00Z')})));
+    });
+
+    it('denies an expiry that is not a number', async () => {
+      const db = asUser(env, ALICE, ALICE_EMAIL);
+      await assertFails(db.doc('invitations/invite-1').set(
+          guestInvite({guestExpiresAt: '2099-01-01T00:00:00Z'})));
+    });
+
+    it('still denies minting one on somebody else behalf', async () => {
+      const db = asUser(env, CAROL, CAROL_EMAIL);
+      await assertFails(db.doc('invitations/invite-1').set(guestInvite({})));
+    });
+  });
+
   describe('delete', () => {
     beforeEach(async () => {
       await seed(env, {'invitations/invite-1': inviteDoc({})});

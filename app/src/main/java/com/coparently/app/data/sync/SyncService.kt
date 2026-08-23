@@ -13,11 +13,13 @@ import com.coparently.app.data.remote.firebase.FirestoreEventDataSource
 import com.coparently.app.data.remote.firebase.FirestoreUserDataSource
 import com.coparently.app.data.repository.LocalDateJsonAdapter
 import com.coparently.app.data.repository.ParentSlotMigrator
+import com.coparently.app.domain.guests.GuestGrantPolicy
 import com.google.gson.GsonBuilder
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
@@ -364,6 +366,7 @@ class SyncService @Inject constructor(
                 "medicalPhotos" to ChildInfoPhotos.decode(
                     gson.fromJson(entity.medicalPhotosJson, List::class.java)
                 ),
+                "guests" to ChildInfoGuests.encode(guestsOf(entity)),
                 "createdAt" to entity.createdAt.format(formatter),
                 "updatedAt" to entity.updatedAt.format(formatter),
                 "createdByFirebaseUid" to entity.createdByFirebaseUid,
@@ -371,7 +374,10 @@ class SyncService @Inject constructor(
                 "sharedWith" to ChildInfoAudience.entitled(
                     userId = userId,
                     creatorUid = entity.createdByFirebaseUid,
-                    partnerId = partnerId
+                    partnerId = partnerId,
+                    guestUids = GuestGrantPolicy
+                        .active(guestsOf(entity).values.toList(), Instant.now())
+                        .map { it.uid }
                 )
             )
 
@@ -425,6 +431,7 @@ class SyncService @Inject constructor(
                                 "medicalPhotos" to ChildInfoPhotos.decode(
                                     gson.fromJson(localEntity.medicalPhotosJson, List::class.java)
                                 ),
+                                "guests" to ChildInfoGuests.encode(guestsOf(localEntity)),
                                 "createdAt" to localEntity.createdAt.format(formatter),
                                 "updatedAt" to LocalDateTime.now().format(formatter),
                                 "createdByFirebaseUid" to localEntity.createdByFirebaseUid,
@@ -605,6 +612,16 @@ class SyncService @Inject constructor(
     }
 
     /**
+     * The guest grants stored on [entity], decoded through the one reader.
+     *
+     * Round-tripping Room's JSON through [ChildInfoGuests] rather than shipping the raw string
+     * is what keeps this map and the repository's from disagreeing about a half-written grant:
+     * both drop the same ones, on the same rule.
+     */
+    private fun guestsOf(entity: com.coparently.app.data.local.entity.ChildInfoEntity) =
+        ChildInfoGuests.decode(gson.fromJson(entity.guestsJson, Map::class.java))
+
+    /**
      * Converts Firestore child info data to ChildInfoEntity.
      */
     @Suppress("UNCHECKED_CAST")
@@ -621,6 +638,7 @@ class SyncService @Inject constructor(
             schoolInfoJson = (this["schoolInfo"] as? Map<*, *>)?.let { gson.toJson(it) },
             medicalProfileJson = gson.toJson(this["medicalProfile"] ?: emptyMap<String, Any?>()),
             medicalPhotosJson = gson.toJson(ChildInfoPhotos.decode(this["medicalPhotos"])),
+            guestsJson = gson.toJson(ChildInfoGuests.encode(ChildInfoGuests.decode(this["guests"]))),
             createdAt = LocalDateTime.parse(this["createdAt"] as String, formatter),
             updatedAt = LocalDateTime.parse(this["updatedAt"] as String, formatter),
             createdByFirebaseUid = this["createdByFirebaseUid"] as? String,

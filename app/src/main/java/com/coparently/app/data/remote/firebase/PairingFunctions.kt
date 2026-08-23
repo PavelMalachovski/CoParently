@@ -10,10 +10,17 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Thin client for the pairing Cloud Functions.
+ * Thin client for the invitation Cloud Functions.
  *
  * Translates [FirebaseFunctionsException] into a [PairingError] so the layers
  * above never inspect exception text or Firebase error codes.
+ *
+ * Guest redemption lives here too, next to co-parent redemption, even though the two must
+ * never be confused server-side. The thing they share is exactly this class's job — one
+ * `call` helper, one reason-to-[PairingError] table — and a second copy of that table is a
+ * second place for the two to drift apart. What must not be shared is the *decision*, and
+ * that is made by two separate callables in `functions/index.js`, each of which refuses the
+ * other's `kind`.
  */
 @Singleton
 class PairingFunctions @Inject constructor(
@@ -63,6 +70,47 @@ class PairingFunctions @Inject constructor(
     }
 
     /**
+     * Redeems a **guest** invitation by [code] or by [invitationId] — exactly one.
+     *
+     * Reaches `acceptGuestInvitation`, never `acceptPairingInvitation`. The two callables
+     * refuse each other's `kind`, so a code offered to the wrong one comes back as
+     * [PairingError.NotGuestInvitation] or [PairingError.GuestInvitation] rather than
+     * quietly doing the other thing.
+     *
+     * @return the child record the caller may now read and when that ends, or a
+     *   [PairingException]-wrapped [PairingError] on failure. Both fields are required: a
+     *   response missing either is a contract violation, and a grant with no end is the one
+     *   outcome this feature must never produce by accident.
+     * @throws IllegalArgumentException if both or neither of [code] and [invitationId] are
+     *   given — a caller programming error, not a backend failure.
+     */
+    suspend fun acceptGuestInvitation(
+        code: String? = null,
+        invitationId: String? = null
+    ): Result<AcceptGuestResult> {
+        require((code == null) != (invitationId == null)) {
+            "acceptGuestInvitation requires exactly one of code or invitationId, got " +
+                "code=$code, invitationId=$invitationId"
+        }
+        val payload = buildMap<String, Any> {
+            code?.let { put("code", it) }
+            invitationId?.let { put("invitationId", it) }
+        }
+        return call("acceptGuestInvitation", payload) { data ->
+            val childInfoId = data["childInfoId"] as? String
+            val expiresAtMillis = (data["expiresAtMillis"] as? Number)?.toLong() ?: 0L
+            AcceptGuestResult(
+                childInfoId = checkNotNull(childInfoId?.takeIf { it.isNotBlank() }) {
+                    "acceptGuestInvitation succeeded but returned no childInfoId"
+                },
+                expiresAtMillis = expiresAtMillis.also {
+                    check(it > 0L) { "acceptGuestInvitation succeeded but returned no expiry" }
+                }
+            )
+        }
+    }
+
+    /**
      * Removes the co-parent link.
      *
      * @return the former partner's UID, or null when there was no link.
@@ -104,6 +152,11 @@ class PairingFunctions @Inject constructor(
                 "self-pairing" -> PairingError.SelfPairing
                 "already-paired" -> PairingError.AlreadyPaired
                 "wrong-recipient" -> PairingError.WrongRecipient
+                "guest-invitation" -> PairingError.GuestInvitation
+                "not-a-guest-invitation" -> PairingError.NotGuestInvitation
+                "grant-expired" -> PairingError.GrantEnded
+                "inviter-not-entitled" -> PairingError.InviterNotEntitled
+                "already-entitled" -> PairingError.AlreadyEntitled
                 else -> when ((e as? FirebaseFunctionsException)?.code) {
                     FirebaseFunctionsException.Code.UNAVAILABLE,
                     FirebaseFunctionsException.Code.DEADLINE_EXCEEDED -> PairingError.Network
@@ -137,3 +190,14 @@ class PairingException(val error: PairingError, cause: Throwable? = null) :
  *   not that pairing failed.
  */
 data class AcceptInvitationResult(val partnerId: String, val role: String?)
+
+/**
+ * What [PairingFunctions.acceptGuestInvitation] returns on success.
+ *
+ * @property childInfoId The one child record the caller may now read. Exactly one: a guest is
+ *   invited to a child, not to a family.
+ * @property expiresAtMillis When that access ends, as epoch milliseconds. Required, unlike
+ *   [AcceptInvitationResult.role]: a missing `role` costs a best-effort local migration,
+ *   while a missing expiry would be shown to the guest as access that never ends.
+ */
+data class AcceptGuestResult(val childInfoId: String, val expiresAtMillis: Long)

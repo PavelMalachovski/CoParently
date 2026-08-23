@@ -1,8 +1,9 @@
 # SDD ledger — plan: docs/superpowers/plans/2026-08-23-guest-access-and-photos.md
 
-**This covers G1 only.** The plan is explicit that G1 and G2 ship as two branches — G1 is a list
-field and a Storage path, G2 changes a rule that governs live medical data, and one risk profile
-should not carry the other through review. G2 has not been started.
+**Two sections, one per branch.** The plan is explicit that G1 and G2 ship separately — G1 is a
+list field and a Storage path, G2 changes a rule that governs live medical data, and one risk
+profile should not carry the other through review. G1 is merged; **G2 is the section at the
+bottom of this file**.
 
 Branch: `claude/package-g1-medical-photos`.
 Base: `main` @ `3122436`.
@@ -134,3 +135,155 @@ allows any member of `sharedWith` to write. G2 puts a guest in `sharedWith` so t
 which under that rule would make a grandparent an **editor of a child's medical record** — now
 including these photographs. Nothing in G1 touches it; it is noted here because G1 is what gives
 that rule something new to protect.
+
+---
+---
+
+# G2 — guest access
+
+Branch: `claude/package-g2-guest-access`.
+Base: `main` @ `0fb39fc` (G1 merged as #59, F's ledger as #58).
+Tasks: 5–10 of the plan's 11, all implemented. Task 11 partly run.
+
+## What was and was not verified here
+
+Same environment as C, D, E, F and G1: **no Android SDK, and no route to Google's Maven host**
+(`dl.google.com`, and `maven.google.com` by redirect, are refused by the proxy with 403). So
+`assembleDebug`, `testDebugUnitTest`, `lint` and `detekt` were **not** run, and no Compose or Hilt
+file in this package has been through a compiler.
+
+Really run, on this branch, after the rebase onto `0fb39fc`:
+
+- **The Firestore rules suite, on the emulator — 263 passing**, up from 237 on `main` before G1.
+  G2 added 26: 6 for the update hole, 11 for the guest read, 9 for the `kind` shape.
+- **The Cloud Functions suite — 103 passing** and `eslint` clean, up from 71. G2 added 32: 21 for
+  the guest-accept callable, 11 for the sweep.
+- **Every pure-Kotlin test that compiles without the Android classpath — 321 passing**, up from
+  298 at the end of G1. G2's own are `GuestGrantPolicyTest` (8), `ChildInfoGuestsTest` (7),
+  `GuestInviteUriTest` (5) and `GuestAccessDurationTest` (3).
+- **Locale completeness**, by grep: all 32 new keys in exactly five files each, every one
+  referenced from code, and every `guest_strings.xml` parses.
+- **`MaxLineLength` 120** over every Kotlin line this package adds. Nothing was added to
+  `app/config/detekt/baseline.xml`.
+
+## Ledger
+
+Task 5 (the update hole): `b06c87c`. **Written first, before anything created a guest.**
+
+  - The pre-existing `child_info` update rule allowed **any member of `sharedWith`** to write. G2's
+    whole mechanism is putting a guest in `sharedWith` so reading works, so shipping the guest
+    before this fix would have made a grandmother an editor of a child's medical record —
+    photographs included. The six new cases confirm the hole was real before the fix, not
+    theoretical.
+  - The rule now additionally requires the writer to be the creator or the creator's co-parent,
+    and requires `createdByFirebaseUid` to be unchanged. Ownership is not a field a writer gets to
+    move.
+
+Task 6 (the grant): `a680f7e`. `GuestGrant` + `GuestGrantPolicy`, pure, thirty days by default.
+
+  - **Epoch millis, not the ISO strings the rest of this schema uses, and the reason is hard.**
+    Rules have no string-to-timestamp parser, so an ISO expiry could not be compared in
+    `firestore.rules` at all — the rule could only ever have checked that a guest *is* a guest.
+    Discovered while writing Task 7's rule, which is why Task 6's commit was amended rather than a
+    known-wrong intermediate shipped.
+  - The boundary belongs to the closed side: a grant expiring at noon is inactive at noon, in all
+    three implementations. `GuestGrantPolicy` is the written statement the other two must agree
+    with, and both point back at it in comments.
+  - Fail closed everywhere: a non-positive expiry is expired, never absent.
+    `ChatReadStateTimeZoneTest`'s Prague/Tokyo shape is repeated here, because an expiry that
+    depends on where the reader is standing is the custody document's bug in a worse place.
+
+Task 7 (the field and its rule): `d986311`. Room **20 → 21**, `guestsJson TEXT NOT NULL DEFAULT '{}'`.
+
+  - **SEVEN map sites again, plus the eighth that is not a map.** Same list G1 found, found the
+    same way — by grepping an existing field rather than trusting the plan. `SyncService`'s
+    `UseLocal` conflict map is now the **third** package in a row where the plan's list omits it.
+  - `ConflictResolver.countNonNullFields` counts `guestsJson`, and it matters more here than it
+    did for photographs: a version holding a grant and one holding none must not score equal, or a
+    grandparent's access is revoked by a conflict nobody sees rather than by a parent deciding to
+    revoke it.
+  - `ChildInfoGuests` is pure and separate on the `ChildInfoAudience`/`ChildInfoPhotos` precedent.
+    It reads *strictly*: a grant missing its name or its granter is dropped rather than defaulted
+    into existence, and a missing expiry reads as 0, which every layer treats as already past.
+    Being lenient in that file would hand out a permanent grant by accident.
+  - Two of the eleven new rules cases failed before `guestGrantExpired()` existed. That is why it
+    exists.
+
+Task 8 (inviting and accepting): `0d0afca`. A **second callable**, `acceptGuestInvitation`.
+
+  - Two functions rather than a `kind` branch, as the plan required. Each refuses the other's
+    kind, and **both refusals are tested** — including the dangerous direction, set up with two
+    unpaired accounts so that nothing but the `kind` check stands between a guest code and a
+    co-parent link.
+  - The callable checks what rules cannot cheaply check: that the inviter holds the record **as a
+    parent**. Membership of `sharedWith` is not enough, because a guest is in it too, and a guest
+    who can invite another guest is how a thirty-day grant becomes permanent.
+  - `coplanly://guest` is its own host, not a query parameter on `coplanly://pair`. The two codes
+    are six characters from the same generator, so the host is the only thing that says which
+    callable may redeem one. `MainActivity` reads it with a second reader for the same reason the
+    server has a second callable.
+  - `NavGraph`'s two loose pairing parameters became one `PendingInviteCodes`. Adding the guest
+    code as two more would have put the function at detekt's `LongParameterList` threshold of 6 —
+    the growth its own `pendingChatOpen` doc had already predicted.
+  - `GuestAccessDuration` offers a week, thirty days or ninety, and **no "no end" entry**. A test
+    asserts every entry produces a grant that is active now, so the enum can never grow a member
+    that hands out access nobody can use — or one that never ends.
+
+Task 9 (seeing and revoking): `d7476e8`.
+
+  - Revoking removes the entry from `guests` and **nothing else**. `sharedWith` is derived at
+    upload time by `ChildInfoAudience.entitled` from the still-active grants, so the uid leaves the
+    audience in the same write. A second place computing the audience would be a second place for
+    it to disagree with the first.
+  - Red row, and it confirms — the sign-out anatomy, for the reason that comment gives.
+  - A failed revoke raises a snackbar, which is why `ChildInfoScreen` gained a host. Silence would
+    be this feature's worst failure: the local write succeeds, the row disappears, and the parent
+    walks away believing access is gone while `sharedWith` still holds the uid.
+
+Task 10 (the sweep): `fec3ef9`. `sweepExpiredGuests`, daily at 03:00 UTC.
+
+  - **Scans the collection**, because there is no query for it: Firestore cannot filter on a field
+    inside a map's values. A denormalised "earliest expiry" column would make it queryable and is
+    deliberately absent — it would be a derived field that all seven child-document map sites have
+    to remember to recompute, which is the class of bug this package spent Task 7 avoiding.
+  - **A defect found while writing it, fixed in the same commit.** A co-parent redeeming a guest
+    code passed every check the callable had, and landed in `guests` while already being a parent
+    in `sharedWith`. When the grant ran out this sweep would have taken a **parent** out of the
+    audience of their own child's record. The callable now refuses an accepter who already reads
+    the record, and the sweep never removes a document's creator from `sharedWith`. Both, because
+    only the callable can recognise the *other* parent and only the sweep sees what is already
+    stored.
+
+## Still to run
+
+- [ ] `./gradlew clean assembleDebug testDebugUnitTest lint detekt` — nothing Compose- or
+      Hilt-shaped in G2 has compiled. That first build is also where the Hilt binding for
+      `GuestRepository` is proved.
+- [ ] `connectedDebugAndroidTest --tests …CoPlanlyDatabaseMigrationTest` (20→21).
+- [ ] **Commit the generated `app/schemas/…/15.json` through `21.json`.** B2's, C's, D's, E's,
+      G1's and now G2's are all missing. They appear on the first local `assembleDebug`.
+- [ ] `firebase deploy --only firestore:rules,functions` — the rules and both new functions are
+      written and tested but **not deployed**. Until they are, the guest feature does nothing on a
+      real device, and — more importantly — the Task 5 fix to the `child_info` update rule is not
+      live either.
+- [ ] The device run, plan Task 11: three accounts, two phones.
+- [ ] Record the run in spec §7.
+
+## The check that proves this package
+
+**Accept a guest invitation on a third account, then try to change something.** Everything else
+here either works or visibly does not. The one failure with no symptom is Task 5's: if that rule
+fix were wrong or undeployed, the guest would read the record exactly as intended *and* be able to
+edit a child's medications, and nothing on any screen would say so.
+
+## Three things to watch alongside it
+
+1. **A guest, then a background sync, then look at `sharedWith`.** Seven maps carry `guests`, and
+   only the four in `ChildInfoRepositoryImpl` are covered. If a guest loses access after a sync
+   tick, the missing map is `SyncService`'s.
+2. **Set a grant to expire in the past and wait for 03:00 UTC.** The rule refuses the read
+   immediately; the sweep is what removes the uid. Between those two the guest still appears in
+   the parent's list, and the gap is bounded by a day — long enough to look like a bug.
+3. **A co-parent scanning a guest code.** Should be refused with "you can already see this
+   record". If it succeeds, the `already-entitled` check did not deploy, and the trap it closes
+   ends with a parent swept out of their own child's audience a month later.

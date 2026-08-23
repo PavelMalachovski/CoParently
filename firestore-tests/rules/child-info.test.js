@@ -146,6 +146,192 @@ describe('Part 1d: child_info', () => {
         .doc('child_info/child-1').update({createdByFirebaseUid: BOB}));
   });
 
+  describe('Package G2: audience membership must not imply write', () => {
+    // The rule this whole package rests on. A guest is put into `sharedWith` so the *read*
+    // rule works unchanged — which, under an update rule that allows any member of the
+    // audience to write, would make a grandparent an editor of a child's medical record.
+    //
+    // Written before the rule changed, and every pre-existing case in this file has to keep
+    // passing afterwards: if one stops, the audience model differs from what the design
+    // assumed and the plan needs revisiting, not the test.
+
+    it('denies an update from a uid in sharedWith who is neither creator nor their partner',
+        async () => {
+          // Carol is in the audience and nothing else — exactly a guest's position.
+          await seed(env, {'child_info/child-1': childInfoDoc({sharedWith: [ALICE, BOB, CAROL]})});
+          await assertFails(env.authenticatedContext(CAROL).firestore()
+              .doc('child_info/child-1').update({medicalNotes: 'I changed this'}));
+        });
+
+    it('denies such a uid adding a photograph to the record', async () => {
+      // The same hole, pointed at what package G1 just added. A guest who could write the
+      // record could attach or remove medical photographs on a child that is not theirs.
+      await seed(env, {'child_info/child-1': childInfoDoc({sharedWith: [ALICE, BOB, CAROL]})});
+      await assertFails(env.authenticatedContext(CAROL).firestore()
+          .doc('child_info/child-1').update({medicalPhotos: ['https://example.test/x.jpg']}));
+    });
+
+    it('still lets the creator update', async () => {
+      await seed(env, {'child_info/child-1': childInfoDoc({sharedWith: [ALICE, BOB, CAROL]})});
+      await assertSucceeds(env.authenticatedContext(ALICE).firestore()
+          .doc('child_info/child-1').update({medicalNotes: 'Pollen allergy'}));
+    });
+
+    it("still lets the creator's partner update", async () => {
+      await seed(env, {'child_info/child-1': childInfoDoc({sharedWith: [ALICE, BOB, CAROL]})});
+      await assertSucceeds(env.authenticatedContext(BOB).firestore()
+          .doc('child_info/child-1').update({medicalNotes: 'Pollen allergy'}));
+    });
+
+    it('lets the partner update a record the partner created', async () => {
+      // The mirror of the case above: Bob creates, Alice edits. `isPartnerOf` is not
+      // symmetric by construction — it reads one uid's `partnerId` — so both directions are
+      // pinned rather than assumed.
+      await seed(env, {
+        'child_info/child-2': childInfoDoc({
+          id: 'child-2', createdByFirebaseUid: BOB, lastModifiedBy: BOB,
+        }),
+      });
+      await assertSucceeds(env.authenticatedContext(ALICE).firestore()
+          .doc('child_info/child-2').update({medicalNotes: 'Pollen allergy'}));
+    });
+
+    it('denies a uid outside sharedWith entirely, as it always did', async () => {
+      await seed(env, {'child_info/child-1': childInfoDoc({sharedWith: [ALICE, BOB]})});
+      await assertFails(env.authenticatedContext(CAROL).firestore()
+          .doc('child_info/child-1').update({medicalNotes: 'I changed this'}));
+    });
+  });
+
+  describe('Package G2: a guest reads, and only a parent may let one in', () => {
+    // A guest is a uid in `sharedWith` — which is what makes the read rule work unchanged —
+    // plus an entry in `guests`, which is what makes them a guest rather than a parent. The
+    // update rule tightened above is what keeps the first half from implying the second.
+
+    // Epoch millis, not an ISO string: `firestore.rules` has no way to parse a string into a
+    // timestamp, so millis is the only representation the app, the rule and the sweep can all
+    // compare. See `GuestGrant.expiresAtMillis`.
+    const FUTURE = Date.parse('2099-01-01T00:00:00Z');
+    const PAST = Date.parse('2020-01-01T00:00:00Z');
+
+    /**
+     * A guests map holding one grant.
+     *
+     * @param {string} uid The guest's UID.
+     * @param {number} expiresAtMillis Epoch millis the grant ends at.
+     * @return {!Object} The map to store under `guests`.
+     */
+    function guests(uid, expiresAtMillis) {
+      return {[uid]: {
+        name: 'Nina',
+        grantedBy: ALICE,
+        grantedAtMillis: Date.parse('2026-08-23T09:30:00Z'),
+        expiresAtMillis,
+      }};
+    }
+
+    it('lets a guest read the child record', async () => {
+      await seed(env, {'child_info/child-1': childInfoDoc({
+        sharedWith: [ALICE, BOB, CAROL], guests: guests(CAROL, FUTURE),
+      })});
+      await assertSucceeds(
+          env.authenticatedContext(CAROL).firestore().doc('child_info/child-1').get());
+    });
+
+    it('denies a guest whose grant has expired', async () => {
+      // The rule is the first of two defences and the weaker one: it stops the read, but the
+      // uid stays in `sharedWith`, so the record keeps coming back from the audience query.
+      // The scheduled sweep is what actually removes them. Both are needed.
+      await seed(env, {'child_info/child-1': childInfoDoc({
+        sharedWith: [ALICE, BOB, CAROL], guests: guests(CAROL, PAST),
+      })});
+      await assertFails(
+          env.authenticatedContext(CAROL).firestore().doc('child_info/child-1').get());
+    });
+
+    it('denies a guest whose grant carries no usable expiry', async () => {
+      // Fail closed, the same way GuestGrantPolicy does: a non-positive value is a field that
+      // was absent, defaulted, or written by something that did not know it had to fill it in,
+      // and it must not read as "no expiry".
+      await seed(env, {'child_info/child-1': childInfoDoc({
+        sharedWith: [ALICE, BOB, CAROL], guests: guests(CAROL, 0),
+      })});
+      await assertFails(
+          env.authenticatedContext(CAROL).firestore().doc('child_info/child-1').get());
+    });
+
+    it('denies a guest whose grant has no expiry field at all', async () => {
+      await seed(env, {'child_info/child-1': childInfoDoc({
+        sharedWith: [ALICE, BOB, CAROL],
+        guests: {[CAROL]: {name: 'Nina', grantedBy: ALICE}},
+      })});
+      await assertFails(
+          env.authenticatedContext(CAROL).firestore().doc('child_info/child-1').get());
+    });
+
+    it('lets a participant parent add a guest', async () => {
+      await seed(env, {'child_info/child-1': childInfoDoc({})});
+      await assertSucceeds(env.authenticatedContext(BOB).firestore()
+          .doc('child_info/child-1').update({
+            sharedWith: [ALICE, BOB, CAROL], guests: guests(CAROL, FUTURE),
+          }));
+    });
+
+    it('denies a guest adding another guest', async () => {
+      // The escalation this package must not have: a grandparent handing the record on.
+      await seed(env, {'child_info/child-1': childInfoDoc({
+        sharedWith: [ALICE, BOB, CAROL], guests: guests(CAROL, FUTURE),
+      })});
+      await assertFails(env.authenticatedContext(CAROL).firestore()
+          .doc('child_info/child-1').update({
+            sharedWith: [ALICE, BOB, CAROL, 'dave-uid'],
+            guests: Object.assign(guests(CAROL, FUTURE), guests('dave-uid', FUTURE)),
+          }));
+    });
+
+    it('denies a guest removing themselves from the guests map to become a plain member',
+        async () => {
+          // Without this, a guest could drop their own grant while staying in `sharedWith` and
+          // read the record forever — the expiry rule only bites on uids the map still names.
+          await seed(env, {'child_info/child-1': childInfoDoc({
+            sharedWith: [ALICE, BOB, CAROL], guests: guests(CAROL, FUTURE),
+          })});
+          await assertFails(env.authenticatedContext(CAROL).firestore()
+              .doc('child_info/child-1').update({guests: {}}));
+        });
+
+    it('denies a non-participant adding a guest', async () => {
+      await seed(env, {'child_info/child-1': childInfoDoc({})});
+      await assertFails(env.authenticatedContext(CAROL).firestore()
+          .doc('child_info/child-1').update({
+            sharedWith: [ALICE, BOB, CAROL], guests: guests(CAROL, FUTURE),
+          }));
+    });
+
+    it('lets a parent revoke a guest', async () => {
+      await seed(env, {'child_info/child-1': childInfoDoc({
+        sharedWith: [ALICE, BOB, CAROL], guests: guests(CAROL, FUTURE),
+      })});
+      await assertSucceeds(env.authenticatedContext(ALICE).firestore()
+          .doc('child_info/child-1').update({sharedWith: [ALICE, BOB], guests: {}}));
+    });
+
+    it('a guest may not read the record once revoked', async () => {
+      await seed(env, {'child_info/child-1': childInfoDoc({sharedWith: [ALICE, BOB], guests: {}})});
+      await assertFails(
+          env.authenticatedContext(CAROL).firestore().doc('child_info/child-1').get());
+    });
+
+    it('a record with no guests key at all still reads for its parents', async () => {
+      // Every document written before this field existed. `guests` is absent, not empty, and a
+      // rule that indexed it directly would fail with a missing-field error rather than
+      // falling through — the hazard this file has already been bitten by twice.
+      await seed(env, {'child_info/child-1': childInfoDoc({})});
+      await assertSucceeds(
+          env.authenticatedContext(BOB).firestore().doc('child_info/child-1').get());
+    });
+  });
+
   describe('Part 3: a document whose sharedWith has been stripped', () => {
     beforeEach(async () => {
       const stripped = childInfoDoc({});

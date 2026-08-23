@@ -1,12 +1,19 @@
 package com.coparently.app.presentation.childinfo
 
+import androidx.annotation.StringRes
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.coparently.app.data.analytics.AnalyticsManager
 import com.coparently.app.data.crashlytics.CrashlyticsManager
+import com.coparently.app.R
 import com.coparently.app.data.remote.firebase.FirebaseAuthService
+import com.coparently.app.data.remote.firebase.PairingException
+import com.coparently.app.domain.guests.GuestAccessDuration
+import com.coparently.app.domain.guests.GuestInvite
 import com.coparently.app.domain.model.ChildInfo
+import com.coparently.app.domain.model.PairingError
 import com.coparently.app.domain.repository.ChildInfoRepository
+import com.coparently.app.domain.repository.GuestRepository
 import com.coparently.app.domain.repository.MedicalPhotoStorage
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
@@ -14,6 +21,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.time.Instant
 import java.util.UUID
 import javax.inject.Inject
 
@@ -40,6 +48,28 @@ enum class MedicalPhotoError {
 }
 
 /**
+ * The guest-invite sheet on the child's screen.
+ *
+ * @property isOpen Whether the sheet is showing
+ * @property childInfoId The record being opened up — exactly one, always
+ * @property duration How long the access will last, before a code exists
+ * @property invite The minted invitation, or null while none has been created yet. Once
+ *   non-null the length can no longer be changed: the code already carries the expiry, and a
+ *   sheet that let the parent move it afterwards would be showing a number the document does
+ *   not hold
+ * @property isBusy A mint is in flight
+ * @property errorRes The one message to show, or null
+ */
+data class GuestInviteState(
+    val isOpen: Boolean = false,
+    val childInfoId: String = "",
+    val duration: GuestAccessDuration = GuestAccessDuration.DEFAULT,
+    val invite: GuestInvite? = null,
+    val isBusy: Boolean = false,
+    @StringRes val errorRes: Int? = null
+)
+
+/**
  * ViewModel for managing child information.
  * Handles CRUD operations and UI state for child info screens.
  */
@@ -47,6 +77,7 @@ enum class MedicalPhotoError {
 class ChildInfoViewModel @Inject constructor(
     private val childInfoRepository: ChildInfoRepository,
     private val medicalPhotoStorage: MedicalPhotoStorage,
+    private val guestRepository: GuestRepository,
     private val firebaseAuthService: FirebaseAuthService,
     private val analyticsManager: AnalyticsManager,
     private val crashlyticsManager: CrashlyticsManager
@@ -66,6 +97,115 @@ class ChildInfoViewModel @Inject constructor(
     fun clearPhotoError() {
         _photoError.value = null
     }
+
+    /**
+     * Set when revoking a guest failed, so the screen can say so.
+     *
+     * A silent failure here is the worst kind this feature has: the parent has decided
+     * somebody should no longer be able to read their child's medical record, the row would
+     * disappear from the list on the next emission if the local write went through, and they
+     * would walk away believing the access is gone while `sharedWith` still holds the uid.
+     */
+    private val _guestRevokeFailed = MutableStateFlow(false)
+    val guestRevokeFailed: StateFlow<Boolean> = _guestRevokeFailed.asStateFlow()
+
+    /** Clears [guestRevokeFailed] once the screen has shown it. */
+    fun clearGuestRevokeFailed() {
+        _guestRevokeFailed.value = false
+    }
+
+    /**
+     * Takes a guest's access back, now.
+     *
+     * Removing the grant from the map is the whole of it: `sharedWith` is **derived** at
+     * upload time by `ChildInfoAudience.entitled` from the grants that are still active, so
+     * dropping the entry drops the uid from the audience in the same write. Nothing here
+     * touches `sharedWith` directly, and nothing should — a second place computing the
+     * audience is a second place for it to disagree with the first.
+     *
+     * `upsertChildInfo` writes Room and Firestore in one call, so this takes effect on the
+     * next read rather than at the next sync tick. If the remote write fails the row is
+     * marked unsynced and retried, and [guestRevokeFailed] tells the parent it has not
+     * happened yet.
+     */
+    fun revokeGuest(childInfo: ChildInfo, guestUid: String) {
+        if (guestUid !in childInfo.guests) return
+        viewModelScope.launch {
+            try {
+                childInfoRepository.upsertChildInfo(
+                    childInfo.copy(guests = childInfo.guests - guestUid)
+                )
+            } catch (e: CancellationException) {
+                throw e
+            } catch (
+                @Suppress("TooGenericExceptionCaught") e: Exception
+            ) {
+                crashlyticsManager.recordException(e)
+                _guestRevokeFailed.value = true
+            }
+        }
+    }
+
+    /** The guest-invite sheet's state; [GuestInviteState.isOpen] is false when it is closed. */
+    private val _guestInvite = MutableStateFlow(GuestInviteState())
+    val guestInvite: StateFlow<GuestInviteState> = _guestInvite.asStateFlow()
+
+    /** Opens the invite sheet for [childInfoId], on the default length. */
+    fun openGuestInvite(childInfoId: String) {
+        _guestInvite.value = GuestInviteState(isOpen = true, childInfoId = childInfoId)
+    }
+
+    /** Closes the sheet and forgets the code it was showing. */
+    fun dismissGuestInvite() {
+        _guestInvite.value = GuestInviteState()
+    }
+
+    /** Changes how long the access being offered will last. Ignored once a code exists. */
+    fun chooseGuestDuration(duration: GuestAccessDuration) {
+        val current = _guestInvite.value
+        if (current.invite != null) return
+        _guestInvite.value = current.copy(duration = duration, errorRes = null)
+    }
+
+    /**
+     * Mints the invitation, using the length currently chosen.
+     *
+     * The expiry is computed here, from `Instant.now()`, rather than by the repository or the
+     * callable: it is the parent's choice, and it has to be the same value the sheet has been
+     * showing them. Recomputing it further down would silently move the date they agreed to.
+     */
+    fun createGuestInvite() {
+        val current = _guestInvite.value
+        if (current.isBusy || current.invite != null || current.childInfoId.isEmpty()) return
+        _guestInvite.value = current.copy(isBusy = true, errorRes = null)
+        viewModelScope.launch {
+            val result = guestRepository.inviteGuest(
+                childInfoId = current.childInfoId,
+                grantExpiresAtMillis = current.duration.expiryFrom(Instant.now())
+            )
+            _guestInvite.value = result.fold(
+                onSuccess = { _guestInvite.value.copy(isBusy = false, invite = it) },
+                onFailure = {
+                    _guestInvite.value.copy(isBusy = false, errorRes = guestMessageFor(it))
+                }
+            )
+        }
+    }
+
+    /**
+     * The one message for a failed invitation.
+     *
+     * [PairingError.GrantEnded] is reachable here in exactly one way — the sheet sat open
+     * long enough for a chosen expiry to fall into the past — and it deserves its own line
+     * rather than "something went wrong", because the fix is to pick a length again.
+     */
+    @StringRes
+    private fun guestMessageFor(throwable: Throwable): Int =
+        when ((throwable as? PairingException)?.error) {
+            PairingError.Network -> R.string.pairing_error_network
+            PairingError.GrantEnded -> R.string.guest_error_grant_ended
+            else -> R.string.guest_invite_error_unknown
+        }
 
     init {
         loadChildInfo()

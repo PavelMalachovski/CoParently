@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Letting somebody outside the parent pair read one child's record. -->
+<resources>
+    <string name="guest_section_label">Guest access</string>
+    <string name="guest_invite_row_title">Invite a guest</string>
+    <string name="guest_invite_row_supporting">Someone who needs to see this record for a while</string>
+    <string name="guest_invite_title">Invite a guest</string>
+    <string name="guest_invite_scope">A guest can read this child\'s record — medications, allergies, notes and photographs. They cannot see your calendar, expenses or messages, and they cannot change anything.</string>
+    <string name="guest_invite_how_long">How long?</string>
+    <string name="guest_invite_duration_week">1 week</string>
+    <string name="guest_invite_duration_month">30 days</string>
+    <string name="guest_invite_duration_quarter">90 days</string>
+    <string name="guest_invite_create">Create a code</string>
+    <string name="guest_invite_ends_on">Access ends on %1$s</string>
+    <string name="guest_invite_share">Share the link</string>
+    <string name="guest_invite_share_message">Open this link to see the child\'s record in CoPlanly: %1$s</string>
+    <string name="guest_invite_error_unknown">The invitation could not be created. Please try again.</string>
+    <string name="guest_accept_title">Guest access</string>
+    <string name="guest_accept_back">Back</string>
+    <string name="guest_accept_explainer">Enter the code a parent sent you. You will be able to read one child\'s record until the access ends — nothing else in the app, and nothing you can change.</string>
+    <string name="guest_accept_action">Accept</string>
+    <string name="guest_accept_done_title">You have access</string>
+    <string name="guest_accept_done_until">Until %1$s</string>
+    <string name="guest_accept_done_scope">You can read this child\'s record. The family\'s calendar, expenses and messages stay private.</string>
+    <string name="guest_accept_done_action">Done</string>
+    <string name="guest_error_not_guest_invitation">This is a co-parent invitation, not a guest code. Ask the parent for a guest invitation.</string>
+    <string name="guest_error_grant_ended">This access has already ended. Ask the parent for a new invitation.</string>
+    <string name="guest_error_inviter_not_entitled">Whoever sent this code cannot grant access to that record.</string>
+    <string name="guest_access_until">Access until %1$s</string>
+    <string name="guest_revoke_title">Remove %1$s\'s access?</string>
+    <string name="guest_revoke_message">They will no longer be able to read this record. You can invite them again later.</string>
+    <string name="guest_revoke_confirm">Remove access</string>
+    <string name="guest_revoke_cancel">Cancel</string>
+    <string name="guest_revoke_failed">Access could not be removed. Check your connection and try again.</string>
+    <string name="guest_error_already_entitled">You can already see this record — you do not need a guest code for it.</string>
+</resources>

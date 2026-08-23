@@ -422,6 +422,20 @@ object DatabaseMigrations {
     }
 
     /**
+     * Holds the people who may read a child's record without being a parent of them.
+     *
+     * One column, `NOT NULL DEFAULT '{}'`. Empty on every existing row is the true answer: there
+     * was no way to let anyone in until now.
+     */
+    val MIGRATION_20_21 = object : Migration(20, 21) {
+        override fun migrate(database: SupportSQLiteDatabase) {
+            database.execSQL(
+                "ALTER TABLE child_info ADD COLUMN guestsJson TEXT NOT NULL DEFAULT '{}'"
+            )
+        }
+    }
+
+    /**
      * List of all migrations in order.
      */
     val ALL_MIGRATIONS = arrayOf(
@@ -439,6 +453,7 @@ object DatabaseMigrations {
         MIGRATION_16_17,
         MIGRATION_17_18,
         MIGRATION_18_19,
-        MIGRATION_19_20
+        MIGRATION_19_20,
+        MIGRATION_20_21
     )
 }

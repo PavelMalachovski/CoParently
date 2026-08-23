@@ -30,11 +30,13 @@ import androidx.lifecycle.lifecycleScope
 import androidx.navigation.compose.rememberNavController
 import com.coparently.app.data.notification.NotificationManager
 import com.coparently.app.domain.chat.ChatUri
+import com.coparently.app.domain.guests.GuestInviteUri
 import com.coparently.app.domain.pairing.PairingUri
 import com.coparently.app.domain.repository.PreferencesRepository
 import com.coparently.app.presentation.navigation.NavGraph
 import com.coparently.app.presentation.navigation.PendingChatLink
 import com.coparently.app.presentation.navigation.PendingChatOpen
+import com.coparently.app.presentation.navigation.PendingInviteCodes
 import com.coparently.app.presentation.splash.SplashScreen
 import com.coparently.app.presentation.sync.SyncViewModel
 import com.coparently.app.presentation.theme.CoPlanlyTheme
@@ -89,6 +91,28 @@ class MainActivity : AppCompatActivity() {
      * parameter count does not grow by two for every deep link it gains (see [NavGraph]'s
      * doc).
      */
+    /**
+     * A guest code carried by a `coplanly://guest` deep link, awaiting hand-off to the
+     * guest-accept screen. Separate from [pendingPairingCode], and that is the point: the two
+     * codes are indistinguishable six-character strings, so the host the link arrived on is
+     * the only thing that says which callable may redeem it. Redeeming is never automatic
+     * here either — the guest confirms on the screen, for the same reason
+     * [readPairingCode] gives.
+     */
+    private val _pendingGuestCode = MutableStateFlow<String?>(null)
+    private val pendingGuestCode: StateFlow<String?> = _pendingGuestCode
+
+    /**
+     * The two invitation codes, bundled for [NavGraph] — see [PendingInviteCodes] for why they
+     * travel together and why they stay distinct fields.
+     */
+    private val pendingInviteCodes = PendingInviteCodes(
+        pairing = _pendingPairingCode,
+        onPairingConsumed = { _pendingPairingCode.value = null },
+        guest = _pendingGuestCode,
+        onGuestConsumed = { _pendingGuestCode.value = null }
+    )
+
     private val _pendingChatLink = MutableStateFlow<PendingChatLink?>(null)
     private val pendingChatOpen = PendingChatOpen(
         link = _pendingChatLink,
@@ -128,6 +152,7 @@ class MainActivity : AppCompatActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         readPairingCode(intent)
+        readGuestCode(intent)
         readChatDeepLink(intent)
     }
 
@@ -180,6 +205,7 @@ class MainActivity : AppCompatActivity() {
         // re-arm the confirmation dialog for a code the user already handled.
         if (savedInstanceState == null) {
             readPairingCode(intent)
+            readGuestCode(intent)
             readChatDeepLink(intent)
         }
 
@@ -215,8 +241,7 @@ class MainActivity : AppCompatActivity() {
                             NavGraph(
                                 navController = navController,
                                 syncViewModel = syncViewModel,
-                                pendingPairingCode = pendingPairingCode,
-                                onPairingCodeConsumed = { _pendingPairingCode.value = null },
+                                pendingInviteCodes = pendingInviteCodes,
                                 pendingChatOpen = pendingChatOpen
                             )
                         }
@@ -257,6 +282,23 @@ class MainActivity : AppCompatActivity() {
         val data = intent?.data ?: return
         if (!PairingUri.isPairingUri(data.scheme, data.host)) return
         _pendingPairingCode.value = PairingUri.extractCode(data.toString()).orEmpty()
+    }
+
+    /**
+     * Extracts a guest code from a `coplanly://guest?code=…` intent.
+     *
+     * Deliberately a second reader rather than a `host` branch inside [readPairingCode]. The
+     * cost of the two paths crossing is not a broken screen: it is a guest redeemed through
+     * `acceptPairingInvitation`, which would make them a co-parent.
+     *
+     * Unlike the pairing link, a `coplanly://guest` link with no code is ignored. There is no
+     * push notification that opens a bare one, and a guest-accept screen with an empty field
+     * and no explanation of how they got there would be worse than nothing.
+     */
+    private fun readGuestCode(intent: Intent?) {
+        val data = intent?.data ?: return
+        if (!GuestInviteUri.isGuestUri(data.scheme, data.host)) return
+        _pendingGuestCode.value = GuestInviteUri.extractCode(data.toString()) ?: return
     }
 
     /**

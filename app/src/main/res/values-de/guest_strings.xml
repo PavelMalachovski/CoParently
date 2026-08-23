@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Gastzugang zur Akte eines Kindes. -->
+<resources>
+    <string name="guest_section_label">Gastzugang</string>
+    <string name="guest_invite_row_title">Gast einladen</string>
+    <string name="guest_invite_row_supporting">Jemand, der diese Akte eine Zeit lang sehen muss</string>
+    <string name="guest_invite_title">Gast einladen</string>
+    <string name="guest_invite_scope">Ein Gast kann die Akte dieses Kindes lesen — Medikamente, Allergien, Notizen und Fotos. Kalender, Ausgaben und Nachrichten bleiben unsichtbar, und ändern kann ein Gast nichts.</string>
+    <string name="guest_invite_how_long">Wie lange?</string>
+    <string name="guest_invite_duration_week">1 Woche</string>
+    <string name="guest_invite_duration_month">30 Tage</string>
+    <string name="guest_invite_duration_quarter">90 Tage</string>
+    <string name="guest_invite_create">Code erstellen</string>
+    <string name="guest_invite_ends_on">Zugang endet am %1$s</string>
+    <string name="guest_invite_share">Link teilen</string>
+    <string name="guest_invite_share_message">Öffne diesen Link, um die Akte des Kindes in CoPlanly zu sehen: %1$s</string>
+    <string name="guest_invite_error_unknown">Die Einladung konnte nicht erstellt werden. Bitte erneut versuchen.</string>
+    <string name="guest_accept_title">Gastzugang</string>
+    <string name="guest_accept_back">Zurück</string>
+    <string name="guest_accept_explainer">Gib den Code ein, den ein Elternteil dir geschickt hat. Bis zum Ende des Zugangs kannst du die Akte eines Kindes lesen — sonst nichts in der App, und ändern kannst du nichts.</string>
+    <string name="guest_accept_action">Annehmen</string>
+    <string name="guest_accept_done_title">Du hast Zugang</string>
+    <string name="guest_accept_done_until">Bis %1$s</string>
+    <string name="guest_accept_done_scope">Du kannst die Akte dieses Kindes lesen. Kalender, Ausgaben und Nachrichten der Familie bleiben privat.</string>
+    <string name="guest_accept_done_action">Fertig</string>
+    <string name="guest_error_not_guest_invitation">Das ist eine Einladung für den anderen Elternteil, kein Gastcode. Bitte um eine Gasteinladung.</string>
+    <string name="guest_error_grant_ended">Dieser Zugang ist bereits abgelaufen. Bitte um eine neue Einladung.</string>
+    <string name="guest_error_inviter_not_entitled">Wer diesen Code geschickt hat, darf für diese Akte keinen Zugang erteilen.</string>
+    <string name="guest_access_until">Zugang bis %1$s</string>
+    <string name="guest_revoke_title">Zugang von %1$s entfernen?</string>
+    <string name="guest_revoke_message">Diese Person kann die Akte dann nicht mehr lesen. Du kannst sie später wieder einladen.</string>
+    <string name="guest_revoke_confirm">Zugang entfernen</string>
+    <string name="guest_revoke_cancel">Abbrechen</string>
+    <string name="guest_revoke_failed">Der Zugang konnte nicht entfernt werden. Verbindung prüfen und erneut versuchen.</string>
+    <string name="guest_error_already_entitled">Du kannst diese Akte bereits sehen — dafür brauchst du keinen Gastcode.</string>
+</resources>

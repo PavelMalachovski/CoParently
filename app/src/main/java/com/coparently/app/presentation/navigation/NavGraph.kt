@@ -52,17 +52,14 @@ import kotlinx.coroutines.flow.StateFlow
  * Top-level destinations (Calendar / Chat / Expenses / Settings) share a bottom
  * navigation bar; detail screens hide it.
  *
- * @param pendingPairingCode A code carried by a `coplanly://pair` deep link
- *   ([MainActivity][com.coparently.app.presentation.MainActivity] owns it), or
- *   null when none is outstanding.
- * @param onPairingCodeConsumed Called once [pendingPairingCode] has been
- *   handed to the pairing screen, so the caller can clear it and avoid
- *   re-navigating on the next recomposition.
+ * @param pendingInviteCodes The `coplanly://pair` and `coplanly://guest` codes awaiting
+ *   hand-off ([MainActivity][com.coparently.app.presentation.MainActivity] owns both), each
+ *   with its own consumption callback — see [PendingInviteCodes].
  * @param pendingChatOpen A `coplanly://chat` deep link awaiting hand-off to the Chat tab,
  *   bundled with its own consumption callback (see [PendingChatOpen]) rather than as two more
- *   loose parameters alongside [pendingPairingCode]/[onPairingCodeConsumed] — that shape
- *   would have pushed this function's parameter count to detekt's `LongParameterList`
- *   threshold of 6.
+ *   loose parameters — that shape would have pushed this function's parameter count to
+ *   detekt's `LongParameterList` threshold of 6, which is also why the two invite codes
+ *   above travel together.
  */
 @Composable
 // A NavHost's body is one flat list of route declarations, not branching logic — splitting it
@@ -73,8 +70,7 @@ import kotlinx.coroutines.flow.StateFlow
 fun NavGraph(
     navController: NavHostController,
     syncViewModel: SyncViewModel,
-    pendingPairingCode: StateFlow<String?>,
-    onPairingCodeConsumed: () -> Unit,
+    pendingInviteCodes: PendingInviteCodes,
     pendingChatOpen: PendingChatOpen
 ) {
     val authStateViewModel: AuthStateViewModel = hiltViewModel()
@@ -96,7 +92,13 @@ fun NavGraph(
         else -> Screen.Home.route
     }
 
-    PairingDeepLinkEffect(pendingPairingCode, isAuthenticated, navController, onPairingCodeConsumed)
+    PairingDeepLinkEffect(
+        pendingInviteCodes.pairing,
+        isAuthenticated,
+        navController,
+        pendingInviteCodes.onPairingConsumed
+    )
+    GuestDeepLinkEffect(pendingInviteCodes, isAuthenticated, navController)
     ChatDeepLinkEffect(pendingChatOpen, isAuthenticated, navController)
 
     val backStackEntry by navController.currentBackStackEntryAsState()
@@ -483,6 +485,27 @@ fun NavGraph(
             }
 
             composable(
+                route = Screen.GuestAccept.route,
+                arguments = listOf(
+                    navArgument(Screen.GuestAccept.ARG_CODE) {
+                        type = NavType.StringType
+                        defaultValue = ""
+                    }
+                ),
+                enterTransition = { slideInFromRight() },
+                exitTransition = { slideOutToLeft() },
+                popEnterTransition = { slideInFromLeft() },
+                popExitTransition = { slideOutToRight() }
+            ) { backStackEntry ->
+                com.coparently.app.presentation.guests.GuestAcceptScreen(
+                    onDone = { navController.popBackStack() },
+                    prefilledCode = backStackEntry.arguments
+                        ?.getString(Screen.GuestAccept.ARG_CODE)
+                        ?.takeIf { it.isNotEmpty() }
+                )
+            }
+
+            composable(
                 route = Screen.CustodyConflict.route,
                 enterTransition = { slideInFromRight() },
                 exitTransition = { slideOutToLeft() },
@@ -793,6 +816,51 @@ private fun PairingDeepLinkEffect(
 }
 
 /**
+ * The two invitation codes a deep link can carry, each with the callback that clears it.
+ *
+ * They travel together because they arrive the same way and are consumed the same way — and
+ * because [NavGraph] cannot afford four more loose parameters (see its `pendingChatOpen`
+ * doc). They stay *distinct fields* because the codes themselves are indistinguishable: six
+ * characters from the same generator, redeemable by two different callables, and the host the
+ * link arrived on is the only thing that says which. Collapsing them into one field would
+ * throw away that answer.
+ *
+ * @property pairing A `coplanly://pair` code, or null when none is outstanding. Empty string
+ *   means "link present, no code" — see `MainActivity.readPairingCode`.
+ * @property onPairingConsumed Clears [pairing] once the pairing screen has it.
+ * @property guest A `coplanly://guest` code, or null when none is outstanding. Never empty: a
+ *   bare guest link is ignored rather than opening an empty screen.
+ * @property onGuestConsumed Clears [guest] once the guest-accept screen has it.
+ */
+class PendingInviteCodes(
+    val pairing: StateFlow<String?>,
+    val onPairingConsumed: () -> Unit,
+    val guest: StateFlow<String?>,
+    val onGuestConsumed: () -> Unit
+)
+
+/**
+ * Navigates to the guest-accept screen when a `coplanly://guest` link is pending.
+ *
+ * Same hand-off shape as [PairingDeepLinkEffect] and, deliberately, a separate effect
+ * navigating to a separate route. Nothing here should be able to end at the pairing screen.
+ */
+@Composable
+private fun GuestDeepLinkEffect(
+    pendingInviteCodes: PendingInviteCodes,
+    isAuthenticated: Boolean?,
+    navController: NavHostController
+) {
+    val guestCode by pendingInviteCodes.guest.collectAsState()
+    LaunchedEffect(guestCode, isAuthenticated) {
+        if (guestCode != null && isAuthenticated == true) {
+            navController.navigate(Screen.GuestAccept.routeWithCode(guestCode))
+            pendingInviteCodes.onGuestConsumed()
+        }
+    }
+}
+
+/**
  * A `coplanly://chat` deep link awaiting hand-off, or null while none is pending.
  *
  * [conversationId] carries the id from the link's `?conversationId=…` query parameter (see
@@ -926,6 +994,20 @@ sealed class Screen(val route: String) {
         fun routeWithCode(code: String?): String =
             if (code.isNullOrEmpty()) "pairing" else "pairing?code=$code"
     }
+    /**
+     * Redeeming a guest invitation — a separate route from [Pairing], mirroring the two
+     * separate callables behind them. Nothing about a guest belongs on a screen whose other
+     * outcome is a co-parent link.
+     */
+    data object GuestAccept : Screen("guest_accept?code={code}") {
+        /** Optional invite code carried by a `coplanly://guest` deep link. */
+        const val ARG_CODE = "code"
+
+        /** Builds the route, with [code] pre-filled when a deep link supplied one. */
+        fun routeWithCode(code: String?): String =
+            if (code.isNullOrEmpty()) "guest_accept" else "guest_accept?code=$code"
+    }
+
     data object CustodySetup : Screen("custody_setup")
 
     /** The signed-in user's own profile — editable. */
