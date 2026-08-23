@@ -8,7 +8,7 @@
     <string name="onboarding_skip">Пропустити</string>
     <string name="onboarding_finish">Готово</string>
     <string name="onboarding_intro_title">Кілька запитань перед початком</string>
-    <string name="onboarding_intro_body">CoPlanly може зберігати дані вашої родини, щоб той, хто буде поруч із дитиною, зміг діяти, якщо станеться неочікуване, — групу крові, алергію, телефон бабусі.\n\nУсе це необов\'язкове, крім вашого імені, і це можна заповнити пізніше в налаштуваннях.</string>
+    <string name="onboarding_intro_body">CoPlanly може зберігати важливі дані вашої родини — групу крові, алергії, телефон бабусі — щоб той, хто буде поруч із дитиною, міг швидко зорієнтуватися в неочікуваній ситуації.\n\nУсе це необов\'язкове, крім вашого імені, і це можна заповнити пізніше в налаштуваннях.</string>
     <string name="onboarding_footnote">Зберігається для вас і другого з батьків, на випадок непередбачених обставин.</string>
     <string name="onboarding_profile_title">Про вас</string>
     <string name="onboarding_profile_name_required">Ім\'я — єдине, що потрібно застосунку: ним підписується кожна подія й кожна витрата.</string>

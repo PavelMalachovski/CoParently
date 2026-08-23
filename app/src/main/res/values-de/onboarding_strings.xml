@@ -8,7 +8,7 @@
     <string name="onboarding_skip">Überspringen</string>
     <string name="onboarding_finish">Fertig</string>
     <string name="onboarding_intro_title">Ein paar Fragen, bevor du loslegst</string>
-    <string name="onboarding_intro_body">CoPlanly kann die Angaben deiner Familie aufbewahren, damit derjenige, der gerade bei deinem Kind ist, handeln kann, wenn etwas Unerwartetes passiert — eine Blutgruppe, eine Allergie, die Telefonnummer der Großmutter.\n\nAlles davon ist freiwillig außer deinem Namen, und du kannst es später in den Einstellungen ergänzen.</string>
+    <string name="onboarding_intro_body">CoPlanly kann die wichtigen Angaben deiner Familie aufbewahren — Blutgruppe, Allergien, die Telefonnummer der Großmutter — damit derjenige, der gerade bei deinem Kind ist, sich in einer unerwarteten Situation schnell zurechtfindet.\n\nAlles davon ist freiwillig außer deinem Namen, und du kannst es später in den Einstellungen ergänzen.</string>
     <string name="onboarding_footnote">Für dich und deinen Co-Elternteil aufbewahrt, für den Notfall.</string>
     <string name="onboarding_profile_title">Über dich</string>
     <string name="onboarding_profile_name_required">Dein Name ist das Einzige, was die App braucht — er steht an jedem Termin und jeder Ausgabe.</string>

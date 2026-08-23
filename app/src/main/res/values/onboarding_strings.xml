@@ -11,7 +11,7 @@
     <string name="onboarding_skip">Skip</string>
     <string name="onboarding_finish">Finish</string>
     <string name="onboarding_intro_title">A few questions before you start</string>
-    <string name="onboarding_intro_body">CoPlanly can hold your family\'s details so that whoever is with your child can act if something unexpected happens — a blood group, an allergy, a grandparent\'s phone number.\n\nAll of it is optional except your name, and you can fill it in later from Settings.</string>
+    <string name="onboarding_intro_body">CoPlanly can hold your family\'s key details — a blood group, allergies, a grandparent\'s phone number — so that whoever is with your child can find their way quickly if something unexpected happens.\n\nAll of it is optional except your name, and you can fill it in later from Settings.</string>
     <string name="onboarding_footnote">Kept for you and your co-parent, in case of an emergency.</string>
     <string name="onboarding_profile_title">About you</string>
     <string name="onboarding_profile_name_required">Your name is the one thing the app needs — it labels every event and expense.</string>
