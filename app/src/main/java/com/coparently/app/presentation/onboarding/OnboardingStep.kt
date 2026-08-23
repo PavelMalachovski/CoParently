@@ -42,8 +42,11 @@ enum class OnboardingStep {
     /** This step's 1-based position among the steps that carry a progress count. */
     val displayIndex: Int get() = ordinal + 1
 
+    /** True for the step that ends the wizard; leaving it, by any button, finishes onboarding. */
+    val isLast: Boolean get() = ordinal == OnboardingStep.entries.lastIndex
+
     companion object {
         /** How many steps the progress indicator counts. */
-        val count: Int = entries.size
+        val count: Int = OnboardingStep.entries.size
     }
 }

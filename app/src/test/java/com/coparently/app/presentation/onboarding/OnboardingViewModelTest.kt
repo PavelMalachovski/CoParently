@@ -127,6 +127,20 @@ class OnboardingViewModelTest {
     }
 
     @Test
+    fun `skipping the last step finishes, rather than doing nothing`() = runTest(dispatcher) {
+        // Leaving the co-parent invitation unanswered is a supported outcome: it lands the
+        // parent unpaired on Home, where the app's own "connect your co-parent" prompt lives.
+        // Advancing blindly instead left Skip on this step as a button that did nothing.
+        walkTo(OnboardingStep.CoParent)
+        advanceUntilIdle()
+
+        viewModel.skip()
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.isFinished)
+    }
+
+    @Test
     fun `back never leaves the wizard from its first step`() = runTest(dispatcher) {
         advanceUntilIdle()
         viewModel.back()

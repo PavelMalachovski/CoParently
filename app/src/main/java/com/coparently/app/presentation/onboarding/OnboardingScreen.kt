@@ -41,7 +41,6 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.coparently.app.R
-import com.coparently.app.domain.model.EmergencyContact
 import com.coparently.app.presentation.childinfo.components.AllergyEditor
 import com.coparently.app.presentation.childinfo.components.DatePickerDialog
 import com.coparently.app.presentation.childinfo.components.EmergencyContactEditor
@@ -97,9 +96,7 @@ fun OnboardingScreen(
                 state = uiState,
                 onBack = viewModel::back,
                 onSkip = viewModel::skip,
-                onNext = {
-                    if (uiState.step == OnboardingStep.CoParent) viewModel.finish() else viewModel.next()
-                }
+                onNext = viewModel::next
             )
         }
     ) { padding ->
@@ -197,8 +194,9 @@ private fun ProfileStep(state: OnboardingUiState, viewModel: OnboardingViewModel
         value = state.name,
         onValueChange = viewModel::updateName,
         label = { Text(stringResource(R.string.profile_name_label)) },
+        // Explained, not flagged: a field nobody has touched yet must not be rendered in error
+        // colours on the first screen a new parent sees. The disabled Next carries the rule.
         supportingText = { Text(stringResource(R.string.onboarding_profile_name_required)) },
-        isError = state.name.isBlank(),
         singleLine = true,
         modifier = Modifier.fillMaxWidth()
     )
@@ -441,7 +439,7 @@ private fun OnboardingBottomBar(
                 } else {
                     Text(
                         stringResource(
-                            if (state.step == OnboardingStep.CoParent) {
+                            if (state.step.isLast) {
                                 R.string.onboarding_finish
                             } else {
                                 R.string.onboarding_next

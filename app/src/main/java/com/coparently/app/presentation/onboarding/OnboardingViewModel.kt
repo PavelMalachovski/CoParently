@@ -233,7 +233,7 @@ class OnboardingViewModel @Inject constructor(
             OnboardingStep.Relatives -> persist { saveChild(state) }
             else -> Unit
         }
-        advance()
+        leaveStep(state.step)
     }
 
     /**
@@ -244,8 +244,9 @@ class OnboardingViewModel @Inject constructor(
      * into a deletion.
      */
     fun skip() {
-        if (!_uiState.value.canSkip) return
-        advance()
+        val state = _uiState.value
+        if (!state.canSkip) return
+        leaveStep(state.step)
     }
 
     /** Steps back. A no-op on the first step, which has nowhere to go. */
@@ -288,8 +289,19 @@ class OnboardingViewModel @Inject constructor(
         }
     }
 
-    /** Moves to the next step, stopping at the last one. */
-    private fun advance() {
+    /**
+     * Moves on from [step] — to the next one, or out of the wizard when there is no next one.
+     *
+     * Both Next and Skip come through here, because on the last step they mean the same thing.
+     * Skipping the co-parent invitation is a supported outcome, not a dead end: it leaves the
+     * parent unpaired on Home, where the app's own "connect your co-parent" prompt lives. An
+     * earlier version advanced blindly and left Skip on that step doing nothing at all.
+     */
+    private fun leaveStep(step: OnboardingStep) {
+        if (step.isLast) {
+            finish()
+            return
+        }
         _uiState.update { state ->
             val following = OnboardingStep.entries.getOrNull(state.step.ordinal + 1)
             following?.let { state.copy(step = it) } ?: state
