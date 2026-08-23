@@ -133,6 +133,7 @@ fun DayWeekView(
     daysCount: Int,
     events: List<Event>,
     getCustody: (LocalDate) -> String?,
+    getProposedCustody: (LocalDate) -> String? = { null },
     parentNames: ParentNames,
     onDateChange: (LocalDate) -> Unit,
     onEventClick: (String) -> Unit,
@@ -199,6 +200,7 @@ fun DayWeekView(
             daysCount = daysCount,
             events = events,
             getCustody = getCustody,
+            getProposedCustody = getProposedCustody,
             parentNames = parentNames,
             scrollState = scrollState,
             onEventClick = onEventClick,
@@ -227,6 +229,7 @@ private fun DayWeekPage(
     daysCount: Int,
     events: List<Event>,
     getCustody: (LocalDate) -> String?,
+    getProposedCustody: (LocalDate) -> String?,
     parentNames: ParentNames,
     scrollState: LazyListState,
     onEventClick: (String) -> Unit,
@@ -533,7 +536,8 @@ private fun DayWeekPage(
                                     val fill = DayCellFills.weekHourCell(
                                         isWeekend = isWeekend,
                                         isToday = isToday,
-                                        custody = custody
+                                        custody = custody,
+                                        proposedCustody = getProposedCustody(date)
                                     )
                                     val baseColor = when (fill.base) {
                                         DayCellBase.WEEKEND ->
@@ -557,6 +561,22 @@ private fun DayWeekPage(
                                         DayCellOverlay.PUBLIC_HOLIDAY,
                                         DayCellOverlay.NONE -> Color.Transparent
                                     }
+                                    // A pending proposal's preview, over the agreed tint rather
+                                    // than instead of it — same hue, less of it. The week gets
+                                    // it as well as the month: unlike a handover, which the week
+                                    // already shows as the boundary between two runs of its
+                                    // custody band, a proposal has no other form in this layout,
+                                    // and leaving it out would make the week the one view that
+                                    // shows a schedule as settled while the month says it is not.
+                                    val proposalColor = when (fill.pendingProposalFor) {
+                                        DayCellOverlay.CUSTODY_MOM ->
+                                            CoPlanlyColors.MomPink
+                                                .copy(alpha = CoPlanlyColors.PROPOSAL_TINT_ALPHA)
+                                        DayCellOverlay.CUSTODY_DAD ->
+                                            CoPlanlyColors.DadBlue
+                                                .copy(alpha = CoPlanlyColors.PROPOSAL_TINT_ALPHA)
+                                        else -> Color.Transparent
+                                    }
 
                                     // Resolved here: the semantics lambda is not a composable context.
                                     val slotDescription = stringResource(
@@ -575,6 +595,10 @@ private fun DayWeekPage(
                                             )
                                             .background(
                                                 color = overlayColor,
+                                                shape = RoundedCornerShape(dims.paddingSmall)
+                                            )
+                                            .background(
+                                                color = proposalColor,
                                                 shape = RoundedCornerShape(dims.paddingSmall)
                                             )
                                             // Hour cells had no outline at all, so on a dark

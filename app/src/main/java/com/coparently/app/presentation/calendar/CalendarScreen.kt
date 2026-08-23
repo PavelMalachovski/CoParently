@@ -228,6 +228,7 @@ fun CalendarScreen(
     val customEventTypes by calendarViewModel.customEventTypes.collectAsState()
     val showHolidays by calendarViewModel.showHolidays.collectAsState()
     val custodyChangeAnnouncement by calendarViewModel.custodyChangeAnnouncement.collectAsState()
+    val pendingProposal by calendarViewModel.pendingProposal.collectAsState()
 
     // Who the two parents are, resolved with the fallback strings once for the whole screen.
     // Every label below this line - ribbon, grid, agenda card, filters, preview sheet - reads
@@ -285,6 +286,19 @@ fun CalendarScreen(
                 legacy = { date -> CustodyHelper.getCustodyForDate(date, custodySchedules) }
             )
         }
+
+    // What a pending proposal would make of a day, or null when nothing is pending. Deliberately
+    // separate from `getCustody`, and for the same reason a pending swap is: a proposal has
+    // changed nothing yet, and folding it into the lookup would move days both parents are still
+    // arguing about. The grid draws it as a preview over the agreed day instead.
+    val getProposedCustody: (LocalDate) -> String? = remember(pendingProposal) {
+        val proposed = pendingProposal?.model
+        if (proposed == null) {
+            { _ -> null }
+        } else {
+            { date -> proposed.getCustodyFor(date) }
+        }
+    }
 
     // The dates a swap is being negotiated on. A pending swap has changed nothing about whose
     // day it is, so it is deliberately not part of `getCustody` — the grid marks it separately.
@@ -547,6 +561,7 @@ fun CalendarScreen(
                                     daysCount = if (mode == CalendarViewMode.DAY) 1 else 7,
                                     events = filteredEvents,
                                     getCustody = getCustody,
+                                    getProposedCustody = getProposedCustody,
                                     parentNames = parentNames,
                                     onDateChange = { calendarViewModel.setSelectedDate(it) },
                                     onEventClick = { eventId -> previewEventId = eventId },
@@ -582,6 +597,7 @@ fun CalendarScreen(
                                     selectedDate = selectedDate,
                                     eventsByDay = eventsByDay,
                                     getCustody = getCustody,
+                                    getProposedCustody = getProposedCustody,
                                     parentNames = parentNames,
                                     pendingSwapDates = pendingSwapDates,
                                     // Only a paired account may offer a swap: unpaired there is

@@ -31,11 +31,20 @@ enum class DayCellOverlay {
  *   [DayCellOverlay.CUSTODY_DAD]. It is a **shape**, not a fourth colour: the cell is split on a
  *   diagonal with this parent in the top-left and [overlay]'s parent in the bottom-right, so the
  *   weekend base still shows through both halves and this file's invariant survives.
+ * @property pendingProposalFor The parent a **pending, unanswered** custody proposal would give
+ *   this day to, when that differs from whose day it is now; null on every other day. Only ever
+ *   [DayCellOverlay.CUSTODY_MOM] or [DayCellOverlay.CUSTODY_DAD]. It is drawn *over* [overlay],
+ *   at a lower alpha, so the agreed pattern keeps its full strength underneath: a proposal is a
+ *   preview, and a grid that showed only the proposal would tell a parent their days had changed
+ *   when they had not. The two translucent hues do blend into something that is neither parent's
+ *   colour, and that is the intended reading — the day is being argued about. The cell's spoken
+ *   description says so in words, which is what actually disambiguates it.
  */
 data class DayCellFill(
     val base: DayCellBase,
     val overlay: DayCellOverlay,
-    val handoverFrom: DayCellOverlay? = null
+    val handoverFrom: DayCellOverlay? = null,
+    val pendingProposalFor: DayCellOverlay? = null
 )
 
 /**
@@ -53,6 +62,13 @@ data class DayCellFill(
  * Weekend deliberately does **not** win over custody: weekends are the days a separated parent
  * checks first, and replacing the parent hue there with grey would remove the answer from exactly
  * the cells the screen exists to give it in.
+ *
+ * **Every case a cell can be in is decided here, in one place**: weekend base, custody overlay,
+ * public holiday, today, the handover diagonal and the pending-proposal preview. Two functions
+ * that each knew some of the cases is precisely how the weekend band became unreachable, so a new
+ * case folds in rather than growing a second decision beside this one. (Pending *swap* arrows are
+ * the deliberate exception: they are a glyph, not a fill, and `MonthView` draws them from a set of
+ * dates — a swap changes nothing about whose day it is, so it has no business in a colour.)
  */
 object DayCellFills {
 
@@ -72,13 +88,18 @@ object DayCellFills {
      *   for it.
      * @param isPublicHoliday A public holiday, not a school vacation — school vacation is a
      *   month-level banner and never a cell fill.
+     * @param proposedCustody Whose day this would be under a **pending** custody proposal, or
+     *   null when nothing is pending. Resolved from the proposal's own pattern, never from the
+     *   agreed one. See [pendingProposal].
      */
+    @Suppress("LongParameterList") // one cell's inputs, expressed as one parameter list
     fun monthCell(
         isWeekend: Boolean,
         isCurrentMonth: Boolean,
         custody: String?,
         previousCustody: String?,
-        isPublicHoliday: Boolean
+        isPublicHoliday: Boolean,
+        proposedCustody: String? = null
     ): DayCellFill = DayCellFill(
         base = baseFor(isWeekend),
         overlay = if (!isCurrentMonth) {
@@ -87,7 +108,8 @@ object DayCellFills {
             custodyOverlay(custody)
                 ?: if (isPublicHoliday) DayCellOverlay.PUBLIC_HOLIDAY else DayCellOverlay.NONE
         },
-        handoverFrom = if (isCurrentMonth) handoverFrom(custody, previousCustody) else null
+        handoverFrom = if (isCurrentMonth) handoverFrom(custody, previousCustody) else null,
+        pendingProposalFor = if (isCurrentMonth) pendingProposal(custody, proposedCustody) else null
     )
 
     /**
@@ -103,6 +125,22 @@ object DayCellFills {
     }
 
     /**
+     * The parent a pending proposal would move this day to, or null when the day is not moving.
+     *
+     * Null when the proposal agrees with the agreed pattern, which is most of the grid: a
+     * proposal is a whole pattern, so marking every day it covers would wash the month and say
+     * nothing. Only the days that would actually change are drawn as a preview.
+     *
+     * Null when either side is unknown, for the same reason [handoverFrom] refuses one: an
+     * unanswered day is not a change, it is an unknown, and previewing a move away from nothing
+     * would invent the arrangement it claims to be previewing.
+     */
+    private fun pendingProposal(custody: String?, proposedCustody: String?): DayCellOverlay? {
+        if (custody == null || proposedCustody == null || custody == proposedCustody) return null
+        return custodyOverlay(proposedCustody)
+    }
+
+    /**
      * The fill for one hour cell in the week or day view.
      *
      * Custody beats today for the same reason it does in the month grid: today already reads as
@@ -112,12 +150,24 @@ object DayCellFills {
      * @param isWeekend Saturday or Sunday.
      * @param isToday Whether this column is today.
      * @param custody `"mom"`, `"dad"`, or null.
+     * @param proposedCustody Whose day this would be under a pending proposal, or null when
+     *   nothing is pending. The week view gets the same preview as the month grid: unlike the
+     *   handover diagonal and the swap arrows — which package C kept to the month, because the
+     *   week already shows a handover as the boundary between two runs of its custody band — a
+     *   pending proposal has no other form in this layout. Leaving it out would make the week
+     *   the one view that shows a schedule as settled while the month says it is not.
      */
-    fun weekHourCell(isWeekend: Boolean, isToday: Boolean, custody: String?): DayCellFill =
+    fun weekHourCell(
+        isWeekend: Boolean,
+        isToday: Boolean,
+        custody: String?,
+        proposedCustody: String? = null
+    ): DayCellFill =
         DayCellFill(
             base = baseFor(isWeekend),
             overlay = custodyOverlay(custody)
-                ?: if (isToday) DayCellOverlay.TODAY else DayCellOverlay.NONE
+                ?: if (isToday) DayCellOverlay.TODAY else DayCellOverlay.NONE,
+            pendingProposalFor = pendingProposal(custody, proposedCustody)
         )
 
     private fun baseFor(isWeekend: Boolean) =

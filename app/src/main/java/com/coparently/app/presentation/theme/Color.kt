@@ -27,6 +27,17 @@ object CoPlanlyColors {
     const val CUSTODY_TINT_ALPHA = 0.14f
 
     /**
+     * Alpha for the wash over a day a **pending** custody proposal would move.
+     *
+     * Below [CUSTODY_TINT_ALPHA] on purpose: an agreed day and a proposed one are the same hue,
+     * and what separates them is how much of it there is. Raising this to match custody would
+     * make a proposal indistinguishable from the thing it is only asking for. It lives beside
+     * [CUSTODY_TINT_ALPHA] for the same reason that one is here — the month grid and the
+     * week/day columns both draw it, and two copies is how they drifted apart last time.
+     */
+    const val PROPOSAL_TINT_ALPHA = 0.09f
+
+    /**
      * Threshold for `MaterialTheme.colorScheme.surface.luminance()` when choosing between the
      * light- and dark-theme member of a text-grade colour pair. Below this the rendered theme
      * is dark. Use this rather than `isSystemInDarkTheme()`: the app can force light while the
