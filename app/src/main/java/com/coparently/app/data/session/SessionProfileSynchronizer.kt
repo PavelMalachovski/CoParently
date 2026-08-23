@@ -40,7 +40,8 @@ import javax.inject.Singleton
 @Singleton
 class SessionProfileSynchronizer @Inject constructor(
     private val authService: FirebaseAuthService,
-    private val userRepository: UserRepository
+    private val userRepository: UserRepository,
+    private val accountSwitchGuard: AccountSwitchGuard
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -68,6 +69,9 @@ class SessionProfileSynchronizer @Inject constructor(
             .distinctUntilChanged()
             .collect { uid ->
                 if (uid == null) return@collect
+                // Before the profile write: if a different account just signed in, the wipe
+                // must land before anything reads or uploads the previous account's rows.
+                accountSwitchGuard.ensureAccountConsistency()
                 Log.d(TAG, "Ensuring the profile document for the signed-in user")
                 userRepository.ensureProfile()
             }

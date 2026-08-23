@@ -25,6 +25,7 @@ class SessionProfileSynchronizerTest {
 
     private val userRepository: UserRepository = mockk(relaxed = true)
     private val authService: FirebaseAuthService = mockk(relaxed = true)
+    private val accountSwitchGuard: AccountSwitchGuard = mockk(relaxed = true)
 
     @Test
     fun `repairs the profile for a session that is already signed in`() = runTest {
@@ -67,7 +68,8 @@ class SessionProfileSynchronizerTest {
         coVerify(exactly = 0) { userRepository.ensureProfile() }
     }
 
-    private fun synchronizer() = SessionProfileSynchronizer(authService, userRepository)
+    private fun synchronizer() =
+        SessionProfileSynchronizer(authService, userRepository, accountSwitchGuard)
 
     private fun user(uid: String): FirebaseUser {
         val firebaseUser = mockk<FirebaseUser>(relaxed = true)

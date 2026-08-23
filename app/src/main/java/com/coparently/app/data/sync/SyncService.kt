@@ -13,6 +13,7 @@ import com.coparently.app.data.remote.firebase.FirestoreEventDataSource
 import com.coparently.app.data.remote.firebase.FirestoreUserDataSource
 import com.coparently.app.data.repository.LocalDateJsonAdapter
 import com.coparently.app.data.repository.ParentSlotMigrator
+import com.coparently.app.data.session.AccountSwitchGuard
 import com.coparently.app.domain.repository.PetRepository
 import com.coparently.app.domain.guests.GuestGrantPolicy
 import com.google.gson.GsonBuilder
@@ -49,7 +50,8 @@ class SyncService @Inject constructor(
     private val conflictResolver: ConflictResolver,
     private val parentSlotMigrator: ParentSlotMigrator,
     private val encryptedPreferences: EncryptedPreferences,
-    private val petRepository: PetRepository
+    private val petRepository: PetRepository,
+    private val accountSwitchGuard: AccountSwitchGuard
 ) {
     // `LocalDate::class.java` needs the same adapter `ChildInfoRepositoryImpl` and
     // `UserRepositoryImpl` register: `Vaccination.date` is a `LocalDate`, and a document read
@@ -71,6 +73,11 @@ class SyncService @Inject constructor(
         return try {
             val currentUser = firebaseAuthService.getCurrentUser()
                 ?: return Result.failure(IllegalStateException("User not authenticated"))
+
+            // The upload choke point: a periodic SyncWorker run can fire before the session
+            // boundary has processed an account switch, and syncing another account's
+            // still-unsynced rows under this uid is the leak the guard exists to stop.
+            accountSwitchGuard.ensureAccountConsistency()
 
             _syncStatus.value = SyncStatus.Syncing(0, 100)
 
