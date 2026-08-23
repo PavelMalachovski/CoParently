@@ -17,6 +17,7 @@ import com.coparently.app.domain.repository.GuestRepository
 import com.coparently.app.domain.repository.MedicalPhotoStorage
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -212,17 +213,33 @@ class ChildInfoViewModel @Inject constructor(
     }
 
     /**
-     * Loads all child information.
+     * The collection feeding [uiState], so a second call replaces it instead of stacking a
+     * second collector on the same reactive Room flow.
+     */
+    private var listJob: Job? = null
+
+    /** The collection feeding [currentChildInfo]; see [loadChildInfoById]. */
+    private var childJob: Job? = null
+
+    /**
+     * Loads every child, for the screen that owns showing every child.
+     *
+     * **Deliberately does not touch [currentChildInfo].** It used to set it to
+     * `childInfoList.first()` on every emission, which is a different question answered with
+     * the wrong data: the editor is open on one specific child, and the head of the list is
+     * only that child when the household has one. Any write to the `child_info` table —
+     * a background Firestore sync tick was enough — re-emitted the list and moved the
+     * editor's base to child A while the user was editing child B, so the save then
+     * overwrote **child A's real row**, id and ownership stamps included. The editor now
+     * subscribes to the child it was opened with; see [loadChildInfoById].
      */
     fun loadChildInfo() {
-        viewModelScope.launch {
+        listJob?.cancel()
+        listJob = viewModelScope.launch {
             _uiState.value = ChildInfoUiState.Loading
             try {
                 childInfoRepository.getAllChildInfo().collect { childInfoList ->
                     _uiState.value = ChildInfoUiState.Success(childInfoList)
-                    if (childInfoList.isNotEmpty()) {
-                        _currentChildInfo.value = childInfoList.first()
-                    }
                 }
             } catch (e: Exception) {
                 _uiState.value = ChildInfoUiState.Error(e.message ?: "Failed to load child info")
@@ -231,10 +248,18 @@ class ChildInfoViewModel @Inject constructor(
     }
 
     /**
-     * Loads specific child information by ID.
+     * Observes the one child being edited, for the editor that owns exactly one.
+     *
+     * A subscription rather than a one-shot read, so a change arriving from the co-parent
+     * while the form is open is reflected — and a subscription to **this** child, so nothing
+     * else that touches the table can move the editor's base out from under it.
+     *
+     * Cancels any previous observation: opening a second child must not leave the first one
+     * still writing to [currentChildInfo], which would restore exactly the bug this replaced.
      */
     fun loadChildInfoById(id: String) {
-        viewModelScope.launch {
+        childJob?.cancel()
+        childJob = viewModelScope.launch {
             childInfoRepository.observeChildInfoById(id).collect { childInfo ->
                 _currentChildInfo.value = childInfo
             }
@@ -381,7 +406,10 @@ class ChildInfoViewModel @Inject constructor(
             try {
                 childInfoRepository.deleteChildInfo(childInfo)
                 analyticsManager.logChildInfoDeleted()
-                loadChildInfo()
+                // No reload: `getAllChildInfo()` is a reactive Room flow and has already
+                // re-emitted without this row. Calling it here used to start a *second*
+                // collector on the same flow, one more with every delete.
+
             } catch (e: Exception) {
                 crashlyticsManager.recordExceptionWithContext(
                     e,
