@@ -144,6 +144,67 @@ class HomeWeekTest {
         assertEquals(listOf("tomorrow", "sunday", "thursday"), entries.map { it.event.id })
     }
 
+    @Test
+    fun `today's agenda covers the whole day, past events included`() {
+        // Unlike the week, whose window opens at now: the today card answers "what is today",
+        // and a 9:00 appointment does not stop having happened at 9:05.
+        val agenda = HomeWeek.todayOf(
+            events = listOf(
+                event("this-morning", now.minusHours(3)),
+                event("this-evening", now.plusHours(3)),
+                event("tomorrow", now.plusDays(1))
+            ),
+            today = now.toLocalDate(),
+            userId = "uid-mom",
+            custodyFor = { null }
+        )
+
+        assertEquals(listOf("this-morning", "this-evening"), agenda.events.map { it.id })
+    }
+
+    @Test
+    fun `a multi-day event still running today is part of today`() {
+        // Overlap, not start date — the same rule the calendar's day queries follow.
+        val agenda = HomeWeek.todayOf(
+            events = listOf(
+                event("camp", now.minusDays(2)).copy(endDateTime = now.plusDays(1)),
+                event("last-week", now.minusDays(5)).copy(endDateTime = now.minusDays(4))
+            ),
+            today = now.toLocalDate(),
+            userId = "uid-mom",
+            custodyFor = { null }
+        )
+
+        assertEquals(listOf("camp"), agenda.events.map { it.id })
+    }
+
+    @Test
+    fun `today's agenda names the day's custody parent`() {
+        val agenda = HomeWeek.todayOf(
+            events = emptyList(),
+            today = now.toLocalDate(),
+            userId = "uid-mom",
+            custodyFor = { date -> if (date == now.toLocalDate()) "dad" else null }
+        )
+
+        assertEquals("dad", agenda.dayParent)
+    }
+
+    @Test
+    fun `a co-parent's private event never appears on today's agenda`() {
+        val agenda = HomeWeek.todayOf(
+            events = listOf(
+                event("theirs", now.plusHours(1))
+                    .copy(isPrivate = true, createdByFirebaseUid = "uid-dad")
+            ),
+            today = now.toLocalDate(),
+            userId = "uid-mom",
+            custodyFor = { null }
+        )
+
+        assertTrue(agenda.events.isEmpty())
+    }
+
     private fun event(id: String, start: LocalDateTime) = Event(
         id = id,
         title = id,

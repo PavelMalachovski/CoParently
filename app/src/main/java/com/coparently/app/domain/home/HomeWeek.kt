@@ -24,6 +24,25 @@ data class WeekEntry(
 )
 
 /**
+ * Today's agenda, as the home screen shows it.
+ *
+ * This is the day-agenda card that used to sit under the calendar's month grid, moved to the
+ * home screen so the grid can fill its screen. Unlike [WeekEntry]'s window — which opens at
+ * *now*, because an event already started is behind the parent — today's agenda covers the
+ * **whole** day: the card answers "what is today", and a 9:00 appointment does not stop having
+ * happened at 9:05.
+ *
+ * @property date The day being described — always today at build time.
+ * @property events Every event touching [date], in start order.
+ * @property dayParent The slot whose custody day it is, or null when no arrangement answers.
+ */
+data class TodayAgenda(
+    val date: LocalDate,
+    val events: List<Event>,
+    val dayParent: String?
+)
+
+/**
  * The child's week, as the home screen shows it.
  *
  * Pure, so the window arithmetic and the filtering can be tested without a ViewModel, a
@@ -70,6 +89,38 @@ object HomeWeek {
                     key = "${event.id}@${event.startDateTime}"
                 )
             }
+    }
+
+    /**
+     * Today's agenda: every event touching [today], whole day, earliest first.
+     *
+     * Multi-day and overnight events are matched by overlap, the same rule the calendar's
+     * day queries follow — an event that started yesterday and ends tomorrow is part of today.
+     *
+     * @param events Events overlapping the home window, recurring series already expanded.
+     * @param today The day the screen is being drawn on.
+     * @param userId This device's Firebase UID, or blank while the session is unresolved.
+     * @param custodyFor Whose day a date is; bind through `CustodyResolver` as [of] asks.
+     */
+    fun todayOf(
+        events: List<Event>,
+        today: LocalDate,
+        userId: String,
+        custodyFor: (LocalDate) -> String?
+    ): TodayAgenda = TodayAgenda(
+        date = today,
+        events = events
+            .filter { it.covers(today) }
+            .filter { it.isVisibleTo(userId) }
+            .sortedBy { it.startDateTime },
+        dayParent = custodyFor(today)
+    )
+
+    /** Whether this event touches [day] — start and end dates inclusive. */
+    private fun Event.covers(day: LocalDate): Boolean {
+        val start = startDateTime.toLocalDate()
+        val end = (endDateTime ?: startDateTime).toLocalDate()
+        return !day.isBefore(start) && !day.isAfter(end)
     }
 
     /**

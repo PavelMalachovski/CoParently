@@ -194,11 +194,12 @@ fun CustodyChangedBanner(byName: String, onDismiss: () -> Unit, modifier: Modifi
 }
 
 /**
- * The selected day's events, listed under the month grid.
+ * One day's agenda: date, whose custody day it is, and the day's events.
  *
- * This is the other half of replacing event chips with dots: the dots say *how many*, and this
- * says *what*. Before, a cell showed the first event's title at roughly 9sp and hid the rest
- * behind "+N", so the only way to read a busy day was to leave the month view entirely.
+ * Born as the card under the calendar's month grid — the other half of replacing event chips
+ * with dots: the dots say *how many*, and this says *what*. It now renders on the home screen
+ * as the "today" card instead, so the month grid can fill its screen; the composable stayed
+ * here so the calendar could take it back without the two ever growing separate anatomies.
  *
  * @param date The selected day
  * @param events That day's events, in start order

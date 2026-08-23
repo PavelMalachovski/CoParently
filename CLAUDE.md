@@ -37,8 +37,13 @@ replace) the July 2026 overhaul below — those invariants still hold except whe
 5. **Calendar header is one row**: title (which *is* the Month/Week/Day picker), Today,
    Filters, gear. Change requests and school vacation are inline banners over the grid
    (`components/CalendarBanners.kt`), not a badged glyph and a per-day teal strip. Month
-   cells carry event **dots**; the selected day's titles go in the `DayAgendaCard` below,
-   and tapping a day selects it rather than jumping to Day view.
+   cells carry event **dots**, tapping a day selects it rather than jumping to Day view, and
+   the grid fills its screen. *(Aug 2026, second pass: the `DayAgendaCard` no longer sits
+   under the grid — it renders on Home as the "today" card (`HomeWeek.todayOf`), fed by the
+   same `DayAgendaCard` composable so the two surfaces cannot drift. Month paging is snapped
+   by `MonthView`'s own nestedScroll settle — one 500 ms tween, identical in both
+   directions — with `calendarScrollPaged = false`; don't hand snapping back to the library,
+   whose spring read differently per direction.)*
 6. **Weekly summary has exactly one entry point** — the button at the bottom of Home. The
    unlabelled `view_list` action is gone from the calendar header; don't add a second route.
 7. **The Chat tab renders the thread in place** when there is exactly one conversation
