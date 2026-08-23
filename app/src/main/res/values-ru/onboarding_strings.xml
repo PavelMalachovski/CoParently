@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Russian translations of onboarding_strings.xml. -->
+<resources>
+    <string name="onboarding_title">Настройка</string>
+    <string name="onboarding_progress">Шаг %1$d из %2$d</string>
+    <string name="onboarding_next">Далее</string>
+    <string name="onboarding_back">Назад</string>
+    <string name="onboarding_skip">Пропустить</string>
+    <string name="onboarding_finish">Готово</string>
+    <string name="onboarding_intro_title">Несколько вопросов перед началом</string>
+    <string name="onboarding_intro_body">CoPlanly может хранить данные вашей семьи, чтобы тот, кто окажется рядом с ребёнком, смог действовать, если случится непредвиденное, — группу крови, аллергию, телефон бабушки.\n\nВсё это необязательно, кроме вашего имени, и это можно заполнить позже в настройках.</string>
+    <string name="onboarding_footnote">Хранится для вас и второго родителя, на случай непредвиденных обстоятельств.</string>
+    <string name="onboarding_profile_title">О себе</string>
+    <string name="onboarding_profile_name_required">Имя — единственное, что нужно приложению: им подписывается каждое событие и каждый расход.</string>
+    <string name="onboarding_child_title">О ребёнке</string>
+    <string name="onboarding_child_body">Лекарства, занятия и данные об учебном заведении можно добавить позже, в настройках.</string>
+    <string name="onboarding_relatives_title">Кто может помочь</string>
+    <string name="onboarding_relatives_body">Бабушка, дедушка, тётя, дядя — любой, кто может забрать ребёнка или кому позвонят в экстренном случае.</string>
+    <string name="onboarding_relatives_needs_child">Эти контакты сохраняются вместе с ребёнком, поэтому сначала добавьте ребёнка — вернитесь на шаг назад или добавьте позже в настройках.</string>
+    <string name="onboarding_custody_title">Расписание опеки</string>
+    <string name="onboarding_custody_body">Укажите, в какие дни ребёнок с кем из вас. Это можно изменить в любой момент, и второй родитель должен будет согласиться с изменением.</string>
+    <string name="onboarding_custody_open">Составить расписание</string>
+    <string name="onboarding_coparent_title">Пригласите второго родителя</string>
+    <string name="onboarding_coparent_body">Отправьте ссылку или код. Как только он присоединится, он увидит всё, что вы здесь заполнили, и сможет дополнить.</string>
+    <string name="onboarding_coparent_open">Отправить приглашение</string>
+</resources>

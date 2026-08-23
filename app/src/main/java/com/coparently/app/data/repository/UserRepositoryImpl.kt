@@ -364,7 +364,8 @@ class UserRepositoryImpl @Inject constructor(
                 ?: DEFAULT_ALLERGIES_JSON,
             medicalProfileJson = (remote?.get("medicalProfile") as? Map<*, *>)
                 ?.let { gson.toJson(it) }
-                ?: DEFAULT_MEDICAL_PROFILE_JSON
+                ?: DEFAULT_MEDICAL_PROFILE_JSON,
+            onboardingCompletedAt = remote?.string("onboardingCompletedAt")
         )
         if (updated != local) userDao.insertUser(updated)
     }
@@ -417,7 +418,8 @@ class UserRepositoryImpl @Inject constructor(
                     "allergies" to user.allergies,
                     "medicalProfile" to gson.fromJson(
                         gson.toJson(user.medicalProfile), Map::class.java
-                    )
+                    ),
+                    "onboardingCompletedAt" to (user.onboardingCompletedAt ?: "")
                 )
                 firestoreUserDataSource.updateUser(firebaseUser.uid, userData).getOrThrow()
             } catch (e: Exception) {
@@ -498,7 +500,8 @@ class UserRepositoryImpl @Inject constructor(
             allergies = gson.fromJson(allergiesJson, Array<String>::class.java)?.toList().orEmpty(),
             medicalProfile = (
                 gson.fromJson(medicalProfileJson, MedicalProfile::class.java) ?: MedicalProfile()
-                ).withSanitizedVaccinationNames()
+                ).withSanitizedVaccinationNames(),
+            onboardingCompletedAt = onboardingCompletedAt
         )
     }
 
@@ -520,7 +523,8 @@ class UserRepositoryImpl @Inject constructor(
             dateOfBirth = dateOfBirth?.toString(),
             phone = phone,
             allergiesJson = gson.toJson(allergies),
-            medicalProfileJson = gson.toJson(medicalProfile)
+            medicalProfileJson = gson.toJson(medicalProfile),
+            onboardingCompletedAt = onboardingCompletedAt
         )
     }
 
@@ -546,7 +550,8 @@ class UserRepositoryImpl @Inject constructor(
                 (this["medicalProfile"] as? Map<*, *>)?.let {
                     gson.fromJson(gson.toJson(it), MedicalProfile::class.java)
                 } ?: MedicalProfile()
-                ).withSanitizedVaccinationNames()
+                ).withSanitizedVaccinationNames(),
+            onboardingCompletedAt = (this["onboardingCompletedAt"] as? String)?.takeIf { it.isNotBlank() }
         )
     }
 

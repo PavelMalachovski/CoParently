@@ -329,11 +329,45 @@ class CoPlanlyDatabaseMigrationTest {
         }
     }
 
+    /**
+     * 14-to-15 adds the first-run marker, and adds nothing else.
+     *
+     * Null on every existing row is the correct starting state rather than an oversight:
+     * `OnboardingState` treats an account that already carries a name and a child as complete
+     * by evidence, so a long-standing installation upgrading with a null marker is never handed
+     * a questionnaire about data it already holds. An empty string would be a different value
+     * with the same intent, which is why this asserts null specifically.
+     */
+    @Test
+    fun migration14To15_addsTheOnboardingMarkerAsNull() {
+        val db = helper.createDatabase(TEST_DB, VERSION_14)
+        db.execSQL(
+            """
+            INSERT INTO users (id, email, name, role, colorCode, googleCalendarSyncEnabled,
+                               allergiesJson, medicalProfileJson)
+            VALUES ('u1', 'a@example.com', 'Olya', 'mom', '#FF4081', 0, '[]', '{}')
+            """.trimIndent()
+        )
+        db.close()
+
+        val migrated = helper.runMigrationsAndValidate(
+            TEST_DB, VERSION_15, true, DatabaseMigrations.MIGRATION_14_15
+        )
+
+        migrated.query("SELECT name, onboardingCompletedAt FROM users").use {
+            assertTrue(it.moveToFirst())
+            assertEquals("Olya", it.getString(0))
+            assertTrue("the marker must start null, not empty", it.isNull(1))
+        }
+    }
+
     private companion object {
         const val TEST_DB = "coplanly-migration-test.db"
         const val VERSION_11 = 11
         const val VERSION_12 = 12
         const val VERSION_13 = 13
+        const val VERSION_14 = 14
+        const val VERSION_15 = 15
 
         /** 2026-08-01T12:00:00 at UTC+05:30, i.e. 06:30:00Z. */
         const val NOON_AT_PLUS_FIVE_THIRTY_MILLIS = 1_785_565_800_000L

@@ -42,7 +42,7 @@ import com.coparently.app.data.local.entity.UserEntity
         BudgetEntity::class,
         ChangeRequestEntity::class
     ],
-    version = 14,
+    version = 15,
     exportSchema = true
 )
 @TypeConverters(Converters::class)

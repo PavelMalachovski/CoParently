@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Czech translations of onboarding_strings.xml. -->
+<resources>
+    <string name="onboarding_title">Nastavení</string>
+    <string name="onboarding_progress">Krok %1$d z %2$d</string>
+    <string name="onboarding_next">Další</string>
+    <string name="onboarding_back">Zpět</string>
+    <string name="onboarding_skip">Přeskočit</string>
+    <string name="onboarding_finish">Hotovo</string>
+    <string name="onboarding_intro_title">Několik otázek, než začnete</string>
+    <string name="onboarding_intro_body">CoPlanly umí uchovat údaje o vaší rodině, aby ten, kdo je zrovna s dítětem, mohl jednat, když se stane něco nečekaného — krevní skupinu, alergii, telefon na babičku.\n\nVšechno kromě vašeho jména je nepovinné a můžete to doplnit později v nastavení.</string>
+    <string name="onboarding_footnote">Uchováváme pro vás a druhého rodiče, pro případ nouze.</string>
+    <string name="onboarding_profile_title">O vás</string>
+    <string name="onboarding_profile_name_required">Jméno je jediné, co aplikace potřebuje — podepisuje se jím každá událost i každý výdaj.</string>
+    <string name="onboarding_child_title">O dítěti</string>
+    <string name="onboarding_child_body">Léky, kroužky a údaje o škole můžete doplnit později v nastavení.</string>
+    <string name="onboarding_relatives_title">Kdo může pomoci</string>
+    <string name="onboarding_relatives_body">Babička, dědeček, teta, strýc — kdokoli, kdo může dítě vyzvednout nebo komu se zavolá v nouzi.</string>
+    <string name="onboarding_relatives_needs_child">Tyto kontakty se ukládají k dítěti, takže nejdřív přidejte dítě — vraťte se o krok zpět, nebo je doplňte později v nastavení.</string>
+    <string name="onboarding_custody_title">Rozvrh péče</string>
+    <string name="onboarding_custody_body">Určete, které dny je dítě u koho z vás. Kdykoli to můžete změnit a druhý rodič bude muset se změnou souhlasit.</string>
+    <string name="onboarding_custody_open">Sestavit rozvrh</string>
+    <string name="onboarding_coparent_title">Pozvěte druhého rodiče</string>
+    <string name="onboarding_coparent_body">Pošlete mu odkaz nebo kód. Jakmile se připojí, uvidí všechno, co jste tady vyplnili, a může to doplnit.</string>
+    <string name="onboarding_coparent_open">Odeslat pozvánku</string>
+</resources>
