@@ -3,14 +3,16 @@ package com.coparently.app.presentation.chat
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -24,7 +26,12 @@ import androidx.compose.ui.unit.dp
 import com.coparently.app.R
 
 /**
- * The message composer.
+ * The message composer: a borderless pill field beside a round filled send button — the
+ * messenger anatomy, adopted in the August 2026 second pass. The field is a filled
+ * `TextField` on `surfaceContainerHigh` (the same step incoming bubbles sit on) rather than
+ * an outlined one: the pill *is* the boundary, and a stroked border on top of it read as a
+ * form input in the middle of a conversation. The send button is disabled — not hidden —
+ * while the field is blank, so the affordance never jumps around as the user types.
  *
  * Stateless: the text lives in `ChatScreen`, because more than one thing seeds it — a draft
  * arriving from Expenses, and a message template — and a composable that owns its own text
@@ -54,9 +61,11 @@ fun MessageInput(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 12.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
+        // Bottom, not centre: when the field grows to a second line the send button stays
+        // anchored beside the line being typed, the way every messenger composer behaves.
+        verticalAlignment = Alignment.Bottom
     ) {
-        OutlinedTextField(
+        TextField(
             value = value,
             onValueChange = onValueChange,
             modifier = Modifier
@@ -66,21 +75,36 @@ fun MessageInput(
             placeholder = { Text(stringResource(R.string.chat_type_message)) },
             shape = RoundedCornerShape(24.dp),
             colors = TextFieldDefaults.colors(
+                focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
                 focusedIndicatorColor = Color.Transparent,
                 unfocusedIndicatorColor = Color.Transparent
             ),
             maxLines = 4
         )
 
-        IconButton(
+        FilledIconButton(
             onClick = { if (value.isNotBlank()) onSendMessage(value) },
-            enabled = value.isNotBlank()
+            enabled = value.isNotBlank(),
+            modifier = Modifier.size(SEND_BUTTON_SIZE),
+            colors = IconButtonDefaults.filledIconButtonColors(
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+                disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         ) {
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.Send,
                 contentDescription = stringResource(R.string.chat_send),
-                tint = if (value.isNotBlank()) MaterialTheme.colorScheme.primary else Color.Gray
+                modifier = Modifier.size(SEND_ICON_SIZE)
             )
         }
     }
 }
+
+/** Diameter of the round send button — sized to the pill field's single-line height. */
+private val SEND_BUTTON_SIZE = 48.dp
+
+/** The send glyph inside the button. */
+private val SEND_ICON_SIZE = 22.dp
