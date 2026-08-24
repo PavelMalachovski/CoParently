@@ -46,9 +46,11 @@ class CommunicationAnalyzer @Inject constructor(
 
     private fun buildCommunicationPrompt(message: String, context: MessageContext): String {
         return """
-            Analyze the tone and emotional content of this co-parenting message:
+            Analyze the tone and emotional content of this co-parenting message.
 
-            Message: "$message"
+            ${PromptSafety.DATA_ONLY_PREAMBLE}
+
+            ${PromptSafety.fence("MESSAGE", message)}
 
             Context:
             - Sender: ${context.senderName}
@@ -80,9 +82,11 @@ class CommunicationAnalyzer @Inject constructor(
 
     private fun buildImprovementPrompt(originalMessage: String, analysis: ToneAnalysis): String {
         return """
-            Rewrite this co-parenting message to be more effective and appropriate:
+            Rewrite this co-parenting message to be more effective and appropriate.
 
-            Original: "$originalMessage"
+            ${PromptSafety.DATA_ONLY_PREAMBLE}
+
+            ${PromptSafety.fence("ORIGINAL MESSAGE", originalMessage)}
 
             Issues identified:
             ${analysis.issues.joinToString("\n")}

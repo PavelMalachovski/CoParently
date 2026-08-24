@@ -3,6 +3,7 @@ package com.coparently.app.data.remote.ai
 import android.util.Log
 import com.coparently.app.domain.model.Event
 import com.coparently.app.domain.model.ai.*
+import com.coparently.app.domain.usecase.ai.PromptSafety
 import com.google.ai.client.generativeai.GenerativeModel
 import com.google.ai.client.generativeai.type.generationConfig
 import com.google.gson.Gson
@@ -13,11 +14,17 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Implementation of AIService using Google Gemini API
+ * Implementation of AIService using Google Gemini API.
+ *
+ * **Nothing here logs a model response.** Every method used to `Log.d` the raw `responseText`,
+ * and the prompts these responses answer are built from the family's calendar, their chat
+ * messages, their expenses and a child's details — so the whole point of the feature was being
+ * written to logcat, where a bug report or a connected `adb` picks it up. `Log.e` on the failure
+ * paths is kept: it carries the exception, not the content.
  */
 @Singleton
 class GeminiAIService @Inject constructor(
-    private val apiKey: String,
+    @GeminiApiKey private val apiKey: String,
     private val gson: Gson
 ) : AIService {
 
@@ -44,8 +51,6 @@ class GeminiAIService @Inject constructor(
             val response = generativeModel.generateContent(prompt)
             val responseText = response.text ?: return emptyList()
 
-            Log.d(TAG, "Time slot suggestions response: $responseText")
-
             parseTimeSlotSuggestions(responseText)
         } catch (e: Exception) {
             Log.e(TAG, "Error generating time slot suggestions", e)
@@ -63,8 +68,6 @@ class GeminiAIService @Inject constructor(
                 predictedConflicts = emptyList(),
                 schedulingEfficiency = 0.0
             )
-
-            Log.d(TAG, "Calendar patterns response: $responseText")
 
             parseCalendarInsights(responseText)
         } catch (e: Exception) {
@@ -87,8 +90,6 @@ class GeminiAIService @Inject constructor(
             val response = generativeModel.generateContent(prompt)
             val responseText = response.text ?: return emptyList()
 
-            Log.d(TAG, "Event improvements response: $responseText")
-
             parseEventSuggestions(responseText)
         } catch (e: Exception) {
             Log.e(TAG, "Error suggesting event improvements", e)
@@ -100,8 +101,6 @@ class GeminiAIService @Inject constructor(
         return try {
             val response = generativeModel.generateContent(prompt)
             val responseText = response.text ?: throw Exception("Empty response from AI")
-
-            Log.d(TAG, "Natural language parse response: $responseText")
 
             val parsedEvent = parseEventFromResponse(responseText)
             AIParseResponse(
@@ -120,8 +119,6 @@ class GeminiAIService @Inject constructor(
             val response = generativeModel.generateContent(prompt)
             val responseText = response.text ?: return emptyList()
 
-            Log.d(TAG, "Event suggestions response: $responseText")
-
             parseEventSuggestions(responseText)
         } catch (e: Exception) {
             Log.e(TAG, "Error generating event suggestions", e)
@@ -134,9 +131,11 @@ class GeminiAIService @Inject constructor(
     override suspend fun analyzeSentiment(text: String): SentimentResult {
         return try {
             val prompt = """
-                Analyze the sentiment of this message:
+                Analyze the sentiment of this message.
 
-                "$text"
+                ${PromptSafety.DATA_ONLY_PREAMBLE}
+
+                ${PromptSafety.fence("MESSAGE", text)}
 
                 Return in JSON format:
                 {
@@ -149,8 +148,6 @@ class GeminiAIService @Inject constructor(
             val response = generativeModel.generateContent(prompt)
             val responseText = response.text ?: throw Exception("Empty response")
 
-            Log.d(TAG, "Sentiment analysis response: $responseText")
-
             parseSentimentResult(responseText)
         } catch (e: Exception) {
             Log.e(TAG, "Error analyzing sentiment", e)
@@ -162,8 +159,6 @@ class GeminiAIService @Inject constructor(
         return try {
             val response = generativeModel.generateContent(prompt)
             val responseText = response.text ?: throw Exception("Empty response")
-
-            Log.d(TAG, "Communication analysis response: $responseText")
 
             parseToneAnalysisResponse(responseText)
         } catch (e: Exception) {
@@ -183,8 +178,6 @@ class GeminiAIService @Inject constructor(
             val response = generativeModel.generateContent(prompt)
             val responseText = response.text ?: return emptyList()
 
-            Log.d(TAG, "Message rewrites response: $responseText")
-
             parseMessageRewrites(responseText)
         } catch (e: Exception) {
             Log.e(TAG, "Error generating message rewrites", e)
@@ -196,8 +189,6 @@ class GeminiAIService @Inject constructor(
         return try {
             val response = generativeModel.generateContent(prompt)
             val responseText = response.text ?: throw Exception("Empty response")
-
-            Log.d(TAG, "Conversation summary response: $responseText")
 
             parseConversationSummary(responseText)
         } catch (e: Exception) {
@@ -220,8 +211,6 @@ class GeminiAIService @Inject constructor(
             val response = generativeModel.generateContent(prompt)
             val responseText = response.text ?: throw Exception("Empty response")
 
-            Log.d(TAG, "Family insights response: $responseText")
-
             parseFamilyInsights(responseText)
         } catch (e: Exception) {
             Log.e(TAG, "Error generating family insights", e)
@@ -237,8 +226,6 @@ class GeminiAIService @Inject constructor(
         return try {
             val response = generativeModel.generateContent(prompt)
             val responseText = response.text ?: throw Exception("Empty response")
-
-            Log.d(TAG, "Expense trends response: $responseText")
 
             parseExpenseTrendPrediction(responseText)
         } catch (e: Exception) {
@@ -559,16 +546,20 @@ class GeminiAIService @Inject constructor(
 
     private fun buildCalendarAnalysisPrompt(calendars: List<CalendarData>): String {
         return """
-            Analyze these parent calendars and provide insights:
+            Analyze these parent calendars and provide insights.
 
-            ${calendars.joinToString("\n\n") { calendar ->
-                """
-                Parent: ${calendar.parentName}
-                Events: ${calendar.events.joinToString("\n") {
-                    "- ${it.title} on ${it.startDateTime} (${it.eventType})"
-                }}
-                """.trimIndent()
-            }}
+            ${PromptSafety.DATA_ONLY_PREAMBLE}
+
+            ${PromptSafety.fence(
+                "CALENDARS",
+                calendars.joinToString("\n\n") { calendar ->
+                    "Parent: ${calendar.parentName}\n" +
+                        "Events:\n" +
+                        calendar.events.joinToString("\n") {
+                            "- ${it.title} on ${it.startDateTime} (${it.eventType})"
+                        }
+                }
+            )}
 
             Provide analysis of:
             1. Busy periods
@@ -582,15 +573,23 @@ class GeminiAIService @Inject constructor(
 
     private fun buildEventImprovementPrompt(event: Event, context: EventContext): String {
         return """
-            Suggest improvements for this event:
+            Suggest improvements for this event.
 
-            Event: ${event.title}
-            Type: ${event.eventType}
-            Time: ${event.startDateTime}
-            Description: ${event.description}
+            ${PromptSafety.DATA_ONLY_PREAMBLE}
+
+            ${PromptSafety.fence(
+                "EVENT",
+                "Title: ${event.title}\n" +
+                    "Type: ${event.eventType}\n" +
+                    "Time: ${event.startDateTime}\n" +
+                    "Description: ${event.description}"
+            )}
 
             Recent events context:
-            ${context.recentEvents.take(5).joinToString("\n") { "- ${it.title}" }}
+            ${PromptSafety.fence(
+                "RECENT EVENTS",
+                context.recentEvents.take(5).joinToString("\n") { "- ${it.title}" }
+            )}
 
             Suggest 2-3 improvements to make this event more effective.
             Consider timing, preparation, and coordination.

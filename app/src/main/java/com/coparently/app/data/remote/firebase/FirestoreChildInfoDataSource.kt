@@ -17,16 +17,10 @@ class FirestoreChildInfoDataSource @Inject constructor(
 ) {
     private val childInfoCollection = "child_info"
 
-    /**
-     * Gets all child information as a Flow.
-     */
-    fun getAllChildInfo(): Flow<List<Map<String, Any?>>> = flow {
-        val snapshot = firestore.collection(childInfoCollection)
-            .orderBy("childName")
-            .get()
-            .await()
-        emit(snapshot.documents.mapNotNull { it.data })
-    }
+    // `getAllChildInfo` was removed by the August 2026 audit, for the reason given in
+    // `FirestoreEventDataSource`: it queried the whole `child_info` collection with no
+    // `sharedWith` filter — every family's children, medical notes included — and had no
+    // caller. `getChildInfoForParent` below is the filtered read the app actually uses.
 
     /**
      * Gets child information for a specific parent pair.

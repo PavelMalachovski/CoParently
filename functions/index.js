@@ -554,7 +554,7 @@ exports.acceptPairingInvitation = functions.https.onCall(async (data, context) =
   }
 
   return acceptPairingInvitationImpl(
-      admin.firestore(), context.auth.uid, context.auth.token.email || '', {code, invitationId});
+      admin.firestore(), context.auth.uid, verifiedEmailOf(context), {code, invitationId});
 });
 
 /**
@@ -792,7 +792,7 @@ exports.acceptGuestInvitation = functions.https.onCall(async (data, context) => 
   }
 
   return acceptGuestInvitationImpl(
-      admin.firestore(), context.auth.uid, context.auth.token.email || '', {code, invitationId});
+      admin.firestore(), context.auth.uid, verifiedEmailOf(context), {code, invitationId});
 });
 
 /**
@@ -949,7 +949,7 @@ exports.acceptCalendarFriendInvitation = functions.https.onCall(async (data, con
   }
 
   return acceptCalendarFriendInvitationImpl(
-      admin.firestore(), context.auth.uid, context.auth.token.email || '', {code, invitationId});
+      admin.firestore(), context.auth.uid, verifiedEmailOf(context), {code, invitationId});
 });
 
 /** Firestore caps a batched write at 500 operations; stay clear of the edge. */
@@ -1085,6 +1085,8 @@ exports.sweepExpiredGuests = functions.pubsub
  * product decision, not a leak to close here.
  */
 const SHARED_AUDIENCE_COLLECTIONS = ['events', 'child_info', 'pets'];
+
+exports.SHARED_AUDIENCE_COLLECTIONS = SHARED_AUDIENCE_COLLECTIONS;
 
 /** Firestore caps a batched write at 500 operations; stay clear of the edge. */
 const REVOCATION_BATCH_LIMIT = 400;
@@ -1360,6 +1362,35 @@ exports.unpairCoParent = functions.https.onCall(async (data, context) => {
   }
   return unpairCoParentImpl(admin.firestore(), context.auth.uid);
 });
+
+/**
+ * The caller's email address, but **only when Firebase has verified it**.
+ *
+ * Every `accept*InvitationImpl` refuses an invitation addressed to somebody else by comparing
+ * `invite.toEmail` against the address the caller presents. That comparison is only worth
+ * anything if the address is proven, and `context.auth.token.email` does not prove one: Firebase
+ * fills it in for an email/password account the moment it is registered, with no verification
+ * step in between. So anybody who knew the address an invitation was sent to could register it,
+ * be handed a token claiming it, and redeem the invitation — and an invitation is a bearer
+ * credential for a co-parent link, a child's record, or a family's calendar.
+ *
+ * Returning '' for an unverified caller is what makes them fail that comparison: an invitation
+ * with a `toEmail` no longer matches. A **code-based** invitation carries `toEmail: ''` and is
+ * unaffected, which is correct — there the six-character code is the credential, and it was
+ * delivered out of band to whoever holds it.
+ *
+ * Google sign-in always carries a verified address, so the ordinary path does not notice this.
+ * An email/password user who has not confirmed their address can still pair by code.
+ *
+ * @param {?{auth: ?{token: ?Object}}} context The `onCall` context.
+ * @return {string} The verified address, or ''.
+ */
+function verifiedEmailOf(context) {
+  const token = (context && context.auth && context.auth.token) || {};
+  return token.email_verified === true && typeof token.email === 'string' ? token.email : '';
+}
+
+exports.verifiedEmailOf = verifiedEmailOf;
 
 /**
  * Resolves an invitation reference from a code or a document id.

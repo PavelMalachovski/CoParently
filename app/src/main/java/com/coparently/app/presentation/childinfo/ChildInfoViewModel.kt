@@ -276,7 +276,11 @@ class ChildInfoViewModel @Inject constructor(
             } catch (e: Exception) {
                 crashlyticsManager.recordExceptionWithContext(
                     e,
-                    mapOf("action" to "upsert_child_info", "child_name" to childInfo.childName)
+                    // The child's *id*, never their name: a Crashlytics custom key is uploaded
+                    // to Firebase and, being set on the session rather than the report, rides
+                    // along on every later report from this install. A minor's name is not a
+                    // diagnostic — the id points at the same row and identifies nobody.
+                    mapOf("action" to "upsert_child_info", "child_id" to childInfo.id)
                 )
                 _uiState.value = ChildInfoUiState.Error(e.message ?: "Failed to save child info")
             }

@@ -1,5 +1,6 @@
 package com.coparently.app.di
 
+import com.coparently.app.BuildConfig
 import com.coparently.app.data.repository.UserRepositoryImpl
 import com.coparently.app.domain.repository.UserRepository
 import com.google.firebase.analytics.FirebaseAnalytics
@@ -78,21 +79,37 @@ object FirebaseModule {
     }
 
     /**
-     * Provides Firebase Analytics instance.
+     * Provides Firebase Analytics, collecting only when the build says it may.
+     *
+     * `BuildConfig.ENABLE_ANALYTICS` and `ENABLE_CRASHLYTICS` have existed since the build was
+     * first written — false for debug, true for release — and until this change **nothing in the
+     * app read either of them.** Both SDKs auto-initialise, so every developer's debug install
+     * and every instrumented test run reported into the same production project as real
+     * families, mixing synthetic sessions into the numbers and sending device data from builds
+     * nobody consented on behalf of. Honouring the flags here is a one-line reading of a
+     * decision the project had already made and then never applied.
      */
     @Provides
     @Singleton
     fun provideFirebaseAnalytics(): FirebaseAnalytics {
-        return Firebase.analytics
+        return Firebase.analytics.apply {
+            setAnalyticsCollectionEnabled(BuildConfig.ENABLE_ANALYTICS)
+        }
     }
 
     /**
-     * Provides Firebase Crashlytics instance.
+     * Provides Firebase Crashlytics, collecting only when the build says it may.
+     *
+     * See [provideFirebaseAnalytics] — same flag, same reason. A debug crash is already in front
+     * of the developer who caused it; uploading it adds nothing and takes a stack trace off a
+     * machine that may be mid-experiment.
      */
     @Provides
     @Singleton
     fun provideFirebaseCrashlytics(): FirebaseCrashlytics {
-        return FirebaseCrashlytics.getInstance()
+        return FirebaseCrashlytics.getInstance().apply {
+            setCrashlyticsCollectionEnabled(BuildConfig.ENABLE_CRASHLYTICS)
+        }
     }
 
     /**

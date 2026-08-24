@@ -56,13 +56,17 @@ class NaturalLanguageEventParserUseCase @Inject constructor(
         return """
             Parse the following natural language text into a structured calendar event.
 
-            Text: "$text"
+            ${PromptSafety.DATA_ONLY_PREAMBLE}
+
+            ${PromptSafety.fence("TEXT TO PARSE", text)}
 
             Context:
             - Current date: ${context.currentDate}
             - User timezone: ${context.timezone}
-            - Recent events: ${recentEvents.joinToString { it.title }}
             - Common locations: ${context.commonLocations.joinToString()}
+
+            Recent event titles, for disambiguation only:
+            ${PromptSafety.fence("RECENT EVENT TITLES", recentEvents.joinToString("\n") { it.title })}
 
             Extract:
             1. Event title

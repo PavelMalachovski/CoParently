@@ -140,7 +140,10 @@ class PetsViewModel @Inject constructor(
             ) {
                 crashlyticsManager.recordExceptionWithContext(
                     e,
-                    mapOf("action" to "upsert_pet", "pet_name" to pet.name)
+                    // The id rather than the name, matching `ChildInfoViewModel`: custom keys are
+                    // uploaded and persist across the Crashlytics session, so nothing a family
+                    // typed belongs in one.
+                    mapOf("action" to "upsert_pet", "pet_id" to pet.id)
                 )
                 _uiState.value = PetsUiState.Error(e.message ?: "Failed to save pet")
             }
