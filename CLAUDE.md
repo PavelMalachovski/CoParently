@@ -155,7 +155,8 @@ cd firestore-tests && npm test              # firestore.rules against the local 
 - Windows dev machine; Gradle wrapper works from Git Bash and PowerShell.
 - `google-services.json` is required for the Google Services plugin, but the build
   degrades gracefully if it is missing (see the conditional apply in `app/build.gradle.kts`).
-- **GitHub CI runs on every push and pull request** (`.github/workflows/ci.yml`, added
+- **GitHub CI runs on every pull request, and on every push to `main`** — a push to a
+  feature branch with no PR open is not built (`.github/workflows/ci.yml`, added
   August 2026 — this line used to say there was none). Three jobs: Gradle
   (`assembleDebug`, `testDebugUnitTest`, `lint`, `detekt`, `assembleRelease`), Cloud
   Functions, and the Firestore rules suite against the emulator. Two caveats, both
