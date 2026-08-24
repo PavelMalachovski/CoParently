@@ -16,7 +16,6 @@ import com.coparently.app.domain.repository.MessageRepository
 import com.coparently.app.domain.repository.PairingRepository
 import com.coparently.app.domain.repository.UserRepository
 import com.coparently.app.presentation.common.Loadable
-import com.coparently.app.presentation.common.stateInLoadable
 import com.coparently.app.presentation.common.valueOrNull
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
@@ -219,19 +218,38 @@ class ChatViewModel @Inject constructor(
     val conversations: StateFlow<Loadable<List<Conversation>>> =
         combine(currentUserId, coParentLink) { userId, link -> userId to link }
             .flatMapLatest { (userId, link) ->
-                val conversationId = (link as? CoParentLink.Linked)
-                    ?.let { conversationIdOrNull(userId, it.partnerId) }
-                if (conversationId == null) {
-                    flowOf(emptyList())
-                } else {
-                    messageRepository.observeConversation(conversationId).map { listOfNotNull(it) }
+                when (link) {
+                    // Not an answer yet. Collapsing this into an empty list is the same false
+                    // assertion `Loadable` exists to remove, one layer further down: the screen
+                    // would say "no conversations" for the frames before the pairing listener
+                    // has reported anything at all.
+                    CoParentLink.Resolving -> flowOf(Loadable.Loading)
+
+                    CoParentLink.NotPaired -> flowOf(Loadable.Loaded(emptyList()))
+
+                    is CoParentLink.Linked -> {
+                        // A null id means the session has not resolved, so there is no key to
+                        // build a thread from — but the pairing *has* answered, and signing out
+                        // is a real answer too. Known to be empty, not unknown.
+                        val conversationId = conversationIdOrNull(userId, link.partnerId)
+                        if (conversationId == null) {
+                            flowOf(Loadable.Loaded(emptyList()))
+                        } else {
+                            messageRepository.observeConversation(conversationId)
+                                .map { Loadable.Loaded(listOfNotNull(it)) }
+                        }
+                    }
                 }
             }
-            .catch { e -> failSoft("observe conversation", e) { emit(emptyList()) } }
-            // Loadable, not a bare list: `emptyList()` as an initial value made "the thread has
-            // not loaded" and "there is no thread" the same value, and the screen showed the
-            // empty state for the frames in between.
-            .stateInLoadable(viewModelScope, SUBSCRIPTION_TIMEOUT_MS)
+            // A failed read is a different question from an unfinished one: this one has been
+            // asked and answered badly, so the screen gets an answer rather than a skeleton it
+            // would sit under for ever.
+            .catch { e -> failSoft("observe conversation", e) { emit(Loadable.Loaded(emptyList())) } }
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(SUBSCRIPTION_TIMEOUT_MS),
+                initialValue = Loadable.Loading
+            )
 
     /**
      * The same thread, flattened, for everything inside this class that derives from it.

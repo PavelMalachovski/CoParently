@@ -203,8 +203,12 @@ class ChatViewModelTest {
         val viewModel = createViewModel()
 
         viewModel.conversations.test {
+            // Only here to hold a subscriber open while the id is derived; the assertions are
+            // the verifies below, so how many states pass by on the way is not this test's
+            // business.
             awaitItem()
             advanceUntilIdle()
+            cancelAndIgnoreRemainingEvents()
         }
 
         verify { messageRepository.observeConversation(CONVERSATION) }
