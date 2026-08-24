@@ -87,4 +87,8 @@
     <string name="expenses_row_meta_with_receipt">%1$s · %2$s · Beleg</string>
     <string name="expenses_budget_chip">%1$s %2$s / %3$s</string>
     <string name="expenses_budget_add">+ Budget</string>
+    <!-- Budget status in words (UX-10). -->
+    <string name="budget_status_near">Nahe am Limit</string>
+    <string name="budget_status_over">Über dem Limit</string>
+    <string name="expenses_budget_chip_status">%1$s · %2$s</string>
 </resources>

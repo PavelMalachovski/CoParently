@@ -608,11 +608,30 @@ sentences and no action. Separately, `AnimatedEmptyState` takes no `modifier` an
 top bar in `ConversationsScreen` and `BudgetScreen`; it also does not scroll, so it clips at
 large font scales. Audit §9.12.
 
-### UX-10 · P2 · S · Budget status is carried by colour alone
+### UX-10 · **DONE** · Budget status is carried by colour alone
 
-Under / near / over is a 6dp dot in green/amber/red, decorative (no semantics), and the amber
-`CoPlanlyBudgetWarning` is theme-independent — about 1.9:1 on a light background. A screen reader
-gets "School 800/1000" and no status at all. WCAG 1.4.1. Audit §9.13.
+Under / near / over was a 6dp dot in green/amber/red, decorative (no semantics), and the amber
+`CoPlanlyBudgetWarning` was theme-independent — 1.67:1 on a light background, measured. A screen
+reader got "School 800/1000" and no status at all. WCAG 1.4.1. Audit §9.13.
+
+`BudgetStatus` is now a value, and colour is the **third** channel behind a word and a shape:
+a chip past its threshold says so in words and carries a warning triangle, one past its limit
+carries an error circle. A circle and a triangle rather than two tints of one shape, because the
+point is to survive the colour being discarded. `UNDER` deliberately gets neither — marking every
+budget in hand would bury the two that matter.
+
+Two things fell out of it that were not in the item:
+
+- **The two screens disagreed.** `BudgetItem` decided the same three states in a *third* palette
+  (`Color.Red` / `0xFFFFC107` / `0xFF4CAF50`), so one budget could read as a different amber
+  depending on which screen you were on. Both now go through `BudgetStatus`.
+- **The percentage was painted in the status colour**, which put the amber state at ~1.7:1 as
+  *text*. It is `onSurface` now; the colour is left to the progress bar, where it is a graphical
+  indicator rather than something to read.
+
+`CoPlanlyColors.BudgetWarningLight`/`Dark` is a pair for the reason the parent colours are: no
+single amber clears 3:1 (WCAG 1.4.11) against both surfaces. Measured, not guessed — Orange 800
+is 3.08:1 on white, Amber 600 is 9.55:1 on `DarkSurface`.
 
 ### UX-11 · P2 · S · The Google Calendar row breaks the one-trailing-control rule
 
@@ -872,9 +891,9 @@ Not a wish-list ordering — a dependency ordering. Each block assumes the one a
 8. ~~**CQ-3** — deletions that replicate.~~ **Done.** Tombstones, an outbox that retries, and a
    daily server-side sweep. See the item for the three decisions it rests on.
 9. ~~**UX-1 → UX-7** — the P1 usability set.~~ **Done.** What remains in `UX` is P2 and below:
-   the empty-state anatomies (**UX-9**), budget status carried by colour alone (**UX-10**), the
-   Settings row with three interaction models (**UX-11**), and the English success strings
-   (**UX-12**, blocked on **CQ-14**).
+   the empty-state anatomies (**UX-9**), the Settings row with three interaction models
+   (**UX-11**), and the English success strings (**UX-12**, blocked on **CQ-14**). **UX-10** is
+   done.
 
 **Then, the product bets, in descending confidence**
 

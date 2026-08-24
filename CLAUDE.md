@@ -350,6 +350,12 @@ Data flow: UI → ViewModel → UseCase → Repository → Room (source of truth
 
 ## Known issues / do not "fix" silently
 
+**Check an entry against the code before acting on it.** Two entries in this section, and one
+claim in `storage.rules`, have described defects that were already fixed or limits that were
+never real — a reader following them would have re-fixed working code, or accepted a constraint
+that does not exist. When an item here turns out to be stale, correct it in the same commit as
+whatever you were doing; a stale "known issue" costs more than a missing one.
+
 - `Expense.currency` is a real per-expense field. A month mixing currencies is now summarised
   **per currency** (`calculateExpenseBalancesByCurrency` → one `ExpenseSummaryHeader` per currency
   on the Expenses screen; the Home "this month" tile joins per-currency subtotals). There is still
@@ -401,18 +407,15 @@ Data flow: UI → ViewModel → UseCase → Repository → Room (source of truth
   and re-dating them makes this device win every comparison forever
   (`CustodyModelRepositoryTest` pins both).
 
-- **The calendar never renders `EventUiState.Error`.** `EventViewModel` sets it when a range query
-  fails, but the only `LaunchedEffect(uiState)` branch in `CalendarScreen` handles
-  `OperationSuccess` — so a failed range leaves the last-loaded grid on screen, or an empty one on
-  a cold start, with nothing saying anything went wrong. Milder than the chat-listener entry above,
-  which is why it is listed and not fixed: a recovery lever exists (pull-to-refresh calls
-  `EventViewModel.refresh()`, which re-collects the query from scratch — re-requesting the same
-  range is conflated away and could not restart it), and leaving and re-entering the Calendar tab
-  recreates the ViewModel anyway. What is missing is that the user has to guess at the lever. The
-  fix is an `is EventUiState.Error` branch in that same `LaunchedEffect` raising a snackbar with a
-  Retry action wired to `refresh()`; it needs a new string in all five locales, which is why it was
-  not folded into the query-window work. Don't "fix" it by rendering `Loading` in the calendar —
-  the query flips to `Loading` on every re-anchor and the grid would flicker.
+- ~~**The calendar never renders `EventUiState.Error`.**~~ **Fixed** — and this entry described
+  the defect for some time after it was gone. `CalendarScreen`'s `LaunchedEffect(uiState)` has an
+  `is EventUiState.Error` branch raising a snackbar with a Retry action wired to
+  `EventViewModel.refresh()`, which is the fix this entry used to prescribe, strings and all.
+  Kept rather than deleted because the reasoning is worth finding: `EventViewModel` raises
+  `Error` from eleven places, a failed *write* is the dangerous one (a parent drags an event, the
+  optimistic UI moves it, the write fails, the next sync puts it back), and `Loading` is still the
+  wrong thing to render on the grid — the query flips to `Loading` on every re-anchor and the grid
+  would flicker.
 
 - `firestore.rules` (strict) was realigned with the real document schema (ISO **string**
   dates, presence-based key validation, `change_requests`/`expenses` collections added,
@@ -473,9 +476,10 @@ Data flow: UI → ViewModel → UseCase → Repository → Room (source of truth
   July 2026 localization pass. Don't inject `Context` into ViewModels ad hoc to "fix" one.
 - Calendar range/day queries now match multi-day & overnight events by overlap
   (`getSingleEventsByDateRange` / `getEventsByDate`), not start date only.
-- Unit tests for ChildInfo/Pairing/Settings/Sync ViewModels were removed as stale
-  (they targeted long-gone APIs); rewrite them against the current constructors when
-  touching those features.
+- Unit tests for ChildInfo/Pairing/Settings/Sync ViewModels were once removed as stale (they
+  targeted long-gone APIs). **Three of the four are back**: `ChildInfoViewModelTest`,
+  `PairingViewModelTest` and `SyncServiceTest` all exist and run. Settings still has none —
+  that is the one to write when touching it.
 
 - **`ChildInfoViewModel`'s editor state is loaded by id, never from the head of a list.**
   `loadChildInfo()` serves the list screen and touches nothing else; `loadChildInfoById()` is the

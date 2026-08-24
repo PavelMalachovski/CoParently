@@ -223,6 +223,9 @@ fun SectionRow(
  * @param label Chip text
  * @param modifier Modifier applied to the chip
  * @param icon Optional leading icon
+ * @param iconDescription What the icon means, for a screen reader. Null leaves it decorative,
+ *   which is right when the icon repeats the label and wrong when it is the only thing saying
+ *   something — a status shape, for instance.
  * @param container Fill colour, or null for an outlined chip
  * @param contentColor Text and icon colour
  * @param leadingDot Colour of a small status dot before the label, or null for none
@@ -234,6 +237,7 @@ fun PillChip(
     label: String,
     modifier: Modifier = Modifier,
     icon: ImageVector? = null,
+    iconDescription: String? = null,
     container: Color? = null,
     contentColor: Color = MaterialTheme.colorScheme.primary,
     leadingDot: Color? = null,
@@ -287,7 +291,7 @@ fun PillChip(
         if (icon != null) {
             Icon(
                 imageVector = icon,
-                contentDescription = null,
+                contentDescription = iconDescription,
                 tint = contentColor,
                 modifier = Modifier.size(16.dp)
             )

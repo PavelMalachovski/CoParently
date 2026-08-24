@@ -12,7 +12,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.coparently.app.R
@@ -65,8 +64,9 @@ fun budgetProgress(budgets: List<Budget>, monthExpenses: List<Expense>): List<Bu
  *
  * Budgets already existed but lived entirely behind an unlabelled piggy-bank icon in the top
  * bar, so the Expenses screen carried no budget signal at all — you could blow through a limit
- * without the screen you were looking at ever mentioning it. Each chip states spent-of-limit
- * and carries a dot that turns amber at the budget's alert threshold and red past the limit.
+ * without the screen you were looking at ever mentioning it. Each chip states spent-of-limit;
+ * one past its alert threshold or its limit also says so in words and carries a warning shape,
+ * so the status does not depend on telling two ambers apart (see [BudgetStatus]).
  *
  * @param progress Budget progress entries, already ordered
  * @param onOpenBudgets Opens the budgets screen; also the "+ Budget" target
@@ -87,15 +87,28 @@ fun BudgetChips(
     ) {
         progress.forEach { entry ->
             val format = currencyFormat(entry.budget.currency)
+            val status = entry.status()
+            val statusLabel = status.label()
+            val amounts = stringResource(
+                R.string.expenses_budget_chip,
+                stringResource(entry.budget.category.labelRes),
+                format.format(entry.spent),
+                format.format(entry.budget.monthlyLimit)
+            )
             PillChip(
-                label = stringResource(
-                    R.string.expenses_budget_chip,
-                    stringResource(entry.budget.category.labelRes),
-                    format.format(entry.spent),
-                    format.format(entry.budget.monthlyLimit)
-                ),
+                // The status word joins the label rather than replacing the dot. A chip in hand
+                // stays exactly as it was — the two that need attention are the ones that grow.
+                label = if (statusLabel == null) {
+                    amounts
+                } else {
+                    stringResource(R.string.expenses_budget_chip_status, amounts, statusLabel)
+                },
                 contentColor = MaterialTheme.colorScheme.onSurface,
-                leadingDot = entry.dotColor(),
+                icon = status.icon,
+                iconDescription = statusLabel,
+                // Dot only while the icon is absent, so a warning chip carries one marker and
+                // not two competing ones.
+                leadingDot = if (status.icon == null) status.color() else null,
                 onClick = onOpenBudgets
             )
         }
@@ -106,20 +119,6 @@ fun BudgetChips(
     }
 }
 
-/** Green while comfortably inside, amber past the alert threshold, red past the limit. */
-@Composable
-private fun BudgetProgress.dotColor(): Color = when {
-    isOverLimit -> MaterialTheme.colorScheme.error
-    isNearLimit -> CoPlanlyBudgetWarning
-    else -> MaterialTheme.colorScheme.tertiary
-}
-
-/**
- * Amber for "close to the limit".
- *
- * Material 3 has no warning role between `tertiary` and `error`, and borrowing `error` for a
- * budget at 85% would say "something is wrong" when nothing is. Defined here rather than in the
- * palette because this strip is its only use; promote it to `CoPlanlyColors` if a second screen
- * needs the same idea.
- */
-private val CoPlanlyBudgetWarning = Color(0xFFF5C05B)
+// `dotColor` and the local `CoPlanlyBudgetWarning` moved to `BudgetStatus` (UX-10). The comment
+// on the colour said to promote it "if a second screen needs the same idea" — `BudgetItem` had
+// needed it all along and had been carrying its own, different amber.

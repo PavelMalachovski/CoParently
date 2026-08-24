@@ -88,4 +88,8 @@
     <string name="expenses_row_meta_with_receipt">%1$s · %2$s · účtenka</string>
     <string name="expenses_budget_chip">%1$s %2$s / %3$s</string>
     <string name="expenses_budget_add">+ Rozpočet</string>
+    <!-- Budget status in words (UX-10). -->
+    <string name="budget_status_near">Blízko limitu</string>
+    <string name="budget_status_over">Nad limitem</string>
+    <string name="expenses_budget_chip_status">%1$s · %2$s</string>
 </resources>
