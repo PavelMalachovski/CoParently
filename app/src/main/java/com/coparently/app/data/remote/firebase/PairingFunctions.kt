@@ -200,6 +200,8 @@ class PairingFunctions @Inject constructor(
                 "wrong-recipient" -> PairingError.WrongRecipient
                 "guest-invitation" -> PairingError.GuestInvitation
                 "not-a-guest-invitation" -> PairingError.NotGuestInvitation
+                "friend-invitation" -> PairingError.FriendInvitation
+                "not-a-friend-invitation" -> PairingError.NotFriendInvitation
                 "grant-expired" -> PairingError.GrantEnded
                 "inviter-not-entitled" -> PairingError.InviterNotEntitled
                 "already-entitled" -> PairingError.AlreadyEntitled

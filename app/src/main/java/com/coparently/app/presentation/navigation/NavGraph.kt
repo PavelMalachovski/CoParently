@@ -409,6 +409,9 @@ fun NavGraph(
                     onNavigateToPets = {
                         navController.navigate(Screen.Pets.route)
                     },
+                    onNavigateToFriends = {
+                        navController.navigate(Screen.Friends.route)
+                    },
                     onNavigateToPairing = {
                         navController.navigate(Screen.Pairing.routeWithCode(null))
                     },
@@ -567,6 +570,21 @@ fun NavGraph(
                     onResolved = {
                         navController.popBackStack()
                     }
+                )
+            }
+
+            // The parents' friend list, and the friend's own profile. Detail routes: the
+            // bottom bar hides and an up-arrow returns, like every other Settings destination.
+            composable(route = Screen.Friends.route) {
+                com.coparently.app.presentation.friends.FriendsScreen(
+                    onNavigateUp = { navController.popBackStack() },
+                    onOpenMyProfile = { navController.navigate(Screen.FriendProfile.route) }
+                )
+            }
+
+            composable(route = Screen.FriendProfile.route) {
+                com.coparently.app.presentation.friends.FriendProfileScreen(
+                    onNavigateUp = { navController.popBackStack() }
                 )
             }
 
@@ -1073,6 +1091,12 @@ sealed class Screen(val route: String) {
         fun routeWithCode(code: String?): String =
             if (code.isNullOrEmpty()) "guest_accept" else "guest_accept?code=$code"
     }
+
+    /** The parents' list of who outside the family can see the calendar (item 16). */
+    data object Friends : Screen("friends")
+
+    /** The friend's own profile, authored by them and read by the two parents. */
+    data object FriendProfile : Screen("friend_profile")
 
     data object CustodySetup : Screen("custody_setup")
 

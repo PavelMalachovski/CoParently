@@ -72,4 +72,6 @@
     <string name="pairing_email_invite">Per E-Mail</string>
     <string name="pairing_trust_title">Was beim Verbinden geteilt wird</string>
     <string name="pairing_trust_body">Gemeinsamer Kalender und Betreuungsplan, gemeinsame Ausgaben und Salden sowie der Chat. Private Termine verlassen Ihr Gerät nie. Sie können die Verbindung jederzeit trennen.</string>
+    <string name="pairing_error_friend_invitation">Das ist eine Freundeseinladung. Öffne Einstellungen → Freund mit Kalenderzugriff.</string>
+    <string name="pairing_error_not_friend_invitation">Das ist keine Freundeseinladung.</string>
 </resources>

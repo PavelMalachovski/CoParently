@@ -472,18 +472,11 @@ class PairingViewModel @Inject constructor(
         }
     }
 
+    // Extracted to `PairingErrorText` so the guest and calendar-friend flows, which fail in the
+    // same ways, share one `when` rather than each keeping a copy for a new PairingError to go
+    // unhandled in.
     @StringRes
-    private fun messageFor(throwable: Throwable): Int =
-        when ((throwable as? PairingException)?.error) {
-            PairingError.NotFound -> R.string.pairing_error_not_found
-            PairingError.Expired -> R.string.pairing_error_expired
-            PairingError.NotPending -> R.string.pairing_error_not_pending
-            PairingError.SelfPairing -> R.string.pairing_error_self_pairing
-            PairingError.AlreadyPaired -> R.string.pairing_error_already_paired
-            PairingError.WrongRecipient -> R.string.pairing_error_wrong_recipient
-            PairingError.Network -> R.string.pairing_error_network
-            else -> R.string.pairing_error_unknown
-        }
+    private fun messageFor(throwable: Throwable): Int = throwable.pairingMessageRes()
 
     private companion object {
         const val TAG = "PairingViewModel"

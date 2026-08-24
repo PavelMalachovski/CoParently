@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.EventAvailable
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Diversity3
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Language
@@ -103,6 +104,7 @@ private val syncTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
  * @param onNavigateToChildInfo Opens child information
  * @param onNavigateToPets Opens the pets list
  * @param onNavigateToPairing Opens co-parent pairing
+ * @param onNavigateToFriends Opens the calendar-friend list (item 16)
  * @param onNavigateToCustodySetup Opens custody schedule setup
  * @param onNavigateToMyProfile Opens the signed-in user's own profile, editable
  * @param onNavigateToCoParentProfile Opens the co-parent's profile, read-only
@@ -122,6 +124,7 @@ fun SettingsScreen(
     onNavigateToChildInfo: (() -> Unit)? = null,
     onNavigateToPets: (() -> Unit)? = null,
     onNavigateToPairing: (() -> Unit)? = null,
+    onNavigateToFriends: (() -> Unit)? = null,
     onNavigateToCustodySetup: (() -> Unit)? = null,
     onNavigateToMyProfile: (() -> Unit)? = null,
     onNavigateToCoParentProfile: (() -> Unit)? = null,
@@ -191,6 +194,22 @@ fun SettingsScreen(
                             icon = Icons.Default.Group,
                             title = stringResource(R.string.settings_pairing_title),
                             supporting = stringResource(R.string.settings_pairing_description),
+                            onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                navigate()
+                            },
+                            trailing = { Chevron() }
+                        )
+                        Divider()
+                    }
+                    // The trusted third person (item 16), directly under pairing: a friend can
+                    // only be admitted once the pair exists, so this is where a parent already
+                    // is when the thought occurs.
+                    onNavigateToFriends?.let { navigate ->
+                        SectionRow(
+                            icon = Icons.Default.Diversity3,
+                            title = stringResource(R.string.friend_section_title),
+                            supporting = stringResource(R.string.friend_section_supporting),
                             onClick = {
                                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                 navigate()
