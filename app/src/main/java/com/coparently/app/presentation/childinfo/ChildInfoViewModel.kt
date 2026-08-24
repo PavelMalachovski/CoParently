@@ -17,6 +17,7 @@ import com.coparently.app.domain.repository.GuestRepository
 import com.coparently.app.domain.repository.MedicalPhotoStorage
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -86,8 +87,16 @@ class ChildInfoViewModel @Inject constructor(
     private val _uiState = MutableStateFlow<ChildInfoUiState>(ChildInfoUiState.Loading)
     val uiState: StateFlow<ChildInfoUiState> = _uiState.asStateFlow()
 
+    /**
+     * The one child an editor is open on, set only by [loadChildInfoById]. Null until a child is
+     * loaded by id — including for a brand-new child, so its form starts genuinely blank rather
+     * than prefilled from whoever happened to be first in the list.
+     */
     private val _currentChildInfo = MutableStateFlow<ChildInfo?>(null)
     val currentChildInfo: StateFlow<ChildInfo?> = _currentChildInfo.asStateFlow()
+
+    /** The live [loadChildInfoById] collector, so opening another child replaces it. */
+    private var childObservation: Job? = null
 
     /** Why a photograph did not make it on or off the record, or null when nothing is wrong. */
     private val _photoError = MutableStateFlow<MedicalPhotoError?>(null)
@@ -212,7 +221,16 @@ class ChildInfoViewModel @Inject constructor(
     }
 
     /**
-     * Loads all child information.
+     * Loads every child, for the screen that lists them.
+     *
+     * **Does not touch [currentChildInfo].** It used to set it to `childInfoList.first()` on
+     * every emission, which made the editor's contents a function of the list rather than of the
+     * child being edited: while a parent edited child B, any write touching the `child_info`
+     * table — a background sync tick was enough — re-emitted the list, reset the state to child A
+     * and silently repopulated the visible form. The damage was at save time, where the
+     * snapshot-and-`copy()` base had become child A, so the write landed on **child A's real
+     * row** — its id, `createdAt` and `createdByFirebaseUid` included — carrying a mix of stale
+     * values and whatever child B's fields held.
      */
     fun loadChildInfo() {
         viewModelScope.launch {
@@ -220,9 +238,6 @@ class ChildInfoViewModel @Inject constructor(
             try {
                 childInfoRepository.getAllChildInfo().collect { childInfoList ->
                     _uiState.value = ChildInfoUiState.Success(childInfoList)
-                    if (childInfoList.isNotEmpty()) {
-                        _currentChildInfo.value = childInfoList.first()
-                    }
                 }
             } catch (e: Exception) {
                 _uiState.value = ChildInfoUiState.Error(e.message ?: "Failed to load child info")
@@ -231,10 +246,15 @@ class ChildInfoViewModel @Inject constructor(
     }
 
     /**
-     * Loads specific child information by ID.
+     * Observes the one child being edited, and the only thing that sets [currentChildInfo].
+     *
+     * Cancels a previous observation first: without that, opening one child after another leaves
+     * the earlier collector running, and two collectors then write the same state — the same
+     * class of defect as reading the head of the list, arrived at from the other direction.
      */
     fun loadChildInfoById(id: String) {
-        viewModelScope.launch {
+        childObservation?.cancel()
+        childObservation = viewModelScope.launch {
             childInfoRepository.observeChildInfoById(id).collect { childInfo ->
                 _currentChildInfo.value = childInfo
             }

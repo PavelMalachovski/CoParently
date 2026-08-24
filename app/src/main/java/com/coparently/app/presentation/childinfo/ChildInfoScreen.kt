@@ -32,6 +32,7 @@ import com.coparently.app.presentation.childinfo.components.GuestInviteSheet
 import com.coparently.app.presentation.childinfo.components.MedicalPhotoStrip
 import com.coparently.app.presentation.common.ConfirmationDialog
 import com.coparently.app.presentation.common.GroupLabel
+import com.coparently.app.presentation.common.ListSkeleton
 import com.coparently.app.presentation.common.SectionGroup
 import com.coparently.app.presentation.common.SectionGroupScope
 import com.coparently.app.presentation.common.SectionRow
@@ -59,7 +60,6 @@ fun ChildInfoScreen(
     val haptic = LocalHapticFeedback.current
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsState()
-    val currentChildInfo by viewModel.currentChildInfo.collectAsState()
     val guestInvite by viewModel.guestInvite.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -121,9 +121,11 @@ fun ChildInfoScreen(
         ) {
             when (val state = uiState) {
                 is ChildInfoUiState.Loading -> {
-                    CircularProgressIndicator(
-                        modifier = Modifier.align(Alignment.Center)
-                    )
+                    // A skeleton rather than a spinner, matching every other list in the app: a
+                    // centred spinner says "something is happening", a skeleton says what is
+                    // about to be there, and consistency across the tabs is worth more here than
+                    // either on its own.
+                    ListSkeleton(rows = 3)
                 }
                 is ChildInfoUiState.Error -> {
                     Column(
@@ -169,7 +171,11 @@ fun ChildInfoScreen(
                             }
                         }
                     } else {
-                        currentChildInfo?.let { childInfo ->
+                        // Read from the list this screen already holds, rather than from
+                        // `currentChildInfo`: that state belongs to the editor and is set by the
+                        // child it was opened on. Feeding it from the head of the list is what
+                        // let an edit of one child be saved over another.
+                        state.childInfoList.firstOrNull()?.let { childInfo ->
                             ChildInfoContent(
                                 childInfo = childInfo,
                                 onEditClick = onEditClick,

@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.content.ContextCompat
+import com.coparently.app.data.crashlytics.CrashlyticsManager
 import com.coparently.app.data.remote.firebase.FcmService
 import com.coparently.app.data.remote.firebase.FirebaseAuthService
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -23,7 +24,8 @@ import javax.inject.Singleton
 class NotificationManager @Inject constructor(
     @ApplicationContext private val context: Context,
     private val fcmService: FcmService,
-    private val firebaseAuthService: FirebaseAuthService
+    private val firebaseAuthService: FirebaseAuthService,
+    private val crashlyticsManager: CrashlyticsManager
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -67,8 +69,11 @@ class NotificationManager @Inject constructor(
                     fcmService.updateUserToken(token)
                 }
             } catch (e: Exception) {
-                // Log error but don't crash app
-                e.printStackTrace()
+                // Push registration failing silently is how a parent stops receiving anything
+                // without either of them learning why. It must not crash the app; it must not be
+                // invisible either.
+                android.util.Log.e(TAG, "FCM token registration failed", e)
+                crashlyticsManager.recordException(e)
             }
         }
     }
@@ -85,7 +90,8 @@ class NotificationManager @Inject constructor(
                     fcmService.updateUserToken(token)
                 }
             } catch (e: Exception) {
-                e.printStackTrace()
+                android.util.Log.e(TAG, "FCM token refresh failed", e)
+                crashlyticsManager.recordException(e)
             }
         }
     }
@@ -112,6 +118,10 @@ class NotificationManager @Inject constructor(
         } catch (e: Exception) {
             Result.failure(e)
         }
+    }
+
+    private companion object {
+        const val TAG = "NotificationManager"
     }
 }
 

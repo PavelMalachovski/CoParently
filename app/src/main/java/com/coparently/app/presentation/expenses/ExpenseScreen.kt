@@ -41,8 +41,11 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.coparently.app.R
 import com.coparently.app.domain.model.Expense
+import com.coparently.app.presentation.common.ListSkeleton
+import com.coparently.app.presentation.common.Loadable
 import com.coparently.app.presentation.common.animations.AnimatedEmptyState
 import com.coparently.app.presentation.common.rememberParentNames
+import com.coparently.app.presentation.common.valueOrNull
 import kotlinx.coroutines.launch
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
@@ -83,14 +86,17 @@ fun ExpenseScreen(
     viewModel: ExpenseViewModel = hiltViewModel(),
     budgetViewModel: BudgetViewModel = hiltViewModel()
 ) {
-    val expenses by viewModel.expenses.collectAsState()
+    val expensesState by viewModel.expenses.collectAsState()
+    val expenses = expensesState.valueOrNull.orEmpty()
     val monthExpenses by viewModel.monthExpenses.collectAsState()
     val selectedMonth by viewModel.selectedMonth.collectAsState()
     val balancesByCurrency by viewModel.balancesByCurrency.collectAsState()
     val roleByUid by viewModel.roleByUid.collectAsState()
     val currentUserId by viewModel.currentUserId.collectAsState()
     val parentNames = rememberParentNames(viewModel.parents.collectAsState().value)
-    val budgets by budgetViewModel.budgets.collectAsState()
+    // Flattened: the budget progress bars have nothing to say while budgets load, and the
+    // chip strip they sit in is not the surface that answers "do you have budgets".
+    val budgets = budgetViewModel.budgets.collectAsState().value.valueOrNull.orEmpty()
     val breakdowns by viewModel.breakdowns.collectAsState()
     val selectedBreakdown by viewModel.selectedBreakdown.collectAsState()
     val analyticsPayers by viewModel.analyticsPayers.collectAsState()
@@ -155,7 +161,9 @@ fun ExpenseScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            if (expenses.isEmpty()) {
+            if (expensesState is Loadable.Loading) {
+                ListSkeleton(modifier = Modifier.weight(1f))
+            } else if (expenses.isEmpty()) {
                 Box(modifier = Modifier.weight(1f)) {
                     AnimatedEmptyState(
                         icon = Icons.Default.ReceiptLong,

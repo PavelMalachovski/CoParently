@@ -1,5 +1,6 @@
 package com.coparently.app.data.sync
 
+import com.coparently.app.data.crashlytics.CrashlyticsManager
 import com.coparently.app.data.local.dao.EventDao
 import com.coparently.app.data.local.entity.EventEntity
 import com.coparently.app.data.remote.google.CredentialProvider
@@ -27,7 +28,8 @@ class CalendarSyncRepository @Inject constructor(
     private val eventDao: EventDao,
     private val googleCalendarApi: GoogleCalendarApi,
     private val credentialProvider: CredentialProvider,
-    private val userRepository: UserRepository
+    private val userRepository: UserRepository,
+    private val crashlyticsManager: CrashlyticsManager
 ) {
     /**
      * Syncs events from Google Calendar to local database (pull).
@@ -58,7 +60,7 @@ class CalendarSyncRepository @Inject constructor(
             emit(SyncResult.Progress("Fetching events from Google Calendar..."))
 
             // Execute API call on IO dispatcher to avoid NetworkOnMainThreadException
-            val googleEvents = withContext(Dispatchers.IO) {
+            val imported = withContext(Dispatchers.IO) {
                 googleCalendarApi.listEvents(
                     credential = credential,
                     timeMin = startDate,
@@ -66,11 +68,11 @@ class CalendarSyncRepository @Inject constructor(
                 )
             }
 
-            emit(SyncResult.Progress("Found ${googleEvents.size} events in Google Calendar"))
+            emit(SyncResult.Progress("Found ${imported.events.size} events in Google Calendar"))
 
             val eventsToInsert = mutableListOf<EventEntity>()
 
-            googleEvents.forEach { googleEvent ->
+            imported.events.forEach { googleEvent ->
                 val eventEntity = googleEvent.toEventEntity(ownerSlot, ownerUid)
                 eventsToInsert.add(eventEntity)
             }
@@ -79,7 +81,20 @@ class CalendarSyncRepository @Inject constructor(
                 eventDao.insertEvents(eventsToInsert)
             }
 
-            emit(SyncResult.Success("Synced ${eventsToInsert.size} events from Google Calendar"))
+            // Says which window was read and whether anything was left behind. "Synced N events"
+            // on its own is what a truncated import used to say too, which is how a half-finished
+            // import passed for a complete one.
+            val window = "${imported.from.toLocalDate()} - ${imported.until.toLocalDate()}"
+            emit(
+                SyncResult.Success(
+                    if (imported.truncated) {
+                        "Synced the first ${eventsToInsert.size} events ($window). " +
+                            "There are more in that period than one import can take."
+                    } else {
+                        "Synced ${eventsToInsert.size} events ($window)"
+                    }
+                )
+            )
         } catch (e: IllegalStateException) {
             android.util.Log.e("CalendarSync", "Authentication error: ${e.message}", e)
             emit(SyncResult.Error(e.message ?: "Authentication error. Please sign in again."))
@@ -117,7 +132,7 @@ class CalendarSyncRepository @Inject constructor(
         } catch (e: Exception) {
             // Log full error for debugging
             android.util.Log.e("CalendarSync", "Unexpected error: ${e.javaClass.simpleName} - ${e.message}", e)
-            e.printStackTrace()
+            crashlyticsManager.recordException(e)
             val errorDetails = buildString {
                 append("Error during sync: ")
                 append(e.javaClass.simpleName)
@@ -192,7 +207,7 @@ class CalendarSyncRepository @Inject constructor(
         } catch (e: Exception) {
             // Log full error for debugging
             android.util.Log.e("CalendarSync", "Unexpected error: ${e.javaClass.simpleName} - ${e.message}", e)
-            e.printStackTrace()
+            crashlyticsManager.recordException(e)
             val errorDetails = buildString {
                 append("Error during sync: ")
                 append(e.javaClass.simpleName)

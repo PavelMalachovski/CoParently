@@ -6,8 +6,10 @@ Guidance for Claude Code (and other AI assistants) working in this repository.
 
 CoPlanly — an Android shared-calendar app for separated parents. Kotlin + Jetpack Compose
 (Material 3), Clean Architecture with Hilt, Room as the offline-first source of truth,
-Firebase (Auth/Firestore/FCM) for sync between the two parents, Google Calendar integration,
-Gemini for AI features.
+Firebase (Auth/Firestore/FCM) for sync between the two parents, Google Calendar integration.
+**No AI:** the Gemini subsystem was deleted in August 2026 (MON-7) — ~3,200 lines reachable from
+no navigation graph, with the API key shipping in every APK. If AI returns it goes behind the
+Cloud Function proxy (SEC-1), never with a key in the client. See `docs/AUDIT-2026-08.md` §6.
 
 **The authoritative roadmap is `docs/CoPlanly/MVP_phases.md`** (not `.cursor/roadmap.md`,
 which is the historical original plan). MVP 1 is complete, and **MVP 2 appears to be complete
@@ -157,7 +159,7 @@ cd firestore-tests && npm test              # firestore.rules against the local 
   August 2026 — this line used to say there was none). Three jobs: Gradle
   (`assembleDebug`, `testDebugUnitTest`, `lint`, `detekt`, `assembleRelease`), Cloud
   Functions, and the Firestore rules suite against the emulator. Two caveats, both
-  deliberate and both tracked in `docs/BACKLOG.md` §2: **detekt reports but does not gate**
+  deliberate and both tracked in `docs/BACKLOG.md` (**CQ-12**, **CQ-1**): **detekt reports but does not gate**
   (`continue-on-error`) until its baseline is regenerated locally, and there is **no
   instrumented migration job**, because `app/schemas/` stops at v14 while the database is at
   v24. Still run the build locally before pushing — CI is a backstop, not a substitute.
@@ -254,8 +256,9 @@ Data flow: UI → ViewModel → UseCase → Repository → Room (source of truth
    schedule on create/update, cancel on delete.
 10. **Receipt OCR is on-device only** (`ReceiptTextRecognizer`/ML Kit, parsed by
     `ReceiptParser`, wired up in `AddExpenseScreen`/`ExpenseViewModel.scanReceipt`) — no
-    receipt text or photo may be sent to Gemini or any other remote service without an
-    explicit product decision.
+    receipt text or photo may be sent to a model or any other remote service without an
+    explicit product decision. The rule outlived the AI subsystem on purpose: on-device OCR is
+    a privacy asset worth keeping, not an accident of what happened to be wired up.
 11. **Pairing writes never touch the other parent's user document from the client.**
     Accepting an invitation and unpairing go through the `acceptPairingInvitation` /
     `unpairCoParent` callables (`functions/index.js`) — `firestore.rules` allows a user
@@ -321,19 +324,22 @@ Data flow: UI → ViewModel → UseCase → Repository → Room (source of truth
   no FX conversion between currencies (spec §10) — deliberately: totals stay honest within each
   currency rather than being normalised. Do not reintroduce a single cross-currency total.
 
-- **A failed chat Firestore listener is never re-established** (known, accepted at merge time —
-  backlog with the time-zone item below). Both mirror branches in `MessageRepositoryImpl` end in
-  `.catch { Log.w(...) }`, which *completes* the mirror flow, so `merge(mirror, local)` then runs
-  on Room alone for the rest of the process. `SharingStarted.WhileSubscribed` cannot restart it:
-  `rememberChatUnreadCount()` in `NavGraph` holds an Activity-scoped `ChatViewModel` collecting
-  `unreadCount` for the whole process lifetime, so the subscriber count never reaches zero.
-  Observed once in production, on the first launch after install — both chat listeners were
-  denied ~0.5 s before `ensureConversation` created the canonical conversation document, and that
-  session ran on local data only. Nothing is lost and a cold restart clears it, but the app looks
-  entirely healthy while receiving nothing. Recurs on any reinstall, factory reset or account
-  switch. Fix when touching this code: `retryWhen` with backoff on both branches, or await
-  `ensureConversation` before subscribing the observers. Don't "fix" it by removing the `.catch` —
-  an uncaught failure in `viewModelScope.launch` terminates the process.
+- **A failed chat Firestore listener now reconnects, but only for a while.** Both mirror branches
+  in `MessageRepositoryImpl` go through `reconnecting()` — `retryWhen` with exponential backoff,
+  eight attempts, capped at a minute apart — before reaching the `.catch` that ends the mirror.
+  That covers the case seen in production: on the first launch after install both listeners were
+  denied ~0.5 s before `ensureConversation` created the conversation document, and the whole
+  session then ran on local data while looking entirely healthy. **What is still open (CQ-8 in
+  `docs/BACKLOG.md`):** an outage longer than the backoff still ends in that degraded state, and
+  still lasts until the process restarts. `catch` *completes* the mirror flow, so
+  `merge(mirror, local)` runs on Room alone afterwards, and `SharingStarted.WhileSubscribed`
+  cannot restart it — `rememberChatUnreadCount()` in `NavGraph` holds an Activity-scoped
+  `ChatViewModel` collecting `unreadCount` for the whole process lifetime, so the subscriber count
+  never reaches zero. The structural fixes are awaiting `ensureConversation` before subscribing,
+  or dropping that Activity-scoped collector. Don't "fix" it by removing the `.catch` — an
+  uncaught failure in `viewModelScope.launch` terminates the process — and don't make the retry
+  unbounded: a genuinely broken rule would then reconnect for the life of the process, and any
+  test of the give-up path spins on the virtual clock instead of finishing.
 
 - **Cross-time-zone chat is implemented but never verified on two devices.** The August 2026
   chat sync moved message times to epoch millis specifically so two parents in different zones
@@ -426,8 +432,9 @@ Data flow: UI → ViewModel → UseCase → Repository → Room (source of truth
     `custody_schedules` block just because the Room table name is still there.
 - `strings.xml` is **no longer gitignored** (older docs/audit §2.1 claim otherwise —
   stale). No secrets live in resources: the OAuth client secret is injected via
-  BuildConfig (`GOOGLE_CLIENT_SECRET` gradle property / env var), `GEMINI_API_KEY`
-  likewise. Real secrets belong in `gradle.properties`/env vars only.
+  BuildConfig (`GOOGLE_CLIENT_SECRET` gradle property / env var). `GEMINI_API_KEY` is gone
+  with the AI subsystem — don't reintroduce a model key in the client. Real secrets belong in
+  `gradle.properties`/env vars only.
 - User-facing strings produced **inside ViewModels/services** (e.g.
   `GoogleCalendarSyncState.message`, sync/status errors) are still hardcoded English —
   extracting them needs a resource-provider abstraction and is a tracked follow-up of the
@@ -438,38 +445,17 @@ Data flow: UI → ViewModel → UseCase → Repository → Room (source of truth
   (they targeted long-gone APIs); rewrite them against the current constructors when
   touching those features.
 
-- **`ChildInfoViewModel` stays subscribed to the whole child list for the editor's entire
-  lifetime, and any emission can overwrite the wrong child's row.** `init` calls
-  `loadChildInfo()`, which collects `childInfoRepository.getAllChildInfo()` — a reactive
-  Room `Flow` — for as long as the ViewModel lives, and every single emission unconditionally
-  runs `_currentChildInfo.value = childInfoList.first()`, regardless of which child
-  `AddEditChildInfoScreen` was actually opened to edit. The damage is not the prefill, it is
-  the **save**: while a user is genuinely editing child B — not the first child in the
-  household — any write that touches the `child_info` table re-emits the list and clobbers
-  `_currentChildInfo` back to child A; `LaunchedEffect(currentChildInfo)` then silently
-  repopulates the visible form with child A's data. The trigger needs no user error at all —
-  a background Firestore sync tick is enough, and so is an unrelated edit to child A made
-  from another screen. The medical-profile editor added in this round
-  (`presentation/common/MedicalProfileEditor.kt`) made the blast radius concrete: the save
-  button's snapshot-and-`copy()` base is `currentChildInfo`, so at save time the base is
-  child A, and the write overwrites **child A's real row** — its id, `createdAt` and
-  `createdByFirebaseUid` included — with a mix of stale values and whatever child B's form
-  fields currently hold. The `isNewChild` guard added alongside that save
-  (`base = currentChildInfo.takeIf { !isNewChild }`) does not help here: it only forces a
-  fresh `ChildInfo` when adding a brand-new child, and `isNewChild` is `false` for a genuine
-  edit of an existing child, so this path runs through unguarded exactly as before. The
-  correct fix is for the editor to stop reading the head of a list it does not own: load the
-  one child actually being edited by id and observe that, the way `loadChildInfoById` already
-  does for the initial load — `ChildInfoDao.observeChildInfoById` (already wired through
-  `ChildInfoRepository.observeChildInfoById`) is the right subscription for the whole screen
-  lifetime, not `getAllChildInfo()`. `getAllChildInfo()`/`loadChildInfo()` belongs to the list
-  screen that owns showing every child, not to an editor that owns exactly one. Left unfixed
-  this round: it is pre-existing (present since before `ChildInfo.medicalProfile` did, and
-  therefore before this task), and fixing the ViewModel's subscription strategy is a change of
-  its own, not a rider on adding a field editor. Don't "fix" it by widening the `isNewChild`
-  guard — that guard's job is stopping a brand-new child from saving on top of an existing
-  row, and two *existing* children being confused for each other never involves `"new"` or a
-  `null` id in the first place, so no version of that check touches this path.
+- **`ChildInfoViewModel`'s editor state is loaded by id, never from the head of a list.**
+  `loadChildInfo()` serves the list screen and touches nothing else; `loadChildInfoById()` is the
+  only writer of `currentChildInfo`, and it cancels a previous observation before starting the
+  next. This used to be the other way round — `init` collected `getAllChildInfo()` for the
+  ViewModel's whole lifetime and set `_currentChildInfo = childInfoList.first()` on **every**
+  emission — so while a parent edited child B, any write touching `child_info` (a background sync
+  tick was enough) reset the state to child A and repopulated the visible form. The damage was at
+  save: the snapshot-and-`copy()` base had become child A, so the write landed on **child A's real
+  row**, id and `createdAt` included, carrying child B's field values. Keep the split: a screen
+  that shows every child reads the list it already holds (`ChildInfoScreen` reads
+  `state.childInfoList`), and an editor that owns exactly one child observes that one by id.
 
 ## Localization (i18n) — July 2026, keep consistent
 

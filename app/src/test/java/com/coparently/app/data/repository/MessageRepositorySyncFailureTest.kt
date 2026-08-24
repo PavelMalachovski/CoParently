@@ -111,16 +111,19 @@ class MessageRepositorySyncFailureTest {
     fun `a failed messages query is logged with the conversation and the query shape`() = runTest {
         every { firestoreMessageDataSource.getMessages(CONVERSATION_ID) } returns
             failing(missingIndex())
-        val logged = slot<String>()
+        // A list, not a `slot`: reconnection logs a line per attempt before giving up, and MockK
+        // refuses to capture into a slot when a verified call matched more than once.
+        val logged = mutableListOf<String>()
 
         repository.observeMessages(CONVERSATION_ID).toList()
 
         verify { android.util.Log.w(any<String>(), capture(logged), any<Throwable>()) }
-        // Swallowing silently is what makes an index outage invisible: the message has to
-        // name the conversation, the query and where the index is declared.
-        assertTrue(logged.captured.contains(CONVERSATION_ID))
-        assertTrue(logged.captured.contains("timestamp"))
-        assertTrue(logged.captured.contains("firestore.indexes.json"))
+        // Swallowing silently is what makes an index outage invisible: the message that gives up
+        // has to name the conversation, the query and where the index is declared. Selected by
+        // content rather than by position, so the number of reconnect attempts is free to change.
+        val gaveUp = logged.single { it.contains("firestore.indexes.json") }
+        assertTrue(gaveUp.contains(CONVERSATION_ID))
+        assertTrue(gaveUp.contains("timestamp"))
     }
 
     @Test
@@ -208,6 +211,85 @@ class MessageRepositorySyncFailureTest {
 
         verify(exactly = 0) { firestoreMessageDataSource.observeConversation(any()) }
     }
+
+    // ---- reconnecting after a failure (CQ-8) ------------------------------
+
+    @Test
+    fun `a listener that fails once is re-established, and mirrors what it then receives`() =
+        runTest {
+            // The production case, exactly: both listeners were denied about half a second
+            // before `ensureConversation` wrote the conversation document. One retry catches it.
+            // Before the retry existed, `catch` completed the mirror and the whole session ran
+            // on Room alone while looking entirely healthy.
+            var subscriptions = 0
+            every { firestoreMessageDataSource.getMessages(CONVERSATION_ID) } returns flow {
+                subscriptions++
+                if (subscriptions == 1) throw missingIndex()
+                emit(listOf(remoteMessage()))
+            }
+            val entity = slot<MessageEntity>()
+
+            repository.observeMessages(CONVERSATION_ID).toList()
+
+            assertEquals("the failed listener must be re-subscribed, not dropped", 2, subscriptions)
+            coVerify(exactly = 1) { messageDao.insertMessage(capture(entity)) }
+            assertEquals("msg-1", entity.captured.id)
+        }
+
+    @Test
+    fun `the conversation listener reconnects too, not only the messages one`() = runTest {
+        // Both branches ended in the same `catch`, so both had the same defect. Fixing one
+        // would leave a session where messages arrive and read state never does.
+        var subscriptions = 0
+        every { firestoreMessageDataSource.observeConversation(CONVERSATION_ID) } returns flow {
+            subscriptions++
+            if (subscriptions == 1) throw missingIndex()
+            emit(
+                mapOf(
+                    "id" to CONVERSATION_ID,
+                    "participants" to listOf(UID, "uidB"),
+                    "title" to "Co-parent",
+                    "createdAt" to "2026-08-01T10:00:00"
+                )
+            )
+        }
+        every { firestoreMessageDataSource.getMessages(CONVERSATION_ID) } returns flowOf(emptyList())
+
+        repository.observeConversation(CONVERSATION_ID).toList()
+
+        assertEquals(2, subscriptions)
+    }
+
+    @Test
+    fun `reconnection is bounded, so a broken deployment does not retry for ever`() = runTest {
+        // The give-up path is deliberate: retrying for ever turns a genuinely broken rule into a
+        // listener that reconnects for the life of the process. What must not happen is the
+        // failure escaping - that is what used to kill the process on opening Chat.
+        var subscriptions = 0
+        every { firestoreMessageDataSource.getMessages(CONVERSATION_ID) } returns flow {
+            subscriptions++
+            throw missingIndex()
+        }
+
+        val messages = repository.observeMessages(CONVERSATION_ID).toList().last()
+
+        assertTrue("it must retry at all", subscriptions > 1)
+        assertTrue("but not for ever: $subscriptions attempts", subscriptions <= 16)
+        assertEquals("Room still drives the thread", LOCAL_MESSAGE_ID, messages.first().id)
+    }
+
+    private fun remoteMessage() = mapOf(
+        "id" to "msg-1",
+        "conversationId" to CONVERSATION_ID,
+        "senderId" to UID,
+        "senderName" to "Mom",
+        "content" to "See you at 5",
+        "timestamp" to "2026-08-01T10:05:00",
+        "messageType" to "TEXT",
+        "attachments" to emptyList<String>(),
+        "isRead" to false,
+        "replyToMessageId" to ""
+    )
 
     private fun missingIndex() = FirebaseFirestoreException(
         "The query requires an index.",

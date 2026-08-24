@@ -26,11 +26,27 @@ if (hasGoogleServicesJson) {
 }
 
 android {
+    // The Kotlin package, and therefore where `R` and `BuildConfig` are generated. Deliberately
+    // *not* the same as `applicationId` below: renaming the package would touch every file in
+    // the tree for no user-visible gain, while the applicationId is the identity Play and
+    // Firebase key on. The two are allowed to differ and this is exactly the case for it.
     namespace = "com.coparently.app"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.coparently.app"
+        // The app's permanent identity. Changed from `com.coparently.app` (REL-1) while it still
+        // could be: after the first Play upload an applicationId can never change — a different
+        // one is a different app, with no upgrade path for anyone who installed the first. The
+        // product is CoPlanly, the deep-link scheme is `coplanly://`, and the old id said
+        // "coparently".
+        //
+        // **This breaks a local build until Firebase is updated**, and it is meant to: the
+        // Google Services plugin matches `google-services.json` on the package name and will
+        // fail with "No matching client found for package name 'app.coplanly'". Register the new
+        // app in the Firebase console, download a fresh `google-services.json`, and update the
+        // OAuth client's package name and SHA-1. CI is unaffected — `google-services.json` is
+        // gitignored, so the plugin is not applied there at all.
+        applicationId = "app.coplanly"
         minSdk = 26
         targetSdk = 36
         versionCode = 2
@@ -47,8 +63,6 @@ android {
             isMinifyEnabled = false
             buildConfigField("Boolean", "ENABLE_CRASHLYTICS", "false")
             buildConfigField("Boolean", "ENABLE_ANALYTICS", "false")
-            // Gemini API key from gradle.properties or environment variable
-            buildConfigField("String", "GEMINI_API_KEY", "\"${project.findProperty("GEMINI_API_KEY") ?: System.getenv("GEMINI_API_KEY") ?: ""}\"")
             // Google OAuth client secret — never committed; supplied via ~/.gradle/gradle.properties or env
             buildConfigField("String", "GOOGLE_CLIENT_SECRET", "\"${project.findProperty("GOOGLE_CLIENT_SECRET") ?: System.getenv("GOOGLE_CLIENT_SECRET") ?: ""}\"")
         }
@@ -61,8 +75,6 @@ android {
             )
             buildConfigField("Boolean", "ENABLE_CRASHLYTICS", "true")
             buildConfigField("Boolean", "ENABLE_ANALYTICS", "true")
-            // Gemini API key from gradle.properties or environment variable
-            buildConfigField("String", "GEMINI_API_KEY", "\"${project.findProperty("GEMINI_API_KEY") ?: System.getenv("GEMINI_API_KEY") ?: ""}\"")
             // Google OAuth client secret — never committed; supplied via ~/.gradle/gradle.properties or env
             buildConfigField("String", "GOOGLE_CLIENT_SECRET", "\"${project.findProperty("GOOGLE_CLIENT_SECRET") ?: System.getenv("GOOGLE_CLIENT_SECRET") ?: ""}\"")
         }
@@ -101,7 +113,7 @@ android {
         // rather than satisfy anything. Password sign-in itself works without it: the
         // credential is then scoped to this package and signing certificate alone.
         // Re-enable this check together with the App Links work, when a domain exists
-        // (docs/BACKLOG.md).
+        // (docs/BACKLOG.md, CQ-16).
         disable += "CredManMissingDal"
     }
 
@@ -235,16 +247,11 @@ dependencies {
     // and from first launch (~4 MB) instead of waiting on a Play Services download.
     implementation("com.google.mlkit:text-recognition:16.0.1")
 
-    // Generative AI - Gemini API
-    implementation("com.google.ai.client.generativeai:generativeai:0.9.0")
-
-    // Retrofit for AI API calls
-    implementation("com.squareup.retrofit2:retrofit:2.9.0")
-    implementation("com.squareup.retrofit2:converter-gson:2.9.0")
-
-    // OkHttp for HTTP client
-    implementation("com.squareup.okhttp3:okhttp:4.12.0")
-    implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
+    // Removed with the AI subsystem (MON-7): `generativeai`, `retrofit`, `converter-gson`,
+    // `okhttp` and `logging-interceptor`. All five were declared for it and, after it went,
+    // had no consumer left in `app/src` at all — retrofit already had none before. OkHttp
+    // stays on the classpath transitively via coil, at the same 4.12.0, for anything that
+    // needs it.
 
     // Firebase - Updated to latest BOM
     val firebaseBom = platform("com.google.firebase:firebase-bom:33.7.0")

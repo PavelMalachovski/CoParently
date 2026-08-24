@@ -11,11 +11,13 @@ import com.coparently.app.domain.model.Message
 import com.coparently.app.domain.model.MessageSendStatus
 import com.coparently.app.domain.repository.MessageRepository
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.retryWhen
 import kotlinx.coroutines.flow.transform
 import java.time.LocalDateTime
 import javax.inject.Inject
@@ -33,6 +35,15 @@ import javax.inject.Singleton
  * Each observer mirrors what arrives into Room and hands the caller the Room-backed flow.
  * Room is the source of truth: a denied read, a missing index or a cold offline cache
  * degrades to "nothing new this round", logged, with the local copy intact.
+ *
+ * A failure now **reconnects** before it degrades — see [reconnecting]. It used not to, and the
+ * difference was a session that looked entirely healthy while receiving nothing: `catch`
+ * *completes* the mirror flow, so `merge(mirror, local)` ran on Room alone for the rest of the
+ * process, and `SharingStarted.WhileSubscribed` could not restart it because `NavGraph` holds an
+ * Activity-scoped `ChatViewModel` collecting the unread count for the whole process lifetime, so
+ * the subscriber count never reaches zero. Seen in production on the first launch after install:
+ * both listeners were denied about half a second before `ensureConversation` created the
+ * conversation document, and that entire session ran on local data.
  */
 @Singleton
 class MessageRepositoryImpl @Inject constructor(
@@ -50,6 +61,7 @@ class MessageRepositoryImpl @Inject constructor(
     override fun observeConversation(conversationId: String): Flow<Conversation?> {
         val mirror = firestoreMessageDataSource.observeConversation(conversationId)
             .onEach { remote -> mirrorConversation(conversationId, remote) }
+            .reconnecting("Conversation", conversationId)
             .catch { e ->
                 Log.w(
                     TAG,
@@ -82,6 +94,7 @@ class MessageRepositoryImpl @Inject constructor(
     override fun observeMessages(conversationId: String): Flow<List<Message>> {
         val mirror = firestoreMessageDataSource.getMessages(conversationId)
             .onEach { documents -> mirrorMessages(documents) }
+            .reconnecting("Messages", conversationId)
             .catch { e ->
                 Log.w(
                     TAG,
@@ -358,7 +371,52 @@ class MessageRepositoryImpl @Inject constructor(
      */
     private fun <T> Flow<*>.mirrorOnly(): Flow<T> = transform { }
 
+    /**
+     * Re-subscribes a failed remote listener, backing off exponentially, before letting the
+     * failure reach the `catch` that ends the mirror.
+     *
+     * The production case was a race, not an outage: both listeners were denied roughly half a
+     * second before `ensureConversation` wrote the conversation document, and one retry would
+     * have caught it. Blips, a rules deploy propagating and a short offline stretch are the same
+     * shape. The cap exists because the alternative — retrying forever — turns a genuinely
+     * broken deployment into a listener that reconnects for the life of the process, and makes
+     * any test of the give-up path spin on the virtual clock rather than finish.
+     *
+     * **What this does not fix:** an outage lasting longer than the backoff still ends in the
+     * degraded state, and still lasts until the process restarts, because nothing re-collects.
+     * The structural answer is either awaiting `ensureConversation` before subscribing, or
+     * dropping the Activity-scoped collector that keeps `WhileSubscribed` from ever unsubscribing
+     * — both larger than this, and both tracked as CQ-8 in docs/BACKLOG.md.
+     *
+     * A [CancellationException] is never retried: it is the collector going away, not a failure.
+     */
+    private fun <T> Flow<T>.reconnecting(what: String, conversationId: String): Flow<T> =
+        retryWhen { cause, attempt ->
+            if (cause is CancellationException || attempt >= MAX_RECONNECT_ATTEMPTS) {
+                return@retryWhen false
+            }
+            val backoffMs = (RECONNECT_BASE_DELAY_MS shl attempt.toInt())
+                .coerceAtMost(RECONNECT_MAX_DELAY_MS)
+            Log.w(
+                TAG,
+                "$what listener failed for conversationId=$conversationId; reconnecting in " +
+                    "${backoffMs}ms (attempt ${attempt + 1} of $MAX_RECONNECT_ATTEMPTS).",
+                cause
+            )
+            delay(backoffMs)
+            true
+        }
+
     private companion object {
         const val TAG = "MessageRepo"
+
+        /** Reconnect attempts before the mirror gives up and the local copy carries on alone. */
+        const val MAX_RECONNECT_ATTEMPTS = 8L
+
+        /** First backoff step; each attempt doubles it, up to [RECONNECT_MAX_DELAY_MS]. */
+        const val RECONNECT_BASE_DELAY_MS = 1_000L
+
+        /** Ceiling on a single backoff, so the last attempts stay a minute apart, not an hour. */
+        const val RECONNECT_MAX_DELAY_MS = 60_000L
     }
 }

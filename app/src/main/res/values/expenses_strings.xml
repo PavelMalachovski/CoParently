@@ -19,6 +19,10 @@
     <string name="budget_field_category">Category</string>
     <string name="budget_field_limit">Monthly limit</string>
     <string name="budget_save">Save budget</string>
+    <string name="budget_edit_title">Edit budget</string>
+    <string name="budget_delete">Delete budget</string>
+    <string name="budget_delete_confirm_title">Delete this budget?</string>
+    <string name="budget_delete_confirm_message">The limit is removed. Expenses in this category are kept.</string>
     <string name="budgets_empty_title">No budgets yet</string>
     <string name="budgets_empty_description">Set a monthly limit per category to keep shared spending on track.</string>
     <string name="expenses_empty_title">No expenses yet</string>

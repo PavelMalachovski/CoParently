@@ -19,9 +19,9 @@ import androidx.compose.ui.unit.dp
 import com.coparently.app.presentation.theme.dimensions
 
 /**
- * Создает анимированный градиент для эффекта shimmer (мерцания).
+ * Builds the animated gradient behind the shimmer effect.
  *
- * @return Brush с анимированным горизонтальным градиентом
+ * @return A brush carrying an animated horizontal gradient
  */
 @Composable
 private fun shimmerBrush(): Brush {
@@ -53,11 +53,11 @@ private fun shimmerBrush(): Brush {
 }
 
 /**
- * Skeleton Loading для списка событий.
- * Показывает несколько анимированных плейсхолдеров событий.
+ * Placeholder rows for a list of events.
+ * Draws several animated event placeholders.
  *
- * @param modifier Модификатор для кастомизации
- * @param count Количество скелетонов для отображения
+ * @param modifier Modifier for customisation
+ * @param count How many placeholder rows to draw
  */
 @Composable
 fun EventListSkeleton(
@@ -79,10 +79,10 @@ fun EventListSkeleton(
 }
 
 /**
- * Skeleton Loading для одного события.
- * Отображает анимированный плейсхолдер для карточки события.
+ * Placeholder for a single event row.
+ * An animated placeholder for one event card.
  *
- * @param modifier Модификатор для кастомизации
+ * @param modifier Modifier for customisation
  */
 @Composable
 fun EventItemSkeleton(
@@ -107,7 +107,7 @@ fun EventItemSkeleton(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Skeleton для иконки/индикатора времени
+            // Placeholder for the icon / time indicator
             Box(
                 modifier = Modifier
                     .size(48.dp)
@@ -115,12 +115,12 @@ fun EventItemSkeleton(
                     .background(shimmer)
             )
 
-            // Skeleton для текстового контента
+            // Placeholder for the text content
             Column(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                // Skeleton для заголовка события
+                // Placeholder for the event title
                 Box(
                     modifier = Modifier
                         .fillMaxWidth(0.7f)
@@ -129,7 +129,7 @@ fun EventItemSkeleton(
                         .background(shimmer)
                 )
 
-                // Skeleton для описания/времени
+                // Placeholder for the description / time
                 Box(
                     modifier = Modifier
                         .fillMaxWidth(0.5f)
@@ -139,7 +139,7 @@ fun EventItemSkeleton(
                 )
             }
 
-            // Skeleton для дополнительной иконки/действия
+            // Placeholder for the trailing icon / action
             Box(
                 modifier = Modifier
                     .size(24.dp)
@@ -151,10 +151,10 @@ fun EventItemSkeleton(
 }
 
 /**
- * Skeleton Loading для календаря в режиме месяца.
- * Отображает анимированную сетку дней месяца.
+ * Placeholder for the calendar in month mode.
+ * An animated placeholder for the month's day grid.
  *
- * @param modifier Модификатор для кастомизации
+ * @param modifier Modifier for customisation
  */
 @Composable
 fun CalendarMonthSkeleton(
@@ -169,7 +169,7 @@ fun CalendarMonthSkeleton(
             .padding(dims.paddingMedium),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        // Skeleton для заголовков дней недели
+        // Placeholder for the weekday headers
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceEvenly
@@ -186,7 +186,7 @@ fun CalendarMonthSkeleton(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Skeleton для сетки дней (6 недель)
+        // Placeholder for the day grid (six weeks)
         repeat(6) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -207,11 +207,11 @@ fun CalendarMonthSkeleton(
 }
 
 /**
- * Skeleton Loading для списка дня/недели с временными слотами.
- * Отображает анимированные временные блоки событий.
+ * Placeholder for the day/week list with its hour slots.
+ * Animated placeholders for the hour blocks.
  *
- * @param modifier Модификатор для кастомизации
- * @param itemCount Количество временных слотов для отображения
+ * @param modifier Modifier for customisation
+ * @param itemCount How many hour slots to draw
  */
 @Composable
 fun DayWeekViewSkeleton(
@@ -233,7 +233,7 @@ fun DayWeekViewSkeleton(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment = Alignment.Top
             ) {
-                // Skeleton для индикатора времени
+                // Placeholder for the time indicator
                 Column(
                     horizontalAlignment = Alignment.End,
                     verticalArrangement = Arrangement.spacedBy(4.dp)
@@ -247,7 +247,7 @@ fun DayWeekViewSkeleton(
                     )
                 }
 
-                // Skeleton для блока события
+                // Placeholder for the event block
                 Card(
                     modifier = Modifier
                         .weight(1f)
@@ -285,10 +285,14 @@ fun DayWeekViewSkeleton(
 }
 
 /**
- * Простой Skeleton Loading Box для произвольного контента.
- * Базовый компонент для создания кастомных скелетонов.
+ * A shimmering placeholder of arbitrary size — the building block the other skeletons here are
+ * made of, and the one a screen reaches for when it wants a shape this file does not already
+ * have.
  *
- * @param modifier Модификатор для кастомизации размера и формы
+ * The Russian KDoc this file carried — from when none of it was reachable from anywhere — was
+ * translated with UX-2, which is what finally wired the skeletons up.
+ *
+ * @param modifier Sets the size and shape of the placeholder
  */
 @Composable
 fun SkeletonBox(
@@ -303,10 +307,10 @@ fun SkeletonBox(
 }
 
 /**
- * Skeleton Loading для карточки custody indicator.
- * Отображает анимированный плейсхолдер для индикатора родителя.
+ * Placeholder for the custody indicator card.
+ * An animated placeholder for the parent indicator.
  *
- * @param modifier Модификатор для кастомизации
+ * @param modifier Modifier for customisation
  */
 @Composable
 fun CustodyIndicatorSkeleton(
@@ -332,7 +336,7 @@ fun CustodyIndicatorSkeleton(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Skeleton для иконки
+            // Placeholder for the icon
             Box(
                 modifier = Modifier
                     .size(32.dp)
@@ -340,7 +344,7 @@ fun CustodyIndicatorSkeleton(
                     .background(shimmer)
             )
 
-            // Skeleton для текста
+            // Placeholder for the text
             Box(
                 modifier = Modifier
                     .weight(1f)

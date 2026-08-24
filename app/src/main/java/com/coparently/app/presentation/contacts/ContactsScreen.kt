@@ -37,9 +37,12 @@ import com.coparently.app.R
 import com.coparently.app.domain.contacts.ContactGroup
 import com.coparently.app.domain.contacts.DirectoryContact
 import com.coparently.app.presentation.common.GroupLabel
+import com.coparently.app.presentation.common.ListSkeleton
+import com.coparently.app.presentation.common.Loadable
 import com.coparently.app.presentation.common.PillChip
 import com.coparently.app.presentation.common.SectionGroup
 import com.coparently.app.presentation.common.SectionRow
+import com.coparently.app.presentation.common.valueOrNull
 import kotlinx.coroutines.launch
 
 /** How the numbers on one row are joined. Punctuation, not text — nothing to translate. */
@@ -67,7 +70,8 @@ fun ContactsScreen(
     onNavigateUp: () -> Unit,
     viewModel: ContactsViewModel = hiltViewModel()
 ) {
-    val groups by viewModel.groups.collectAsState()
+    val groupsState by viewModel.groups.collectAsState()
+    val groups = groupsState.valueOrNull.orEmpty()
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -91,7 +95,11 @@ fun ContactsScreen(
         },
         snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { padding ->
-        if (groups.isEmpty()) {
+        if (groupsState is Loadable.Loading) {
+            // The emergency surface. A parent opening this in a hurry must not be told there
+            // are no contacts a frame before being shown them.
+            ListSkeleton(modifier = Modifier.padding(padding), rows = 4)
+        } else if (groups.isEmpty()) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()

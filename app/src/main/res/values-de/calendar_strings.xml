@@ -63,7 +63,8 @@
         <item quantity="other">%1$d Änderungsanfragen vom anderen Elternteil</item>
     </plurals>
     <string name="calendar_change_requests_review">Prüfen</string>
-    <string name="calendar_change_view_mode">Ansicht wechseln</string>
+    <string name="calendar_change_view_mode">Ansicht wechseln oder zu einem Datum springen</string>
+    <string name="calendar_jump_to_date">Zu Datum springen…</string>
 
     <string name="calendar_custody_changed_by">Änderung des Betreuungsplans von %1$s</string>
     <string name="calendar_agenda_header_with_custody">%1$s · Tag von %2$s</string>

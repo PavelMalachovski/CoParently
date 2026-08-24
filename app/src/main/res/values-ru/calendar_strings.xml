@@ -67,7 +67,8 @@
         <item quantity="other">%1$d запросов на изменение от второго родителя</item>
     </plurals>
     <string name="calendar_change_requests_review">Посмотреть</string>
-    <string name="calendar_change_view_mode">Сменить вид</string>
+    <string name="calendar_change_view_mode">Сменить вид или перейти к дате</string>
+    <string name="calendar_jump_to_date">Перейти к дате…</string>
 
     <!-- Noun phrase, not "X изменил(а)" — Russian inflects that verb for gender and a name
          cannot agree with one; the software would end up guessing or hedging with "(а)". -->

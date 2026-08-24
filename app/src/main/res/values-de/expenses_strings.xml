@@ -17,6 +17,10 @@
     <string name="budget_field_category">Kategorie</string>
     <string name="budget_field_limit">Monatliches Limit</string>
     <string name="budget_save">Budget speichern</string>
+    <string name="budget_edit_title">Budget bearbeiten</string>
+    <string name="budget_delete">Budget löschen</string>
+    <string name="budget_delete_confirm_title">Dieses Budget löschen?</string>
+    <string name="budget_delete_confirm_message">Das Limit wird entfernt. Ausgaben in dieser Kategorie bleiben erhalten.</string>
     <string name="budgets_empty_title">Noch keine Budgets</string>
     <string name="budgets_empty_description">Lege pro Kategorie ein monatliches Limit fest, um die gemeinsamen Ausgaben im Blick zu behalten.</string>
     <string name="expenses_empty_title">Noch keine Ausgaben</string>

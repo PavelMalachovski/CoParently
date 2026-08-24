@@ -60,6 +60,7 @@ import com.coparently.app.presentation.calendar.components.CustodyChangedBanner
 import com.coparently.app.presentation.calendar.components.DaySwapSheet
 import com.coparently.app.presentation.calendar.components.EventTypeFilterSheet
 import com.coparently.app.presentation.common.rememberParentNames
+import com.coparently.app.presentation.common.rememberToday
 import com.coparently.app.presentation.event.EventUiState
 import com.coparently.app.presentation.event.EventViewModel
 import com.coparently.app.presentation.theme.dimensions
@@ -213,7 +214,9 @@ fun CalendarScreen(
     val selectedDate by calendarViewModel.selectedDate.collectAsState()
     val displayedMonth by calendarViewModel.displayedMonth.collectAsState()
     val queryAnchorMonth by calendarViewModel.queryAnchorMonth.collectAsState()
-    val today = remember { LocalDate.now() }
+    // Not `remember { LocalDate.now() }`: that captures the date at first composition and
+    // never revisits it, so an app left open overnight goes on highlighting yesterday.
+    val today by rememberToday()
 
     // What the screen says it is showing: the header title, and the day DAY/WEEK render.
     val anchorDate = CalendarSelection.anchorDate(viewMode, displayedMonth, selectedDate, today)
@@ -437,11 +440,11 @@ fun CalendarScreen(
     // must add them explicitly — an incoming swap used to raise no banner at all, leaving the
     // co-parent no visible route to the inbox that answers it.
     val inboxUserId by changeRequestViewModel.currentUserId.collectAsState()
-    val pendingSwapsAwaitingMe = remember(dayOverrides, inboxUserId) {
+    val pendingSwapsAwaitingMe = remember(dayOverrides, inboxUserId, today) {
         if (inboxUserId.isEmpty()) {
             0
         } else {
-            DaySwapInbox.visible(dayOverrides, LocalDate.now())
+            DaySwapInbox.visible(dayOverrides, today)
                 .count { DaySwapInbox.awaitsAnswerFrom(it, inboxUserId) }
         }
     }
@@ -461,6 +464,7 @@ fun CalendarScreen(
                 viewMode = viewMode,
                 onViewModeChange = { mode -> calendarViewModel.setViewMode(mode) },
                 onNavigateToToday = { calendarViewModel.showMonth(YearMonth.now()) },
+                onJumpToDate = { showDatePicker = true },
                 onFiltersClick = { showTypeFilters = true },
                 filtersActive = parentFilter != ParentFilter.BOTH ||
                     hiddenEventTypes.isNotEmpty() ||

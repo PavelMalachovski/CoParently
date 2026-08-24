@@ -9,6 +9,7 @@ import android.net.Uri
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import com.coparently.app.R
+import com.coparently.app.data.crashlytics.CrashlyticsManager
 import com.coparently.app.domain.chat.ChatUri
 import com.coparently.app.domain.pairing.PairingUri
 import com.google.firebase.messaging.FirebaseMessagingService
@@ -43,6 +44,9 @@ class CoPlanlyMessagingService : FirebaseMessagingService() {
 
     @Inject
     lateinit var fcmService: FcmService
+
+    @Inject
+    lateinit var crashlyticsManager: CrashlyticsManager
 
     override fun onCreate() {
         super.onCreate()
@@ -86,7 +90,10 @@ class CoPlanlyMessagingService : FirebaseMessagingService() {
             try {
                 fcmService.updateUserToken(token)
             } catch (e: Exception) {
-                e.printStackTrace()
+                // A token that never reaches Firestore means the co-parent's pushes go nowhere,
+                // and nothing on either device says so.
+                android.util.Log.e("CoPlanlyMessaging", "Storing the refreshed FCM token failed", e)
+                crashlyticsManager.recordException(e)
             }
         }
     }

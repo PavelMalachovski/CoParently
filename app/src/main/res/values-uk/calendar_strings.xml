@@ -67,7 +67,8 @@
         <item quantity="other">%1$d запитів на зміну від іншого з батьків</item>
     </plurals>
     <string name="calendar_change_requests_review">Переглянути</string>
-    <string name="calendar_change_view_mode">Змінити вигляд</string>
+    <string name="calendar_change_view_mode">Змінити вигляд або перейти до дати</string>
+    <string name="calendar_jump_to_date">Перейти до дати…</string>
 
     <!-- Noun phrase, not "X змінив(ла)" — Ukrainian inflects that verb for gender and a name
          cannot agree with one; the software would end up guessing or hedging with "(ла)". -->
