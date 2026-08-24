@@ -1,7 +1,5 @@
 package com.coparently.app.presentation.calendar
 
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
@@ -57,6 +55,7 @@ import com.coparently.app.R
 import com.coparently.app.domain.holidays.Holiday
 import com.coparently.app.domain.model.Event
 import com.coparently.app.presentation.common.ParentNames
+import com.coparently.app.presentation.common.monthPagingTween
 import com.coparently.app.presentation.common.rememberToday
 import com.coparently.app.presentation.theme.CoPlanlyColors
 import com.coparently.app.presentation.theme.dimensions
@@ -684,7 +683,7 @@ private fun eventDotColor(
  *
  * The fling velocity decides *which* month wins — a real fling turns the page the way it was
  * thrown, a slow release goes to whichever month holds more of the screen — but never *how*
- * the page gets there: the animation is the same [MONTH_SETTLE_MS] tween either way, which is
+ * the page gets there: the animation is the same [monthPagingTween] either way, which is
  * the whole point of taking snapping away from the library.
  *
  * Offsets are LTR-only, which every shipped locale (en/cs/de/ru/uk) is.
@@ -703,10 +702,7 @@ private suspend fun CalendarState.settleToNearestMonth(velocityX: Float) {
     }
     // target.offset is the signed distance from the viewport's start edge, so scrolling by
     // exactly it aligns the month flush — forward for a positive offset, back for a negative.
-    animateScrollBy(
-        value = target.offset.toFloat(),
-        animationSpec = tween(durationMillis = MONTH_SETTLE_MS, easing = FastOutSlowInEasing)
-    )
+    animateScrollBy(value = target.offset.toFloat(), animationSpec = monthPagingTween())
 }
 
 /** Whether the first visible month sits flush with the viewport's start edge. */
@@ -714,9 +710,6 @@ private fun CalendarState.isSettledOnBoundary(): Boolean {
     val first = layoutInfo.visibleMonthsInfo.firstOrNull() ?: return false
     return kotlin.math.abs(first.offset) <= 1
 }
-
-/** How long a month page takes to settle, in either direction — the calm, deliberate slide. */
-private const val MONTH_SETTLE_MS = 500
 
 /** Release velocity (px/s) below which a swipe settles to the nearest month, not the thrown one. */
 private const val MONTH_SETTLE_FLING_THRESHOLD = 300f
