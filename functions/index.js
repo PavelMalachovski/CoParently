@@ -328,92 +328,234 @@ exports.onChildInfoUpdated = functions.firestore
  * Cloud Function for sending email invitations.
  * Triggered when a new invitation is created in Firestore.
  */
+/**
+ * Delivery outcomes recorded on an invitation. Deliberately **not** the invitation's `status`.
+ *
+ * The previous implementation wrote `status: 'failed'` when delivery threw — and `status` is
+ * what every redemption path gates on (`invite.status !== 'pending'` refuses in all three
+ * callables, and the rules only allow a `pending` invitation to be cancelled or rejected). So
+ * a bounced email permanently destroyed a perfectly good invite code, which the inviter could
+ * still read off their own screen and hand over in person. Delivery is a separate fact from
+ * redeemability, and it now lives in its own field.
+ *
+ * @enum {string}
+ */
+const EmailDelivery = {
+  SENT: 'sent',
+  FAILED: 'failed',
+  NOT_CONFIGURED: 'not_configured',
+  /** No address to deliver to: a code, QR or share-link invitation. */
+  NOT_APPLICABLE: 'not_applicable',
+};
+
+exports.EmailDelivery = EmailDelivery;
+
+/**
+ * The configured mail provider, or null when none is set up.
+ *
+ * Read fresh on every call rather than cached at module load, so tests can set it per-case —
+ * the same reason `backfillAdminUids` does. Populated at deploy time from `functions/.env`.
+ *
+ * @return {?{apiKey: string, from: string, fromName: string}} The provider, or null.
+ */
+function emailProviderConfig() {
+  const apiKey = process.env.SENDGRID_API_KEY || '';
+  const from = process.env.INVITE_FROM_EMAIL || '';
+  if (!apiKey || !from) {
+    return null;
+  }
+  return {apiKey, from, fromName: process.env.INVITE_FROM_NAME || 'CoPlanly'};
+}
+
+exports.emailProviderConfig = emailProviderConfig;
+
+/**
+ * Posts one message to SendGrid's v3 API.
+ *
+ * Written against `https` directly rather than pulling in `@sendgrid/mail`: this is a single
+ * JSON POST, and a dependency added for it would be one more thing to keep patched in a
+ * function that runs on every invitation. Swapping providers means replacing this one
+ * function — everything above it is provider-agnostic.
+ *
+ * @param {{apiKey: string, from: string, fromName: string}} config The provider.
+ * @param {{to: string, subject: string, html: string, text: string}} message The email.
+ * @return {Promise<void>} Resolves when the provider accepts the message.
+ */
+function sendViaSendGrid(config, message) {
+  const https = require('https');
+  const payload = JSON.stringify({
+    personalizations: [{to: [{email: message.to}]}],
+    from: {email: config.from, name: config.fromName},
+    subject: message.subject,
+    content: [
+      {type: 'text/plain', value: message.text},
+      {type: 'text/html', value: message.html},
+    ],
+  });
+
+  return new Promise((resolve, reject) => {
+    const request = https.request({
+      hostname: 'api.sendgrid.com',
+      path: '/v3/mail/send',
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${config.apiKey}`,
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(payload),
+      },
+    }, (response) => {
+      // SendGrid answers 202 with an empty body on success. Anything else is drained and
+      // reported, so the failure recorded on the invitation says what the provider said.
+      const chunks = [];
+      response.on('data', (chunk) => chunks.push(chunk));
+      response.on('end', () => {
+        if (response.statusCode >= 200 && response.statusCode < 300) {
+          resolve();
+        } else {
+          reject(new Error(
+              `SendGrid responded ${response.statusCode}: ${Buffer.concat(chunks)}`));
+        }
+      });
+    });
+    request.on('error', reject);
+    request.write(payload);
+    request.end();
+  });
+}
+
+exports.sendViaSendGrid = sendViaSendGrid;
+
+/**
+ * The invitation email, in both parts.
+ *
+ * Carries the **code** as well as the link. A deep link only opens the app on a device that
+ * has it installed, and the recipient of a co-parent invitation frequently does not yet — the
+ * code is what they can type in after installing, and it is what the inviter can also read out
+ * over the phone. A message that omitted it would strand exactly the recipient it is for.
+ *
+ * @param {string} senderName The inviting parent's display name.
+ * @param {!Object} invite The invitation document.
+ * @return {{to: string, subject: string, html: string, text: string}} The email.
+ */
+function invitationEmail(senderName, invite) {
+  const who = senderName || 'A co-parent';
+  const code = invite.code || '';
+  const subject = `${who} invited you to CoPlanly`;
+
+  const text = [
+    `${who} has invited you to share a calendar on CoPlanly.`,
+    '',
+    `Your invite code: ${code}`,
+    '',
+    'Install CoPlanly, sign in, and enter the code on the pairing screen.',
+    'The code expires in 7 days.',
+    '',
+    'If you were not expecting this, you can ignore this email.',
+  ].join('\n');
+
+  const html = `
+    <div style="font-family: -apple-system, Segoe UI, Roboto, sans-serif;
+                max-width: 560px; margin: 0 auto; color: #14171F;">
+      <h1 style="font-size: 20px; margin: 0 0 16px;">${who} invited you to CoPlanly</h1>
+      <p style="margin: 0 0 16px; line-height: 1.6;">
+        CoPlanly is a shared calendar for parents raising a child in two homes.
+      </p>
+      <p style="margin: 0 0 8px; line-height: 1.6;">Your invite code:</p>
+      <p style="font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 28px;
+                letter-spacing: 4px; margin: 0 0 24px;">${code}</p>
+      <p style="margin: 0 0 16px; line-height: 1.6;">
+        Install CoPlanly, sign in, and enter the code on the pairing screen.
+        The code expires in 7 days.
+      </p>
+      <hr style="border: none; border-top: 1px solid #E7EAF1; margin: 24px 0;">
+      <p style="color: #545B6D; font-size: 13px; line-height: 1.5;">
+        If you were not expecting this, you can ignore this email.
+      </p>
+    </div>
+  `;
+
+  return {to: invite.toEmail, subject, html, text};
+}
+
+exports.invitationEmail = invitationEmail;
+
+/**
+ * Delivers an invitation email and records what happened on the invitation.
+ *
+ * **This used to send nothing at all.** It built the message, wrote it to `console.log`, and
+ * returned — under a `// TODO: Replace with actual email sending service`. The client's
+ * "Invite by email" button therefore produced an invitation the recipient was never told
+ * about, while the inviter saw the field clear as though it had worked. For a product that is
+ * worth nothing until the *other* parent installs it, that was the growth path, dead.
+ *
+ * Every outcome is recorded in `emailDelivery`, including the one where no provider is
+ * configured — a deployment without `SENDGRID_API_KEY` should be visibly unconfigured rather
+ * than quietly silent, which is precisely how the old behaviour survived so long.
+ *
+ * A failure here never throws: an `onCreate` trigger retries an uncaught rejection
+ * indefinitely, and a rejected address will be rejected on every retry. The invitation itself
+ * is untouched — see [EmailDelivery].
+ *
+ * @param {FirebaseFirestore.Firestore} db Firestore instance.
+ * @param {FirebaseFirestore.DocumentReference} inviteRef The invitation.
+ * @param {!Object} invite The invitation document.
+ * @param {function(!Object): !Promise<void>} send Delivers one message.
+ * @return {Promise<string>} The recorded [EmailDelivery] outcome.
+ */
+async function deliverInvitationEmailImpl(db, inviteRef, invite, send) {
+  const record = async (outcome, extra) => {
+    await inviteRef.update(Object.assign({
+      emailDelivery: outcome,
+      emailDeliveryAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, extra || {}));
+    return outcome;
+  };
+
+  // Code, QR and share-link invitations carry no address. They are the majority, and this
+  // trigger fires for all of them.
+  if (!invite.toEmail) {
+    return record(EmailDelivery.NOT_APPLICABLE);
+  }
+
+  const senderSnap = await db.collection('users').doc(invite.fromUserId).get();
+  const senderName = senderSnap.exists && senderSnap.data() ? senderSnap.data().name : '';
+
+  try {
+    await send(invitationEmail(senderName, invite));
+    return record(EmailDelivery.SENT);
+  } catch (err) {
+    console.error(`Invitation email to ${invite.toEmail} was not delivered`, err);
+    return record(EmailDelivery.FAILED, {emailDeliveryError: String(err.message || err)});
+  }
+}
+
+exports.deliverInvitationEmailImpl = deliverInvitationEmailImpl;
+
+/**
+ * Sends the invitation email when an invitation is created.
+ *
+ * See [deliverInvitationEmailImpl] for what is recorded and why nothing here throws.
+ */
 exports.sendEmailInvitation = functions.firestore
     .document('invitations/{invitationId}')
-    .onCreate(async (snap, context) => {
-      const invitation = snap.data();
-      const invitationId = context.params.invitationId;
-
-      console.log(`Processing email invitation ${invitationId} to ${invitation.toEmail}`);
-
-      try {
-        // Get sender's information
-        const senderDoc = await admin.firestore()
-            .collection('users')
-            .doc(invitation.fromUserId)
-            .get();
-
-        if (!senderDoc.exists) {
-          console.error('Sender not found for invitation:', invitationId);
-          return null;
-        }
-
-        const senderData = senderDoc.data();
-
-        // Create invitation acceptance URL
-        const acceptUrl = `https://coparently.app/pair?invitation=${invitationId}`;
-
-        // Email content (in production, use a proper email service like SendGrid)
-        const emailContent = {
-          to: invitation.toEmail,
-          subject: 'Co-Parent Invitation from CoParently',
-          html: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-              <h1 style="color: #4CAF50;">Co-Parent Invitation</h1>
-              <p>Hello,</p>
-              <p><strong>${senderData.name}</strong> has invited you to connect as co-parents on CoParently!</p>
-              <p>CoParently helps co-parents coordinate childcare schedules, share information, and stay organized.</p>
-
-              <div style="text-align: center; margin: 30px 0;">
-                <a href="${acceptUrl}"
-                   style="background-color: #4CAF50; color: white; padding: 12px 24px;
-                          text-decoration: none; border-radius: 4px; display: inline-block;">
-                  Accept Invitation
-                </a>
-              </div>
-
-              <p>If the button doesn't work, copy and paste this link into your browser:</p>
-              <p style="word-break: break-all; color: #666;">${acceptUrl}</p>
-
-              <p>This invitation will expire in 7 days.</p>
-              <p>If you didn't expect this invitation, you can safely ignore this email.</p>
-
-              <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
-              <p style="color: #666; font-size: 12px;">
-                CoParently - Making co-parenting easier
-              </p>
-            </div>
-          `,
-        };
-
-        // In production, integrate with email service (SendGrid, Mailgun, etc.)
-        // For now, we'll log the email content
-        console.log('Email invitation prepared:', {
-          to: emailContent.to,
-          subject: emailContent.subject,
-          acceptUrl: acceptUrl,
-        });
-
-        // TODO: Replace with actual email sending service
-        // Example with SendGrid:
-        // const sgMail = require('@sendgrid/mail');
-        // sgMail.setApiKey(process.env.SENDGRID_API_KEY);
-        // await sgMail.send(emailContent);
-
-        console.log(`Email invitation sent to ${invitation.toEmail}`);
-        return null;
-      } catch (error) {
-        console.error('Error sending email invitation:', error);
-
-        // Mark invitation as failed
+    .onCreate(async (snap) => {
+      const config = emailProviderConfig();
+      if (!config) {
+        console.warn(
+            'No mail provider configured (SENDGRID_API_KEY / INVITE_FROM_EMAIL); ' +
+            'email invitations are not being delivered.');
         await snap.ref.update({
-          status: 'failed',
-          error: error.message,
-          sentAt: admin.firestore.FieldValue.serverTimestamp(),
+          emailDelivery: snap.data().toEmail ?
+            EmailDelivery.NOT_CONFIGURED : EmailDelivery.NOT_APPLICABLE,
+          emailDeliveryAt: admin.firestore.FieldValue.serverTimestamp(),
         });
-
-        throw error;
+        return null;
       }
+
+      await deliverInvitationEmailImpl(
+          admin.firestore(), snap.ref, snap.data(),
+          (message) => sendViaSendGrid(config, message));
+      return null;
     });
 
 /**

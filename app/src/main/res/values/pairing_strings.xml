@@ -77,4 +77,7 @@
     <string name="pairing_trust_body">Shared calendar and custody schedule, shared expenses and balances, and chat. Private events never leave your device. You can unlink at any time.</string>
     <string name="pairing_error_friend_invitation">This is a friend invitation. Open Settings → Friend with calendar access to use it.</string>
     <string name="pairing_error_not_friend_invitation">This is not a friend invitation.</string>
+    <!-- Shown after an email invitation is created. Deliberately does not claim the email
+         arrived: the app cannot know that, and the code works either way. -->
+    <string name="pairing_email_invite_created">Invitation sent. If it doesn\'t arrive, share the code directly.</string>
 </resources>

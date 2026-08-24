@@ -59,6 +59,15 @@ data class PairingFormState(
     @StringRes val codeErrorRes: Int? = null,
     @StringRes val emailErrorRes: Int? = null,
     @StringRes val actionErrorRes: Int? = null,
+    /**
+     * A one-shot confirmation to show once, cleared by [PairingViewModel.consumeActionInfo].
+     *
+     * Sending an email invitation used to report nothing at all: the field simply cleared, so
+     * a success and a silently-undelivered invitation looked identical to the inviter. The
+     * message deliberately does not claim the email arrived — the app cannot know that — it
+     * says the invitation is out and the code can be handed over directly if it does not.
+     */
+    @StringRes val actionInfoRes: Int? = null,
     val qrBitmap: Bitmap? = null
 )
 
@@ -195,7 +204,10 @@ class PairingViewModel @Inject constructor(
         launchAction(
             onSuccess = {
                 analyticsManager.logInvitationSent()
-                _form.value = _form.value.copy(emailInput = "")
+                _form.value = _form.value.copy(
+                    emailInput = "",
+                    actionInfoRes = R.string.pairing_email_invite_created
+                )
             },
             onError = { res -> _form.value = _form.value.copy(emailErrorRes = res) }
         ) { pairingRepository.sendEmailInvitation(email) }
@@ -456,6 +468,11 @@ class PairingViewModel @Inject constructor(
     /** Marks a field-less action error as shown; call once it has been presented (e.g. a snackbar). */
     fun consumeActionError() {
         _form.value = _form.value.copy(actionErrorRes = null)
+    }
+
+    /** Clears the one-shot confirmation once the screen has shown it. */
+    fun consumeActionInfo() {
+        _form.value = _form.value.copy(actionInfoRes = null)
     }
 
     private fun launchAction(
