@@ -5,7 +5,7 @@
 **A modern Android app that helps separated parents coordinate childcare — together.**
 
 [![Android](https://img.shields.io/badge/Android-8.0%2B-green.svg)](https://www.android.com)
-[![Kotlin](https://img.shields.io/badge/Kotlin-1.9-blue.svg)](https://kotlinlang.org)
+[![Kotlin](https://img.shields.io/badge/Kotlin-2.1-blue.svg)](https://kotlinlang.org)
 [![Jetpack Compose](https://img.shields.io/badge/Jetpack%20Compose-Material%203-4285F4.svg)](https://developer.android.com/jetpack/compose)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
@@ -34,9 +34,15 @@ Firebase sync between the two households.
   vacations shown directly in the calendar, with a toggle
 - 🔒 **Private events** — events only you can see; they never leave your device
 - 🔄 **Sync** — two-way Google Calendar sync + Firestore sync between parents
-- 💬 **Chat**, 💰 **expense tracking**, 🏥 **medical records**, 🎓 **school module**,
-  🤖 **AI assistance** (Gemini): natural-language event entry, conflict monitoring, suggestions
-- 🌍 **Localization** — English, Czech, Russian; light & dark themes
+- 💬 **Chat**, 💰 **expense tracking** with on-device receipt OCR, 🏥 **child records**
+  including a medical profile, 🐾 **pet records**, 👵 **guest and calendar-friend access**
+- 🌍 **Localization** — English, Czech, German, Russian, Ukrainian; light & dark themes
+
+> **Not shipped yet:** an AI subsystem exists in `domain/usecase/ai`, `data/remote/ai` and
+> `presentation/ai` (~3,100 lines: natural-language event entry, conflict monitoring, tone
+> analysis, summaries), but **none of its screens is reachable from navigation**. The README
+> advertised it as a feature until the August 2026 audit. See `docs/AUDIT-2026-08.md` §6 for
+> what to do with it, and `docs/BACKLOG.md` for what stands between the app and a release.
 
 ---
 
