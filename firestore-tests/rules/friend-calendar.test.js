@@ -86,8 +86,12 @@ describe('calendar_friends', () => {
 
   const PATH = `calendar_friends/${FRIEND}`;
 
-  it('lets a parent grant a friend calendar access', async () => {
-    await assertSucceeds(env.authenticatedContext(MOM).firestore().doc(PATH).set(grant({})));
+  // No client writes a grant. `acceptCalendarFriendInvitation` does, on Admin credentials,
+  // and it is the only thing that proves the inviter is a paired parent before doing so.
+  // These cases used to assert the opposite — that a parent could write one directly — which
+  // is what let anybody write one for themselves. See the block comment in `firestore.rules`.
+  it('refuses a parent writing a grant directly (the callable is the only writer)', async () => {
+    await assertFails(env.authenticatedContext(MOM).firestore().doc(PATH).set(grant({})));
   });
 
   it('refuses a friend granting themselves access', async () => {
@@ -97,6 +101,31 @@ describe('calendar_friends', () => {
 
   it('refuses a grant stamped by a non-parent', async () => {
     await assertFails(env.authenticatedContext(MOM).firestore().doc(PATH).set(grant({grantedBy: DAD})));
+  });
+
+  // The breach this rule was closed for: the old condition asked only that the written
+  // document name the caller among its own two `familyParents` and credit them as
+  // `grantedBy` — both attacker-supplied. So a stranger could write a grant at their *own*
+  // uid naming their victim as the other "parent", and the third disjunct of the `events`
+  // read rule then served the victim's whole calendar.
+  it('refuses a stranger self-granting access to a victim they name as a parent', async () => {
+    const selfGrant = {
+      familyParents: [STRANGER, MOM], grantedBy: STRANGER,
+      grantedAtMillis: 1, expiresAtMillis: FAR_FUTURE,
+    };
+    await assertFails(
+        env.authenticatedContext(STRANGER).firestore()
+            .doc(`calendar_friends/${STRANGER}`).set(selfGrant));
+  });
+
+  // Even with a grant seeded past the rules, a second account must not be able to rewrite it
+  // — repointing somebody else's grant at themselves both revokes the real friend and admits
+  // the writer.
+  it('refuses overwriting an existing grant', async () => {
+    await seed(env, {[PATH]: grant({})});
+    await assertFails(
+        env.authenticatedContext(STRANGER).firestore().doc(PATH)
+            .update({familyParents: [STRANGER, MOM]}));
   });
 
   it('lets the friend and both parents read the grant, refuses a stranger', async () => {

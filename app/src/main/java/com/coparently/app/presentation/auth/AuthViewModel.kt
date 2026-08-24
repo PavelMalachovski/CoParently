@@ -78,7 +78,7 @@ class AuthViewModel @Inject constructor(
                     onSuccess = {
                         _uiState.update { it.copy(resetEmailSentTo = email) }
                     },
-                    onFailure = { error -> reportEmailFailure(error, "password_reset", email) }
+                    onFailure = { error -> reportEmailFailure(error, "password_reset") }
                 )
             } finally {
                 _uiState.update { it.copy(isLoading = false) }
@@ -112,7 +112,7 @@ class AuthViewModel @Inject constructor(
                         analyticsManager.logLogin("email")
                         completeSignIn(activity, state.email, state.password, onSuccess)
                     },
-                    onFailure = { error -> reportEmailFailure(error, "sign_in", state.email) }
+                    onFailure = { error -> reportEmailFailure(error, "sign_in") }
                 )
             } finally {
                 _uiState.update { it.copy(isLoading = false) }
@@ -143,7 +143,7 @@ class AuthViewModel @Inject constructor(
                         analyticsManager.logSignUp("email")
                         completeSignIn(activity, state.email, state.password, onSuccess)
                     },
-                    onFailure = { error -> reportEmailFailure(error, "sign_up", state.email) }
+                    onFailure = { error -> reportEmailFailure(error, "sign_up") }
                 )
             } finally {
                 _uiState.update { it.copy(isLoading = false) }
@@ -247,12 +247,19 @@ class AuthViewModel @Inject constructor(
         onSuccess()
     }
 
-    private fun reportEmailFailure(error: Throwable, action: String, email: String) {
+    /**
+     * Records a failed email sign-in or sign-up, **without the address it was attempted with**.
+     *
+     * The address used to be attached as a Crashlytics custom key. Custom keys are uploaded to
+     * Firebase and persist on the Crashlytics session, so they rode along on every later report
+     * from that install too — an identifier for a real person, in a product whose users are
+     * separated parents, sent to a third-party service nobody consented to. Nothing diagnostic
+     * was lost by dropping it: which address was typed does not distinguish a wrong password
+     * from a network failure, and [action] plus the exception already say which call failed.
+     */
+    private fun reportEmailFailure(error: Throwable, action: String) {
         rethrowIfCancellation(error)
-        crashlyticsManager.recordExceptionWithContext(
-            error,
-            mapOf("action" to action, "email" to email)
-        )
+        crashlyticsManager.recordExceptionWithContext(error, mapOf("action" to action))
         // isLoading is cleared by the caller's `finally` (signIn/signUp), not here — a single
         // clearing point per path means nobody has to reason about which reset wins.
         _uiState.update { it.copy(error = AuthError.fromEmailPassword(error)) }

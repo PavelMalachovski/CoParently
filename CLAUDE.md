@@ -10,8 +10,15 @@ Firebase (Auth/Firestore/FCM) for sync between the two parents, Google Calendar 
 Gemini for AI features.
 
 **The authoritative roadmap is `docs/CoPlanly/MVP_phases.md`** (not `.cursor/roadmap.md`,
-which is the historical original plan). MVP 1 is complete; MVP 2 (receipts, change requests,
-dashboards) is next. The latest full audit lives in `docs/AUDIT-2026-07.md`.
+which is the historical original plan). MVP 1 is complete, and **MVP 2 appears to be complete
+too** — receipts with on-device OCR, change requests, the Home dashboard, structured change
+requests from chat and event images are all shipped; this line said "MVP 2 is next" for longer
+than it was true. Re-baseline against `MVP_phases.md` before planning MVP 3.
+
+**The latest full audit lives in `docs/AUDIT-2026-08.md`** (`AUDIT-2026-07.md` is the previous
+one). Read §5 before planning anything: the app has no privacy policy, no in-app account
+deletion and no signing config, so it cannot be published yet, and the `applicationId`
+(`com.coparently.app`, against a product called CoPlanly) becomes permanent at first upload.
 
 ## Design refresh (August 2026) — implemented, keep consistent
 
@@ -84,7 +91,8 @@ When touching the UI, keep these invariants:
    those routes (`BottomNavDestination.topLevelRoutes`); detail screens hide it and keep
    an up-arrow. **Settings is NOT a tab** — it opens from a gear action in each top-level
    screen's top bar and is a detail screen (`onNavigateUp = popBackStack`, bottom bar
-   hidden). `QuickActionsBottomSheet` was dead code and is gone.
+   hidden). `QuickActionsBottomSheet` was dead code and is gone — genuinely so as of the
+   August 2026 audit; the file had in fact survived this note by several months.
    *(Aug 2026: budgets no longer open from an unlabelled Expenses top-bar action — they are
    a chip strip on the Expenses screen itself. Tab switches, including Home's stat-tile deep
    links, go through `NavHostController.navigateToTab` so they share one back-stack policy.)*
@@ -207,7 +215,7 @@ cd firestore-tests && npm test              # firestore.rules against the local 
 
 ```
 domain/    — models, repository interfaces, use cases, holidays, ReminderScheduler
-data/      — Room (v9 + migrations), Firestore/Google/AI clients, repository impls, sync
+data/      — Room (v24 + migrations), Firestore/Google/AI clients, repository impls, sync
 presentation/ — Compose screens per feature + ViewModels + theme
 di/        — Hilt modules (Database, Firebase, Google, UseCase, Notification, …)
 ```
@@ -257,7 +265,7 @@ Data flow: UI → ViewModel → UseCase → Repository → Room (source of truth
     document in the collection would have passed. This is why
     `FirestoreExpenseDataSource.getAllExpenses()` takes a `creatorUids` list and filters
     with `.whereIn("createdByFirebaseUid", creatorUids)` — mirroring
-    `FirestoreEventDataSource.observeEventsForParents()` — instead of reading the whole
+    `FirestoreEventDataSource.observeEventsSharedWith()` — instead of reading the whole
     `expenses` collection. Also keep the rule's field names in sync with what the writer
     actually sets: the expenses rule used to reference a `sharedWith` array that
     `ExpenseRepositoryImpl.addExpense()` never writes (the model shares expenses via the
@@ -273,7 +281,8 @@ Data flow: UI → ViewModel → UseCase → Repository → Room (source of truth
     the conversation as `{uid: epochMillis}` maps — one write per event — and the ticks and
     unread badge are derived from them by `ChatReadState`, never stored per message.
     Message times are stored the same way: `Message.sentAtMillis`, epoch millis (Room
-    schema v13), not a naive `LocalDateTime`, so two parents in different time zones agree
+    schema v13, since superseded — the database is at v24), not a naive `LocalDateTime`, so two
+    parents in different time zones agree
     on what a mark means and on when a message was sent. The Firestore field keeps its name
     (`timestamp`) and the read path still accepts a legacy ISO string, so a co-parent on an
     older build stays readable. Deliberately *not* changed: `Event`, `Expense`, `Budget`
@@ -394,13 +403,11 @@ Data flow: UI → ViewModel → UseCase → Repository → Room (source of truth
   `functions/index.js`, diff against `firestore.rules`' match blocks) found two more
   mismatches. One is now fixed; the other is left as-is because it is not reachable in
   production:
-  - `FirestoreMedicalDataSource` (`medicalRecords`, `allergies`) and
-    `FirestoreEducationDataSource` (`grades`, `schoolEvents`) have no rule coverage, but
-    `MedicalRepositoryImpl`/`EducationRepositoryImpl` are never bound in
-    `RepositoryModule` and no ViewModel/UseCase references either interface — dead code
-    with the same shape as the `CoParentPairingService` Task 11 deleted. Decide (delete,
-    or wire up + add rules) before anyone binds them; don't add rules for unreachable
-    collections speculatively.
+  - `FirestoreMedicalDataSource`/`FirestoreEducationDataSource` and their unbound
+    `MedicalRepositoryImpl`/`EducationRepositoryImpl` were the unreachable half of this,
+    and they have since been **deleted** — this bullet described them as still present for
+    some time after they were gone. The rule it argued for was correctly never written:
+    don't add rules for collections no client reaches.
   - `custody_schedules` (Room's `CustodyScheduleEntity`/`CustodyScheduleDao`, the legacy
     per-parent custody table) has no Firestore data source and never will — it stays
     Room-only. Its rule block, which matched no client code, has been deleted from

@@ -604,7 +604,7 @@ private fun ModelTypeCard(
             Spacer(modifier = Modifier.width(dims.paddingSmall))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = modelType.displayName,
+                    text = modelTypeLabel(modelType),
                     style = MaterialTheme.typography.bodyLarge,
                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                 )
@@ -619,20 +619,40 @@ private fun ModelTypeCard(
 }
 
 /**
- * Returns a brief description for each model type.
+ * The name of a custody model, in the reader's language.
+ *
+ * `CustodyModelType.displayName` — which this screen used to render — is an English literal
+ * on the enum, so the custody picker showed "Week On / Week Off" to every user in every
+ * locale. The translations already existed in all five `custody_strings.xml` files and simply
+ * were not wired up, which made this the untranslated screen on the one flow a Czech parent
+ * cannot skip: `střídavá péče` is the arrangement most of them are here to describe.
+ *
+ * `displayName` is left on the enum for logs and debugging, where an English constant is what
+ * you want; it must not reach the UI.
  */
-private fun getModelTypeDescription(modelType: CustodyModelType): String {
-    return when (modelType) {
-        CustodyModelType.WEEK_ON_WEEK_OFF ->
-            "One parent has the child for a full week, then they switch."
-        CustodyModelType.TWO_TWO_THREE ->
-            "2 days, 2 days, 3 days pattern. More frequent transitions."
-        CustodyModelType.THREE_FOUR_FOUR_THREE ->
-            "3 days, 4 days alternating. Balanced mid-week and weekend time."
-        CustodyModelType.CUSTOM ->
-            "Create your own schedule pattern."
+@Composable
+private fun modelTypeLabel(modelType: CustodyModelType): String = stringResource(
+    when (modelType) {
+        CustodyModelType.WEEK_ON_WEEK_OFF -> R.string.custody_model_week_on_week_off
+        CustodyModelType.TWO_TWO_THREE -> R.string.custody_model_two_two_three
+        CustodyModelType.THREE_FOUR_FOUR_THREE -> R.string.custody_model_three_four_four_three
+        CustodyModelType.CUSTOM -> R.string.custody_model_custom
     }
-}
+)
+
+/**
+ * A brief description of each model type, in the reader's language. See [modelTypeLabel] —
+ * these four strings were hardcoded in English beside translations that already existed.
+ */
+@Composable
+private fun getModelTypeDescription(modelType: CustodyModelType): String = stringResource(
+    when (modelType) {
+        CustodyModelType.WEEK_ON_WEEK_OFF -> R.string.custody_model_week_on_week_off_desc
+        CustodyModelType.TWO_TWO_THREE -> R.string.custody_model_two_two_three_desc
+        CustodyModelType.THREE_FOUR_FOUR_THREE -> R.string.custody_model_three_four_four_three_desc
+        CustodyModelType.CUSTOM -> R.string.custody_model_custom_desc
+    }
+)
 
 /**
  * Creates a temporary CustodyModel from the UI state for preview purposes.

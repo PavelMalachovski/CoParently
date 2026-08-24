@@ -142,17 +142,27 @@ describe('revokeSharedAudience', () => {
     assert.ok(!swept.includes('budgets'), 'budgets must not be swept');
   });
 
+  // Derived from `SHARED_AUDIENCE_COLLECTIONS` rather than written out, because the literal
+  // version of this case went stale the moment `pets` joined that list: it kept asserting the
+  // two-collection counts and failed on `6 !== 4` while the sweep itself was correct. A count
+  // hard-coded beside a list that grows tests the transcription, not the behaviour.
   it('queries by array-contains on sharedWith in both directions per collection', async () => {
     const db = fakeDb({events: [], child_info: []});
 
     await revokeSharedAudience(db, 'a', 'b');
 
-    assert.strictEqual(db._queries.length, 4);
+    const collections = require('../index').SHARED_AUDIENCE_COLLECTIONS;
+    assert.strictEqual(db._queries.length, collections.length * 2);
     db._queries.forEach((q) => {
       assert.strictEqual(q.field, 'sharedWith');
       assert.strictEqual(q.op, 'array-contains');
     });
-    assert.deepStrictEqual(db._queries.map((q) => q.value), ['a', 'b', 'a', 'b']);
+    assert.deepStrictEqual(
+        db._queries.map((q) => q.value),
+        collections.flatMap(() => ['a', 'b']));
+    assert.deepStrictEqual(
+        db._queries.map((q) => q.collection),
+        collections.flatMap((name) => [name, name]));
   });
 
   it('splits large sweeps into batches below the 500-operation write cap', async () => {

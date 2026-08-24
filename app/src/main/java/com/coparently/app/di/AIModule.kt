@@ -1,15 +1,14 @@
 package com.coparently.app.di
 
-import android.content.Context
 import com.coparently.app.BuildConfig
 import com.coparently.app.data.remote.ai.AIService
 import com.coparently.app.data.remote.ai.GeminiAIService
+import com.coparently.app.data.remote.ai.GeminiApiKey
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
-import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
@@ -50,21 +49,24 @@ object AIModule {
             .build()
     }
 
+    /**
+     * The Gemini API key, from `BuildConfig` (a gradle property or environment variable).
+     *
+     * Qualified rather than bound as a bare `String` — see [GeminiApiKey]. The old placeholder
+     * fallback is gone too: `"YOUR_GEMINI_API_KEY_HERE"` is not a key, so every AI call made
+     * with it failed at the network, and each failure path swallows the exception and returns
+     * an empty result. An unconfigured build therefore looked exactly like a model that had
+     * nothing to say. An empty string is the honest value for "not configured".
+     */
     @Provides
     @Singleton
-    fun provideGeminiApiKey(@ApplicationContext context: Context): String {
-        // In production, this should come from BuildConfig or secure storage
-        // For now, using a placeholder - replace with actual API key
-        return BuildConfig.GEMINI_API_KEY.ifEmpty {
-            // Fallback to resources or environment variable
-            "YOUR_GEMINI_API_KEY_HERE"
-        }
-    }
+    @GeminiApiKey
+    fun provideGeminiApiKey(): String = BuildConfig.GEMINI_API_KEY
 
     @Provides
     @Singleton
     fun provideAIService(
-        apiKey: String,
+        @GeminiApiKey apiKey: String,
         gson: Gson
     ): AIService {
         return GeminiAIService(apiKey, gson)

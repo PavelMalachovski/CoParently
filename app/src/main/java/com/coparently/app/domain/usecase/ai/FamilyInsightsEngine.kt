@@ -172,16 +172,26 @@ class FamilyInsightsEngine @Inject constructor(
         timeRange: DateRange
     ): String {
         return """
-            Analyze family parenting data and provide insights:
+            Analyze family parenting data and provide insights.
+
+            ${PromptSafety.DATA_ONLY_PREAMBLE}
 
             Time Period: Last ${timeRange.toDays()} days
 
             Calendar Activities:
-            ${calendarData.take(20).joinToString("\n") { "- ${it.title} (${it.eventType}) on ${it.startDateTime}" }}
+            ${PromptSafety.fence(
+                "CALENDAR",
+                calendarData.take(20)
+                    .joinToString("\n") { "- ${it.title} (${it.eventType}) on ${it.startDateTime}" }
+            )}
             ${if (calendarData.size > 20) "... and ${calendarData.size - 20} more events" else ""}
 
             Expenses:
-            ${expenseData.take(15).joinToString("\n") { "- ${it.title}: $${it.amount} (${it.category})" }}
+            ${PromptSafety.fence(
+                "EXPENSES",
+                expenseData.take(15)
+                    .joinToString("\n") { "- ${it.title}: ${it.amount} (${it.category})" }
+            )}
             ${if (expenseData.size > 15) "... and ${expenseData.size - 15} more expenses" else ""}
 
             Provide:

@@ -6,67 +6,45 @@ import android.util.Log
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import dagger.hilt.android.qualifiers.ApplicationContext
+import java.io.IOException
+import java.security.GeneralSecurityException
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
  * Encrypted SharedPreferences wrapper for secure storage.
- * Uses AndroidX Security Crypto library to encrypt sensitive data.
- * Falls back to regular SharedPreferences if encryption is not available.
+ *
+ * Holds the Google OAuth **refresh token**, access token, ID token and the signed-in address
+ * (see the `KEY_*` constants) — the refresh token being a credential that grants a bearer
+ * standing access to the user's Google Calendar until it is revoked.
+ *
+ * **This never degrades to unencrypted on-disk storage, and the degradation it used to perform
+ * is the reason this class is written the way it is.** Every failure branch used to end in
+ * `context.getSharedPreferences("encrypted_prefs", MODE_PRIVATE)` — the *same file name* the
+ * encrypted store uses — so a single `EncryptedSharedPreferences.create` failure wrote the
+ * refresh token to `/data/data/<pkg>/shared_prefs/encrypted_prefs.xml` in clear text, and said
+ * so only in a `Log.w` nobody reads. Two things made that permanent rather than momentary:
+ *
+ *  * the recovery deleted `encrypted_prefs.xml` via [Context.deleteFile], which resolves under
+ *    `files/`, while SharedPreferences live under `shared_prefs/` — so the corrupt keyset was
+ *    never actually removed and every later launch failed identically; and
+ *  * the fallback shared the encrypted store's file, mixing AES256_SIV key names and
+ *    ciphertext values with plain ones, so the store could not read its own earlier writes and
+ *    the app simply re-issued the tokens and wrote those in clear text beside them.
+ *
+ * The keysets `EncryptedSharedPreferences` derives live inside that same preferences file, so
+ * clearing the file is what a genuine recovery looks like: it costs the stored tokens (the user
+ * signs in to Google Calendar again) and buys back an encrypted store. If even that fails, the
+ * store is held [InMemorySharedPreferences] — the behaviour the old "ultimate fallback" comment
+ * claimed but did not implement. Tokens then live for the process and no further, which is the
+ * correct trade for a credential: an inconvenience is recoverable, a plaintext refresh token on
+ * disk is not.
  */
 @Singleton
 class EncryptedPreferences @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
-    private val masterKey: MasterKey? = try {
-        MasterKey.Builder(context)
-            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-            .build()
-    } catch (e: Exception) {
-        Log.e("EncryptedPreferences", "Failed to create MasterKey, falling back to regular SharedPreferences", e)
-        null
-    }
-
-    private val encryptedPreferences: SharedPreferences = try {
-        if (masterKey != null) {
-            try {
-                EncryptedSharedPreferences.create(
-                    context,
-                    "encrypted_prefs",
-                    masterKey,
-                    EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-                    EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-                )
-            } catch (e: Exception) {
-                Log.e("EncryptedPreferences", "Failed to create EncryptedSharedPreferences, trying to delete corrupted file", e)
-                // Try to delete the corrupted encrypted file and fall back
-                try {
-                    context.deleteFile("encrypted_prefs.xml")
-                    context.deleteFile("encrypted_prefs.xml.bak")
-                } catch (deleteEx: Exception) {
-                    Log.w("EncryptedPreferences", "Could not delete corrupted encrypted file", deleteEx)
-                }
-                // Fallback to regular SharedPreferences
-                Log.w("EncryptedPreferences", "Using regular SharedPreferences as fallback")
-                context.getSharedPreferences("encrypted_prefs", Context.MODE_PRIVATE)
-            }
-        } else {
-            // Fallback to regular SharedPreferences if encryption fails
-            Log.w("EncryptedPreferences", "Using regular SharedPreferences as fallback (no master key)")
-            context.getSharedPreferences("encrypted_prefs", Context.MODE_PRIVATE)
-        }
-    } catch (e: Exception) {
-        Log.e("EncryptedPreferences", "Failed to create SharedPreferences, using application context", e)
-        // Last resort: use application context
-        try {
-            context.applicationContext.getSharedPreferences("encrypted_prefs", Context.MODE_PRIVATE)
-        } catch (e2: Exception) {
-            Log.e("EncryptedPreferences", "Critical: Failed to create any SharedPreferences, using in-memory fallback", e2)
-            // Ultimate fallback: use in-memory SharedPreferences
-            // This will lose data on app restart but prevents crash
-            context.getSharedPreferences("encrypted_prefs_memory", Context.MODE_PRIVATE)
-        }
-    }
+    private val encryptedPreferences: SharedPreferences = createEncryptedStore(context)
 
     /**
      * Stores an access token securely.
@@ -344,6 +322,80 @@ class EncryptedPreferences @Inject constructor(
     }
 
     companion object {
+        private const val TAG = "EncryptedPreferences"
+
+        /**
+         * The preferences file. It holds both the encrypted entries and the Tink keysets
+         * `EncryptedSharedPreferences` wraps with the master key, which is why clearing this one
+         * file is a complete reset of the store.
+         */
+        private const val STORE_NAME = "encrypted_prefs"
+
+        /**
+         * Opens the encrypted store, recovering once from a corrupt keyset and falling back to
+         * memory rather than to plaintext.
+         *
+         * A `create` failure is not exotic: the master key is invalidated by a lock-screen
+         * change on several OEM builds, by a Keystore restore, and by a Play Services update
+         * that rotates the provider. What follows the failure is what matters, and the only two
+         * acceptable outcomes are an encrypted store or no store on disk at all.
+         */
+        private fun createEncryptedStore(context: Context): SharedPreferences {
+            openEncrypted(context)?.let { return it }
+
+            // The keyset inside the file no longer matches the master key that wraps it. Remove
+            // the file — data and keysets together — and let `create` mint a fresh keyset. This
+            // discards the stored Google tokens, so the user re-authorises Calendar; nothing
+            // else in here is not re-derivable.
+            Log.w(TAG, "Encrypted store unreadable; clearing it and re-creating")
+            deleteStore(context)
+
+            openEncrypted(context)?.let { return it }
+
+            // Both attempts failed, so the device cannot give us an encrypted store at all.
+            // Keeping the tokens in memory means they are gone at process death and never
+            // touch the disk — see this class's KDoc for why plaintext is not the alternative.
+            Log.e(TAG, "No encrypted store available; keeping preferences in memory only")
+            return InMemorySharedPreferences()
+        }
+
+        /** The encrypted store, or null when it cannot be opened for any reason. */
+        private fun openEncrypted(context: Context): SharedPreferences? = try {
+            val masterKey = MasterKey.Builder(context)
+                .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+                .build()
+            EncryptedSharedPreferences.create(
+                context,
+                STORE_NAME,
+                masterKey,
+                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+            )
+        } catch (e: GeneralSecurityException) {
+            Log.e(TAG, "Encrypted preferences could not be opened", e)
+            null
+        } catch (e: IOException) {
+            Log.e(TAG, "Encrypted preferences could not be opened", e)
+            null
+        }
+
+        /**
+         * Removes the preferences file, keysets included.
+         *
+         * `deleteSharedPreferences` is API 24+ and this module is minSdk 26, so the older
+         * clear-and-hope path is not needed. A `clear()` on the open store would not do:
+         * the failure being recovered from is one where the store cannot be opened.
+         */
+        private fun deleteStore(context: Context) {
+            try {
+                context.deleteSharedPreferences(STORE_NAME)
+            } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+                // Deliberately broad: whatever goes wrong here, the next step is the same —
+                // try to open the store again, and hold it in memory if that fails too.
+                Log.e(TAG, "Could not delete the corrupt encrypted store", e)
+            }
+        }
+
         private const val KEY_ACCESS_TOKEN = "access_token"
         private const val KEY_REFRESH_TOKEN = "refresh_token"
         private const val KEY_TOKEN_EXPIRY = "token_expiry"

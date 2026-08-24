@@ -9,6 +9,34 @@ rules_version = '2';
 // None of these blocks can tell one signed-in user from another: Storage rules cannot read
 // Firestore, so none of them knows who a parent of what is. See the medical_photos block, which
 // says at length what that costs and why it was accepted there.
+//
+// ---------------------------------------------------------------------------------------
+// WRITE IS THE WORSE HALF, AND IT WAS UNDOCUMENTED UNTIL THE AUGUST 2026 AUDIT.
+//
+// The read exposure below is argued for at length. The write rules are the same
+// `request.auth != null` and nobody wrote down what that means: **any signed-in CoPlanly user
+// who learns an object's path can overwrite it or delete it.** `request.resource == null` is a
+// delete, and every block admits it. A path is not a secret — `receipts/{expenseId}.jpg` and
+// `event_images/{eventId}.jpg` are built from ids any co-parent has held, and an ex-partner's
+// local Room copy survives both sign-out and the unpair sweep, so those ids outlive the link
+// the sweep revoked.
+//
+// So the failure is not only disclosure. It is an ex-partner deleting the other parent's
+// receipts, or replacing a photograph attached to a child's medical record with a different
+// image, in a product whose records are used to settle disagreements about what happened.
+//
+// This was deliberately NOT patched with an owner check in that audit, and the reason is worth
+// keeping: both parents legitimately manage the same objects (the `child_info` update rule
+// admits the creator *and* their partner), so a rule keyed on the uploader's uid would deny the
+// co-parent a deletion the app offers them. Per-object metadata naming the audience is
+// enforceable here and would fit that model, but it needs the client to stamp it, a decision
+// about objects already in the bucket that carry no such stamp, and a check against the guest
+// and friend read paths — a change of its own size.
+//
+// The fix the medical_photos block already names is the fix for this too: a Cloud Function
+// proxy that resolves the caller against Firestore and is the only writer with credentials.
+// Until then, treat every block below as: authenticated == may read, overwrite and delete.
+// ---------------------------------------------------------------------------------------
 service firebase.storage {
   match /b/{bucket}/o {
     match /receipts/{fileName} {

@@ -88,10 +88,11 @@ class ConversationSummarizer @Inject constructor(
         }
 
         return """
-            Summarize this co-parenting conversation:
+            Summarize this co-parenting conversation.
 
-            Messages:
-            $messageText
+            ${PromptSafety.DATA_ONLY_PREAMBLE}
+
+            ${PromptSafety.fence("CONVERSATION", messageText)}
 
             Provide:
             1. Brief summary of discussion

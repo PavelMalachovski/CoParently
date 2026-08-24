@@ -1,7 +1,6 @@
 package com.coparently.app.data.remote.firebase
 
 import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.Query
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.tasks.await
@@ -18,41 +17,18 @@ class FirestoreEventDataSource @Inject constructor(
 ) {
     private val eventsCollection = "events"
 
-    /**
-     * Gets all events as a Flow.
-     */
-    fun getAllEvents(): Flow<List<Map<String, Any?>>> = flow {
-        val snapshot = firestore.collection(eventsCollection)
-            .orderBy("startDateTime")
-            .get()
-            .await()
-        emit(snapshot.documents.map { it.data!! })
-    }
-
-    /**
-     * Gets events for a specific date range.
-     */
-    fun getEventsByDateRange(startDate: String, endDate: String): Flow<List<Map<String, Any?>>> = flow {
-        val snapshot = firestore.collection(eventsCollection)
-            .whereGreaterThanOrEqualTo("startDateTime", startDate)
-            .whereLessThanOrEqualTo("startDateTime", endDate)
-            .orderBy("startDateTime")
-            .get()
-            .await()
-        emit(snapshot.documents.map { it.data!! })
-    }
-
-    /**
-     * Gets events for a specific parent owner.
-     */
-    fun getEventsByParent(parentOwner: String): Flow<List<Map<String, Any?>>> = flow {
-        val snapshot = firestore.collection(eventsCollection)
-            .whereEqualTo("parentOwner", parentOwner)
-            .orderBy("startDateTime")
-            .get()
-            .await()
-        emit(snapshot.documents.map { it.data!! })
-    }
+    // `getAllEvents`, `getEventsByDateRange` and `getEventsByParent` were removed by the
+    // August 2026 audit. All three queried the `events` collection with no owner filter — the
+    // first two with none at all, the third on `parentOwner`, which holds the slot identifier
+    // `"mom"`/`"dad"` and not a uid — so each one asked Firestore for *every* family's events.
+    //
+    // None had a caller: `EventRepositoryImpl` reads Room, and the live remote reads go through
+    // `observeEventsSharedWith` below, which filters on `sharedWith` exactly as the rule
+    // requires. Today the rules reject an unfiltered query outright, so these returned
+    // PERMISSION_DENIED rather than other people's data — but that is the only thing that
+    // stopped them, and they sat here named like ordinary API waiting for a rule to be relaxed
+    // or an admin path to be added. Deleted rather than filtered, because a filtered version
+    // would just duplicate `observeEventsSharedWith`.
 
     /**
      * Gets an event by ID.

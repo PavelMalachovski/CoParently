@@ -137,8 +137,15 @@ class CrashlyticsManager @Inject constructor(
     /**
      * Records an exception with additional context information.
      *
+     * **Never pass anything a user typed.** Crashlytics custom keys are uploaded to Firebase and
+     * are set on the *session*, not on the one report — so a key set here rides along on every
+     * later report from the same install until the process ends. Call sites used to pass the
+     * signed-in address, a child's name and a pet's name; all three now pass ids. Ids, actions
+     * and enum names are the intended contents.
+     *
      * @param throwable The exception to record
-     * @param context Additional context information as key-value pairs
+     * @param context Additional context information as key-value pairs — identifiers, not
+     *   personal data
      */
     fun recordExceptionWithContext(throwable: Throwable, context: Map<String, String>) {
         context.forEach { (key, value) ->
