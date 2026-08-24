@@ -236,20 +236,34 @@ fun DayAgendaCard(
             .padding(horizontal = 14.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        Text(
-            text = custody
-                ?.let {
-                    stringResource(
-                        R.string.calendar_agenda_header_with_custody,
-                        date.format(dateFormatter),
-                        parentNames.labelFor(it)
-                    )
-                }
-                ?: date.format(dateFormatter),
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        // Two lines, not one (UX-8). Whose day it is used to be a suffix on the date, at
+        // `labelMedium` in `onSurfaceVariant` and in no parent colour at all — the smallest,
+        // greyest text on a screen where the *next* handover is rendered at 26sp bold. The
+        // hierarchy was inverted: the future event shouted over the present fact the app is
+        // opened to answer.
+        //
+        // The date stays small and muted, because it is the context. The custody line is
+        // promoted and carries the parent's own colour, through `ParentColors.text` — the
+        // text-grade member of the pair, never the raw fill, which fails AA as a foreground.
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(
+                text = date.format(dateFormatter),
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            if (custody != null) {
+                Text(
+                    text = stringResource(
+                        R.string.calendar_agenda_custody_day,
+                        parentNames.labelFor(custody)
+                    ),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = ParentColors.text(custody)
+                )
+            }
+        }
 
         if (events.isEmpty()) {
             Text(

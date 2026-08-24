@@ -596,13 +596,23 @@ Fixed: the calendar header's three controls, the month title included — which 
 Month/Week/Day switcher and was a bare `clickable`, so TalkBack did not announce it as a control
 either.
 
-### UX-8 · P2 · S · The answer to "whose day is it" is the smallest, greyest text on screen
+### UX-8 · **PARTLY DONE** · P3 · S · The answer to "whose day is it" is the smallest, greyest text
 
-`CalendarBanners:239` renders it as `labelMedium` (12sp) in `onSurfaceVariant` with no parent
-colour, while `HomeScreen:673` gives the *next* handover 26sp bold. The hierarchy is inverted:
-the future event is louder than the present fact the app is opened for. The two surfaces also
-colour from different sources (`event.parentOwner` versus `entry.dayParent ?: event.parentOwner`),
-so one visual channel carries two meanings on adjacent cards. Audit §9.11.
+`CalendarBanners` rendered it as a **suffix on the date**, `labelMedium` (12sp) in
+`onSurfaceVariant` with no parent colour, while `HomeScreen` gives the *next* handover 26sp bold.
+The hierarchy was inverted: the future event shouted over the present fact the app is opened to
+answer. Audit §9.11.
+
+Now its own line at `titleMedium`, in that parent's colour through `ParentColors.text` — the
+text-grade member of the pair, never the raw fill. The date stays small and muted, because the
+date is the context and the answer is the answer. Deliberately not raised to compete with the
+26sp handover: a measured step, not a shouting match.
+
+**Left open — the second half of the item.** The two surfaces still colour from different
+sources: `event.parentOwner` on one and `entry.dayParent ?: event.parentOwner` on the other, so
+one visual channel carries two meanings on adjacent cards. That is a question about what a chip's
+colour *means* — the event's owner, or whose day it falls on — and it wants an owner's answer
+before either call site changes. Dropped to P3 because the loud half is fixed.
 
 ### UX-9 · P2 · M · Five different empty-state anatomies
 
