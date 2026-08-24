@@ -332,3 +332,16 @@ dependencies {
     detektPlugins("io.gitlab.arturbosch.detekt:detekt-formatting:1.23.7")
 }
 
+
+// A failing unit test on CI printed only its exception class and a line number — enough to
+// know something broke, not enough to know what. `FULL` prints the assertion message and the
+// stack, so a red build can be diagnosed from its log instead of by downloading the XML report
+// and guessing in the meantime. Only failures are logged; a green run stays quiet.
+tasks.withType<Test>().configureEach {
+    testLogging {
+        events("failed")
+        exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+        showStackTraces = true
+        showCauses = true
+    }
+}

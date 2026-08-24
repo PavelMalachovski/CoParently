@@ -96,6 +96,7 @@ class CalendarViewModelCustodyChangeTest {
         val custodyModelRepository = mockk<CustodyModelRepository> {
             every { getActiveModel() } returns flowOf(null)
             every { observeShared() } returns sharedCustody
+            every { observeDayOverrides() } returns flowOf(emptyMap())
         }
         val parentsSource = mockk<ParentsSource> {
             every { observe() } returns flowOf(
@@ -123,6 +124,7 @@ class CalendarViewModelCustodyChangeTest {
         val custodyModelRepository = mockk<CustodyModelRepository> {
             every { getActiveModel() } returns flowOf(null)
             every { observeShared() } returns sharedCustody
+            every { observeDayOverrides() } returns flowOf(emptyMap())
         }
         val parentsSource = mockk<ParentsSource> {
             every { observe() } returns parentsFlow

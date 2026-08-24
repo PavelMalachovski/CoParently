@@ -49,6 +49,7 @@ class CalendarViewModelTest {
         custodyModelRepository = mockk {
             every { getActiveModel() } returns flowOf(null)
             every { observeShared() } returns flowOf(null)
+            every { observeDayOverrides() } returns flowOf(emptyMap())
         }
         encryptedPreferences = mockk {
             every { getString(any(), any()) } returns null
