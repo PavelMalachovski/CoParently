@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Push notification text (SEC-3). Composed on the receiving device. -->
+<resources>
+    <string name="push_event_created_title">Nová událost</string>
+    <string name="push_event_created_body">%1$s přidal/a „%2$s“</string>
+    <string name="push_event_updated_title">Událost změněna</string>
+    <string name="push_event_updated_body">%1$s změnil/a „%2$s“</string>
+    <string name="push_event_deleted_title">Událost zrušena</string>
+    <string name="push_event_deleted_body">%1$s zrušil/a „%2$s“</string>
+    <string name="push_child_info_updated_title">Informace o dítěti aktualizovány</string>
+    <string name="push_child_info_updated_body">%1$s aktualizoval/a informace o %2$s</string>
+    <string name="push_change_request_created_title">Žádost o změnu</string>
+    <string name="push_change_request_created_body">%1$s žádá o změnu „%2$s“</string>
+    <string name="push_change_request_accepted_title">Změna přijata</string>
+    <string name="push_change_request_accepted_body">%1$s přijal/a změnu „%2$s“</string>
+    <string name="push_change_request_declined_title">Změna odmítnuta</string>
+    <string name="push_change_request_declined_body">%1$s odmítl/a změnu „%2$s“</string>
+    <string name="push_change_request_cancelled_title">Žádost o změnu stažena</string>
+    <string name="push_change_request_cancelled_body">%1$s stáhl/a žádost o „%2$s“</string>
+    <string name="push_custody_proposal_proposed_title">Návrh nového rozvrhu péče</string>
+    <string name="push_custody_proposal_proposed_body">Druhý rodič navrhuje nový rozvrh</string>
+    <string name="push_custody_proposal_accepted_title">Nový rozvrh péče schválen</string>
+    <string name="push_custody_proposal_accepted_body">Druhý rodič souhlasil s novým rozvrhem</string>
+    <string name="push_custody_proposal_declined_title">Návrh rozvrhu odmítnut</string>
+    <string name="push_custody_proposal_declined_body">Druhý rodič odmítl navržený rozvrh</string>
+    <string name="push_day_swap_offered_title">Návrh na výměnu dne</string>
+    <string name="push_day_swap_offered_body">Druhý rodič navrhuje vyměnit %1$s</string>
+    <string name="push_day_swap_accepted_title">Výměna dne schválena</string>
+    <string name="push_day_swap_accepted_body">Druhý rodič souhlasil s výměnou %1$s</string>
+    <string name="push_day_swap_declined_title">Výměna dne odmítnuta</string>
+    <string name="push_day_swap_declined_body">Druhý rodič odmítl výměnu %1$s</string>
+    <string name="push_pairing_accepted_title">Pozvánka přijata</string>
+    <string name="push_pairing_accepted_body">%1$s je nyní druhý rodič v CoPlanly</string>
+    <string name="push_pairing_removed_title">Propojení zrušeno</string>
+    <string name="push_pairing_removed_body">%1$s ukončil/a propojení</string>
+    <string name="push_actor_fallback">Druhý rodič</string>
+</resources>

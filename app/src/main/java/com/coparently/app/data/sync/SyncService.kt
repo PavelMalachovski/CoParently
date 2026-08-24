@@ -608,12 +608,15 @@ class SyncService @Inject constructor(
         val currentUser = firebaseAuthService.getCurrentUser() ?: return
         val userData = userDao.getUserById(currentUser.uid) ?: return
 
+        // Null for an action nothing announces. Skipping is the whole of the handling: the
+        // receiving device composes the sentence from the type now, so a payload it has no
+        // type for is a push that would be dropped on arrival.
         val notificationPayload = fcmService.createEventNotificationPayload(
             eventId = eventId,
             eventTitle = eventTitle,
             action = action,
             performedBy = userData.name
-        )
+        ) ?: return
 
         fcmService.queueNotificationForUser(partnerId, notificationPayload)
     }

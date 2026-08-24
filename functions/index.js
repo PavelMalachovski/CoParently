@@ -41,11 +41,16 @@ admin.initializeApp();
  * delivered to onMessageReceived uniformly in all three app states, so the client always
  * decides how to render it. title/body therefore live in `data`.
  *
- * FCM requires every `data` value to be a string and rejects the whole message otherwise.
- * `title` and `body` used to be copied through unconverted, which made them the only two
- * values that were never coerced: a queue document with a missing or non-string title made
- * `admin.messaging().send` throw and the push was lost. Every value is coerced here,
- * `title`/`body` included, and absent keys become '' rather than the string 'undefined'.
+ * FCM requires every `data` value to be a string and rejects the whole message otherwise, so
+ * every value is coerced here and an absent key becomes '' rather than the string 'undefined'.
+ *
+ * **The payload no longer carries the notification's text** (SEC-3). It carries a `type` and the
+ * few names that type needs; the receiving device writes the sentence from its own string
+ * resources, in the reader's language, and drops a `type` it has no wording for. The `title` and
+ * `body` defaults this used to inject are gone with that — they encoded a contract in which the
+ * sender wrote what the other parent's lock screen would say. `type` keeps its 'general'
+ * fallback, which is now a value no client composes and every client therefore discards: the
+ * right outcome for a payload that arrived malformed.
  *
  * @param {string} token The recipient's FCM registration token.
  * @param {Object} data The queued `data` payload.
@@ -64,8 +69,6 @@ function buildFcmMessage(token, data) {
     token: token,
     data: Object.assign(
         {
-          title: '',
-          body: '',
           type: 'general',
           eventId: '',
           childInfoId: '',
@@ -652,13 +655,17 @@ async function acceptPairingInvitationImpl(db, acceptingUserId, acceptingEmail, 
     });
   });
 
-  const accepterName = (await accepterRef.get()).data().name || 'Your co-parent';
+  // The name only. The sentence around it is written by the receiving device, from its own
+  // string resources, in the reader's language (SEC-3) — an English `title`/`body` written here
+  // would reach a Czech parent in English, and would also be the shape that let a *client*
+  // write whatever it liked. An empty name is fine: the app substitutes a translated
+  // "your co-parent" for it.
+  const accepterName = (await accepterRef.get()).data().name || '';
   await db.collection('notification_queue').add({
     targetUserId: invite.fromUserId,
     data: {
       type: 'pairing_accepted',
-      title: 'Invitation accepted',
-      body: `${accepterName} is now your co-parent in CoPlanly`,
+      actorName: accepterName,
     },
     status: 'pending',
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -1561,8 +1568,7 @@ async function unpairCoParentImpl(db, callerUid) {
         targetUserId: result.unpairedFrom,
         data: {
           type: 'pairing_removed',
-          title: 'Co-parent unlinked',
-          body: `${result.callerName} ended the co-parent link`,
+          actorName: result.callerName || '',
         },
         status: 'pending',
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -2023,8 +2029,14 @@ async function notifyOfChatMessage(db, message) {
     data: {
       type: 'chat_message',
       conversationId,
-      title: message.senderName || 'CoPlanly',
-      body: String(message.content || '').slice(0, CHAT_MESSAGE_PREVIEW_LENGTH),
+      // `actorName`/`preview` rather than `title`/`body`, so that no queued payload anywhere
+      // carries pre-written notification text and the security rule can refuse those two keys
+      // outright (SEC-3). This one still relays rather than composes — a chat notification's
+      // title *is* the sender and its body *is* the message — but only this function has seen
+      // the message, and the rule refuses `chat_message` from a client, so relaying it here is
+      // not the hole that relaying the others was.
+      actorName: message.senderName || '',
+      preview: String(message.content || '').slice(0, CHAT_MESSAGE_PREVIEW_LENGTH),
     },
     status: 'pending',
     createdAt: admin.firestore.FieldValue.serverTimestamp(),

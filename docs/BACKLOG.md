@@ -177,11 +177,39 @@ database**. A child's medical profile, the full chat history and every expense s
 SQLite. SQLCipher plus a migration, or — as a smaller first step — field-level encryption of
 the medical profile alone. Audit §3.3.
 
-### SEC-3 · P1 · S · Notification text is composed on the client
+### SEC-3 · **DONE** · Notification text is composed on the client
 
-So a push can claim to be anything. Length is now bounded (audit §2.7); composition is not.
-Blocked behind CQ-14 (service-layer strings are still hardcoded English, so moving composition
-server-side needs the localisation story settled first).
+So a push could claim to be anything. Length was bounded (audit §2.7); composition was not —
+the sending device wrote `title` and `body`, and the other phone rendered them verbatim with the
+app's own icon, on a lock screen, from someone the reader may be trying to keep at a distance.
+
+**Composed on the receiving device now**, not on the sender and not on a server. A payload
+carries a `type` and the few names that type needs (`PushPayload`); the app writes the sentence
+from its own string resources, and **drops a type it has no wording for** rather than falling
+back to whatever text arrived — the fallback is what would have left the forgery open.
+
+Two rules make it hold rather than be a convention, both pinned in
+`firestore-tests/rules/notification-payload.test.js`:
+
+- a client-written payload carrying `title` or `body` **at all** is refused (a length bound
+  would have let an empty one through, which is why this is presence and not size);
+- `data.type` must be in an **allow-list** of the fourteen types a client produces. The three
+  server-only types — `pairing_accepted`, `pairing_removed`, `chat_message` — are absent, so a
+  co-parent cannot announce a pairing that did not happen or a chat message under a name that is
+  not theirs. Cloud Functions write as admin and bypass rules, which is what makes an allow-list
+  safe here.
+
+**The CQ-14 blocker was wrong**, and worth recording as an error rather than quietly dropping.
+It assumed *server-side* was the only alternative to *sender-side*, which would indeed have
+needed a stored locale and a JavaScript string catalogue. But `buildFcmMessage` already sends
+**data-only** messages precisely so the app always renders the push itself — so the receiving
+device was already drawing the notification, and it is the device that holds all five
+translations and knows which one the reader wants. Composing there is both safer and better
+localized than composing on a server, and it needed no new profile field.
+
+Thirty-three strings in five locales. Remaining gap: the chat preview still relays rather than
+composes — its title *is* the sender and its body *is* the message — but only the Cloud Function
+that saw the message can produce that type, and the rule refuses it from a client.
 
 ### SEC-4 · P2 · S · `CustodyModelEntity.lastModifiedAt` is a naive local date-time
 
@@ -395,7 +423,12 @@ are not coverage.
 `GoogleCalendarSyncState.message`, sync/status errors, `NavGraph`'s "Checking authentication…"
 — hardcoded English, unreachable by `stringResource`. Extracting them needs a resource-provider
 abstraction. **Do not** inject `Context` into a ViewModel ad hoc to fix one; that is the rule
-`SwapError` and `CLAUDE.md` both exist to protect. Blocks **SEC-3** and part of **UX-14**.
+`SwapError` and `CLAUDE.md` both exist to protect. Blocks part of **UX-14**.
+
+It used to be recorded as blocking **SEC-3** too. It did not: push text moved to the *receiving*
+device, which has a `Context` and all five translations, so no resource-provider abstraction was
+involved. Worth remembering when the next item claims to be blocked behind this one — the
+question to ask is which side of the wire the string is finally read on.
 
 ### CQ-15 · P3 · S · Dead code
 
@@ -810,32 +843,34 @@ Not a wish-list ordering — a dependency ordering. Each block assumes the one a
 
 5. **REL-2, REL-4, REL-5, REL-6, REL-7** — keystore, legal, consent, Play Console, and the one
    device test CI cannot run.
-6. **SEC-1** — the Cloud Function proxy. Now two holes rather than three, MON-7 having removed
+6. ~~**SEC-3** — notification text composed on the client.~~ **Done**, and it was not blocked
+   behind CQ-14 after all — see the item.
+7. **SEC-1** — the Cloud Function proxy. Now two holes rather than three, MON-7 having removed
    the AI key from the APK by deleting the subsystem — and it is the precondition for AI ever
    coming back.
-7. ~~**CQ-3** — deletions that replicate.~~ **Done.** Tombstones, an outbox that retries, and a
+8. ~~**CQ-3** — deletions that replicate.~~ **Done.** Tombstones, an outbox that retries, and a
    daily server-side sweep. See the item for the three decisions it rests on.
-8. ~~**UX-1 → UX-7** — the P1 usability set.~~ **Done.** What remains in `UX` is P2 and below:
+9. ~~**UX-1 → UX-7** — the P1 usability set.~~ **Done.** What remains in `UX` is P2 and below:
    the empty-state anatomies (**UX-9**), budget status carried by colour alone (**UX-10**), the
    Settings row with three interaction models (**UX-11**), and the English success strings
    (**UX-12**, blocked on **CQ-14**).
 
 **Then, the product bets, in descending confidence**
 
-9. **MON-4 then MON-3** — settle what the record guarantees, then sell the export. This order is
+10. **MON-4 then MON-3** — settle what the record guarantees, then sell the export. This order is
    not negotiable: an export of a record nobody can vouch for is worth nothing to a lawyer.
-10. **MON-5** — the Rodičovský plán. The cheapest local moat and the reason a mediator recommends
+11. **MON-5** — the Rodičovský plán. The cheapest local moat and the reason a mediator recommends
     you.
-11. ~~**MON-6** — the Czech custody preset.~~ **Done.** What it exposed is **MON-6b**: the
+12. ~~**MON-6** — the Czech custody preset.~~ **Done.** What it exposed is **MON-6b**: the
     schedule cannot describe a half-day, so the contact afternoon most Czech orders include has
     nowhere to go.
-12. ~~**MON-7** — one AI feature behind the proxy, or delete the subsystem.~~ **Deleted.** If AI
+13. ~~**MON-7** — one AI feature behind the proxy, or delete the subsystem.~~ **Deleted.** If AI
     returns it returns behind **SEC-1**, as one feature rather than eight.
-13. **MON-8** — the school import.
+14. **MON-8** — the school import.
 
 **Structural, whenever it fits**
 
-14. **CQ-5**, and the rest of **CQ-6**. Both grow worse with tenure, so they land on your
+15. **CQ-5**, and the rest of **CQ-6**. Both grow worse with tenure, so they land on your
     longest-standing users first. CQ-6's network and home-screen halves are done; what remains
     is the Room query behind the chat screen, which needs a "load earlier" affordance and has
     to be done together with **CQ-8** — see the item. CQ-5 is the harder one and is *not* a
@@ -844,7 +879,7 @@ Not a wish-list ordering — a dependency ordering. Each block assumes the one a
     `updatedAt` carries SEC-4's ordering defect anyway), and a date window on `startDateTime`
     cuts off the master row of a recurring series that began before it. Settle those two before
     writing any of it.
-15. **CQ-12, CQ-13** — make detekt gate again, and write the ViewModel tests. The first four CI
+16. **CQ-12, CQ-13** — make detekt gate again, and write the ViewModel tests. The first four CI
     runs are the argument for both.
 
 **One thread runs through this document.** The security holes, the release-only Gson corruption,

@@ -320,7 +320,20 @@ Data flow: UI → ViewModel → UseCase → Repository → Room (source of truth
     early reintroduces exactly the bug. `FirestoreEventDataSource.deleteEvent` still removes a
     document outright and has exactly one legitimate caller — an event turned private has to
     leave Firestore with no trace.
-15. **`sharedWith` is computed at upload time and never recomputed for a row already marked
+15. **A push carries a type, never a sentence** (SEC-3). `data/remote/firebase/PushPayload.kt`
+    is the vocabulary; `CoPlanlyMessagingService` writes the text from *its own* string
+    resources and **drops a type it has no wording for**. Never reintroduce a `title`/`body`
+    fallback for an unrecognised type — that fallback is the forgery, not a nicety, and
+    `firestore.rules` refuses both keys from a client precisely so nothing legitimate needs
+    one. Two halves, and both are load-bearing: the rule's **allow-list** of client types keeps
+    `pairing_accepted`, `pairing_removed` and `chat_message` producible only by Cloud Functions
+    (which write as admin and bypass rules), so a co-parent cannot announce a pairing that did
+    not happen. Adding a type means four places agreeing — `PushPayload`, the rule's allow-list,
+    `CoPlanlyMessagingService.PUSH_TEXT`, and the five `push_strings.xml` — and a type missing
+    from any of them is a push that silently never appears. This is also why service-layer
+    string extraction (**CQ-14**) was *not* a prerequisite: the string is read on the receiving
+    device, which has a `Context` and all five translations.
+16. **`sharedWith` is computed at upload time and never recomputed for a row already marked
     synced.** An event created while the account was unpaired is uploaded with an audience of
     one uid, and nothing revisits it — so it stays unreadable by a co-parent who arrives later.
     Pairing repaired this only for the *accepter*, and only by accident: `EventDao.reslotOwner`

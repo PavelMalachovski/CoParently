@@ -38,7 +38,7 @@ function enqueueFor(env, callerUid, targetUid) {
   return env.authenticatedContext(callerUid).firestore()
       .collection('notification_queue').add({
         targetUserId: targetUid,
-        data: {type: 'event_created', title: 'New Event', body: 'Alice created an event'},
+        data: {type: 'event_created', subject: 'Swimming', actorName: 'Alice'},
         createdAt: Date.now(),
         status: 'pending',
       });

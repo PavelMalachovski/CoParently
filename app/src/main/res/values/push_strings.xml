@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Push notification text (SEC-3).
+
+  These are composed on the **receiving** device, not by the phone that sent the notification
+  and not on a server. A queued payload carries a type and the few names it needs; this file
+  is the sentence. That is what makes the frame — "New event", "Change requested" — something
+  nobody can forge, and it is also why the notification arrives in the reader's language
+  rather than the sender's.
+
+  Every %1$s / %2$s is a name a person typed: a parent's display name, an event's title, a
+  child's name. Keep them out of positions where the surrounding grammar has to agree with
+  them, the same rule the custody preview strings follow.
+-->
+<resources>
+    <string name="push_event_created_title">New event</string>
+    <string name="push_event_created_body">%1$s added “%2$s”</string>
+    <string name="push_event_updated_title">Event changed</string>
+    <string name="push_event_updated_body">%1$s changed “%2$s”</string>
+    <string name="push_event_deleted_title">Event cancelled</string>
+    <string name="push_event_deleted_body">%1$s cancelled “%2$s”</string>
+    <string name="push_child_info_updated_title">Child information updated</string>
+    <string name="push_child_info_updated_body">%1$s updated information for %2$s</string>
+    <string name="push_change_request_created_title">Change requested</string>
+    <string name="push_change_request_created_body">%1$s asked to change “%2$s”</string>
+    <string name="push_change_request_accepted_title">Change accepted</string>
+    <string name="push_change_request_accepted_body">%1$s accepted the change to “%2$s”</string>
+    <string name="push_change_request_declined_title">Change declined</string>
+    <string name="push_change_request_declined_body">%1$s declined the change to “%2$s”</string>
+    <string name="push_change_request_cancelled_title">Change request withdrawn</string>
+    <string name="push_change_request_cancelled_body">%1$s withdrew the request about “%2$s”</string>
+    <string name="push_custody_proposal_proposed_title">New custody schedule proposed</string>
+    <string name="push_custody_proposal_proposed_body">Your co-parent proposes a new schedule</string>
+    <string name="push_custody_proposal_accepted_title">New custody schedule agreed</string>
+    <string name="push_custody_proposal_accepted_body">Your co-parent agreed to the new schedule</string>
+    <string name="push_custody_proposal_declined_title">Custody proposal turned down</string>
+    <string name="push_custody_proposal_declined_body">Your co-parent turned down the proposed schedule</string>
+    <string name="push_day_swap_offered_title">Day swap proposed</string>
+    <string name="push_day_swap_offered_body">Your co-parent proposes swapping %1$s</string>
+    <string name="push_day_swap_accepted_title">Day swap agreed</string>
+    <string name="push_day_swap_accepted_body">Your co-parent agreed to swap %1$s</string>
+    <string name="push_day_swap_declined_title">Day swap turned down</string>
+    <string name="push_day_swap_declined_body">Your co-parent turned down swapping %1$s</string>
+    <string name="push_pairing_accepted_title">Invitation accepted</string>
+    <string name="push_pairing_accepted_body">%1$s is now your co-parent in CoPlanly</string>
+    <string name="push_pairing_removed_title">Co-parent unlinked</string>
+    <string name="push_pairing_removed_body">%1$s ended the co-parent link</string>
+    <string name="push_actor_fallback">Your co-parent</string>
+</resources>

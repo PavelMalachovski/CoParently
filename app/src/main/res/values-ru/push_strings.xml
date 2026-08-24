@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Push notification text (SEC-3). Composed on the receiving device. -->
+<resources>
+    <string name="push_event_created_title">Новое событие</string>
+    <string name="push_event_created_body">%1$s добавил(а) «%2$s»</string>
+    <string name="push_event_updated_title">Событие изменено</string>
+    <string name="push_event_updated_body">%1$s изменил(а) «%2$s»</string>
+    <string name="push_event_deleted_title">Событие отменено</string>
+    <string name="push_event_deleted_body">%1$s отменил(а) «%2$s»</string>
+    <string name="push_child_info_updated_title">Информация о ребёнке обновлена</string>
+    <string name="push_child_info_updated_body">%1$s обновил(а) информацию о %2$s</string>
+    <string name="push_change_request_created_title">Запрос на изменение</string>
+    <string name="push_change_request_created_body">%1$s просит изменить «%2$s»</string>
+    <string name="push_change_request_accepted_title">Изменение принято</string>
+    <string name="push_change_request_accepted_body">%1$s принял(а) изменение «%2$s»</string>
+    <string name="push_change_request_declined_title">Изменение отклонено</string>
+    <string name="push_change_request_declined_body">%1$s отклонил(а) изменение «%2$s»</string>
+    <string name="push_change_request_cancelled_title">Запрос на изменение отозван</string>
+    <string name="push_change_request_cancelled_body">%1$s отозвал(а) запрос по «%2$s»</string>
+    <string name="push_custody_proposal_proposed_title">Предложен новый график опеки</string>
+    <string name="push_custody_proposal_proposed_body">Второй родитель предлагает новый график</string>
+    <string name="push_custody_proposal_accepted_title">Новый график опеки согласован</string>
+    <string name="push_custody_proposal_accepted_body">Второй родитель согласился с новым графиком</string>
+    <string name="push_custody_proposal_declined_title">Предложение по графику отклонено</string>
+    <string name="push_custody_proposal_declined_body">Второй родитель отклонил предложенный график</string>
+    <string name="push_day_swap_offered_title">Предложен обмен днём</string>
+    <string name="push_day_swap_offered_body">Второй родитель предлагает поменяться на %1$s</string>
+    <string name="push_day_swap_accepted_title">Обмен днём согласован</string>
+    <string name="push_day_swap_accepted_body">Второй родитель согласился поменяться на %1$s</string>
+    <string name="push_day_swap_declined_title">Обмен днём отклонён</string>
+    <string name="push_day_swap_declined_body">Второй родитель отклонил обмен на %1$s</string>
+    <string name="push_pairing_accepted_title">Приглашение принято</string>
+    <string name="push_pairing_accepted_body">%1$s теперь ваш со-родитель в CoPlanly</string>
+    <string name="push_pairing_removed_title">Связь с со-родителем разорвана</string>
+    <string name="push_pairing_removed_body">%1$s разорвал(а) связь</string>
+    <string name="push_actor_fallback">Второй родитель</string>
+</resources>

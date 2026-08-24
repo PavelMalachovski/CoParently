@@ -5,6 +5,7 @@ import com.coparently.app.data.local.entity.ChangeRequestEntity
 import com.coparently.app.data.remote.firebase.FcmService
 import com.coparently.app.data.remote.firebase.FirebaseAuthService
 import com.coparently.app.data.remote.firebase.FirestoreChangeRequestDataSource
+import com.coparently.app.data.remote.firebase.PushPayload
 import com.coparently.app.domain.model.ChangeRequest
 import com.coparently.app.domain.model.ChangeRequestStatus
 import com.coparently.app.domain.repository.ChangeRequestRepository
@@ -103,20 +104,17 @@ class ChangeRequestRepositoryImpl @Inject constructor(
         action: String
     ) {
         if (targetUserId.isEmpty() || targetUserId == firebaseAuthService.getCurrentUser()?.uid) return
-        val performedBy = firebaseAuthService.getCurrentUser()?.displayName ?: "Your co-parent"
+        // Null for an action nothing announces — see `FcmService.createEventNotificationPayload`.
+        val type = PushPayload.changeRequestType(action) ?: return
+        // Empty rather than "Your co-parent": the receiving device holds a translated fallback
+        // for a missing name, and an English one written here would win over it.
+        val performedBy = firebaseAuthService.getCurrentUser()?.displayName.orEmpty()
         val payload = mapOf(
-            "type" to "change_request_$action",
-            "changeRequestId" to request.id,
-            "eventId" to request.eventId,
-            "title" to when (action) {
-                "created" -> "Change requested: ${request.eventTitle}"
-                "accepted" -> "Change accepted: ${request.eventTitle}"
-                "declined" -> "Change declined: ${request.eventTitle}"
-                "cancelled" -> "Change request withdrawn: ${request.eventTitle}"
-                else -> "Change request update"
-            },
-            "body" to "$performedBy $action a change request",
-            "timestamp" to System.currentTimeMillis().toString()
+            PushPayload.TYPE to type,
+            PushPayload.CHANGE_REQUEST_ID to request.id,
+            PushPayload.EVENT_ID to request.eventId,
+            PushPayload.SUBJECT to request.eventTitle,
+            PushPayload.ACTOR to performedBy
         )
         // Notification delivery is best-effort; the request itself is already synced.
         fcmService.queueNotificationForUser(targetUserId, payload)

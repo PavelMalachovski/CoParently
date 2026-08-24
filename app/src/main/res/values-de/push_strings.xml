@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Push notification text (SEC-3). Composed on the receiving device. -->
+<resources>
+    <string name="push_event_created_title">Neuer Termin</string>
+    <string name="push_event_created_body">%1$s hat „%2$s“ hinzugefügt</string>
+    <string name="push_event_updated_title">Termin geändert</string>
+    <string name="push_event_updated_body">%1$s hat „%2$s“ geändert</string>
+    <string name="push_event_deleted_title">Termin abgesagt</string>
+    <string name="push_event_deleted_body">%1$s hat „%2$s“ abgesagt</string>
+    <string name="push_child_info_updated_title">Kinderdaten aktualisiert</string>
+    <string name="push_child_info_updated_body">%1$s hat die Daten von %2$s aktualisiert</string>
+    <string name="push_change_request_created_title">Änderung angefragt</string>
+    <string name="push_change_request_created_body">%1$s möchte „%2$s“ ändern</string>
+    <string name="push_change_request_accepted_title">Änderung angenommen</string>
+    <string name="push_change_request_accepted_body">%1$s hat die Änderung an „%2$s“ angenommen</string>
+    <string name="push_change_request_declined_title">Änderung abgelehnt</string>
+    <string name="push_change_request_declined_body">%1$s hat die Änderung an „%2$s“ abgelehnt</string>
+    <string name="push_change_request_cancelled_title">Änderungsanfrage zurückgezogen</string>
+    <string name="push_change_request_cancelled_body">%1$s hat die Anfrage zu „%2$s“ zurückgezogen</string>
+    <string name="push_custody_proposal_proposed_title">Neuer Betreuungsplan vorgeschlagen</string>
+    <string name="push_custody_proposal_proposed_body">Der andere Elternteil schlägt einen neuen Plan vor</string>
+    <string name="push_custody_proposal_accepted_title">Neuer Betreuungsplan vereinbart</string>
+    <string name="push_custody_proposal_accepted_body">Der andere Elternteil hat dem neuen Plan zugestimmt</string>
+    <string name="push_custody_proposal_declined_title">Betreuungsvorschlag abgelehnt</string>
+    <string name="push_custody_proposal_declined_body">Der andere Elternteil hat den Plan abgelehnt</string>
+    <string name="push_day_swap_offered_title">Tagestausch vorgeschlagen</string>
+    <string name="push_day_swap_offered_body">Der andere Elternteil schlägt vor, %1$s zu tauschen</string>
+    <string name="push_day_swap_accepted_title">Tagestausch vereinbart</string>
+    <string name="push_day_swap_accepted_body">Der andere Elternteil stimmt dem Tausch am %1$s zu</string>
+    <string name="push_day_swap_declined_title">Tagestausch abgelehnt</string>
+    <string name="push_day_swap_declined_body">Der andere Elternteil lehnt den Tausch am %1$s ab</string>
+    <string name="push_pairing_accepted_title">Einladung angenommen</string>
+    <string name="push_pairing_accepted_body">%1$s ist jetzt Ihr Mit-Elternteil in CoPlanly</string>
+    <string name="push_pairing_removed_title">Verknüpfung aufgehoben</string>
+    <string name="push_pairing_removed_body">%1$s hat die Verknüpfung beendet</string>
+    <string name="push_actor_fallback">Der andere Elternteil</string>
+</resources>
