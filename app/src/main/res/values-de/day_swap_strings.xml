@@ -18,4 +18,28 @@
     <string name="day_swap_inbox_waiting">Wartet auf eine Antwort</string>
     <string name="day_swap_accept">Annehmen</string>
     <string name="day_swap_decline">Ablehnen</string>
+    <string name="day_swap_range">%1$s – %2$s</string>
+    <string name="day_swap_sheet_title_range">Diese Tage tauschen</string>
+    <string name="day_swap_select_hint">Tippe weitere Tage an, um den Tausch zu erweitern</string>
+    <string name="day_swap_selection_cancel">Auswahl abbrechen</string>
+    <plurals name="day_swap_day_count">
+        <item quantity="one">%1$d Tag</item>
+        <item quantity="other">%1$d Tage</item>
+    </plurals>
+    <plurals name="day_swap_direction">
+        <item quantity="one">%1$d Tag geht von %2$s an %3$s</item>
+        <item quantity="other">%1$d Tage gehen von %2$s an %3$s</item>
+    </plurals>
+    <plurals name="day_swap_skipped_days">
+        <item quantity="one">Für %1$d ausgewählten Tag ist keine Betreuung hinterlegt; er bleibt außen vor.</item>
+        <item quantity="other">Für %1$d ausgewählte Tage ist keine Betreuung hinterlegt; sie bleiben außen vor.</item>
+    </plurals>
+    <plurals name="day_swap_inbox_offered_by_you_days">
+        <item quantity="one">Du hast %2$s %1$d Tag angeboten</item>
+        <item quantity="other">Du hast %2$s %1$d Tage angeboten</item>
+    </plurals>
+    <plurals name="day_swap_inbox_offered_to_you_days">
+        <item quantity="one">%2$s bietet dir %1$d Tag an</item>
+        <item quantity="other">%2$s bietet dir %1$d Tage an</item>
+    </plurals>
 </resources>

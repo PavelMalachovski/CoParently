@@ -677,7 +677,8 @@ service cloud.firestore {
         'change_request_created', 'change_request_accepted',
         'change_request_declined', 'change_request_cancelled',
         'custody_proposal_proposed', 'custody_proposal_accepted', 'custody_proposal_declined',
-        'day_swap_offered', 'day_swap_accepted', 'day_swap_declined'
+        'day_swap_offered', 'day_swap_accepted', 'day_swap_declined',
+        'day_swap_group_offered', 'day_swap_group_accepted', 'day_swap_group_declined'
       ];
     }
 
@@ -710,7 +711,11 @@ service cloud.firestore {
                       !('body' in request.resource.data.get('data', {})) &&
                       isValidLength(request.resource.data.get('data', {}).get('subject', ''), 0, 200) &&
                       isValidLength(request.resource.data.get('data', {}).get('actorName', ''), 0, 100) &&
-                      isValidLength(request.resource.data.get('data', {}).get('date', ''), 0, 20);
+                      isValidLength(request.resource.data.get('data', {}).get('date', ''), 0, 20) &&
+                      // A grouped swap's day count, as a decimal string. Bounded like every
+                      // other free-text key: a field the rule does not know about is a field
+                      // with no bound.
+                      isValidLength(request.resource.data.get('data', {}).get('dayCount', ''), 0, 4);
       allow update, delete: if false;
     }
 

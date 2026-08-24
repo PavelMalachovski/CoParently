@@ -59,6 +59,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -68,6 +69,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.coparently.app.R
+import com.coparently.app.domain.custody.DaySwapGroup
 import com.coparently.app.domain.custody.HandoverInfo
 import com.coparently.app.domain.expenses.CurrencyBalance
 import com.coparently.app.domain.home.WeekEntry
@@ -202,8 +204,12 @@ fun HomeScreen(
                     parentNames = parentNames,
                     pendingProposal = pendingProposal,
                     pendingProposalDiff = pendingProposalDiff,
-                    onAcceptSwap = changeRequestViewModel::acceptSwap,
-                    onDeclineSwap = changeRequestViewModel::declineSwap,
+                    onAcceptSwap = { group ->
+                        changeRequestViewModel.decideSwapGroup(group, accept = true)
+                    },
+                    onDeclineSwap = { group ->
+                        changeRequestViewModel.decideSwapGroup(group, accept = false)
+                    },
                     onAcceptProposal = changeRequestViewModel::acceptProposal,
                     onDeclineProposal = changeRequestViewModel::declineProposal,
                     onOpenChangeRequests = onOpenChangeRequests
@@ -229,8 +235,8 @@ private fun AwaitingDialogs(
     parentNames: ParentNames,
     pendingProposal: com.coparently.app.domain.custody.CustodyProposal?,
     pendingProposalDiff: com.coparently.app.domain.custody.CustodyPatternDiff?,
-    onAcceptSwap: (LocalDate) -> Unit,
-    onDeclineSwap: (LocalDate) -> Unit,
+    onAcceptSwap: (DaySwapGroup) -> Unit,
+    onDeclineSwap: (DaySwapGroup) -> Unit,
     onAcceptProposal: () -> Unit,
     onDeclineProposal: () -> Unit,
     onOpenChangeRequests: () -> Unit
@@ -280,19 +286,35 @@ private fun AwaitingDialogs(
         }
     }
 
-    val swap = state.awaitingSwaps.firstOrNull { "swap_${it.date}" !in dismissed }
-    if (swap != null) {
-        val key = "swap_${swap.date}"
+    // One dialog per *offer*, not per day. A week offered as one agreement used to raise seven
+    // dialogs in a row, each dismissal revealing the next and every one asking the same question.
+    val swapGroup = state.awaitingSwaps.firstOrNull { "swap_${it.key}" !in dismissed }
+    if (swapGroup != null) {
+        val key = "swap_${swapGroup.key}"
+        val first = swapGroup.swaps.first()
+        val dateFormat = DateTimeFormatter.ofLocalizedDate(FormatStyle.FULL)
+        val context = LocalContext.current
         AlertDialog(
             onDismissRequest = { dismissed = dismissed + key },
             title = { Text(stringResource(R.string.home_dialog_swap_title)) },
             text = {
                 Text(
-                    stringResource(
-                        R.string.home_dialog_swap_message,
-                        parentNames.labelForUid(swap.override.requestedBy),
-                        swap.date.format(DateTimeFormatter.ofLocalizedDate(FormatStyle.FULL))
-                    )
+                    if (swapGroup.dayCount == 1) {
+                        stringResource(
+                            R.string.home_dialog_swap_message,
+                            parentNames.labelForUid(first.override.requestedBy),
+                            swapGroup.firstDate.format(dateFormat)
+                        )
+                    } else {
+                        context.resources.getQuantityString(
+                            R.plurals.home_dialog_swap_message_days,
+                            swapGroup.dayCount,
+                            swapGroup.dayCount,
+                            parentNames.labelForUid(first.override.requestedBy),
+                            swapGroup.firstDate.format(dateFormat),
+                            swapGroup.lastDate.format(dateFormat)
+                        )
+                    }
                 )
             },
             confirmButton = {
@@ -300,7 +322,7 @@ private fun AwaitingDialogs(
                 // moment, and the dialog must not sit there inviting a second tap meanwhile.
                 TextButton(onClick = {
                     dismissed = dismissed + key
-                    onAcceptSwap(swap.date)
+                    onAcceptSwap(swapGroup)
                 }) {
                     Text(stringResource(R.string.day_swap_accept))
                 }
@@ -312,7 +334,7 @@ private fun AwaitingDialogs(
                     }
                     TextButton(onClick = {
                         dismissed = dismissed + key
-                        onDeclineSwap(swap.date)
+                        onDeclineSwap(swapGroup)
                     }) {
                         Text(stringResource(R.string.day_swap_decline))
                     }

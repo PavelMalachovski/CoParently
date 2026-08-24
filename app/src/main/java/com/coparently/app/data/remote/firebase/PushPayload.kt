@@ -56,8 +56,18 @@ object PushPayload {
      */
     const val SUBJECT = "subject"
 
-    /** The day a swap concerns, ISO `yyyy-MM-dd`. */
+    /** The day a swap concerns, ISO `yyyy-MM-dd`. For a group, its first day. */
     const val DATE = "date"
+
+    /**
+     * How many days a grouped swap covers, as a decimal string.
+     *
+     * A count rather than a range string, and that is a rule interaction rather than a style
+     * choice: `firestore.rules` bounds `date` at 20 characters, which `2026-09-05..2026-09-11`
+     * exceeds. The receiving device turns the count into a sentence in its own language, where
+     * Czech, Russian and Ukrainian each need three plural forms the sender could not know.
+     */
+    const val DAY_COUNT = "dayCount"
 
     /** Deep-link targets. Ids, not text — nothing renders them. */
     const val EVENT_ID = "eventId"
@@ -84,6 +94,17 @@ object PushPayload {
     const val DAY_SWAP_OFFERED = "day_swap_offered"
     const val DAY_SWAP_ACCEPTED = "day_swap_accepted"
     const val DAY_SWAP_DECLINED = "day_swap_declined"
+
+    /**
+     * A run of days offered, agreed or turned down as one.
+     *
+     * Separate types rather than a count on the single-day ones so an older build, which has no
+     * wording for these, drops them instead of announcing "1 day" for five. Dropping is the
+     * intended behaviour for an unrecognised type; see the class KDoc.
+     */
+    const val DAY_SWAP_GROUP_OFFERED = "day_swap_group_offered"
+    const val DAY_SWAP_GROUP_ACCEPTED = "day_swap_group_accepted"
+    const val DAY_SWAP_GROUP_DECLINED = "day_swap_group_declined"
 
     // ---- types only a Cloud Function may produce -------------------------------
 
@@ -120,7 +141,10 @@ object PushPayload {
         CUSTODY_PROPOSAL_DECLINED,
         DAY_SWAP_OFFERED,
         DAY_SWAP_ACCEPTED,
-        DAY_SWAP_DECLINED
+        DAY_SWAP_DECLINED,
+        DAY_SWAP_GROUP_OFFERED,
+        DAY_SWAP_GROUP_ACCEPTED,
+        DAY_SWAP_GROUP_DECLINED
     )
 
     /**

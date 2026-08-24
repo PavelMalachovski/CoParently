@@ -45,6 +45,18 @@ enum class DayOverrideStatus {
  * @property decidedAt ISO date-time of that answer, or null while pending.
  * @property note Optional free text from either side. Blank is stored as null rather than as an
  *   empty string, so the UI has one thing to test for.
+ * @property groupId Ties the days of one multi-day offer together, or null for a single day and
+ *   for every entry written before groups existed.
+ *
+ *   Grouping is a **client-side** fact and deliberately so. `firestore.rules` can validate a diff
+ *   that names exactly one date (Rules cannot iterate a map), so a run of days is still written
+ *   one date at a time and stays one entry per date — which is the semantics the map exists to
+ *   make structurally true. What the group id buys is the half the reporter actually asked for:
+ *   the co-parent gets one card, one dialog and one push saying "5 days", instead of five of
+ *   each.
+ *
+ *   A null id means "its own group of one", which is what makes every pre-existing entry read
+ *   correctly with no migration and no backfill.
  */
 data class DayOverride(
     val toParent: String,
@@ -53,7 +65,8 @@ data class DayOverride(
     val status: DayOverrideStatus = DayOverrideStatus.PENDING,
     val decidedBy: String? = null,
     val decidedAt: String? = null,
-    val note: String? = null
+    val note: String? = null,
+    val groupId: String? = null
 ) {
     /** True while this offer is still waiting for an answer. */
     val isPending: Boolean get() = status == DayOverrideStatus.PENDING

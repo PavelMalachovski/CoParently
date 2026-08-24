@@ -697,6 +697,89 @@ class CustodyModelRepository(
     ): Result<Map<String, DayOverride>> {
         val pair = currentPair()
             ?: return Result.failure(IllegalStateException("No co-parent to agree a swap with"))
+        val next = writeSwap(pair, date, transform).getOrElse { return Result.failure(it) }
+
+        // Package C left this gap on purpose rather than adding a bespoke card the way the
+        // change-request path once had: there must be exactly one way a change reaches the
+        // thread, and this is it. The status the transition produced *is* the announcement —
+        // offered, agreed or turned down — so nothing here has to be told which it was.
+        next[date]?.let { entry ->
+            announceSwap(pair, date, entry.status, dayCount = 1)
+        }
+        return Result.success(next)
+    }
+
+    /**
+     * Applies one transition across a run of days, and announces it **once**.
+     *
+     * Written one date at a time because `firestore.rules` validates a `dayOverrides` diff by
+     * naming its single date — Rules cannot iterate a map — so a five-day offer is five writes to
+     * the same document. What must not be five times is what the co-parent receives: before this,
+     * a week of swapped days produced five chat cards, five inbox rows, five stacked system
+     * notifications and five sequential modal dialogs, each asking about one day of the same
+     * agreement.
+     *
+     * **Not atomic, and the caller is told so.** The loop stops at the first refused write and
+     * returns a failure carrying how many days did land; the days already written stay written,
+     * as pending offers the co-parent can still answer. The alternative — an all-or-nothing write
+     * — needs the rule to validate a multi-date diff, which Rules can only do by unrolling a
+     * fixed number of per-date checks, and an off-by-one there silently admits an unvalidated key.
+     *
+     * @param dates The ISO dates to apply, in the order they should be written.
+     * @param transform The transition for one date, from [DayOverrideTransition].
+     * @return The map after the last successful write.
+     */
+    suspend fun applyDayOverridesForDates(
+        dates: List<String>,
+        transform: (Map<String, DayOverride>, String) -> Result<Map<String, DayOverride>>
+    ): Result<Map<String, DayOverride>> {
+        if (dates.isEmpty()) {
+            return Result.failure(IllegalArgumentException("A swap needs at least one day"))
+        }
+        val pair = currentPair()
+            ?: return Result.failure(IllegalStateException("No co-parent to agree a swap with"))
+
+        var latest: Map<String, DayOverride>? = null
+        var written = 0
+        for (date in dates) {
+            val result = writeSwap(pair, date) { current -> transform(current, date) }
+            val applied = result.getOrElse { cause ->
+                return if (written == 0) {
+                    Result.failure(cause)
+                } else {
+                    Result.failure(
+                        IllegalStateException(
+                            "Only $written of ${dates.size} days could be offered",
+                            cause
+                        )
+                    )
+                }
+            }
+            latest = applied
+            written++
+        }
+
+        val map = latest ?: return Result.failure(IllegalStateException("Nothing was written"))
+        // One announcement and one push for the whole run — the half of this the reporter asked
+        // for. The status of the first day speaks for the group: `decideGroup` and `offerAll`
+        // both give every day of a group the same status.
+        map[dates.first()]?.let { entry ->
+            announceSwap(pair, dates.first(), entry.status, dayCount = dates.size)
+        }
+        return Result.success(map)
+    }
+
+    /**
+     * The document write behind one day of a swap, with no announcement.
+     *
+     * Split out so a group can write N days and announce once; [applyDayOverrides] is this plus
+     * a single-day announcement.
+     */
+    private suspend fun writeSwap(
+        pair: CustodyPair,
+        date: String,
+        transform: (Map<String, DayOverride>) -> Result<Map<String, DayOverride>>
+    ): Result<Map<String, DayOverride>> {
         val existing = firestoreCustodyDataSource.getCustody(pair.documentId)
             ?: return Result.failure(IllegalStateException("The pair has no shared schedule yet"))
 
@@ -713,31 +796,39 @@ class CustodyModelRepository(
                 )
             )
         }
-        if (written == null) {
-            return Result.failure(IllegalStateException("The swap could not be written"))
+        return if (written == null) {
+            Result.failure(IllegalStateException("The swap could not be written"))
+        } else {
+            Result.success(next)
         }
+    }
 
-        // Package C left this gap on purpose rather than adding a bespoke card the way the
-        // change-request path once had: there must be exactly one way a change reaches the
-        // thread, and this is it. The status the transition produced *is* the announcement —
-        // offered, agreed or turned down — so nothing here has to be told which it was.
-        next[date]?.let { entry ->
-            activityAnnouncer.announce(
-                announcement = ActivityAnnouncement(
-                    kind = when (entry.status) {
-                        DayOverrideStatus.PENDING -> ActivityKind.DAY_SWAP_OFFERED
-                        DayOverrideStatus.ACCEPTED -> ActivityKind.DAY_SWAP_ACCEPTED
-                        DayOverrideStatus.DECLINED -> ActivityKind.DAY_SWAP_DECLINED
-                    },
-                    entityType = ActivityEntityType.DAY_SWAP,
-                    entityId = date,
-                    title = date,
-                    whenIso = date
-                )
+    /**
+     * One chat card and one push for a swap, however many days it covers.
+     *
+     * @param dayCount Days in the offer. One picks the single-day wording on the other phone;
+     *   more picks the grouped one, which is the whole point of the group.
+     */
+    private suspend fun announceSwap(
+        pair: CustodyPair,
+        date: String,
+        status: DayOverrideStatus,
+        dayCount: Int
+    ) {
+        activityAnnouncer.announce(
+            announcement = ActivityAnnouncement(
+                kind = when (status) {
+                    DayOverrideStatus.PENDING -> ActivityKind.DAY_SWAP_OFFERED
+                    DayOverrideStatus.ACCEPTED -> ActivityKind.DAY_SWAP_ACCEPTED
+                    DayOverrideStatus.DECLINED -> ActivityKind.DAY_SWAP_DECLINED
+                },
+                entityType = ActivityEntityType.DAY_SWAP,
+                entityId = date,
+                title = date,
+                whenIso = date
             )
-            notifyPartnerOfSwap(pair, date, entry.status)
-        }
-        return Result.success(next)
+        )
+        notifyPartnerOfSwap(pair, date, status, dayCount)
     }
 
     /**
@@ -750,20 +841,35 @@ class CustodyModelRepository(
      * the sentence from its own resources, in the reader's language (SEC-3). It used to be
      * composed here, in English, which is what made a push able to claim to be anything.
      */
-    private suspend fun notifyPartnerOfSwap(pair: CustodyPair, date: String, status: DayOverrideStatus) {
+    private suspend fun notifyPartnerOfSwap(
+        pair: CustodyPair,
+        date: String,
+        status: DayOverrideStatus,
+        dayCount: Int
+    ) {
         val partnerUid = pair.participants.firstOrNull { it != pair.myUid } ?: return
         val action = when (status) {
             DayOverrideStatus.PENDING -> "offered"
             DayOverrideStatus.ACCEPTED -> "accepted"
             DayOverrideStatus.DECLINED -> "declined"
         }
-        fcmService.queueNotificationForUser(
-            targetUserId = partnerUid,
-            notificationData = mapOf(
+        // A run of days gets its own type carrying the count, rather than a date the reader
+        // would have to expand into a range. The count is a string like every other payload
+        // value: `notification_queue` documents hold strings, and the receiving device parses
+        // it — a type it cannot parse composes nothing at all, which is the SEC-3 rule.
+        val data = if (dayCount > 1) {
+            mapOf(
+                PushPayload.TYPE to "day_swap_group_$action",
+                PushPayload.DATE to date,
+                PushPayload.DAY_COUNT to dayCount.toString()
+            )
+        } else {
+            mapOf(
                 PushPayload.TYPE to "day_swap_$action",
                 PushPayload.DATE to date
             )
-        )
+        }
+        fcmService.queueNotificationForUser(targetUserId = partnerUid, notificationData = data)
     }
 
     /**

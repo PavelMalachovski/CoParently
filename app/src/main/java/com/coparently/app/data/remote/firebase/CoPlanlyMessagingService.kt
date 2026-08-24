@@ -131,6 +131,12 @@ class CoPlanlyMessagingService : FirebaseMessagingService() {
             BodyArgs.ACTOR_AND_SUBJECT -> getString(spec.body, actor, data[PushPayload.SUBJECT].orEmpty())
             BodyArgs.ACTOR -> getString(spec.body, actor)
             BodyArgs.DATE -> getString(spec.body, data[PushPayload.DATE].orEmpty())
+            BodyArgs.DAY_COUNT -> {
+                // An unparseable count composes nothing rather than announcing "0 days" — the
+                // same rule as an unrecognised type. Only this build's own writer produces it.
+                val count = data[PushPayload.DAY_COUNT]?.toIntOrNull() ?: return null
+                resources.getQuantityString(spec.body, count, count)
+            }
             BodyArgs.NONE -> getString(spec.body)
         }
         return PushText(getString(spec.title), body)
@@ -239,12 +245,18 @@ class CoPlanlyMessagingService : FirebaseMessagingService() {
     private data class PushText(val title: String, val body: String)
 
     /** Which of the payload's names a body string takes, in order. */
-    private enum class BodyArgs { ACTOR_AND_SUBJECT, ACTOR, DATE, NONE }
+    private enum class BodyArgs { ACTOR_AND_SUBJECT, ACTOR, DATE, DAY_COUNT, NONE }
 
-    /** A type's wording: the frame, and what fills it. */
+    /**
+     * A type's wording: the frame, and what fills it.
+     *
+     * [body] is a plurals resource, not a string, when [args] is [BodyArgs.DAY_COUNT] — Czech,
+     * Russian and Ukrainian each need three forms for "N days", so a count cannot go through
+     * `getString`. Kotlin cannot express that in the type, hence this note.
+     */
     private data class PushTextSpec(
         @StringRes val title: Int,
-        @StringRes val body: Int,
+        val body: Int,
         val args: BodyArgs
     )
 
@@ -372,6 +384,21 @@ class CoPlanlyMessagingService : FirebaseMessagingService() {
                 R.string.push_day_swap_declined_title,
                 R.string.push_day_swap_declined_body,
                 BodyArgs.DATE
+            ),
+            PushPayload.DAY_SWAP_GROUP_OFFERED to PushTextSpec(
+                R.string.push_day_swap_offered_title,
+                R.plurals.push_day_swap_group_offered_body,
+                BodyArgs.DAY_COUNT
+            ),
+            PushPayload.DAY_SWAP_GROUP_ACCEPTED to PushTextSpec(
+                R.string.push_day_swap_accepted_title,
+                R.plurals.push_day_swap_group_accepted_body,
+                BodyArgs.DAY_COUNT
+            ),
+            PushPayload.DAY_SWAP_GROUP_DECLINED to PushTextSpec(
+                R.string.push_day_swap_declined_title,
+                R.plurals.push_day_swap_group_declined_body,
+                BodyArgs.DAY_COUNT
             ),
             PushPayload.PAIRING_ACCEPTED to PushTextSpec(
                 R.string.push_pairing_accepted_title,

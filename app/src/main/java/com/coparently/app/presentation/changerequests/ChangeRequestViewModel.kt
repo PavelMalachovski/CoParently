@@ -8,6 +8,7 @@ import com.coparently.app.domain.custody.CustodyProposal
 import com.coparently.app.domain.custody.DayOverride
 import com.coparently.app.domain.custody.DayOverrideTransition
 import com.coparently.app.domain.custody.DaySwap
+import com.coparently.app.domain.custody.DaySwapGroup
 import com.coparently.app.domain.custody.DaySwapInbox
 import com.coparently.app.domain.events.EventAcceptanceTransition
 import com.coparently.app.domain.model.ChangeRequest
@@ -115,6 +116,21 @@ class ChangeRequestViewModel @Inject constructor(
      */
     val daySwaps: StateFlow<List<DaySwap>> = custodyModelRepository.observeDayOverrides()
         .map { overrides -> DaySwapInbox.visible(overrides, LocalDate.now()) }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
+    /**
+     * The same swaps, folded into the offers they were made as.
+     *
+     * A run of days offered together is one agreement and gets one card. Before grouping, a week
+     * of swapped days produced seven cards asking the same question seven times — and seven modal
+     * dialogs on Home behind them.
+     */
+    val daySwapGroups: StateFlow<List<DaySwapGroup>> = custodyModelRepository.observeDayOverrides()
+        .map { overrides -> DaySwapInbox.groups(overrides, LocalDate.now()) }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
@@ -232,6 +248,31 @@ class ChangeRequestViewModel @Inject constructor(
     /** Turns the co-parent's offer of [date] down. Whose day it is does not change. */
     fun declineSwap(date: LocalDate) = decideSwap(date) { current, uid, now ->
         DayOverrideTransition.decline(current, date.toString(), uid, now)
+    }
+
+    /**
+     * Answers a whole offer at once — every day of it, one way.
+     *
+     * All or nothing, which is what a single card asking about "5 days" honestly means. A partial
+     * answer would need a per-day list inside the card, and the owner chose the simpler
+     * agreement: one notification, one decision.
+     *
+     * @param group The offer being answered.
+     * @param accept True to take the days, false to turn them down.
+     */
+    fun decideSwapGroup(group: DaySwapGroup, accept: Boolean) {
+        viewModelScope.launch {
+            val uid = _currentUserId.value.takeIf { it.isNotEmpty() }
+                ?: userRepository.getCurrentUserId()
+                ?: return@launch
+            val now = LocalDateTime.now().toString()
+            val dates = group.dates
+            custodyModelRepository.applyDayOverridesForDates(dates) { current, date ->
+                DayOverrideTransition.decideGroup(current, listOf(date), uid, now, accept)
+            }.onFailure { e ->
+                _errorMessage.value = e.message ?: "The swap could not be answered"
+            }
+        }
     }
 
     /**

@@ -8,7 +8,7 @@ import com.coparently.app.domain.chat.ChatReadState
 import com.coparently.app.domain.chat.ConversationKey
 import com.coparently.app.domain.custody.CustodyResolver
 import com.coparently.app.domain.custody.DayOverride
-import com.coparently.app.domain.custody.DaySwap
+import com.coparently.app.domain.custody.DaySwapGroup
 import com.coparently.app.domain.custody.DaySwapInbox
 import com.coparently.app.domain.custody.HandoverCalculator
 import com.coparently.app.domain.custody.HandoverInfo
@@ -33,6 +33,10 @@ import com.coparently.app.domain.repository.UserRepository
 import com.coparently.app.presentation.common.Parents
 import com.coparently.app.presentation.common.ParentsSource
 import dagger.hilt.android.lifecycle.HiltViewModel
+import java.time.Duration
+import java.time.LocalDate
+import java.time.LocalDateTime
+import javax.inject.Inject
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -47,10 +51,6 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import java.time.Duration
-import java.time.LocalDate
-import java.time.LocalDateTime
-import javax.inject.Inject
 
 /**
  * Kind of change surfaced on the home dashboard.
@@ -168,7 +168,7 @@ sealed interface HomeUiState {
      * @property monthSpend This month's spending, one subtotal per currency.
      * @property monthBalances This month's settle-up position, per currency.
      * @property unreadCount Unread messages from the co-parent.
-     * @property awaitingSwaps Day swaps still waiting for **this** parent's answer, soonest
+     * @property awaitingSwaps Day-swap offers still waiting for **this** parent's answer, soonest
      *   first. Owner ask (Aug 2026 walkthrough, items 4/13): an incoming swap must be visible —
      *   and answerable — from the main page, not only from an inbox nothing pointed at.
      * @property awaitingRequestCount Incoming event change requests and pending events still
@@ -183,7 +183,7 @@ sealed interface HomeUiState {
         val monthSpend: MonthSpend,
         val monthBalances: List<CurrencyBalance>,
         val unreadCount: Int,
-        val awaitingSwaps: List<DaySwap> = emptyList(),
+        val awaitingSwaps: List<DaySwapGroup> = emptyList(),
         val awaitingRequestCount: Int = 0
     ) : HomeUiState
 }
@@ -512,15 +512,17 @@ class HomeViewModel @Inject constructor(
      * disagree with the screen that answers them. `LocalDate.now()` is read per emission for
      * the reason `ChangeRequestViewModel.daySwaps` documents: this flow outlives midnight.
      */
-    private val awaitingSwaps: StateFlow<List<DaySwap>> = combine(
+    private val awaitingSwaps: StateFlow<List<DaySwapGroup>> = combine(
         custodyModelRepository.observeDayOverrides(),
         _userId
     ) { overrides, uid ->
         if (uid.isEmpty()) {
             emptyList()
         } else {
-            DaySwapInbox.visible(overrides, LocalDate.now())
-                .filter { DaySwapInbox.awaitsAnswerFrom(it, uid) }
+            // Grouped, so a week offered as one agreement raises one dialog rather than seven in
+            // a row — each dismissal revealing the next, which is what the reporter saw.
+            DaySwapInbox.groups(overrides, LocalDate.now())
+                .filter { it.awaitsAnswerFrom(uid) }
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), emptyList())
 

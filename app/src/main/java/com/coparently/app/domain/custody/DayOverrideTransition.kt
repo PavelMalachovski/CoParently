@@ -66,6 +66,80 @@ object DayOverrideTransition {
     )
 
     /**
+     * Offers a run of days as one group.
+     *
+     * Every date is still its own entry — the map's one-override-per-date semantics is what makes
+     * "we swap next Saturday" unambiguous, and a range field would quietly break it. What ties
+     * them together is [groupId], which exists so the co-parent is asked once about five days
+     * rather than five times about one.
+     *
+     * @param current The override map as it stands.
+     * @param toParentByDate ISO date to the slot that would take it. Per date rather than one
+     *   slot for the run: a selection that spans a handover flips each day to its complement, so
+     *   the two halves of it go in opposite directions, and a single `toParent` would hand the
+     *   whole run to one parent — a different agreement from the one the sheet showed.
+     * @param byUid The parent offering.
+     * @param atIso ISO date-time of the offer, the same instant for every day in the group.
+     * @param groupId Ties the entries together. The caller generates it.
+     * @param note Optional free text, applied to every day in the group.
+     */
+    @Suppress("LongParameterList") // one entry, one parameter per stored field
+    fun offerAll(
+        current: Map<String, DayOverride>,
+        toParentByDate: Map<String, String>,
+        byUid: String,
+        atIso: String,
+        groupId: String,
+        note: String? = null
+    ): Result<Map<String, DayOverride>> {
+        if (toParentByDate.isEmpty()) {
+            return Result.failure(IllegalArgumentException("A swap needs at least one day"))
+        }
+        val entries = toParentByDate.mapValues { (_, toParent) ->
+            DayOverride(
+                toParent = toParent,
+                requestedBy = byUid,
+                requestedAt = atIso,
+                status = DayOverrideStatus.PENDING,
+                note = note?.takeIf { it.isNotBlank() },
+                groupId = groupId
+            )
+        }
+        return Result.success(current + entries)
+    }
+
+    /**
+     * Answers every still-pending day of one group at once.
+     *
+     * All or nothing was the owner's decision: one notification, one answer. A day of the group
+     * that is already decided — the co-parent withdrew it, or an older build answered it singly
+     * — is skipped rather than refused, so a part-answered group can still be finished.
+     *
+     * @return the new map, or a failure when the group holds nothing this parent may answer.
+     */
+    fun decideGroup(
+        current: Map<String, DayOverride>,
+        dates: Collection<String>,
+        byUid: String,
+        atIso: String,
+        accept: Boolean
+    ): Result<Map<String, DayOverride>> {
+        val answerable = dates.filter { date ->
+            current[date]?.let { it.isPending && it.requestedBy != byUid } == true
+        }
+        if (answerable.isEmpty()) {
+            return Result.failure(IllegalStateException("Nothing in this group is waiting on you"))
+        }
+        val outcome = if (accept) DayOverrideStatus.ACCEPTED else DayOverrideStatus.DECLINED
+        var next = current
+        answerable.forEach { date ->
+            next = next.decide(date, byUid, atIso, note = null, outcome = outcome)
+                .getOrElse { return Result.failure(it) }
+        }
+        return Result.success(next)
+    }
+
+    /**
      * Takes up the co-parent's offer of [date]. From here `CustodyResolver` reads the override
      * instead of the pattern.
      *

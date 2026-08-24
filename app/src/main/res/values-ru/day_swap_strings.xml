@@ -18,4 +18,38 @@
     <string name="day_swap_inbox_waiting">Ждёт ответа</string>
     <string name="day_swap_accept">Принять</string>
     <string name="day_swap_decline">Отклонить</string>
+    <string name="day_swap_range">%1$s – %2$s</string>
+    <string name="day_swap_sheet_title_range">Обменять эти дни</string>
+    <string name="day_swap_select_hint">Нажимайте на другие дни, чтобы расширить обмен</string>
+    <string name="day_swap_selection_cancel">Отменить выбор</string>
+    <plurals name="day_swap_day_count">
+        <item quantity="one">%1$d день</item>
+        <item quantity="few">%1$d дня</item>
+        <item quantity="many">%1$d дней</item>
+        <item quantity="other">%1$d дней</item>
+    </plurals>
+    <plurals name="day_swap_direction">
+        <item quantity="one">%1$d день переходит от %2$s к %3$s</item>
+        <item quantity="few">%1$d дня переходят от %2$s к %3$s</item>
+        <item quantity="many">%1$d дней переходят от %2$s к %3$s</item>
+        <item quantity="other">%1$d дней переходят от %2$s к %3$s</item>
+    </plurals>
+    <plurals name="day_swap_skipped_days">
+        <item quantity="one">Для %1$d выбранного дня опека не задана — он не войдёт в обмен.</item>
+        <item quantity="few">Для %1$d выбранных дней опека не задана — они не войдут в обмен.</item>
+        <item quantity="many">Для %1$d выбранных дней опека не задана — они не войдут в обмен.</item>
+        <item quantity="other">Для %1$d выбранных дней опека не задана — они не войдут в обмен.</item>
+    </plurals>
+    <plurals name="day_swap_inbox_offered_by_you_days">
+        <item quantity="one">Вы предложили %2$s %1$d день</item>
+        <item quantity="few">Вы предложили %2$s %1$d дня</item>
+        <item quantity="many">Вы предложили %2$s %1$d дней</item>
+        <item quantity="other">Вы предложили %2$s %1$d дней</item>
+    </plurals>
+    <plurals name="day_swap_inbox_offered_to_you_days">
+        <item quantity="one">%2$s предлагает вам %1$d день</item>
+        <item quantity="few">%2$s предлагает вам %1$d дня</item>
+        <item quantity="many">%2$s предлагает вам %1$d дней</item>
+        <item quantity="other">%2$s предлагает вам %1$d дней</item>
+    </plurals>
 </resources>

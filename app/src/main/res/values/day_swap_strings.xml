@@ -19,4 +19,28 @@
     <string name="day_swap_inbox_waiting">Waiting for an answer</string>
     <string name="day_swap_accept">Accept</string>
     <string name="day_swap_decline">Decline</string>
+    <string name="day_swap_range">%1$s – %2$s</string>
+    <string name="day_swap_sheet_title_range">Swap these days</string>
+    <string name="day_swap_select_hint">Tap more days to extend the swap</string>
+    <string name="day_swap_selection_cancel">Cancel selection</string>
+    <plurals name="day_swap_day_count">
+        <item quantity="one">%1$d day</item>
+        <item quantity="other">%1$d days</item>
+    </plurals>
+    <plurals name="day_swap_direction">
+        <item quantity="one">%1$d day goes from %2$s to %3$s</item>
+        <item quantity="other">%1$d days go from %2$s to %3$s</item>
+    </plurals>
+    <plurals name="day_swap_skipped_days">
+        <item quantity="one">%1$d selected day has no custody recorded and is left out.</item>
+        <item quantity="other">%1$d selected days have no custody recorded and are left out.</item>
+    </plurals>
+    <plurals name="day_swap_inbox_offered_by_you_days">
+        <item quantity="one">You offered %1$d day to %2$s</item>
+        <item quantity="other">You offered %1$d days to %2$s</item>
+    </plurals>
+    <plurals name="day_swap_inbox_offered_to_you_days">
+        <item quantity="one">%2$s is offering you %1$d day</item>
+        <item quantity="other">%2$s is offering you %1$d days</item>
+    </plurals>
 </resources>

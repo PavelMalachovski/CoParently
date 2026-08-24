@@ -9,16 +9,21 @@ import com.coparently.app.data.local.preferences.PreferenceKeys
 import com.coparently.app.data.repository.CustodyModelRepository
 import com.coparently.app.domain.custody.CustodyChangeAnnouncement
 import com.coparently.app.domain.custody.CustodyProposal
-import com.coparently.app.domain.friends.CalendarFriendGrant
-import com.coparently.app.domain.repository.FriendRepository
 import com.coparently.app.domain.custody.CustodyResolver
 import com.coparently.app.domain.custody.DayOverride
 import com.coparently.app.domain.custody.DayOverrideTransition
 import com.coparently.app.domain.custody.SharedCustody
+import com.coparently.app.domain.friends.CalendarFriendGrant
 import com.coparently.app.domain.model.CustodyModel
+import com.coparently.app.domain.repository.FriendRepository
 import com.coparently.app.presentation.common.Parents
 import com.coparently.app.presentation.common.ParentsSource
 import dagger.hilt.android.lifecycle.HiltViewModel
+import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.YearMonth
+import java.util.UUID
+import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -27,10 +32,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import java.time.LocalDate
-import java.time.LocalDateTime
-import java.time.YearMonth
-import javax.inject.Inject
 
 /** Keeps the shared flows warm across brief unsubscriptions (config changes). */
 private const val HANDOVER_STOP_TIMEOUT_MS = 5_000L
@@ -280,6 +281,55 @@ class CalendarViewModel @Inject constructor(
                     toParent = toParent,
                     byUid = myUid,
                     atIso = LocalDateTime.now().toString(),
+                    note = note
+                )
+            }.onFailure { _swapError.value = SwapError.REFUSED }
+        }
+    }
+
+    /**
+     * Offers a whole run of days as one agreement.
+     *
+     * The reporter's ask: pick consecutive days by long-pressing and dragging out a range, and
+     * have the co-parent receive **one** notification naming the total, not one per day. Every
+     * day still becomes its own override entry — the map's one-override-per-date rule is what
+     * makes a swap unambiguous — but they share a group id, and the repository announces once.
+     *
+     * Each day flips to its own complement, exactly as the single-day sheet does, so a range that
+     * spans a handover exchanges in both directions rather than handing the whole run to one
+     * parent. A day whose custody the app cannot resolve is dropped rather than guessed at.
+     *
+     * @param dates The selected days, in any order; duplicates collapse.
+     * @param toParentFor Resolves the slot a given day would move to, or null when unknown.
+     * @param note Optional free text, applied to every day of the group.
+     */
+    fun offerDaySwapForDates(
+        dates: Collection<LocalDate>,
+        toParentFor: (LocalDate) -> String?,
+        note: String? = null
+    ) {
+        viewModelScope.launch {
+            val myUid = parents.value.me?.uid
+            if (myUid == null) {
+                _swapError.value = SwapError.NOT_READY
+                return@launch
+            }
+            val targets = dates.distinct().sorted()
+                .mapNotNull { date -> toParentFor(date)?.let { date.toString() to it } }
+                .toMap()
+            if (targets.isEmpty()) {
+                _swapError.value = SwapError.REFUSED
+                return@launch
+            }
+            val groupId = UUID.randomUUID().toString()
+            val atIso = LocalDateTime.now().toString()
+            custodyModelRepository.applyDayOverridesForDates(targets.keys.toList()) { current, date ->
+                DayOverrideTransition.offerAll(
+                    current = current,
+                    toParentByDate = mapOf(date to targets.getValue(date)),
+                    byUid = myUid,
+                    atIso = atIso,
+                    groupId = groupId,
                     note = note
                 )
             }.onFailure { _swapError.value = SwapError.REFUSED }

@@ -34,4 +34,22 @@
     <string name="push_pairing_removed_title">Зв’язок зі співбатьком розірвано</string>
     <string name="push_pairing_removed_body">%1$s розірвав(-ла) зв’язок</string>
     <string name="push_actor_fallback">Другий з батьків</string>
+    <plurals name="push_day_swap_group_offered_body">
+        <item quantity="one">Другий з батьків пропонує обміняти %1$d день</item>
+        <item quantity="few">Другий з батьків пропонує обміняти %1$d дні</item>
+        <item quantity="many">Другий з батьків пропонує обміняти %1$d днів</item>
+        <item quantity="other">Другий з батьків пропонує обміняти %1$d днів</item>
+    </plurals>
+    <plurals name="push_day_swap_group_accepted_body">
+        <item quantity="one">Другий з батьків погодився обміняти %1$d день</item>
+        <item quantity="few">Другий з батьків погодився обміняти %1$d дні</item>
+        <item quantity="many">Другий з батьків погодився обміняти %1$d днів</item>
+        <item quantity="other">Другий з батьків погодився обміняти %1$d днів</item>
+    </plurals>
+    <plurals name="push_day_swap_group_declined_body">
+        <item quantity="one">Другий з батьків відхилив обмін %1$d дня</item>
+        <item quantity="few">Другий з батьків відхилив обмін %1$d днів</item>
+        <item quantity="many">Другий з батьків відхилив обмін %1$d днів</item>
+        <item quantity="other">Другий з батьків відхилив обмін %1$d днів</item>
+    </plurals>
 </resources>
