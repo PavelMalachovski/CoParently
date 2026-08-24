@@ -104,4 +104,10 @@
     <string name="childinfo_teacher_name_optional_label">Name der Lehrkraft (optional)</string>
     <string name="childinfo_teacher_email_optional_label">E-Mail der Lehrkraft (optional)</string>
     <string name="childinfo_save_failed">Die Angaben zum Kind konnten nicht gespeichert werden. Bitte versuche es erneut.</string>
+    <string name="childinfo_children_group_label">Kinder</string>
+    <string name="childinfo_delete_title">%1$s löschen?</string>
+    <string name="childinfo_delete_message">Der Eintrag, Medikamente, Allergien und Fotos werden von diesem Gerät und vom Gerät des Co-Elternteils entfernt.</string>
+    <string name="childinfo_delete_confirm">Löschen</string>
+    <string name="childinfo_delete_cancel">Behalten</string>
+    <string name="childinfo_delete_action">Kind löschen</string>
 </resources>

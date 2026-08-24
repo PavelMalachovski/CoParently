@@ -104,4 +104,10 @@
     <string name="childinfo_teacher_name_optional_label">Teacher Name (optional)</string>
     <string name="childinfo_teacher_email_optional_label">Teacher Email (optional)</string>
     <string name="childinfo_save_failed">Could not save the child's details. Please try again.</string>
+    <string name="childinfo_children_group_label">Children</string>
+    <string name="childinfo_delete_title">Delete %1$s?</string>
+    <string name="childinfo_delete_message">Their record, medications, allergies and photographs are removed from this device and from your co-parent's.</string>
+    <string name="childinfo_delete_confirm">Delete</string>
+    <string name="childinfo_delete_cancel">Keep</string>
+    <string name="childinfo_delete_action">Delete child</string>
 </resources>

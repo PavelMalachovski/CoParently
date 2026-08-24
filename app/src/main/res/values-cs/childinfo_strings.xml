@@ -104,4 +104,10 @@
     <string name="childinfo_teacher_name_optional_label">Jméno učitele (nepovinné)</string>
     <string name="childinfo_teacher_email_optional_label">E-mail učitele (nepovinné)</string>
     <string name="childinfo_save_failed">Údaje o dítěti se nepodařilo uložit. Zkuste to prosím znovu.</string>
+    <string name="childinfo_children_group_label">Děti</string>
+    <string name="childinfo_delete_title">Smazat %1$s?</string>
+    <string name="childinfo_delete_message">Jejich záznam, léky, alergie a fotografie budou odstraněny z tohoto zařízení i ze zařízení druhého rodiče.</string>
+    <string name="childinfo_delete_confirm">Smazat</string>
+    <string name="childinfo_delete_cancel">Ponechat</string>
+    <string name="childinfo_delete_action">Smazat dítě</string>
 </resources>
