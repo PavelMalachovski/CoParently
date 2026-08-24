@@ -94,7 +94,22 @@ broken migration is a crash on launch for a user with real data, not a wipe.
 - [ ] Once green, add the instrumented job to CI — it is deliberately absent from
       `.github/workflows/ci.yml` today because it would be red from its first run.
 
-### 2.2 Verify this branch actually builds
+### 2.2 Regenerate the detekt baseline, then make detekt gate again
+
+CI's first run found **194 weighted detekt issues**, essentially all pre-existing:
+`AddEditEventScreen` at 1,246 lines, `AnalyticsManager` with 22 functions, and the
+friends/pets/expense screens added since `app/config/detekt/baseline.xml` was last generated.
+Nobody had run detekt, so nobody had baselined them.
+
+`.github/workflows/ci.yml` therefore runs detekt with `continue-on-error: true` — it reports,
+it does not gate. That is a deliberate, temporary state and it is commented as such in the
+workflow.
+
+- [ ] `./gradlew detektBaseline` (needs the Android SDK), commit the regenerated baseline.
+- [ ] Delete `continue-on-error: true` from the detekt step, so new violations fail again.
+- [ ] Optionally, work the debt down afterwards — the baseline records what was accepted.
+
+### 2.3 Verify this branch actually builds
 
 The Kotlin written during the audit and this session is reviewed but **not compiled** — no
 Android SDK was available.

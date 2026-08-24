@@ -216,22 +216,6 @@ fun EventTypeFilterSheet(
 }
 
 /**
- * One segment per parent, plus Both.
- *
- * The two outer segments are named after the people who hold the slots, not after the slots —
- * a filter offering "Mom" and "Dad" told half the families using this app that one of them was
- * somebody they are not.
- *
- * Parent colours are applied directly from [CoPlanlyColors] rather than through the theme's
- * `secondary` slot: pink and blue mean parent identity in this product and nothing else.
- *
- * @param selected Currently active filter
- * @param parentNames Resolves a slot to that parent's name
- * @param onSelected Callback when a segment is chosen
- */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-/**
  * A single on/off filter chip in a named colour — the calendar friend's (item 16).
  *
  * Its own composable rather than a `FilterChip`: the Material chip's selected state comes from
@@ -280,6 +264,21 @@ private fun FilterPill(
     }
 }
 
+/**
+ * One segment per parent, plus Both.
+ *
+ * The two outer segments are named after the people who hold the slots, not after the slots —
+ * a filter offering "Mom" and "Dad" told half the families using this app that one of them was
+ * somebody they are not.
+ *
+ * Parent colours are applied directly from [CoPlanlyColors] rather than through the theme's
+ * `secondary` slot: pink and blue mean parent identity in this product and nothing else.
+ *
+ * @param selected Currently active filter
+ * @param parentNames Resolves a slot to that parent's name
+ * @param onSelected Callback when a segment is chosen
+ */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ParentFilterSegments(
     selected: ParentFilter,

@@ -321,10 +321,13 @@ class CustodyModelRepository(
         val existing = firestoreCustodyDataSource.getCustody(pair.documentId)
             ?: return Result.failure(IllegalStateException("The pair has no shared schedule yet"))
         val next = transform(existing, pair.myUid, nowIso()).getOrElse { return Result.failure(it) }
-        val written = guarded("decide-proposal", pair.documentId) {
+        // `setCustody` returns Unit, so `guarded` yields `Unit?` — null on failure, and that is
+        // all this value can say. It is the success sentinel the two sibling call sites also
+        // treat it as; the thing to mirror is `next`, the document that was just written.
+        guarded("decide-proposal", pair.documentId) {
             firestoreCustodyDataSource.setCustody(pair.documentId, pair.participants, next)
         } ?: return Result.failure(IllegalStateException("The decision could not be written"))
-        mirrorIntoRoom(written)
+        mirrorIntoRoom(next)
         return Result.success(Unit)
     }
 
