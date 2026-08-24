@@ -79,6 +79,7 @@ import com.coparently.app.presentation.common.SectionGroup
 import com.coparently.app.presentation.common.SectionRow
 import com.coparently.app.presentation.common.rememberParentNames
 import com.coparently.app.presentation.common.rememberToday
+import com.coparently.app.presentation.components.SkeletonBox
 import com.coparently.app.presentation.theme.ParentColors
 import java.text.NumberFormat
 import java.time.LocalDate
@@ -167,6 +168,12 @@ fun HomeScreen(
         }
     ) { padding ->
         when (val state = uiState) {
+            HomeUiState.Loading -> HomeSkeleton(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+            )
+
             HomeUiState.AskForCoParent -> PairingInvitation(
                 onNavigateToPairing = onNavigateToPairing,
                 modifier = Modifier
@@ -332,6 +339,56 @@ private fun AwaitingDialogs(
 
 /** The one requests-summary dialog's dismissal key — swaps key on their date instead. */
 private const val REQUESTS_DIALOG_KEY = "requests"
+
+/**
+ * What the page draws before it knows whether there is a co-parent.
+ *
+ * The shapes match the dashboard it is about to become — a handover hero, two stat tiles, a run
+ * of week rows — so the layout does not jump when the answer arrives. It deliberately contains
+ * no text and no numbers: the defect it replaces is a screen that **asserted facts** it did not
+ * have, and a skeleton that guessed at content would be the same mistake with rounded corners.
+ *
+ * @param modifier Modifier applied to the page
+ */
+@Composable
+private fun HomeSkeleton(modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier.padding(horizontal = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // The handover hero.
+        SkeletonBox(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(120.dp)
+                .clip(RoundedCornerShape(16.dp))
+        )
+
+        // The two stat tiles, side by side as they render.
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            repeat(2) {
+                SkeletonBox(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(72.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                )
+            }
+        }
+
+        // The week.
+        repeat(4) {
+            SkeletonBox(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp)
+                    .clip(RoundedCornerShape(12.dp))
+            )
+        }
+    }
+}
 
 /**
  * The whole unpaired page: a short explanation and one button.

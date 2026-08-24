@@ -133,9 +133,20 @@ fun CoPlanlyTheme(
         else -> LightColorScheme
     }
 
-    // Calculate dimensions based on window size class
-    // Falls back to compact dimensions for phones if no window size class provided
-    val dimensions = windowSizeClass?.getDimensions() ?: compactDimensions
+    // Dimensions come from the caller's window size class when one is given — previews and
+    // tests do that — and otherwise from `adaptiveDimensions()`, which works the size class out
+    // for itself and folds in font scale and touch exploration.
+    //
+    // The fallback used to be `compactDimensions`, and **no caller ever passed a size class**:
+    // `MainActivity` and `QRScannerActivity` both call `CoPlanlyTheme(darkTheme = …)`. So every
+    // device resolved to phone padding — tablets and unfolded folds included — and
+    // `adaptiveDimensions()`, the only code in the project that reads `fontScale` or
+    // `isTouchExplorationEnabled`, was never called by anything. Two features were switched off
+    // by a default argument.
+    //
+    // Outside an Activity (a Compose preview) it degrades to exactly the old behaviour, because
+    // there is no window to measure.
+    val dimensions = windowSizeClass?.getDimensions() ?: adaptiveDimensions()
 
     // Configure system UI appearance using EdgeToEdge API
     // This is the modern approach recommended by Google (replaces Accompanist)

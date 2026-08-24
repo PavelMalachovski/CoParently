@@ -34,12 +34,15 @@ import com.coparently.app.presentation.common.Parents
 import com.coparently.app.presentation.common.ParentsSource
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -136,6 +139,20 @@ sealed interface HomeUiState {
      * details are worth having alone and Settings is where the pairing screen lives.
      */
     data object AskForCoParent : HomeUiState
+
+    /**
+     * Nothing is known yet, so nothing is asserted.
+     *
+     * Home used to have no such state: [PairingState.Loading] collapsed into "not paired", so an
+     * existing user's launch was splash → a **full screen** saying "add your co-parent" → the
+     * dashboard. The reasoning behind that collapse (see [HomeViewModel.uiState]) was sound while
+     * the pairing prompt was one card among many; it stopped being sound when the prompt became
+     * the whole page, because the cost of guessing wrong grew while the guess stayed the same.
+     *
+     * Resolving to a skeleton is not a compromise between the two wrong answers. It declines to
+     * give either until the real one arrives.
+     */
+    data object Loading : HomeUiState
 
     /**
      * The paired dashboard, in the order spec §3 fixes: the next handover, the child's week,
@@ -236,14 +253,30 @@ class HomeViewModel @Inject constructor(
      * card and a silently missing primary CTA, the former is the smaller cost, so "not
      * paired" is what this flow defaults to while the real answer is unknown.
      *
-     * That reasoning got *stronger* when this began gating the page: the cost of being wrong
-     * one way is a paired user seeing the pairing card for a frame, and the cost of being wrong
-     * the other way is an unpaired user seeing a handover with nothing to hand over, two tiles
-     * reading zero and two empty feeds — the hollow screen this package exists to remove.
+     * That reasoning got *stronger* when this began gating the page — and then stopped applying
+     * at all, because [uiState] no longer has to choose. While the answer is unknown the page
+     * draws [HomeUiState.Loading] and asserts neither thing. This flow is kept for the one case
+     * that still needs a decision: a `Loading` that never resolves.
      */
     private val paired: StateFlow<Boolean> = pairingState
         .map { it is PairingState.Paired }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), false)
+
+    /**
+     * False for the first [PAIRING_SETTLE_TIMEOUT_MS] of a subscription, then true forever.
+     *
+     * A skeleton is the right answer for the moment a Firestore listener takes to reply. It is
+     * the *wrong* answer for a listener that fails permanently — and `PairingState.Loading` is
+     * exactly what `PairingRepository` falls back to in that case, so without this the page would
+     * shimmer for the rest of the session with no route out. After the timeout the old
+     * behaviour resumes: an unresolved pairing reads as "not paired", which at least offers the
+     * user something to do, and which Settings' own unconditional pairing entry backs up.
+     */
+    private val pairingSettled: Flow<Boolean> = flow {
+        emit(false)
+        delay(PAIRING_SETTLE_TIMEOUT_MS)
+        emit(true)
+    }
 
     /**
      * The agreed pattern and the one-off swaps, as one subscription.
@@ -545,12 +578,23 @@ class HomeViewModel @Inject constructor(
      * rendering — the hero, the tiles, the week and the changes feed were all still there,
      * all empty, because nothing had told them not to be.
      */
-    val uiState: StateFlow<HomeUiState> = combine(paired, dashboard) { isPaired, content ->
-        if (isPaired) content else HomeUiState.AskForCoParent
+    val uiState: StateFlow<HomeUiState> = combine(
+        pairingState,
+        pairingSettled,
+        dashboard
+    ) { pairing, settled, content ->
+        when {
+            pairing is PairingState.Paired -> content
+            pairing is PairingState.NotPaired -> HomeUiState.AskForCoParent
+            // Still Loading. A skeleton until it has had a fair chance to answer; after that,
+            // the answer that at least gives the user something to do.
+            settled -> HomeUiState.AskForCoParent
+            else -> HomeUiState.Loading
+        }
     }.stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS),
-        HomeUiState.AskForCoParent
+        HomeUiState.Loading
     )
 
     /**
@@ -605,6 +649,13 @@ class HomeViewModel @Inject constructor(
 
         const val MAX_ITEMS = 5
         const val STOP_TIMEOUT_MS = 5000L
+
+        /**
+         * How long the page will show a skeleton before deciding that an unresolved pairing
+         * state means "not paired". Long enough for a cold Firestore listener, short enough that
+         * a permanently failed one does not leave the user shimmering.
+         */
+        const val PAIRING_SETTLE_TIMEOUT_MS = 3000L
         const val TAG = "HomeViewModel"
         val NEAR_THRESHOLD: Duration = Duration.ofSeconds(2)
     }

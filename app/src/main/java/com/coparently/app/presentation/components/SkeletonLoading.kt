@@ -285,10 +285,15 @@ fun DayWeekViewSkeleton(
 }
 
 /**
- * Простой Skeleton Loading Box для произвольного контента.
- * Базовый компонент для создания кастомных скелетонов.
+ * A shimmering placeholder of arbitrary size — the building block the other skeletons here are
+ * made of, and the one a screen reaches for when it wants a shape this file does not already
+ * have.
  *
- * @param modifier Модификатор для кастомизации размера и формы
+ * The rest of this file still carries Russian KDoc from when none of it was reachable from
+ * anywhere; the project's rule is English, and translating it belongs with wiring the remaining
+ * skeletons up (UX-2), not with this one.
+ *
+ * @param modifier Sets the size and shape of the placeholder
  */
 @Composable
 fun SkeletonBox(
