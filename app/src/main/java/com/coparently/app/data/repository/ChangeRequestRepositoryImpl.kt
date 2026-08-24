@@ -79,7 +79,7 @@ class ChangeRequestRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun syncWithFirestore() {
+    override suspend fun observeRemote() {
         val userId = firebaseAuthService.getCurrentUser()?.uid ?: return
         firestoreDataSource.observeChangeRequestsForUser(userId)
             // Offline-first: a Firestore failure (missing index, denied read, no network)

@@ -42,5 +42,15 @@ interface PetRepository {
     /**
      * Syncs local pets with Firestore.
      */
-    suspend fun syncWithFirestore()
+    /**
+     * Uploads what is pending and pulls the remote side once, then **returns**.
+     *
+     * Named for the shape rather than for the subject (CQ-10). This was `syncWithFirestore()`
+     * on all seven repositories, and on three of them it meant the opposite: an endless
+     * snapshot listener that never returns. `SyncService.performFullSync()` already awaits the
+     * pet one, so adding an expense call beside it by analogy — which is exactly what the old
+     * name invited — would have made `performFullSync()` hang, `SyncWorker` be killed at
+     * WorkManager's ten-minute ceiling, and sync stop entirely, with no exception and no log.
+     */
+    suspend fun pullOnce()
 }

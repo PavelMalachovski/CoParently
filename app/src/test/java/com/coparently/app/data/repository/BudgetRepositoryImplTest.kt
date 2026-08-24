@@ -18,7 +18,7 @@ import org.junit.Before
 import org.junit.Test
 
 /**
- * Unit tests for [BudgetRepositoryImpl.syncWithFirestore], guarding the fix for the
+ * Unit tests for [BudgetRepositoryImpl.observeRemote], guarding the fix for the
  * `budgets` collection's `PERMISSION_DENIED` regression (Task 11 follow-up): the strict
  * `firestore.rules` gate `budgets` reads on `createdByFirebaseUid`, so an unfiltered query
  * is rejected outright by Firestore's query-structure validation, exactly like `expenses`
@@ -48,34 +48,34 @@ class BudgetRepositoryImplTest {
     }
 
     @Test
-    fun `syncWithFirestore queries both parents' UIDs when paired`() = runTest {
+    fun `observeRemote queries both parents' UIDs when paired`() = runTest {
         val firebaseUser = mockk<FirebaseUser> { every { uid } returns "uidA" }
         every { firebaseAuthService.getCurrentUser() } returns firebaseUser
         coEvery { userDao.getUserById("uidA") } returns userEntity(id = "uidA", partnerId = "uidB")
         every { firestoreBudgetDataSource.getAllBudgets(listOf("uidA", "uidB")) } returns emptyFlow()
 
-        repository.syncWithFirestore()
+        repository.observeRemote()
 
         coVerify(exactly = 1) { firestoreBudgetDataSource.getAllBudgets(listOf("uidA", "uidB")) }
     }
 
     @Test
-    fun `syncWithFirestore queries only the current user's UID when unpaired`() = runTest {
+    fun `observeRemote queries only the current user's UID when unpaired`() = runTest {
         val firebaseUser = mockk<FirebaseUser> { every { uid } returns "uidA" }
         every { firebaseAuthService.getCurrentUser() } returns firebaseUser
         coEvery { userDao.getUserById("uidA") } returns userEntity(id = "uidA", partnerId = null)
         every { firestoreBudgetDataSource.getAllBudgets(listOf("uidA")) } returns emptyFlow()
 
-        repository.syncWithFirestore()
+        repository.observeRemote()
 
         coVerify(exactly = 1) { firestoreBudgetDataSource.getAllBudgets(listOf("uidA")) }
     }
 
     @Test
-    fun `syncWithFirestore does nothing when signed out`() = runTest {
+    fun `observeRemote does nothing when signed out`() = runTest {
         every { firebaseAuthService.getCurrentUser() } returns null
 
-        repository.syncWithFirestore()
+        repository.observeRemote()
 
         coVerify(exactly = 0) { firestoreBudgetDataSource.getAllBudgets(any()) }
     }

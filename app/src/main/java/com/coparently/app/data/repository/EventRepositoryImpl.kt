@@ -216,7 +216,7 @@ class EventRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun syncWithFirestore() {
+    override suspend fun pullOnce() {
         val firebaseUser = firebaseAuthService.getCurrentUser() ?: return
 
         // Take a single snapshot; collecting the flow here would never complete

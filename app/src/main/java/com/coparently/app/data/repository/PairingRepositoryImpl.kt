@@ -184,7 +184,7 @@ class PairingRepositoryImpl @Inject constructor(
      * `ChatViewModel` decides between "open chat" and "go pair" from it, `ExpenseRepositoryImpl`
      * and `BudgetRepositoryImpl` build their `creatorUids` filter from it, `SyncService` sizes
      * the event audience with it, and `HomeViewModel` renders its CTA from it. Before this
-     * hook the only writer was `UserRepositoryImpl.syncWithFirestore()` behind a 15-minute
+     * hook the only writer was `UserRepositoryImpl.pullOnce()` behind a 15-minute
      * `SyncWorker`, so both phones showed "Paired with X" while chat, expenses, budgets and
      * events stayed unpaired for up to a quarter of an hour — and after an unpair, the
      * ex-partner's UID stayed in `creatorUids` just as long.

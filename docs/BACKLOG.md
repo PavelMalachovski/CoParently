@@ -394,15 +394,23 @@ included. Fix: observe the one child being edited by id (`ChildInfoDao.observeCh
 already wired through the repository), not the head of a list the editor does not own.
 `CLAUDE.md` documents this in full, including why widening the `isNewChild` guard does not help.
 
-### CQ-10 · P2 · S · `syncWithFirestore()` means two incompatible things — a trap
+### CQ-10 · **DONE** · `syncWithFirestore()` means two incompatible things — a trap
 
 Implemented as a one-shot in `PetRepositoryImpl`/`EventRepositoryImpl` and as an **endless**
 `callbackFlow` listener in `ExpenseRepositoryImpl`, `BudgetRepositoryImpl` and
 `ChangeRequestRepositoryImpl`. `SyncService.performFullSync()` already calls the pet one;
 adding the expense one beside it by analogy would make `performFullSync()` **never return**,
 `SyncWorker` would be killed at WorkManager's ten-minute ceiling, and sync would stop entirely
-— with no exception and no log. Rename to `pullOnce()` / `observeRemote()`. Cheap, five files,
-prevents a silent outage. Audit §8.11.
+— with no exception and no log. Audit §8.11.
+
+Renamed by shape: `pullOnce()` on `Pet`, `Event`, `ChildInfo` and `User`; `observeRemote()` on
+`Expense`, `Budget` and `ChangeRequest`. **Seven repositories, not five** — the item counted the
+three endless ones and two of the four one-shots. Each name now carries a doc saying which shape
+it is and what awaiting the wrong one costs, because the name alone is what failed here: the
+danger was never in any single implementation, it was that the two had one word between them.
+
+The classification was checked against the data sources rather than taken from the item: a
+`flow { get() }` returns, a `callbackFlow { addSnapshotListener }` does not.
 
 ### CQ-11 · **PARTLY DONE** · P3 · S · Error handling is declared but not wired
 
@@ -633,12 +641,20 @@ Two things fell out of it that were not in the item:
 single amber clears 3:1 (WCAG 1.4.11) against both surfaces. Measured, not guessed — Orange 800
 is 3.08:1 on white, Amber 600 is 9.55:1 on `DarkSurface`.
 
-### UX-11 · P2 · S · The Google Calendar row breaks the one-trailing-control rule
+### UX-11 · **DONE** · The Google Calendar row breaks the one-trailing-control rule
 
-`SettingsScreen:313` puts a `Switch` **and** a chevron in the trailing slot of a row that is
-itself clickable — three interaction models in one row, against `DesignSystem.kt:143`. The
-chevron has `contentDescription = null`, so TalkBack announces a switch and never mentions that
-the row expands. Audit §9.14.
+`SettingsScreen` put a `Switch` **and** a chevron in the trailing slot of a row that is itself
+clickable — three interaction models in one row, against `SectionRow`'s stated anatomy. The
+chevron had `contentDescription = null`, so TalkBack announced a switch and never mentioned that
+the row expands, which made the sign-in and sync-now actions behind it unreachable without
+sight. Audit §9.14.
+
+The **switch** moved into the expanded block, not the chevron out of the row: expanding is what
+this row *is* — the August 2026 refresh replaced a card of stacked buttons with exactly that —
+and the toggle belongs beside the sign-in that decides whether it can be used at all. It costs
+one extra tap on a control a parent sets once, and it reads as a labelled row there instead of
+an unexplained switch in a trailing slot. `DisclosureChevron` carries the row's state aloud,
+which a plain navigation `Chevron` deliberately does not.
 
 ### UX-12 · P2 · S · Clerical English success messages
 
@@ -891,9 +907,8 @@ Not a wish-list ordering — a dependency ordering. Each block assumes the one a
 8. ~~**CQ-3** — deletions that replicate.~~ **Done.** Tombstones, an outbox that retries, and a
    daily server-side sweep. See the item for the three decisions it rests on.
 9. ~~**UX-1 → UX-7** — the P1 usability set.~~ **Done.** What remains in `UX` is P2 and below:
-   the empty-state anatomies (**UX-9**), the Settings row with three interaction models
-   (**UX-11**), and the English success strings (**UX-12**, blocked on **CQ-14**). **UX-10** is
-   done.
+   the empty-state anatomies (**UX-9**) and the English success strings (**UX-12**, blocked on
+   **CQ-14**). **UX-10** and **UX-11** are done.
 
 **Then, the product bets, in descending confidence**
 

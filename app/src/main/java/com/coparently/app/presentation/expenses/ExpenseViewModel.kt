@@ -103,7 +103,7 @@ class ExpenseViewModel @Inject constructor(
             // here left unpaired accounts with an empty id and a silently-failing Save.
             userRepository.getCurrentUserId()?.let { uid ->
                 _currentUserId.value = uid
-                expenseRepository.syncWithFirestore()
+                expenseRepository.observeRemote()
             }
         }
     }

@@ -23,7 +23,7 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 
 /**
- * Unit tests for [ExpenseRepositoryImpl.syncWithFirestore], guarding the Task 11 fix that
+ * Unit tests for [ExpenseRepositoryImpl.observeRemote], guarding the Task 11 fix that
  * closed a `PERMISSION_DENIED` regression: an unfiltered `expenses` collection query is
  * rejected outright by the strict `firestore.rules` (the read rule is keyed on
  * `createdByFirebaseUid`, and Firestore validates *query structure*, not per-document
@@ -57,40 +57,40 @@ class ExpenseRepositoryImplTest {
     }
 
     @Test
-    fun `syncWithFirestore queries both parents' UIDs when paired`() = runTest {
+    fun `observeRemote queries both parents' UIDs when paired`() = runTest {
         val firebaseUser = mockk<FirebaseUser> { every { uid } returns "uidA" }
         every { firebaseAuthService.getCurrentUser() } returns firebaseUser
         coEvery { userDao.getUserById("uidA") } returns userEntity(id = "uidA", partnerId = "uidB")
         every { firestoreExpenseDataSource.getAllExpenses(listOf("uidA", "uidB")) } returns emptyFlow()
 
-        repository.syncWithFirestore()
+        repository.observeRemote()
 
         coVerify(exactly = 1) { firestoreExpenseDataSource.getAllExpenses(listOf("uidA", "uidB")) }
     }
 
     @Test
-    fun `syncWithFirestore queries only the current user's UID when unpaired`() = runTest {
+    fun `observeRemote queries only the current user's UID when unpaired`() = runTest {
         val firebaseUser = mockk<FirebaseUser> { every { uid } returns "uidA" }
         every { firebaseAuthService.getCurrentUser() } returns firebaseUser
         coEvery { userDao.getUserById("uidA") } returns userEntity(id = "uidA", partnerId = null)
         every { firestoreExpenseDataSource.getAllExpenses(listOf("uidA")) } returns emptyFlow()
 
-        repository.syncWithFirestore()
+        repository.observeRemote()
 
         coVerify(exactly = 1) { firestoreExpenseDataSource.getAllExpenses(listOf("uidA")) }
     }
 
     @Test
-    fun `syncWithFirestore queries only the current user's UID when there is no local user row yet`() = runTest {
+    fun `observeRemote queries only the current user's UID when there is no local user row yet`() = runTest {
         // The Room `users` row (and its partnerId) may not have synced down yet on a fresh
-        // install; syncWithFirestore must still scope to the signed-in UID, not skip the
+        // install; observeRemote must still scope to the signed-in UID, not skip the
         // filter and fall back to an unfiltered (and therefore rejected) query.
         val firebaseUser = mockk<FirebaseUser> { every { uid } returns "uidA" }
         every { firebaseAuthService.getCurrentUser() } returns firebaseUser
         coEvery { userDao.getUserById("uidA") } returns null
         every { firestoreExpenseDataSource.getAllExpenses(listOf("uidA")) } returns emptyFlow()
 
-        repository.syncWithFirestore()
+        repository.observeRemote()
 
         coVerify(exactly = 1) { firestoreExpenseDataSource.getAllExpenses(listOf("uidA")) }
     }
@@ -153,10 +153,10 @@ class ExpenseRepositoryImplTest {
     }
 
     @Test
-    fun `syncWithFirestore does nothing when signed out`() = runTest {
+    fun `observeRemote does nothing when signed out`() = runTest {
         every { firebaseAuthService.getCurrentUser() } returns null
 
-        repository.syncWithFirestore()
+        repository.observeRemote()
 
         coVerify(exactly = 0) { firestoreExpenseDataSource.getAllExpenses(any()) }
     }
