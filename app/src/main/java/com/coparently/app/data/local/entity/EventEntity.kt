@@ -71,6 +71,12 @@ data class EventEntity(
      * predates the column is correct without being rewritten, which is also the honest reading:
      * an event created before the flag existed was never marked.
      */
-    val isImportant: Boolean = false
+    val isImportant: Boolean = false,
+    /**
+     * Which calendar friend takes part — see
+     * [com.coparently.app.domain.model.Event.friendParticipates]. Nullable, no default beyond
+     * null: an event predating the column had no friend on it, which is what null says.
+     */
+    val friendParticipates: String? = null
 )
 

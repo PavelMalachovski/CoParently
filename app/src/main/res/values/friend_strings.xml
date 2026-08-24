@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="friend_section_title">Friend with calendar access</string>
+    <string name="friend_section_supporting">A guardian, friend or grandparent who can see the calendar</string>
+    <string name="friend_invite_action">Invite a friend</string>
+    <string name="friend_invite_code_label">Give them this code</string>
+    <string name="friend_access_until">Access until %1$s</string>
+    <string name="friend_revoke">Remove access</string>
+    <string name="friend_revoke_confirm_title">Remove access for %1$s?</string>
+    <string name="friend_revoke_confirm_message">They will stop seeing the family calendar. You can invite them again at any time.</string>
+    <string name="friend_role_guardian">Guardian</string>
+    <string name="friend_role_friend">Friend</string>
+    <string name="friend_role_grandparent">Grandparent</string>
+    <string name="friend_profile_title">My profile</string>
+    <string name="friend_profile_name">Name</string>
+    <string name="friend_profile_phone">Phone number</string>
+    <string name="friend_profile_blood_group">Blood group</string>
+    <string name="friend_profile_photo">Photo</string>
+    <string name="friend_profile_save">Save</string>
+    <string name="friend_event_participates">%1$s takes part</string>
+    <string name="friend_event_none">Nobody</string>
+    <string name="friend_empty">Nobody outside the family has calendar access.</string>
+</resources>

@@ -66,6 +66,15 @@ data class Event(
     val acceptance: EventAcceptance = EventAcceptance.NOT_REQUIRED,
     val acceptedBy: String? = null,
     val acceptedAt: LocalDateTime? = null,
-    val isImportant: Boolean = false
+    val isImportant: Boolean = false,
+    /**
+     * The UID of the calendar friend expected at this event, or null when none is.
+     *
+     * A friend is not an owner: [parentOwner] stays one of the two slots, because whose *day*
+     * this falls on is a fact about custody and does not change because a grandmother is doing
+     * the pickup. This only records that the friend takes part, which is what the calendar's
+     * friend filter shows and what the grid marks in the friend's colour.
+     */
+    val friendParticipates: String? = null
 )
 

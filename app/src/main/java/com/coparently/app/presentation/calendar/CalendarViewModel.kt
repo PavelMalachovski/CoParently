@@ -9,6 +9,8 @@ import com.coparently.app.data.local.preferences.PreferenceKeys
 import com.coparently.app.data.repository.CustodyModelRepository
 import com.coparently.app.domain.custody.CustodyChangeAnnouncement
 import com.coparently.app.domain.custody.CustodyProposal
+import com.coparently.app.domain.friends.CalendarFriendGrant
+import com.coparently.app.domain.repository.FriendRepository
 import com.coparently.app.domain.custody.CustodyResolver
 import com.coparently.app.domain.custody.DayOverride
 import com.coparently.app.domain.custody.DayOverrideTransition
@@ -59,8 +61,20 @@ class CalendarViewModel @Inject constructor(
     private val custodyScheduleDao: CustodyScheduleDao,
     private val custodyModelRepository: CustodyModelRepository,
     private val encryptedPreferences: EncryptedPreferences,
+    friendRepository: FriendRepository,
     parentsSource: ParentsSource
 ) : ViewModel() {
+
+    /**
+     * The family's calendar friends, live ones only (item 16).
+     *
+     * Drives the filter's friend chip and the grid's friend marker. Empty for a family that has
+     * admitted nobody, which is most of them — the chip is absent rather than disabled, so a
+     * feature nobody uses costs nothing on screen.
+     */
+    val calendarFriends: StateFlow<List<CalendarFriendGrant>> =
+        friendRepository.observeFamilyFriends()
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(HANDOVER_STOP_TIMEOUT_MS), emptyList())
 
     /**
      * Signed-in parent and paired co-parent, for resolving a slot to a name. The whole calendar
