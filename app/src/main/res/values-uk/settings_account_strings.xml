@@ -35,4 +35,17 @@
     <!-- Co-parent sync status line. %1$s = time of the last successful sync. -->
     <string name="settings_sync_idle">Усе актуально</string>
     <string name="settings_sync_last">Синхронізовано о %1$s</string>
+
+    <!-- Account deletion. Irreversible: the server erases the account and everything it
+         holds, and the device is wiped. The second dialog is deliberate, matching unpair. -->
+    <string name="settings_account_delete">Видалити акаунт</string>
+    <string name="settings_account_delete_description">Стерти цей акаунт і всі його дані</string>
+    <string name="settings_account_delete_confirm_title">Видалити цей акаунт?</string>
+    <string name="settings_account_delete_confirm_message">Зникне все, що ви вносили: події, витрати, записи про дитину та все листування. У другого з батьків залишиться лише те, що створив він сам. Скасувати це буде неможливо.</string>
+    <string name="settings_account_delete_final_title">Видалити безповоротно?</string>
+    <string name="settings_account_delete_final_message">Шляху назад немає, копії не залишиться. Якщо ви хочете просто вийти на цьому пристрої, скористайтеся виходом з акаунта.</string>
+    <string name="settings_account_delete_final_yes">Видалити безповоротно</string>
+    <string name="settings_account_delete_cancel">Залишити акаунт</string>
+    <string name="settings_account_delete_progress">Видаляємо ваш акаунт…</string>
+    <string name="settings_account_delete_failed">Акаунт не видалено. Спробуйте ще раз.</string>
 </resources>

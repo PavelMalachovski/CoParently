@@ -35,4 +35,17 @@
     <!-- Co-parent sync status line. %1$s = time of the last successful sync. -->
     <string name="settings_sync_idle">Aktuell</string>
     <string name="settings_sync_last">Synchronisiert um %1$s</string>
+
+    <!-- Account deletion. Irreversible: the server erases the account and everything it
+         holds, and the device is wiped. The second dialog is deliberate, matching unpair. -->
+    <string name="settings_account_delete">Konto löschen</string>
+    <string name="settings_account_delete_description">Dieses Konto und alle Daten löschen</string>
+    <string name="settings_account_delete_confirm_title">Dieses Konto löschen?</string>
+    <string name="settings_account_delete_confirm_message">Alles, was Sie eingetragen haben, wird gelöscht: Termine, Ausgaben, die Daten Ihres Kindes und der gesamte Chat. Dem anderen Elternteil bleibt nur, was er selbst erstellt hat. Das lässt sich nicht rückgängig machen.</string>
+    <string name="settings_account_delete_final_title">Endgültig löschen?</string>
+    <string name="settings_account_delete_final_message">Es gibt keinen Weg zurück und keine Kopie. Wenn Sie sich nur von diesem Gerät abmelden möchten, nutzen Sie stattdessen die Abmeldung.</string>
+    <string name="settings_account_delete_final_yes">Endgültig löschen</string>
+    <string name="settings_account_delete_cancel">Konto behalten</string>
+    <string name="settings_account_delete_progress">Konto wird gelöscht…</string>
+    <string name="settings_account_delete_failed">Das Konto wurde nicht gelöscht. Bitte versuchen Sie es erneut.</string>
 </resources>

@@ -35,4 +35,17 @@
     <!-- Co-parent sync status line. %1$s = time of the last successful sync. -->
     <string name="settings_sync_idle">Aktuální</string>
     <string name="settings_sync_last">Synchronizováno v %1$s</string>
+
+    <!-- Account deletion. Irreversible: the server erases the account and everything it
+         holds, and the device is wiped. The second dialog is deliberate, matching unpair. -->
+    <string name="settings_account_delete">Smazat účet</string>
+    <string name="settings_account_delete_description">Vymazat tento účet i všechna jeho data</string>
+    <string name="settings_account_delete_confirm_title">Smazat tento účet?</string>
+    <string name="settings_account_delete_confirm_message">Zmizí vše, co jste zadali: události, výdaje, záznamy o dítěti i celý chat. Druhému rodiči zůstane jen to, co vytvořil sám. Tento krok nelze vrátit.</string>
+    <string name="settings_account_delete_final_title">Smazat nenávratně?</string>
+    <string name="settings_account_delete_final_message">Není cesty zpět a nezůstane žádná kopie. Pokud se chcete jen odhlásit z tohoto zařízení, použijte odhlášení.</string>
+    <string name="settings_account_delete_final_yes">Smazat nenávratně</string>
+    <string name="settings_account_delete_cancel">Ponechat účet</string>
+    <string name="settings_account_delete_progress">Mažeme váš účet…</string>
+    <string name="settings_account_delete_failed">Účet se nepodařilo smazat. Zkuste to prosím znovu.</string>
 </resources>
