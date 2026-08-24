@@ -23,4 +23,12 @@
     <string name="onboarding_coparent_title">Lade deinen Co-Elternteil ein</string>
     <string name="onboarding_coparent_body">Schick ihm einen Link oder einen Code. Sobald er dabei ist, sieht er alles, was du hier ausgefüllt hast, und kann es ergänzen.</string>
     <string name="onboarding_coparent_open">Einladung senden</string>
+    <string name="onboarding_family_title">Wen betreut ihr gemeinsam?</string>
+    <string name="onboarding_family_body">Wählt beides, wenn es auf eure Familie zutrifft. Ihr könnt das später in den Einstellungen ändern.</string>
+    <string name="onboarding_family_children">Kinder</string>
+    <string name="onboarding_family_children_hint">Kinderdaten, Kontakte und Schulangaben</string>
+    <string name="onboarding_family_pets">Haustiere</string>
+    <string name="onboarding_family_pets_hint">Haustierdaten, Impfungen und die Nummer der Tierarztpraxis</string>
+    <string name="onboarding_pet_title">Euer Haustier</string>
+    <string name="onboarding_pet_body">Nur Name und Art. Impfungen, Fütterungsnotizen und Tierarzt folgen später auf der Haustierseite.</string>
 </resources>

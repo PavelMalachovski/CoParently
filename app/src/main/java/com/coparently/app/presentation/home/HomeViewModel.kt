@@ -20,6 +20,7 @@ import com.coparently.app.domain.home.WeekEntry
 import com.coparently.app.domain.model.CustodyModel
 import com.coparently.app.domain.model.Event
 import com.coparently.app.domain.model.Expense
+import com.coparently.app.domain.model.FamilyKind
 import com.coparently.app.domain.model.PairingState
 import com.coparently.app.domain.model.PartnerSummary
 import com.coparently.app.domain.money.SupportedCurrency
@@ -30,6 +31,7 @@ import com.coparently.app.domain.repository.MessageRepository
 import com.coparently.app.domain.repository.PairingRepository
 import com.coparently.app.domain.repository.PreferencesRepository
 import com.coparently.app.domain.repository.UserRepository
+import com.coparently.app.presentation.common.FamilyKindSource
 import com.coparently.app.presentation.common.Parents
 import com.coparently.app.presentation.common.ParentsSource
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -201,6 +203,7 @@ class HomeViewModel @Inject constructor(
     custodyModelRepository: CustodyModelRepository,
     monthSpendDependencies: MonthSpendDependencies,
     messageRepository: MessageRepository,
+    familyKindSource: FamilyKindSource,
     homeIdentityDependencies: HomeIdentityDependencies
 ) : ViewModel() {
 
@@ -512,6 +515,15 @@ class HomeViewModel @Inject constructor(
      * disagree with the screen that answers them. `LocalDate.now()` is read per emission for
      * the reason `ChangeRequestViewModel.daySwaps` documents: this flow outlives midnight.
      */
+    /**
+     * Whether this family's app offers child records, pet records, or both.
+     *
+     * The union of the two parents' answers; an account that has never been asked reads as both,
+     * so an upgrade never hides a section somebody was already using.
+     */
+    val caresFor: StateFlow<Set<FamilyKind>> = familyKindSource.observe()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), FamilyKind.ALL)
+
     private val awaitingSwaps: StateFlow<List<DaySwapGroup>> = combine(
         custodyModelRepository.observeDayOverrides(),
         _userId

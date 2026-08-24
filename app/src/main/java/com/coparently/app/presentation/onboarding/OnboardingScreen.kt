@@ -2,6 +2,7 @@ package com.coparently.app.presentation.onboarding
 
 import androidx.activity.compose.BackHandler
 import androidx.annotation.StringRes
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -15,9 +16,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ChildCare
+import androidx.compose.material.icons.filled.Pets
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -40,10 +46,15 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.coparently.app.R
+import com.coparently.app.domain.model.FamilyKind
+import com.coparently.app.domain.model.PetSpecies
 import com.coparently.app.presentation.childinfo.components.AllergyEditor
 import com.coparently.app.presentation.childinfo.components.DatePickerDialog
 import com.coparently.app.presentation.childinfo.components.EmergencyContactEditor
 import com.coparently.app.presentation.common.MedicalProfileEditor
+import com.coparently.app.presentation.common.SectionGroup
+import com.coparently.app.presentation.common.SectionRow
+import com.coparently.app.presentation.common.labelRes
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
@@ -89,7 +100,7 @@ fun OnboardingScreen(
     BackHandler(enabled = uiState.step != OnboardingStep.Intro) { viewModel.back() }
 
     Scaffold(
-        topBar = { OnboardingTopBar(step = uiState.step) },
+        topBar = { OnboardingTopBar(state = uiState) },
         bottomBar = {
             OnboardingBottomBar(
                 state = uiState,
@@ -112,18 +123,21 @@ fun OnboardingScreen(
 /** Title and how far along the wizard is, so no step feels open-ended. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun OnboardingTopBar(step: OnboardingStep) {
+private fun OnboardingTopBar(state: OnboardingUiState) {
     Column {
         TopAppBar(title = { Text(stringResource(R.string.onboarding_title)) })
+        // Counted over the steps this run will actually walk, not over the enum: a pets-only
+        // family skips two steps, and "Step 3 of 8" over a six-step flow is a lie the progress
+        // bar tells at the exact moment the parent is deciding whether to finish.
         LinearProgressIndicator(
-            progress = { step.displayIndex.toFloat() / OnboardingStep.count },
+            progress = { state.displayIndex.toFloat() / state.stepCount },
             modifier = Modifier.fillMaxWidth()
         )
         Text(
             text = stringResource(
                 R.string.onboarding_progress,
-                step.displayIndex,
-                OnboardingStep.count
+                state.displayIndex,
+                state.stepCount
             ),
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -151,6 +165,8 @@ private fun OnboardingBody(
     ) {
         when (state.step) {
             OnboardingStep.Intro -> IntroStep()
+            OnboardingStep.Family -> FamilyKindStep(state, viewModel)
+            OnboardingStep.Pet -> PetStep(state, viewModel)
             OnboardingStep.Profile -> ProfileStep(state, viewModel)
             OnboardingStep.Child -> ChildStep(state, viewModel)
             OnboardingStep.Relatives -> RelativesStep(state, viewModel)
@@ -272,6 +288,99 @@ private fun ChildStep(state: OnboardingUiState, viewModel: OnboardingViewModel) 
         onChange = viewModel::updateChildMedicalProfile,
         enabled = true
     )
+
+    Footnote()
+}
+
+/**
+ * Children, pets, or both — the question that decides what the rest of the wizard asks.
+ *
+ * A multi-select rather than a choice of one: a separated family with a child and a dog has both,
+ * and making them pick would hide a section they are already using. Nothing is hidden by silence
+ * either — an account that never answered reads as "show everything", which is what every
+ * upgrade is.
+ *
+ * Changeable afterwards from Settings → Family. Without that route, a family that gets a dog a
+ * year later could never reach the pet records, which is design item 8 in reverse: not an
+ * affordance promising a missing feature, but a built feature with no affordance.
+ */
+@Composable
+private fun FamilyKindStep(state: OnboardingUiState, viewModel: OnboardingViewModel) {
+    StepHeading(title = R.string.onboarding_family_title, body = R.string.onboarding_family_body)
+
+    SectionGroup {
+        FamilyKind.entries.forEachIndexed { index, kind ->
+            val selected = kind in state.caresFor
+            SectionRow(
+                icon = if (kind == FamilyKind.CHILDREN) Icons.Default.ChildCare else Icons.Default.Pets,
+                title = stringResource(
+                    if (kind == FamilyKind.CHILDREN) {
+                        R.string.onboarding_family_children
+                    } else {
+                        R.string.onboarding_family_pets
+                    }
+                ),
+                supporting = stringResource(
+                    if (kind == FamilyKind.CHILDREN) {
+                        R.string.onboarding_family_children_hint
+                    } else {
+                        R.string.onboarding_family_pets_hint
+                    }
+                ),
+                onClick = {
+                    viewModel.setCaresFor(
+                        if (selected) state.caresFor - kind else state.caresFor + kind
+                    )
+                },
+                trailing = {
+                    Checkbox(
+                        checked = selected,
+                        onCheckedChange = { checked ->
+                            viewModel.setCaresFor(
+                                if (checked) state.caresFor + kind else state.caresFor - kind
+                            )
+                        }
+                    )
+                }
+            )
+            if (index != FamilyKind.entries.lastIndex) Divider()
+        }
+    }
+}
+
+/**
+ * The pet's name and species — the pet equivalent of [ChildStep], and as short.
+ *
+ * Deliberately not the whole pet record: vaccinations, feeding notes and the vet's number are
+ * collected on the pet screen afterwards, the same trade [ChildStep] makes by leaving out school
+ * and activities. A first run that asks for everything is a first run people abandon.
+ */
+@Composable
+private fun PetStep(state: OnboardingUiState, viewModel: OnboardingViewModel) {
+    StepHeading(title = R.string.onboarding_pet_title, body = R.string.onboarding_pet_body)
+
+    OutlinedTextField(
+        value = state.petName,
+        onValueChange = viewModel::setPetName,
+        label = { Text(stringResource(R.string.pet_name_label)) },
+        singleLine = true,
+        modifier = Modifier.fillMaxWidth()
+    )
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        PetSpecies.entries.forEach { species ->
+            FilterChip(
+                selected = state.petSpecies == species,
+                onClick = { viewModel.setPetSpecies(species) },
+                label = { Text(stringResource(species.labelRes())) }
+            )
+        }
+    }
 
     Footnote()
 }
@@ -438,7 +547,7 @@ private fun OnboardingBottomBar(
                 } else {
                     Text(
                         stringResource(
-                            if (state.step.isLast) {
+                            if (state.isLastStep) {
                                 R.string.onboarding_finish
                             } else {
                                 R.string.onboarding_next

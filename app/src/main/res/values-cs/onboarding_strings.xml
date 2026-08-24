@@ -23,4 +23,12 @@
     <string name="onboarding_coparent_title">Pozvěte druhého rodiče</string>
     <string name="onboarding_coparent_body">Pošlete mu odkaz nebo kód. Jakmile se připojí, uvidí všechno, co jste tady vyplnili, a může to doplnit.</string>
     <string name="onboarding_coparent_open">Odeslat pozvánku</string>
+    <string name="onboarding_family_title">Koho vychováváte společně?</string>
+    <string name="onboarding_family_body">Pokud máte obojí, vyberte obě možnosti. Později to změníte v Nastavení.</string>
+    <string name="onboarding_family_children">Děti</string>
+    <string name="onboarding_family_children_hint">Záznamy o dětech, kontakty a údaje o škole</string>
+    <string name="onboarding_family_pets">Mazlíčci</string>
+    <string name="onboarding_family_pets_hint">Záznamy o mazlíčcích, očkování a číslo na veterináře</string>
+    <string name="onboarding_pet_title">Váš mazlíček</string>
+    <string name="onboarding_pet_body">Stačí jméno a druh. Očkování, poznámky ke krmení a veterinář přijdou později na obrazovce mazlíčka.</string>
 </resources>

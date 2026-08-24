@@ -48,4 +48,8 @@
     <string name="settings_account_delete_cancel">Ponechat účet</string>
     <string name="settings_account_delete_progress">Mažeme váš účet…</string>
     <string name="settings_account_delete_failed">Účet se nepodařilo smazat. Zkuste to prosím znovu.</string>
+    <string name="settings_family_kind_title">Co vychováváte společně</string>
+    <string name="settings_family_kind_both">%1$s a %2$s</string>
+    <string name="settings_family_kind_save">Uložit</string>
+    <string name="settings_family_kind_cancel">Zrušit</string>
 </resources>

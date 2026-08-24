@@ -4,12 +4,18 @@ import com.coparently.app.domain.model.ChildInfo
 import com.coparently.app.domain.model.EmergencyContact
 import com.coparently.app.domain.model.User
 import com.coparently.app.domain.repository.ChildInfoRepository
+import com.coparently.app.domain.repository.PetRepository
 import com.coparently.app.domain.repository.UserRepository
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
+import java.time.LocalDateTime
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.flowOf
@@ -21,11 +27,6 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
-import java.time.LocalDateTime
-import kotlin.test.assertEquals
-import kotlin.test.assertFalse
-import kotlin.test.assertNull
-import kotlin.test.assertTrue
 
 /**
  * The wizard's rules, which are almost entirely about what a parent is allowed to leave out.
@@ -41,6 +42,7 @@ class OnboardingViewModelTest {
     private val dispatcher = StandardTestDispatcher()
     private lateinit var userRepository: UserRepository
     private lateinit var childInfoRepository: ChildInfoRepository
+    private lateinit var petRepository: PetRepository
     private lateinit var viewModel: OnboardingViewModel
 
     private val storedUser = User(
@@ -62,7 +64,10 @@ class OnboardingViewModelTest {
         childInfoRepository = mockk(relaxed = true) {
             every { getAllChildInfo() } returns flowOf(emptyList())
         }
-        viewModel = OnboardingViewModel(userRepository, childInfoRepository)
+        petRepository = mockk(relaxed = true) {
+            every { getAllPets() } returns flowOf(emptyList())
+        }
+        viewModel = OnboardingViewModel(userRepository, childInfoRepository, petRepository)
     }
 
     @After
@@ -84,6 +89,8 @@ class OnboardingViewModelTest {
 
     @Test
     fun `a blank name is the only thing that blocks progress`() = runTest(dispatcher) {
+        // Intro, then the family question, then the profile.
+        viewModel.next()
         viewModel.next()
         advanceUntilIdle()
         assertEquals(OnboardingStep.Profile, viewModel.uiState.value.step)
@@ -99,6 +106,7 @@ class OnboardingViewModelTest {
 
     @Test
     fun `nothing medical is ever required`() = runTest(dispatcher) {
+        viewModel.next()
         viewModel.next()
         viewModel.updateName("Olya")
         advanceUntilIdle()
@@ -190,7 +198,7 @@ class OnboardingViewModelTest {
                 )
             )
         )
-        viewModel = OnboardingViewModel(userRepository, childInfoRepository)
+        viewModel = OnboardingViewModel(userRepository, childInfoRepository, petRepository)
         advanceUntilIdle()
 
         walkTo(OnboardingStep.Child)
@@ -294,7 +302,7 @@ class OnboardingViewModelTest {
                 )
             )
         )
-        viewModel = OnboardingViewModel(userRepository, childInfoRepository)
+        viewModel = OnboardingViewModel(userRepository, childInfoRepository, petRepository)
         advanceUntilIdle()
 
         val state = viewModel.uiState.value

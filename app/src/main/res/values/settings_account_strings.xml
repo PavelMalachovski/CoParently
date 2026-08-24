@@ -49,4 +49,8 @@
     <string name="settings_account_delete_cancel">Keep my account</string>
     <string name="settings_account_delete_progress">Deleting your account…</string>
     <string name="settings_account_delete_failed">Your account was not deleted. Please try again.</string>
+    <string name="settings_family_kind_title">What you co-parent</string>
+    <string name="settings_family_kind_both">%1$s and %2$s</string>
+    <string name="settings_family_kind_save">Save</string>
+    <string name="settings_family_kind_cancel">Cancel</string>
 </resources>

@@ -6,19 +6,20 @@ import com.coparently.app.data.remote.firebase.FcmService
 import com.coparently.app.data.remote.firebase.FirebaseAuthService
 import com.coparently.app.data.remote.firebase.FirestoreUserDataSource
 import com.coparently.app.data.session.ProfileIdentity
+import com.coparently.app.domain.model.FamilyKind
 import com.coparently.app.domain.model.MedicalProfile
 import com.coparently.app.domain.model.User
 import com.coparently.app.domain.repository.UserRepository
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.UserInfo
 import com.google.gson.GsonBuilder
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
 import java.time.LocalDate
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 
 /**
  * Implementation of UserRepository.
@@ -365,7 +366,10 @@ class UserRepositoryImpl @Inject constructor(
             medicalProfileJson = (remote?.get("medicalProfile") as? Map<*, *>)
                 ?.let { gson.toJson(it) }
                 ?: DEFAULT_MEDICAL_PROFILE_JSON,
-            onboardingCompletedAt = remote?.string("onboardingCompletedAt")
+            onboardingCompletedAt = remote?.string("onboardingCompletedAt"),
+            // `?: local?.caresForKinds`, not a bare remote read: a co-parent's build that does
+            // not write the field must not clear the answer this device already holds.
+            caresForKinds = remote?.string("caresFor") ?: local?.caresForKinds
         )
         if (updated != local) userDao.insertUser(updated)
     }
@@ -419,7 +423,10 @@ class UserRepositoryImpl @Inject constructor(
                     "medicalProfile" to gson.fromJson(
                         gson.toJson(user.medicalProfile), Map::class.java
                     ),
-                    "onboardingCompletedAt" to (user.onboardingCompletedAt ?: "")
+                    "onboardingCompletedAt" to (user.onboardingCompletedAt ?: ""),
+                    // A string of constant names, not a list: the co-parent reads it to decide
+                    // whether to show child records, and the two halves must agree on one shape.
+                    "caresFor" to (FamilyKind.toStored(user.caresFor) ?: "")
                 )
                 firestoreUserDataSource.updateUser(firebaseUser.uid, userData).getOrThrow()
             } catch (e: Exception) {
@@ -501,7 +508,8 @@ class UserRepositoryImpl @Inject constructor(
             medicalProfile = (
                 gson.fromJson(medicalProfileJson, MedicalProfile::class.java) ?: MedicalProfile()
                 ).withSanitizedVaccinationNames(),
-            onboardingCompletedAt = onboardingCompletedAt
+            onboardingCompletedAt = onboardingCompletedAt,
+            caresFor = FamilyKind.fromStored(caresForKinds)
         )
     }
 
@@ -524,7 +532,8 @@ class UserRepositoryImpl @Inject constructor(
             phone = phone,
             allergiesJson = gson.toJson(allergies),
             medicalProfileJson = gson.toJson(medicalProfile),
-            onboardingCompletedAt = onboardingCompletedAt
+            onboardingCompletedAt = onboardingCompletedAt,
+            caresForKinds = FamilyKind.toStored(caresFor)
         )
     }
 
@@ -551,7 +560,8 @@ class UserRepositoryImpl @Inject constructor(
                     gson.fromJson(gson.toJson(it), MedicalProfile::class.java)
                 } ?: MedicalProfile()
                 ).withSanitizedVaccinationNames(),
-            onboardingCompletedAt = (this["onboardingCompletedAt"] as? String)?.takeIf { it.isNotBlank() }
+            onboardingCompletedAt = (this["onboardingCompletedAt"] as? String)?.takeIf { it.isNotBlank() },
+            caresFor = FamilyKind.fromStored(this["caresFor"] as? String)
         )
     }
 

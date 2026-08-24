@@ -5,10 +5,18 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.coparently.app.domain.model.ChildInfo
 import com.coparently.app.domain.model.EmergencyContact
+import com.coparently.app.domain.model.FamilyKind
 import com.coparently.app.domain.model.MedicalProfile
+import com.coparently.app.domain.model.Pet
+import com.coparently.app.domain.model.PetSpecies
 import com.coparently.app.domain.repository.ChildInfoRepository
+import com.coparently.app.domain.repository.PetRepository
 import com.coparently.app.domain.repository.UserRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import java.time.LocalDate
+import java.time.LocalDateTime
+import java.util.UUID
+import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -18,10 +26,14 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import java.time.LocalDate
-import java.time.LocalDateTime
-import java.util.UUID
-import javax.inject.Inject
+
+/**
+ * What the family step opens pre-answered with.
+ *
+ * Children rather than nothing, so the step always has something to move on with and the very
+ * first screen of the app is not a gate. A parent who has pets instead simply changes it.
+ */
+private val DEFAULT_CARES_FOR = setOf(FamilyKind.CHILDREN)
 
 /**
  * Everything the wizard has collected so far, plus which step is showing it.
@@ -59,9 +71,29 @@ data class OnboardingUiState(
     val childAllergies: List<String> = emptyList(),
     val childMedicalProfile: MedicalProfile = MedicalProfile(),
     val relatives: List<EmergencyContact> = emptyList(),
+    val caresFor: Set<FamilyKind> = DEFAULT_CARES_FOR,
+    val petName: String = "",
+    val petSpecies: PetSpecies = PetSpecies.DOG,
     val isSaving: Boolean = false,
     val isFinished: Boolean = false
 ) {
+    /**
+     * The steps this run will walk, given the family answer.
+     *
+     * Derived rather than stored: the answer can change on the [OnboardingStep.Family] step
+     * itself, and a list captured at construction would keep asking about a child the parent has
+     * just said they do not have.
+     */
+    val steps: List<OnboardingStep> get() = OnboardingStep.stepsFor(caresFor)
+
+    /** This step's 1-based position in [steps], for the progress indicator. */
+    val displayIndex: Int get() = steps.indexOf(step).coerceAtLeast(0) + 1
+
+    /** How many steps this run has. Never `OnboardingStep.entries.size` — most runs are shorter. */
+    val stepCount: Int get() = steps.size
+
+    /** True on the step that ends the wizard; leaving it, by any button, finishes onboarding. */
+    val isLastStep: Boolean get() = step == steps.lastOrNull()
     /**
      * Only a blank parent name blocks progress.
      *
@@ -71,7 +103,12 @@ data class OnboardingUiState(
      * thing that blocks is the one thing the app cannot work without.
      */
     val canAdvance: Boolean
-        get() = step != OnboardingStep.Profile || name.isNotBlank()
+        get() = when (step) {
+            OnboardingStep.Profile -> name.isNotBlank()
+            // At least one kind, or the wizard cannot decide what to ask next.
+            OnboardingStep.Family -> caresFor.isNotEmpty()
+            else -> true
+        }
 
     /** Whether this step offers a Skip. */
     val canSkip: Boolean get() = step.isSkippable
@@ -114,7 +151,8 @@ data class OnboardingUiState(
 @HiltViewModel
 class OnboardingViewModel @Inject constructor(
     private val userRepository: UserRepository,
-    private val childInfoRepository: ChildInfoRepository
+    private val childInfoRepository: ChildInfoRepository,
+    private val petRepository: PetRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(OnboardingUiState())
@@ -129,6 +167,9 @@ class OnboardingViewModel @Inject constructor(
      * duplicating it.
      */
     private var childInfoId: String? = null
+
+    /** The pet record this wizard is filling in, for the same reason [childInfoId] exists. */
+    private var petId: String? = null
 
     /**
      * Serializes every write this wizard makes, so a read-modify-write cannot interleave with
@@ -165,6 +206,8 @@ class OnboardingViewModel @Inject constructor(
             try {
                 val user = userRepository.getCurrentUser()
                 val child = childInfoRepository.getAllChildInfo().first().firstOrNull()
+                val pet = petRepository.getAllPets().first().firstOrNull()
+                petId = petId ?: pet?.id
                 // Never clears an id a step has already claimed: this read is asynchronous, and
                 // "no child yet" arriving after a child was created would orphan that record and
                 // make the next save create a second one.
@@ -176,6 +219,17 @@ class OnboardingViewModel @Inject constructor(
                         phone = state.phone.orStored(user?.phone),
                         allergies = state.allergies.orStored(user?.allergies),
                         medicalProfile = state.medicalProfile.orStored(user?.medicalProfile),
+                        // A stored answer wins over the default, but never over one the parent
+                        // has already changed on the step itself.
+                        caresFor = state.caresFor.takeIf { it != DEFAULT_CARES_FOR }
+                            ?: user?.caresFor?.takeIf { it.isNotEmpty() }
+                            ?: DEFAULT_CARES_FOR,
+                        petName = state.petName.orStored(pet?.name),
+                        petSpecies = if (state.petSpecies == PetSpecies.DOG && pet != null) {
+                            pet.species
+                        } else {
+                            state.petSpecies
+                        },
                         childName = state.childName.orStored(child?.childName),
                         childDateOfBirth = state.childDateOfBirth ?: child?.dateOfBirth?.toLocalDate(),
                         childAllergies = state.childAllergies.orStored(child?.allergies),
@@ -243,9 +297,11 @@ class OnboardingViewModel @Inject constructor(
         if (!state.canAdvance) return
 
         when (state.step) {
+            OnboardingStep.Family -> persist { saveCaresFor(state) }
             OnboardingStep.Profile -> persist { saveProfile(state) }
             OnboardingStep.Child -> persist { saveChild(state) }
             OnboardingStep.Relatives -> persist { saveChild(state) }
+            OnboardingStep.Pet -> persist { savePet(state) }
             else -> Unit
         }
         leaveStep(state.step)
@@ -267,9 +323,31 @@ class OnboardingViewModel @Inject constructor(
     /** Steps back. A no-op on the first step, which has nowhere to go. */
     fun back() {
         _uiState.update { state ->
-            val previous = OnboardingStep.entries.getOrNull(state.step.ordinal - 1)
+            val steps = state.steps
+            val previous = steps.getOrNull(steps.indexOf(state.step) - 1)
             previous?.let { state.copy(step = it) } ?: state
         }
+    }
+
+    /**
+     * Records whether this family is co-parenting children, pets or both.
+     *
+     * Written on Next like every other step rather than on tap, so backing out of the wizard
+     * leaves nothing behind — and so the answer reaches the co-parent's device through the same
+     * profile write as the rest.
+     */
+    fun setCaresFor(kinds: Set<FamilyKind>) {
+        _uiState.update { it.copy(caresFor = kinds) }
+    }
+
+    /** The pet step's name field. */
+    fun setPetName(value: String) {
+        _uiState.update { it.copy(petName = value) }
+    }
+
+    /** The pet step's species. */
+    fun setPetSpecies(value: PetSpecies) {
+        _uiState.update { it.copy(petSpecies = value) }
     }
 
     /**
@@ -315,12 +393,13 @@ class OnboardingViewModel @Inject constructor(
      * earlier version advanced blindly and left Skip on that step doing nothing at all.
      */
     private fun leaveStep(step: OnboardingStep) {
-        if (step.isLast) {
+        if (_uiState.value.isLastStep) {
             finish()
             return
         }
         _uiState.update { state ->
-            val following = OnboardingStep.entries.getOrNull(state.step.ordinal + 1)
+            val steps = state.steps
+            val following = steps.getOrNull(steps.indexOf(state.step) + 1)
             following?.let { state.copy(step = it) } ?: state
         }
     }
@@ -346,6 +425,48 @@ class OnboardingViewModel @Inject constructor(
      * `partnerId`, `fcmToken`, `role` and `colorCode` come from the fresh read, never from
      * [state] — see this class's doc, and `ProfileViewModel.save`, which learned it the hard way.
      */
+    /**
+     * Writes what the family co-parents onto the parent's own record.
+     *
+     * Its own write rather than folding it into [saveProfile], because the family step comes
+     * *before* the profile step: the answer decides which steps follow, and waiting for the
+     * profile save would leave it unstored for anyone who backs out in between.
+     */
+    private suspend fun saveCaresFor(state: OnboardingUiState) {
+        val fresh = userRepository.getCurrentUser() ?: return
+        userRepository.updateUser(fresh.copy(caresFor = state.caresFor))
+    }
+
+    /**
+     * Writes the pet the wizard collected, onto one record.
+     *
+     * Same shape as [saveChild], and for the same reason: [petId] is held so a second Next does
+     * not create a second pet. Nothing is written for a blank name — a nameless pet is not
+     * creatable anywhere else in the app, and would show as an unidentifiable row.
+     */
+    private suspend fun savePet(state: OnboardingUiState) {
+        val name = state.petName.trim()
+        if (name.isBlank()) return
+
+        val uid = userRepository.getCurrentUserId()
+        val now = LocalDateTime.now()
+        val existing = petId?.let { petRepository.getPetById(it) }
+        val id = existing?.id ?: petId ?: UUID.randomUUID().toString()
+        petId = id
+
+        // `copy()` onto whatever is stored, never a fresh object: the same field-preserving rule
+        // the event and child editors follow, so ownership and sync stamps survive.
+        val pet = (existing ?: Pet(id = id, name = name, createdAt = now, updatedAt = now)).copy(
+            name = name,
+            species = state.petSpecies,
+            createdByFirebaseUid = existing?.createdByFirebaseUid ?: uid,
+            lastModifiedBy = uid,
+            syncedToFirestore = false,
+            updatedAt = now
+        )
+        petRepository.upsertPet(pet)
+    }
+
     private suspend fun saveProfile(state: OnboardingUiState) {
         val fresh = userRepository.getCurrentUser() ?: return
         userRepository.updateUser(

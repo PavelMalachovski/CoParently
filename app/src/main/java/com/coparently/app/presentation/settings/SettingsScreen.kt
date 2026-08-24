@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.Diversity3
 import androidx.compose.material.icons.filled.EventAvailable
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.FamilyRestroom
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Language
@@ -41,6 +42,7 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -62,6 +64,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -75,6 +78,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.coparently.app.R
 import com.coparently.app.data.sync.SyncStatus
+import com.coparently.app.domain.model.FamilyKind
 import com.coparently.app.domain.money.SupportedCurrency
 import com.coparently.app.presentation.common.ConfirmationDialog
 import com.coparently.app.presentation.common.GroupLabel
@@ -149,6 +153,19 @@ fun SettingsScreen(
     val userEmail by syncViewModel.userEmail.collectAsState()
 
     val settingsUiState by settingsViewModel.settingsState.collectAsState()
+    val caresFor by settingsViewModel.caresFor.collectAsState()
+    var showFamilyKindPicker by rememberSaveable { mutableStateOf(false) }
+
+    if (showFamilyKindPicker) {
+        FamilyKindDialog(
+            selected = caresFor,
+            onConfirm = { kinds ->
+                settingsViewModel.setCaresFor(kinds)
+                showFamilyKindPicker = false
+            },
+            onDismiss = { showFamilyKindPicker = false }
+        )
+    }
     val darkTheme by settingsViewModel.darkThemeFlow.collectAsState()
     val account by settingsViewModel.account.collectAsState()
     val defaultCurrency by settingsViewModel.defaultCurrency.collectAsState()
@@ -241,7 +258,21 @@ fun SettingsScreen(
                         )
                         Divider()
                     }
-                    onNavigateToChildInfo?.let { navigate ->
+                    // What this family co-parents, and the way back into that answer. Without
+                    // this row a family that gets a dog a year after signing up could never
+                    // reach the (fully built) pet records — design item 8 in reverse.
+                    SectionRow(
+                        icon = Icons.Default.FamilyRestroom,
+                        title = stringResource(R.string.settings_family_kind_title),
+                        supporting = caresForSummary(caresFor),
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            showFamilyKindPicker = true
+                        },
+                        trailing = { Chevron() }
+                    )
+                    Divider()
+                    onNavigateToChildInfo?.takeIf { FamilyKind.CHILDREN in caresFor }?.let { navigate ->
                         SectionRow(
                             icon = Icons.Default.ChildCare,
                             title = stringResource(R.string.settings_child_info_title),
@@ -254,7 +285,7 @@ fun SettingsScreen(
                         )
                         Divider()
                     }
-                    onNavigateToPets?.let { navigate ->
+                    onNavigateToPets?.takeIf { FamilyKind.PETS in caresFor }?.let { navigate ->
                         SectionRow(
                             icon = Icons.Default.Pets,
                             title = stringResource(R.string.settings_pets_title),
@@ -865,4 +896,88 @@ private fun SyncStatus.summaryDot(): Color? = when (this) {
     is SyncStatus.Syncing -> MaterialTheme.colorScheme.onSurfaceVariant
     is SyncStatus.Success -> MaterialTheme.colorScheme.tertiary
     is SyncStatus.Error -> MaterialTheme.colorScheme.error
+}
+
+/**
+ * The one-line summary of what the family co-parents, for the Settings row.
+ *
+ * Composable because the answer is a set of slot-like constants and the row shows names in the
+ * reader's language, which a ViewModel has no `Context` to resolve.
+ */
+@Composable
+private fun caresForSummary(kinds: Set<FamilyKind>): String {
+    val children = stringResource(R.string.onboarding_family_children)
+    val pets = stringResource(R.string.onboarding_family_pets)
+    return when {
+        kinds.containsAll(FamilyKind.ALL) -> stringResource(
+            R.string.settings_family_kind_both,
+            children,
+            pets
+        )
+        FamilyKind.PETS in kinds -> pets
+        else -> children
+    }
+}
+
+/**
+ * Changes what the family co-parents.
+ *
+ * A dialog rather than a second screen: two checkboxes and a confirm is the whole interaction,
+ * and it is reached from a row that already says the current answer. Confirm is disabled with
+ * nothing ticked — a family that co-parents neither is not a state this product has, and an OK
+ * that silently did nothing would be worse than one that is plainly unavailable.
+ *
+ * @param selected What is currently agreed, as the union of both parents' answers.
+ * @param onConfirm Called with the new set; only this parent's own record is written.
+ * @param onDismiss Closes without changing anything.
+ */
+@Composable
+private fun FamilyKindDialog(
+    selected: Set<FamilyKind>,
+    onConfirm: (Set<FamilyKind>) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var chosen by rememberSaveable(selected) { mutableStateOf(selected.map { it.name }.toSet()) }
+    val kinds = chosen.mapNotNull { name -> FamilyKind.entries.firstOrNull { it.name == name } }
+        .toSet()
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.settings_family_kind_title)) },
+        text = {
+            Column {
+                FamilyKind.entries.forEach { kind ->
+                    val label = stringResource(
+                        if (kind == FamilyKind.CHILDREN) {
+                            R.string.onboarding_family_children
+                        } else {
+                            R.string.onboarding_family_pets
+                        }
+                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(
+                            checked = kind.name in chosen,
+                            onCheckedChange = { checked ->
+                                chosen = if (checked) chosen + kind.name else chosen - kind.name
+                            }
+                        )
+                        Text(label)
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onConfirm(kinds) },
+                enabled = kinds.isNotEmpty()
+            ) {
+                Text(stringResource(R.string.settings_family_kind_save))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.settings_family_kind_cancel))
+            }
+        }
+    )
 }

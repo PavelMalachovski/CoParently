@@ -73,6 +73,7 @@ import com.coparently.app.domain.custody.DaySwapGroup
 import com.coparently.app.domain.custody.HandoverInfo
 import com.coparently.app.domain.expenses.CurrencyBalance
 import com.coparently.app.domain.home.WeekEntry
+import com.coparently.app.domain.model.FamilyKind
 import com.coparently.app.presentation.calendar.components.DayAgendaCard
 import com.coparently.app.presentation.changerequests.ChangeRequestViewModel
 import com.coparently.app.presentation.common.ParentNames
@@ -142,6 +143,7 @@ fun HomeScreen(
     changeRequestViewModel: ChangeRequestViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val caresFor by viewModel.caresFor.collectAsState()
     val today by rememberToday()
     val parentNames = rememberParentNames(viewModel.parents.collectAsState().value)
     val pendingProposal by changeRequestViewModel.pendingProposal.collectAsState()
@@ -196,6 +198,7 @@ fun HomeScreen(
                     onOpenContacts = onOpenContacts,
                     onOpenChildInfo = onOpenChildInfo,
                     onOpenPets = onOpenPets,
+                    caresFor = caresFor,
                     onOpenExpenses = onOpenExpenses,
                     onOpenChat = onOpenChat
                 )
@@ -485,6 +488,7 @@ private fun Dashboard(
     onOpenContacts: () -> Unit,
     onOpenChildInfo: () -> Unit,
     onOpenPets: () -> Unit,
+    caresFor: Set<FamilyKind>,
     onOpenExpenses: () -> Unit,
     onOpenChat: () -> Unit
 ) {
@@ -509,22 +513,28 @@ private fun Dashboard(
                     onClick = onOpenContacts,
                     trailing = { HomeChevron() }
                 )
-                Divider()
-                SectionRow(
-                    title = stringResource(R.string.settings_child_info_title),
-                    icon = Icons.Default.ChildCare,
-                    supporting = stringResource(R.string.settings_child_info_description),
-                    onClick = onOpenChildInfo,
-                    trailing = { HomeChevron() }
-                )
-                Divider()
-                SectionRow(
-                    title = stringResource(R.string.settings_pets_title),
-                    icon = Icons.Default.Pets,
-                    supporting = stringResource(R.string.settings_pets_description),
-                    onClick = onOpenPets,
-                    trailing = { HomeChevron() }
-                )
+                // Only what this family actually co-parents. An account that never answered the
+                // question reads as both, so nothing an upgrade was already showing disappears.
+                if (FamilyKind.CHILDREN in caresFor) {
+                    Divider()
+                    SectionRow(
+                        title = stringResource(R.string.settings_child_info_title),
+                        icon = Icons.Default.ChildCare,
+                        supporting = stringResource(R.string.settings_child_info_description),
+                        onClick = onOpenChildInfo,
+                        trailing = { HomeChevron() }
+                    )
+                }
+                if (FamilyKind.PETS in caresFor) {
+                    Divider()
+                    SectionRow(
+                        title = stringResource(R.string.settings_pets_title),
+                        icon = Icons.Default.Pets,
+                        supporting = stringResource(R.string.settings_pets_description),
+                        onClick = onOpenPets,
+                        trailing = { HomeChevron() }
+                    )
+                }
             }
         }
 

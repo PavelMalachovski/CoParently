@@ -520,6 +520,29 @@ object DatabaseMigrations {
     }
 
     /**
+     * v25 -> v26: what the family co-parents, and the split each expense was priced at.
+     *
+     * Two nullable columns, so nothing existing can be lost and both read as "unanswered" on
+     * every row that predates them.
+     *
+     * `users.caresForKinds` holds `FamilyKind` constant names joined by a pipe; null means the
+     * question has never been asked, which the app reads as "show everything" rather than
+     * hiding a section somebody was already using.
+     *
+     * `expenses.splitBasisPoints` is the agreed share **as it stood when the expense was
+     * recorded**. Snapshotting rather than reading the family's current ratio is what stops a
+     * renegotiated split silently re-pricing a month both parents had already settled; null
+     * means an expense recorded before the ratio existed, which the balance math reads as an
+     * even split.
+     */
+    val MIGRATION_25_26 = object : Migration(25, 26) {
+        override fun migrate(database: SupportSQLiteDatabase) {
+            database.execSQL("ALTER TABLE users ADD COLUMN caresForKinds TEXT")
+            database.execSQL("ALTER TABLE expenses ADD COLUMN splitBasisPoints INTEGER")
+        }
+    }
+
+    /**
      * List of all migrations in order.
      */
     val ALL_MIGRATIONS = arrayOf(
@@ -542,6 +565,7 @@ object DatabaseMigrations {
         MIGRATION_21_22,
         MIGRATION_22_23,
         MIGRATION_23_24,
-        MIGRATION_24_25
+        MIGRATION_24_25,
+        MIGRATION_25_26
     )
 }

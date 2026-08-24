@@ -1,5 +1,7 @@
 package com.coparently.app.presentation.onboarding
 
+import com.coparently.app.domain.model.FamilyKind
+
 /**
  * The wizard's steps, in the order the product brief lists them.
  *
@@ -7,10 +9,18 @@ package com.coparently.app.presentation.onboarding
  * `CustodySetupScreen` and `PairingScreen`, which already do those jobs and are reachable from
  * Settings anyway. They are steps here so the progress indicator tells the truth about how much
  * is left.
+ *
+ * **Not every step runs.** [Family] asks whether the family is co-parenting children, pets or
+ * both, and the answer decides which of [Child], [Relatives] and [Pet] follow. The wizard used
+ * to walk this enum by `ordinal ± 1` with `entries.size` as the progress denominator, which is
+ * exactly what a conditional flow cannot do — see [stepsFor], which is the list to walk instead.
  */
 enum class OnboardingStep {
     /** Explains what is about to be asked, and why. */
     Intro,
+
+    /** Children, pets, or both. Decides which of the record steps below are asked. */
+    Family,
 
     /** The parent's own details. The only step with a required field. */
     Profile,
@@ -20,6 +30,9 @@ enum class OnboardingStep {
 
     /** Emergency contacts, saved onto the child's record so both parents may edit them. */
     Relatives,
+
+    /** The pet's name and species. */
+    Pet,
 
     /** Hands off to `CustodySetupScreen`. */
     Custody,
@@ -33,20 +46,36 @@ enum class OnboardingStep {
      * [Intro] is excluded because it asks for nothing — there is nothing to skip past, only a
      * Next. [Profile] is excluded because the parent's name is the one field the app genuinely
      * cannot work without: every event, expense and custody day is labelled with it and
-     * `ParentLabels` has no honest fallback. Everything else the wizard asks for, medical
-     * details included, is collected for the parent's own benefit and must never become a gate
-     * on their calendar.
+     * `ParentLabels` has no honest fallback. [Family] is excluded because skipping it would
+     * leave the wizard unable to decide which steps come next — it opens pre-answered with
+     * children, so there is always something to move on with.
+     *
+     * Everything else the wizard asks for, medical details included, is collected for the
+     * parent's own benefit and must never become a gate on their calendar.
      */
-    val isSkippable: Boolean get() = this != Intro && this != Profile
-
-    /** This step's 1-based position among the steps that carry a progress count. */
-    val displayIndex: Int get() = ordinal + 1
-
-    /** True for the step that ends the wizard; leaving it, by any button, finishes onboarding. */
-    val isLast: Boolean get() = ordinal == OnboardingStep.entries.lastIndex
+    val isSkippable: Boolean get() = this != Intro && this != Profile && this != Family;
 
     companion object {
-        /** How many steps the progress indicator counts. */
-        val count: Int = OnboardingStep.entries.size
+        /**
+         * The steps this wizard will actually walk, given what the family co-parents.
+         *
+         * @param caresFor The answer to [Family]; an empty set is treated as children, which is
+         *   what the step opens pre-answered with.
+         */
+        fun stepsFor(caresFor: Set<FamilyKind>): List<OnboardingStep> {
+            val kinds = caresFor.ifEmpty { setOf(FamilyKind.CHILDREN) }
+            return buildList {
+                add(Intro)
+                add(Family)
+                add(Profile)
+                if (FamilyKind.CHILDREN in kinds) {
+                    add(Child)
+                    add(Relatives)
+                }
+                if (FamilyKind.PETS in kinds) add(Pet)
+                add(Custody)
+                add(CoParent)
+            }
+        }
     }
 }

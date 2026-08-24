@@ -7,6 +7,7 @@ import com.coparently.app.data.local.dao.UserDao
 import com.coparently.app.data.remote.firebase.FirebaseAuthService
 import com.coparently.app.data.remote.firebase.PairingException
 import com.coparently.app.data.remote.firebase.PairingFunctions
+import com.coparently.app.domain.model.FamilyKind
 import com.coparently.app.domain.model.PairingError
 import com.coparently.app.domain.model.PairingInvite
 import com.coparently.app.domain.model.PairingState
@@ -16,6 +17,10 @@ import com.coparently.app.domain.repository.PairingRepository
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
 import dagger.hilt.android.qualifiers.ApplicationContext
+import java.util.UUID
+import java.util.concurrent.atomic.AtomicReference
+import javax.inject.Inject
+import javax.inject.Singleton
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.awaitClose
@@ -29,10 +34,6 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.tasks.await
-import java.util.UUID
-import java.util.concurrent.atomic.AtomicReference
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * Firestore-backed [PairingRepository].
@@ -310,7 +311,11 @@ class PairingRepositoryImpl @Inject constructor(
             // their name depends on it. Blank normalizes to null for the same reason as the
             // photo: a pair created before slot assignment shipped has no slot here, and
             // "unknown" must not be dressed up as an answer.
-            role = data.getString("role")?.takeIf { it.isNotBlank() }
+            role = data.getString("role")?.takeIf { it.isNotBlank() },
+            // Their answer to "children, pets or both". Absent on a build that never wrote it,
+            // which reads as "contributes nothing" rather than "everything" — one parent's real
+            // answer must not be widened by the other's silence.
+            caresFor = FamilyKind.fromStored(data.getString("caresFor"))
         )
     }
 

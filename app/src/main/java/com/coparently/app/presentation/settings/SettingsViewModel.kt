@@ -7,20 +7,22 @@ import com.coparently.app.data.remote.firebase.FcmService
 import com.coparently.app.data.session.AccountDeletionService
 import com.coparently.app.data.session.SignedInAccountSource
 import com.coparently.app.domain.model.AccountSummary
+import com.coparently.app.domain.model.FamilyKind
 import com.coparently.app.domain.money.SupportedCurrency
 import com.coparently.app.domain.repository.PreferencesRepository
 import com.coparently.app.domain.repository.UserRepository
+import com.coparently.app.presentation.common.FamilyKindSource
 import com.coparently.app.presentation.common.UiError
 import com.coparently.app.presentation.common.UiState
 import dagger.hilt.android.lifecycle.HiltViewModel
+import java.io.IOException
+import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import java.io.IOException
-import javax.inject.Inject
 
 /**
  * ViewModel for Settings screen.
@@ -33,7 +35,8 @@ class SettingsViewModel @Inject constructor(
     private val userRepository: UserRepository,
     private val preferencesRepository: PreferencesRepository,
     private val analyticsManager: AnalyticsManager,
-    signedInAccountSource: SignedInAccountSource
+    signedInAccountSource: SignedInAccountSource,
+    familyKindSource: FamilyKindSource
 ) : ViewModel() {
 
     /**
@@ -46,6 +49,34 @@ class SettingsViewModel @Inject constructor(
      */
     val account: StateFlow<AccountSummary?> = signedInAccountSource.observe()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(ACCOUNT_STOP_TIMEOUT_MS), null)
+
+    /**
+     * Whether this family's app offers child records, pet records, or both.
+     *
+     * The union of the two parents' answers, from [FamilyKindSource]; an account that has never
+     * answered — every one that predates the question — reads as both, so an upgrade hides
+     * nothing somebody was already using.
+     */
+    val caresFor: StateFlow<Set<FamilyKind>> = familyKindSource.observe()
+        .stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(ACCOUNT_STOP_TIMEOUT_MS),
+            FamilyKind.ALL
+        )
+
+    /**
+     * Records a new answer onto this parent's own record.
+     *
+     * Refuses an empty set: with neither kind selected the app would have nothing to offer, and
+     * a family that co-parents nothing is not a state this product has.
+     */
+    fun setCaresFor(kinds: Set<FamilyKind>) {
+        if (kinds.isEmpty()) return
+        viewModelScope.launch {
+            val fresh = userRepository.getCurrentUser() ?: return@launch
+            userRepository.updateUser(fresh.copy(caresFor = kinds))
+        }
+    }
 
     private val _settingsState = MutableStateFlow(SettingsUiState())
     val settingsState: StateFlow<SettingsUiState> = _settingsState.asStateFlow()

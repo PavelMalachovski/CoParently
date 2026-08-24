@@ -48,4 +48,8 @@
     <string name="settings_account_delete_cancel">Оставить аккаунт</string>
     <string name="settings_account_delete_progress">Удаляем ваш аккаунт…</string>
     <string name="settings_account_delete_failed">Аккаунт не удалён. Попробуйте ещё раз.</string>
+    <string name="settings_family_kind_title">Кого вы воспитываете вместе</string>
+    <string name="settings_family_kind_both">%1$s и %2$s</string>
+    <string name="settings_family_kind_save">Сохранить</string>
+    <string name="settings_family_kind_cancel">Отмена</string>
 </resources>

@@ -48,4 +48,8 @@
     <string name="settings_account_delete_cancel">Залишити акаунт</string>
     <string name="settings_account_delete_progress">Видаляємо ваш акаунт…</string>
     <string name="settings_account_delete_failed">Акаунт не видалено. Спробуйте ще раз.</string>
+    <string name="settings_family_kind_title">Кого ви виховуєте разом</string>
+    <string name="settings_family_kind_both">%1$s і %2$s</string>
+    <string name="settings_family_kind_save">Зберегти</string>
+    <string name="settings_family_kind_cancel">Скасувати</string>
 </resources>

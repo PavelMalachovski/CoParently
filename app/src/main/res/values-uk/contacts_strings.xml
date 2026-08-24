@@ -14,4 +14,5 @@
     <!-- Shown when there is no dialler to open — rare, but a silent no-op looks like a broken
          button. -->
     <string name="contacts_no_dialer">На цьому пристрої немає застосунку для дзвінків.</string>
+    <string name="contacts_vet">Ветеринар</string>
 </resources>
