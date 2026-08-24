@@ -11,13 +11,17 @@ Same environment as packages C–G: **no Android SDK, and no route to Google's M
 
 Really run:
 
-- **Firestore rules, on the emulator** — full suite **286 passing** (280 before this package + 6
-  new custody-proposal cases in `custody-models.test.js`, plus a rewritten `expenses` contract
-  case and a new `expenses-update.test.js`). eslint clean.
+- **Firestore rules, on the emulator** — full suite **302 passing** (280 before this package,
+  then +6 custody-proposal cases in `custody-models.test.js`, a rewritten `expenses` contract
+  case, a new `expenses-update.test.js`, and +17 friend cases in `friend-calendar.test.js`).
+  eslint clean.
+- **Cloud Functions** — **114 passing** (102 before, +12 friend cases in `friend-invite.test.js`)
+  and eslint clean. One failure, `revokeSharedAudience`, pre-dates this branch and is left alone;
+  the `max-len` error that also pre-dated it is fixed here because it blocked the lint gate.
 - **Pure-Kotlin unit tests** under a standalone `kotlinc` 2.1 + JUnit for the files this package
   touched in the domain layer: `DayCellFillsTest` (24 → **25**, two new swap-solid-fill cases),
   `CustodyProposalTransitionTest` (**10**, unchanged, recompiled green against the wired-up
-  transitions).
+  transitions), and item 16's `CalendarFriendPolicyTest` (**6**) + `FriendMappersTest` (**8**).
 - **Locale completeness by grep**: every new key present in exactly five `values*` files
   (verified for the auth, onboarding, home, expenses, pairing, activity and custody strings).
 
@@ -97,64 +101,63 @@ compiled** — the same posture every prior package in this repo took. Flagged p
     dialog with the owner's wording (losing child data, calendar, contacts, shared expenses),
     "Нет" the dismissing default, ×5 locales.
 
-16. **The friend (third member)** — **NOT IMPLEMENTED this round.** See below.
+16. **The friend (third member)** — `9023233`, `dbeb5ee`, `9e145d7`, `c00495e`. See below.
 
 ---
 
-## Item 16 — why it is its own package
+## Item 16 — the friend, in four layers
 
-The owner asked for the full feature: a third person with their own account, invited by a parent
-once the pair exists, who reads the whole calendar, has a profile (photo, info, phone, blood
-group), and appears in the calendar filter with their own colour.
+Built on the guest-grant system (package G2) — a friend sits **beside** the two parent slots and
+never occupies one. Four commits, each verifiable on its own:
 
-The **guest system** (package G2 — `GuestGrant`, `GuestInvite`, `acceptGuestInvitation`,
-`sweepExpiredGuests`) is the right foundation and already does exactly this shape for **one child
-record**. Extending it to the calendar is not a rider on the other fifteen items; it is a
-cross-cutting package touching, at once:
+**Backend** (`9023233`). The grant is **central** — `calendar_friends/{friendUid}` — not fanned
+out into every event's `sharedWith`. Admitting or revoking is one write instead of a rewrite over
+the family's whole history, and no event document changes shape. The `events` read rule gains a
+third disjunct that consults it, placed **last** so a parent's own read short-circuits before any
+`get()`; expiry is compared against `request.time`, so access ends the instant the grant lapses
+with no sweep in the path. The friend queries `createdByFirebaseUid in [a, b]` — the shape
+`expenses`/`budgets` already use — with a composite index added.
 
-- **Cloud Functions** — a friend granted calendar access must be added to the audience of *every*
-  event (a fan-out, like `SyncService.backfillAudienceForPartner`), and `sweepExpiredGuests`
-  extended to events and pets.
-- **`firestore.rules`** — an events-side expiry gate mirroring `guestGrantExpired`, which needs
-  the grant readable from the events path (a central grant + a `get()` per event read, or the
-  grant stamped per event). A design choice with real cost either way, and one that must be
-  proven on the emulator before it ships.
-- **Room** — a new friend-profile entity + migration (schema 23 → 24), plus a photo path on
-  Firebase Storage (the medical-photo infra from G1 is reusable).
-- **The two-slot model** — `Parents`/`ParentsSource`, `ParentFilter` (MOM/BOTH/DAD) and
-  `Event.parentOwner` are all binary today; the filter's third segment and the "friend
-  participates" event field extend past that.
-- **Several new Compose screens** — friend profile, invite, accept — none of which can be compiled
-  in this environment.
+`friend_profiles/{uid}` is authored by the friend; the parents read it and never write it, and
+the `familyParents` read gate is immutable after create.
 
-Doing it in one unverifiable pass alongside the audience fan-out and the rules gate would ship a
-large interconnected feature with no way to test its highest-risk parts here. It should be its own
-SDD package with a build, decomposed as: (1) friend grant + profile model + migration;
-(2) Firestore profile collection + rules + emulator tests; (3) the calendar-audience fan-out +
-events read gate + emulator tests; (4) the filter third segment + participation field;
-(5) the profile/invite/accept UI. Items 1–3 are fully verifiable here; 4–5 follow the guest UI
-that already exists.
+`acceptCalendarFriendInvitation` is the **third** callable beside pairing and guest, for the
+reason the guest one states: paths that grant different things must not be one `kind` branch
+apart. It requires the inviter to be a paired parent, refuses the co-parent taking a grant on
+their own family, and tells both parents. **The pairing callable now refuses a friend invitation
+outright** — without that, redeeming one would run `assignSlots` and hand a friend a permanent
+parent slot, which is the exact failure the split exists to prevent.
 
-### Design proven this round (held out of the tree)
+**Client** (`dbeb5ee`). `CalendarFriendPolicy` states when a grant is live, with the same strict
+comparison and fail-closed default `GuestGrantPolicy` uses, so it, the rule and any future sweep
+agree. `FriendMappers` drops rather than guesses: a grant naming other than two parents, or with
+no expiry, is not a grant. `Event.friendParticipates` (Room **23 → 24**) records who takes part —
+**all seven map sites found by grepping `isImportant`** rather than trusting a list.
 
-The **`friend_profiles` collection and its rules were drafted and run on the emulator** — 9 cases,
-suite green at **295 passing** — before being reverted, because the repo forbids shipping rules for
-a collection no client code reaches yet ("don't add rules for unreachable collections
-speculatively", CLAUDE.md). The verified design, for the next package to adopt as-is:
+**UI** (`9e145d7`, `c00495e`). Settings → Friend, under pairing. The screen answers whichever side
+is signed in: a parent sees the list, an invite sheet and a revoke; a friend sees their grant and
+their profile. The calendar filter gains the friend as a **chip below** the parent row, not a
+fourth segment — the three parent labels already clip at their fallbacks. `FriendTeal` is far from
+both parent hues and is not the theme's neutral `secondary`: a person is not a control.
 
-- `friend_profiles/{friendUid}` — the friend authors their own profile (`name`, `role`
-  guardian/friend/grandparent, `phones`, `bloodGroup`, `photoUrl`); the two parents read it and
-  never write it.
-- `familyParents: [uidA, uidB]` is the read gate: set by the friend at create (from the pair who
-  admitted them), **immutable** on update, and read as a plain array-membership check so a parent's
-  read needs no per-document `get()`. A friend widening it only ever exposes their *own* profile.
-- read: `auth.uid == friendUid || auth.uid in familyParents`; create: `isOwner(friendUid)` + a
-  1–100-char `name` + a two-element `familyParents`; update: `isOwner` + `familyParents` unchanged;
-  delete: `isOwner`.
+### Verified
 
-The photo reuses the medical-photo Storage path (package G1). Calendar read access for the friend
-is best modelled **without a per-event fan-out**: a central `calendar_friends` grant plus an
-`events` read-rule disjunct that `get()`s it, with the friend querying by the two parents' uids via
-`whereIn('createdByFirebaseUid', [a, b])` — the exact shape `expenses`/`budgets` already use — so
-no event document is ever rewritten to admit or remove a friend. That events-rule change is the one
-genuinely higher-stakes edit and belongs in the dedicated package with its own emulator cases.
+- **Firestore rules on the emulator: 302 passing** (+17 friend cases over the 286 this package
+  started from; profiles, grants, the friend's event read, expiry, and the stranger cases).
+- **Functions: 114 passing** (+12 friend cases) and eslint clean, including the case that pins
+  the pairing callable refusing a friend invitation.
+- **Pure Kotlin under standalone `kotlinc` 2.1: 14 tests** (`CalendarFriendPolicyTest` 6,
+  `FriendMappersTest` 8).
+- **42 new strings across all five locales**; `MaxLineLength` 120 clean over every file touched.
+
+### Not done
+
+- **The photo.** The friend profile carries `photoUrl` end to end and the rules admit it, but no
+  upload control ships: the Storage wiring (the medical-photo path from G1) is a change of its
+  own, and a button that did nothing is exactly the promise this project's design rules forbid.
+- **A sweep for lapsed grants.** The rule refuses an expired read and the client hides it, so
+  nothing leaks; what is missing is the tidy-up that deletes the row, mirroring
+  `sweepExpiredGuests`.
+- **Compose files are not compiled here** — no Android SDK, as in every prior package. The
+  screens follow the existing patterns but the first local `assembleDebug` is their first
+  compiler.
