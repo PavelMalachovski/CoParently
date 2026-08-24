@@ -4,9 +4,9 @@ import android.util.Log
 import androidx.annotation.StringRes
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.coparently.app.R
 import com.coparently.app.data.analytics.AnalyticsManager
 import com.coparently.app.data.crashlytics.CrashlyticsManager
-import com.coparently.app.R
 import com.coparently.app.data.remote.firebase.FirebaseAuthService
 import com.coparently.app.data.remote.firebase.PairingException
 import com.coparently.app.domain.guests.GuestAccessDuration

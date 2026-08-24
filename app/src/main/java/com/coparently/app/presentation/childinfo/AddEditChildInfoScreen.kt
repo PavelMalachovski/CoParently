@@ -534,7 +534,6 @@ fun AddEditChildInfoScreen(
                 )
             }
 
-
             // Bottom spacing
             Spacer(modifier = Modifier.height(16.dp))
         }

@@ -63,7 +63,7 @@ enum class OnboardingStep {
      * Everything else the wizard asks for, medical details included, is collected for the
      * parent's own benefit and must never become a gate on their calendar.
      */
-    val isSkippable: Boolean get() = this != Intro && this != Profile && this != Family;
+    val isSkippable: Boolean get() = this != Intro && this != Profile && this != Family
 
     companion object {
         /**

@@ -10,15 +10,15 @@ import com.coparently.app.domain.model.MidweekContact
 import com.coparently.app.presentation.common.Parents
 import com.coparently.app.presentation.common.ParentsSource
 import dagger.hilt.android.lifecycle.HiltViewModel
-import java.time.DayOfWeek
-import java.time.LocalDate
-import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.time.DayOfWeek
+import java.time.LocalDate
+import javax.inject.Inject
 
 /** Keeps the parents flow warm across brief unsubscriptions (config changes). */
 private const val PARENTS_STOP_TIMEOUT_MS = 5_000L

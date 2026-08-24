@@ -100,7 +100,7 @@ data class DaySwapGroup(val swaps: List<DaySwap>) {
      * The group id when there is one, else the single date — so a dismissed card does not come
      * back under a new key on the next recomposition.
      */
-    val key: String get() = swaps.first().override.groupId ?: "single:${firstDate}"
+    val key: String get() = swaps.first().override.groupId ?: "single:$firstDate"
 
     /** The ISO dates the offer covers, which is what a group answer is applied to. */
     val dates: List<String> get() = swaps.map { it.date.toString() }

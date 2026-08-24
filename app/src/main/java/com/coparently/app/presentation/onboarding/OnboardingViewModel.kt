@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.coparently.app.data.repository.FamilySettingsRepository
 import com.coparently.app.domain.expenses.SplitRatio
+import com.coparently.app.domain.expenses.WHOLE_PERCENT
 import com.coparently.app.domain.model.ChildInfo
 import com.coparently.app.domain.model.EmergencyContact
 import com.coparently.app.domain.model.FamilyKind
@@ -15,10 +16,6 @@ import com.coparently.app.domain.repository.ChildInfoRepository
 import com.coparently.app.domain.repository.PetRepository
 import com.coparently.app.domain.repository.UserRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
-import java.time.LocalDate
-import java.time.LocalDateTime
-import java.util.UUID
-import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -28,6 +25,10 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import java.time.LocalDate
+import java.time.LocalDateTime
+import java.util.UUID
+import javax.inject.Inject
 
 /**
  * What the family step opens pre-answered with.
@@ -101,6 +102,7 @@ data class OnboardingUiState(
 
     /** True on the step that ends the wizard; leaving it, by any button, finishes onboarding. */
     val isLastStep: Boolean get() = step == steps.lastOrNull()
+
     /**
      * Only a blank parent name blocks progress.
      *
@@ -367,7 +369,7 @@ class OnboardingViewModel @Inject constructor(
 
     /** The split step's share for slot 1, as a whole percent. */
     fun setSplitMomPercent(value: Int) {
-        _uiState.update { it.copy(splitMomPercent = value.coerceIn(0, 100)) }
+        _uiState.update { it.copy(splitMomPercent = value.coerceIn(0, WHOLE_PERCENT)) }
     }
 
     /**

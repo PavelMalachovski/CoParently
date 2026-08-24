@@ -17,10 +17,6 @@ import com.coparently.app.domain.repository.PairingRepository
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
 import dagger.hilt.android.qualifiers.ApplicationContext
-import java.util.UUID
-import java.util.concurrent.atomic.AtomicReference
-import javax.inject.Inject
-import javax.inject.Singleton
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.awaitClose
@@ -34,6 +30,10 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.tasks.await
+import java.util.UUID
+import java.util.concurrent.atomic.AtomicReference
+import javax.inject.Inject
+import javax.inject.Singleton
 
 /**
  * Firestore-backed [PairingRepository].

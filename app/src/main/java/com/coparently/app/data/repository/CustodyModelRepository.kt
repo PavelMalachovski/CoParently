@@ -21,12 +21,6 @@ import com.coparently.app.domain.model.CustodyModel
 import com.coparently.app.domain.model.CustodyModelType
 import com.coparently.app.domain.model.MidweekContact
 import com.coparently.app.domain.repository.UserRepository
-import java.time.LocalDate
-import java.time.LocalDateTime
-import java.time.format.DateTimeFormatter
-import java.util.UUID
-import javax.inject.Inject
-import javax.inject.Singleton
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
@@ -46,6 +40,12 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.retryWhen
 import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.flow.transform
+import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
+import java.util.UUID
+import javax.inject.Inject
+import javax.inject.Singleton
 
 /**
  * Repository for managing custody model configurations.

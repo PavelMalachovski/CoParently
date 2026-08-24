@@ -7,6 +7,14 @@ const val FULL_SHARE_BASIS_POINTS = 10_000
 private const val BASIS_POINTS_PER_PERCENT = 100
 
 /**
+ * A whole share expressed in percent — the scale the split picker works in.
+ *
+ * Basis points are the storage unit precisely because a percent cannot express a third,
+ * but the control a parent drags is in percent and clamps against this.
+ */
+const val WHOLE_PERCENT = FULL_SHARE_BASIS_POINTS / BASIS_POINTS_PER_PERCENT
+
+/**
  * How the two parents have agreed to divide a shared cost.
  *
  * **Basis points, not a `Double`.** Money is the one thing in this app both parents check
@@ -44,7 +52,7 @@ value class SplitRatio(val momShareBasisPoints: Int) {
     val momPercent: Int get() = momShareBasisPoints / BASIS_POINTS_PER_PERCENT
 
     /** Slot 2's share as a whole percent. */
-    val dadPercent: Int get() = FULL_SHARE_BASIS_POINTS / BASIS_POINTS_PER_PERCENT - momPercent
+    val dadPercent: Int get() = WHOLE_PERCENT - momPercent
 
     /**
      * The fraction [slot] pays of a shared cost.
@@ -70,7 +78,7 @@ value class SplitRatio(val momShareBasisPoints: Int) {
          *   somehow did would otherwise crash the screen reading it.
          */
         fun ofMomPercent(momPercent: Int): SplitRatio =
-            SplitRatio(momPercent.coerceIn(0, 100) * BASIS_POINTS_PER_PERCENT)
+            SplitRatio(momPercent.coerceIn(0, WHOLE_PERCENT) * BASIS_POINTS_PER_PERCENT)
 
         /**
          * A stored value read back, or null when it cannot describe a share.

@@ -13,13 +13,13 @@ import com.coparently.app.domain.repository.UserRepository
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.UserInfo
 import com.google.gson.GsonBuilder
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import java.time.LocalDate
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
 
 /**
  * Implementation of UserRepository.

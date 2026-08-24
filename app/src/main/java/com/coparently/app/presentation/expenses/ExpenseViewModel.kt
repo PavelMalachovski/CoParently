@@ -26,11 +26,6 @@ import com.coparently.app.presentation.common.ParentsSource
 import com.coparently.app.presentation.common.stateInLoadable
 import com.coparently.app.presentation.common.valueOrNull
 import dagger.hilt.android.lifecycle.HiltViewModel
-import java.time.LocalDate
-import java.time.LocalDateTime
-import java.time.YearMonth
-import java.util.UUID
-import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -39,6 +34,11 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.YearMonth
+import java.util.UUID
+import javax.inject.Inject
 
 /** Keeps derived flows warm across brief unsubscriptions (config changes). */
 private const val STOP_TIMEOUT_MS = 5_000L

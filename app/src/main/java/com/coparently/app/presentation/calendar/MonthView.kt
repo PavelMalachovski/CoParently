@@ -66,6 +66,9 @@ import com.kizitonwose.calendar.compose.rememberCalendarState
 import com.kizitonwose.calendar.core.CalendarDay
 import com.kizitonwose.calendar.core.DayPosition
 import com.kizitonwose.calendar.core.OutDateStyle
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.YearMonth
@@ -73,9 +76,6 @@ import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.time.temporal.ChronoUnit
 import java.util.Locale
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.launch
 
 /** Months scrollable to each side of the visible month in the pager. */
 private const val MONTH_PAGER_RANGE = 24L

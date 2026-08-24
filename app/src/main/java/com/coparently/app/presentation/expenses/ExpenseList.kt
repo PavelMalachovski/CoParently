@@ -318,4 +318,3 @@ private fun SwipeToDeleteRow(
         content()
     }
 }
-

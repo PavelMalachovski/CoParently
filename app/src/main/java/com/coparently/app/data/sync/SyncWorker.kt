@@ -15,8 +15,8 @@ import androidx.work.WorkerParameters
 import com.coparently.app.data.crashlytics.CrashlyticsManager
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
-import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CancellationException
+import java.util.concurrent.TimeUnit
 
 /**
  * WorkManager worker for periodic background synchronization.

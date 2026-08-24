@@ -73,12 +73,12 @@ import com.coparently.app.presentation.common.rememberToday
 import com.coparently.app.presentation.event.EventUiState
 import com.coparently.app.presentation.event.EventViewModel
 import com.coparently.app.presentation.theme.dimensions
+import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.YearMonth
 import java.time.temporal.ChronoUnit
 import java.util.Locale
-import kotlinx.coroutines.launch
 
 /**
  * Months loaded either side of the query anchor in MONTH mode.

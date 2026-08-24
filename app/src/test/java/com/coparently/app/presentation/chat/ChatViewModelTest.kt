@@ -1,6 +1,7 @@
 package com.coparently.app.presentation.chat
 
 import app.cash.turbine.test
+import com.coparently.app.data.local.preferences.EncryptedPreferences
 import com.coparently.app.domain.chat.ConversationKey
 import com.coparently.app.domain.model.Conversation
 import com.coparently.app.domain.model.Message
@@ -9,7 +10,6 @@ import com.coparently.app.domain.model.MessageType
 import com.coparently.app.domain.model.PairingState
 import com.coparently.app.domain.model.PartnerSummary
 import com.coparently.app.domain.repository.EventRepository
-import com.coparently.app.data.local.preferences.EncryptedPreferences
 import com.coparently.app.domain.repository.MessageRepository
 import com.coparently.app.domain.repository.PairingRepository
 import com.coparently.app.domain.repository.UserRepository

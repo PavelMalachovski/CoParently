@@ -35,10 +35,6 @@ import com.coparently.app.presentation.common.FamilyKindSource
 import com.coparently.app.presentation.common.Parents
 import com.coparently.app.presentation.common.ParentsSource
 import dagger.hilt.android.lifecycle.HiltViewModel
-import java.time.Duration
-import java.time.LocalDate
-import java.time.LocalDateTime
-import javax.inject.Inject
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -53,6 +49,10 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.time.Duration
+import java.time.LocalDate
+import java.time.LocalDateTime
+import javax.inject.Inject
 
 /**
  * Kind of change surfaced on the home dashboard.

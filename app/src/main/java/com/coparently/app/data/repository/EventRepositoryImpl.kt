@@ -18,14 +18,14 @@ import com.coparently.app.domain.events.EventAcceptanceTransition
 import com.coparently.app.domain.model.Event
 import com.coparently.app.domain.repository.EventRepository
 import com.google.gson.Gson
-import java.time.LocalDateTime
-import java.time.format.DateTimeFormatter
-import javax.inject.Inject
-import javax.inject.Singleton
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
+import javax.inject.Inject
+import javax.inject.Singleton
 
 /**
  * Implementation of EventRepository.

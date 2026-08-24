@@ -19,16 +19,16 @@ import com.coparently.app.domain.repository.ChangeRequestRepository
 import com.coparently.app.domain.repository.MessageRepository
 import com.coparently.app.domain.repository.PetRepository
 import com.google.gson.GsonBuilder
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import javax.inject.Inject
 import javax.inject.Singleton
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 
 /**
  * Service for managing synchronization between local database and Firestore.

@@ -21,9 +21,6 @@ import com.coparently.app.domain.usecase.EventUseCases
 import com.coparently.app.presentation.common.Parents
 import com.coparently.app.presentation.common.ParentsSource
 import dagger.hilt.android.lifecycle.HiltViewModel
-import java.time.LocalDate
-import java.time.LocalDateTime
-import javax.inject.Inject
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -35,6 +32,9 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.time.LocalDate
+import java.time.LocalDateTime
+import javax.inject.Inject
 
 /**
  * ViewModel for the inbox: event change requests, one-off day swaps, and the actions on both.

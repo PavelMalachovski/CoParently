@@ -92,8 +92,8 @@ import com.coparently.app.presentation.common.SectionRow
 import com.coparently.app.presentation.common.SignedInAsRow
 import com.coparently.app.presentation.sync.GoogleCalendarSyncState
 import com.coparently.app.presentation.sync.SyncViewModel
-import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.launch
+import java.time.format.DateTimeFormatter
 
 private val syncTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 

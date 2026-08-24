@@ -39,9 +39,9 @@ import com.coparently.app.presentation.common.animations.*
 import com.coparently.app.presentation.event.AddEditEventScreen
 import com.coparently.app.presentation.event.EventListScreen
 import com.coparently.app.presentation.onboarding.OnboardingScreen
+import com.coparently.app.presentation.pairing.PairingScreen
 import com.coparently.app.presentation.pets.AddEditPetScreen
 import com.coparently.app.presentation.pets.PetsScreen
-import com.coparently.app.presentation.pairing.PairingScreen
 import com.coparently.app.presentation.settings.SettingsScreen
 import com.coparently.app.presentation.sync.AuthStateViewModel
 import com.coparently.app.presentation.sync.SyncViewModel

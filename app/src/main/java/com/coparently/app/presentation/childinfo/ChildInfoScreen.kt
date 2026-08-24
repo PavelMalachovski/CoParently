@@ -18,9 +18,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.coparently.app.R
-import com.coparently.app.domain.model.Activity
 import com.coparently.app.domain.guests.GuestGrant
 import com.coparently.app.domain.guests.GuestGrantPolicy
+import com.coparently.app.domain.model.Activity
 import com.coparently.app.domain.model.ChildInfo
 import com.coparently.app.domain.model.EmergencyContact
 import com.coparently.app.domain.model.MedicalProfile

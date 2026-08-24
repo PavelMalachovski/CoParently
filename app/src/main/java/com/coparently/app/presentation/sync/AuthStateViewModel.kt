@@ -8,7 +8,6 @@ import com.coparently.app.domain.repository.ChildInfoRepository
 import com.coparently.app.domain.repository.PetRepository
 import com.coparently.app.domain.repository.UserRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
-import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -16,6 +15,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+import javax.inject.Inject
 
 /**
  * ViewModel for managing authentication state across the app.

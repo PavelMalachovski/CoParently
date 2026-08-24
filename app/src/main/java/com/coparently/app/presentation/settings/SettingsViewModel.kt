@@ -18,8 +18,6 @@ import com.coparently.app.presentation.common.FamilyKindSource
 import com.coparently.app.presentation.common.UiError
 import com.coparently.app.presentation.common.UiState
 import dagger.hilt.android.lifecycle.HiltViewModel
-import java.io.IOException
-import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -30,6 +28,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.io.IOException
+import javax.inject.Inject
 
 /**
  * ViewModel for Settings screen.

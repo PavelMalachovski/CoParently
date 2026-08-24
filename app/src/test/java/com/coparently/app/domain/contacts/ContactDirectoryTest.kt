@@ -3,11 +3,11 @@ package com.coparently.app.domain.contacts
 import com.coparently.app.domain.model.ChildInfo
 import com.coparently.app.domain.model.EmergencyContact
 import com.coparently.app.domain.model.Pet
+import org.junit.Test
 import java.time.LocalDateTime
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
-import org.junit.Test
 
 /**
  * The contacts list is a screen someone opens in a hurry, so the two things that must not be

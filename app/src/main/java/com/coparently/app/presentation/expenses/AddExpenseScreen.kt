@@ -42,6 +42,7 @@ import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -77,6 +78,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.coparently.app.R
 import com.coparently.app.domain.expenses.SplitRatio
+import com.coparently.app.domain.expenses.WHOLE_PERCENT
 import com.coparently.app.domain.model.Expense
 import com.coparently.app.domain.model.ExpenseCategory
 import com.coparently.app.domain.money.SupportedCurrency
@@ -931,7 +933,7 @@ private fun SplitSection(
                 text = stringResource(
                     R.string.expense_split_ratio,
                     effective,
-                    SPLIT_WHOLE_PERCENT - effective
+                    WHOLE_PERCENT - effective
                 ),
                 style = MaterialTheme.typography.bodyLarge,
                 modifier = Modifier.weight(1f)
@@ -953,16 +955,13 @@ private fun SplitSection(
             Slider(
                 value = overrideMomPercent.toFloat(),
                 onValueChange = { onOverrideChange(it.toInt()) },
-                valueRange = 0f..SPLIT_WHOLE_PERCENT.toFloat(),
+                valueRange = 0f..WHOLE_PERCENT.toFloat(),
                 steps = SPLIT_SLIDER_STEPS,
                 enabled = enabled
             )
         }
     }
 }
-
-/** A whole share, as a percent. */
-private const val SPLIT_WHOLE_PERCENT = 100
 
 /** Stops on the slider: every 5 %, which is nineteen stops between the two ends. */
 private const val SPLIT_SLIDER_STEPS = 19
