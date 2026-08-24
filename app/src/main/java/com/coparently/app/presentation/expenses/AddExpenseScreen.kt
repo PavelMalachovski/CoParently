@@ -45,10 +45,12 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -74,6 +76,7 @@ import androidx.core.content.FileProvider
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.coparently.app.R
+import com.coparently.app.domain.expenses.SplitRatio
 import com.coparently.app.domain.model.Expense
 import com.coparently.app.domain.model.ExpenseCategory
 import com.coparently.app.domain.money.SupportedCurrency
@@ -135,6 +138,12 @@ fun AddExpenseScreen(
     val saveState by viewModel.saveState.collectAsState()
     val scanState by viewModel.scanState.collectAsState()
     val isSaving = saveState is ExpenseSaveState.Saving
+    val agreedRatio by viewModel.agreedRatio.collectAsState()
+    // A new expense is shared by default: that is what a co-parenting expense tracker is for, and
+    // the alternative — every row unshared unless ticked — is how the balance came to read zero.
+    var shared by rememberSaveable { mutableStateOf(true) }
+    // Null means "follow whatever the family agreed", which is the case that must not need a tap.
+    var overrideMomPercent by rememberSaveable { mutableStateOf<Int?>(null) }
     val amountValue = amount.toDoubleOrNull()
     val isFormValid = title.isNotBlank() && amountValue != null
     val context = LocalContext.current
@@ -308,6 +317,19 @@ fun AddExpenseScreen(
                 onRemovePhoto = { receiptUri = null }
             )
 
+            // Only on a new expense: an edit keeps the split it was recorded under, which is the
+            // whole point of snapshotting it — re-opening a settled month must not re-price it.
+            if (editedExpense == null) {
+                SplitSection(
+                    agreedRatio = agreedRatio,
+                    shared = shared,
+                    onSharedChange = { shared = it },
+                    overrideMomPercent = overrideMomPercent,
+                    onOverrideChange = { overrideMomPercent = it },
+                    enabled = !isSaving
+                )
+            }
+
             Spacer(modifier = Modifier.height(16.dp))
 
             val performSave = {
@@ -320,7 +342,9 @@ fun AddExpenseScreen(
                         currency = effectiveCurrency.code,
                         date = date,
                         notes = notes.takeIf { it.isNotBlank() },
-                        receiptImageUri = receiptUri?.toString()
+                        receiptImageUri = receiptUri?.toString(),
+                        shared = shared,
+                        splitOverride = overrideMomPercent?.let { SplitRatio.ofMomPercent(it) }
                     )
                 } else {
                     viewModel.updateExpense(
@@ -843,3 +867,102 @@ private fun createReceiptCaptureUri(context: Context): Uri {
     val file = File(directory, "receipt_${System.currentTimeMillis()}.jpg")
     return FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
 }
+
+/**
+ * How this one expense divides.
+ *
+ * Two decisions, in the order they matter. **Is it shared at all** — a parent buying something
+ * purely for themselves is not a claim on the other, and before this the app had no way to say so
+ * because `splitBetween` was empty on every row it ever wrote, which made every expense look
+ * unshared to the maths and fully owed on the screen. Then, **does it follow the family's agreed
+ * split** — normally yes, and the row says what that is, but "you cover this school trip" is a
+ * real thing two parents agree about one expense and not about all of them.
+ *
+ * A one-off override changes nothing about the agreement: it is stamped onto this expense and
+ * never proposed to the co-parent, because there is nothing here for them to agree to that they
+ * have not already agreed by recording the expense together.
+ *
+ * @param agreedRatio The family's agreed split, shown as the default.
+ * @param shared Whether this expense is split at all.
+ * @param onSharedChange Toggles that.
+ * @param overrideMomPercent Slot 1's share for this expense alone, or null to follow the agreement.
+ * @param onOverrideChange Sets or clears the override.
+ * @param enabled False while a save is in flight.
+ */
+@Composable
+private fun SplitSection(
+    agreedRatio: SplitRatio,
+    shared: Boolean,
+    onSharedChange: (Boolean) -> Unit,
+    overrideMomPercent: Int?,
+    onOverrideChange: (Int?) -> Unit,
+    enabled: Boolean
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                text = stringResource(R.string.expense_split_shared),
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.weight(1f)
+            )
+            Switch(checked = shared, onCheckedChange = onSharedChange, enabled = enabled)
+        }
+
+        if (!shared) {
+            Text(
+                text = stringResource(R.string.expense_split_not_shared_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            return@Column
+        }
+
+        val effective = overrideMomPercent ?: agreedRatio.momPercent
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                text = stringResource(
+                    R.string.expense_split_ratio,
+                    effective,
+                    SPLIT_WHOLE_PERCENT - effective
+                ),
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.weight(1f)
+            )
+            Switch(
+                checked = overrideMomPercent != null,
+                onCheckedChange = { on ->
+                    onOverrideChange(if (on) agreedRatio.momPercent else null)
+                },
+                enabled = enabled
+            )
+        }
+        Text(
+            text = stringResource(R.string.expense_split_override_hint),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        if (overrideMomPercent != null) {
+            Slider(
+                value = overrideMomPercent.toFloat(),
+                onValueChange = { onOverrideChange(it.toInt()) },
+                valueRange = 0f..SPLIT_WHOLE_PERCENT.toFloat(),
+                steps = SPLIT_SLIDER_STEPS,
+                enabled = enabled
+            )
+        }
+    }
+}
+
+/** A whole share, as a percent. */
+private const val SPLIT_WHOLE_PERCENT = 100
+
+/** Stops on the slider: every 5 %, which is nineteen stops between the two ends. */
+private const val SPLIT_SLIDER_STEPS = 19

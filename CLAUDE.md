@@ -350,6 +350,35 @@ Data flow: UI → ViewModel → UseCase → Repository → Room (source of truth
 
 ## Known issues / do not "fix" silently
 
+- **`storage.rules` has never been deployed past its July 2026 state, and that is why attaching a
+  photo to a pet fails.** The file in this repo covers `receipts/`, `event_images/`,
+  `medical_photos/` and `pet_photos/`; the live bucket, on the evidence, still covers only the
+  first two, so `pet_photos/**` falls through to `match /{allPaths=**} { allow read, write: if
+  false; }` and every pet — and, silently, every medical — photo upload is refused. The client
+  path is sound and was ruled out end to end. **The fix is an ops action nobody has taken:
+  `firebase deploy --only storage`**, which also closes the still-unchecked box at
+  `docs/REVIEW-2026-07-23.md:65`. Nothing catches this: `firebase.json` configures a Firestore
+  emulator only, and Storage rules have no test coverage at all. The upload handlers now write a
+  `Log.e` line so the next occurrence is at least diagnosable on a device — they reported only
+  through Crashlytics before, which writes nothing to logcat.
+
+- **The expense split is agreed per pair, and each expense is priced at the split in force when it
+  was recorded.** `family_settings/{pairId}` (same derived id as `custody_models`) holds the agreed
+  `momShareBasisPoints` and any pending proposal; `Expense.splitBasisPoints` is a **snapshot** of
+  it. Do not "simplify" that by reading the current agreement when the balance is computed — the
+  whole point is that renegotiating cannot re-price a month the two parents have already settled
+  and argued about. A null on an expense means it predates the agreement and divides evenly, which
+  is what it was. The ratio is also ignored while both parents still read the same slot, the same
+  condition that leaves `ExpenseBalance.splitKnown` false: applying a slot-keyed share there would
+  charge one parent the other's part.
+
+- **`Expense.splitBetween` used to be empty on every row production ever wrote**, so
+  `calculateExpenseBalance`'s guard never fired, `currentUserOwes` was always zero, and both
+  parents were told at once that the other owed them their whole month's spend. `addExpense` now
+  names both parents on a shared expense. The unit suite missed it for months because
+  `ExpenseBalanceTest`'s fixture defaults `splitBetween` to both parents — a shape production never
+  produced. Be suspicious of any fixture whose default is the thing under test.
+
 - `Expense.currency` is a real per-expense field. A month mixing currencies is now summarised
   **per currency** (`calculateExpenseBalancesByCurrency` → one `ExpenseSummaryHeader` per currency
   on the Expenses screen; the Home "this month" tile joins per-currency subtotals). There is still

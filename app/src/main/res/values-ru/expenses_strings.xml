@@ -91,4 +91,8 @@
     <string name="expenses_split_proposal_confirm">Подтвердить</string>
     <string name="expenses_split_proposal_decline">Отклонить</string>
     <string name="expenses_split_proposal_later">Позже</string>
+    <string name="expense_split_shared">Делить со вторым родителем</string>
+    <string name="expense_split_not_shared_hint">Учитывается в ваших тратах, но никто никому за него не должен.</string>
+    <string name="expense_split_ratio">Деление %1$d / %2$d</string>
+    <string name="expense_split_override_hint">Другое деление только для этого расхода. Согласованное деление семьи не меняется.</string>
 </resources>

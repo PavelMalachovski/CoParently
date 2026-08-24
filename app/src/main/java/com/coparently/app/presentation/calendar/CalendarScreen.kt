@@ -941,8 +941,8 @@ private fun Set<LocalDate>.toggledForSwap(date: LocalDate): Set<LocalDate> {
     if (isEmpty()) return setOf(date)
     if (size == 1 && contains(date)) return emptySet()
 
-    val from = minOf(min(), date)
-    val to = maxOf(max(), date)
+    val from = minOf(minOrNull() ?: date, date)
+    val to = maxOf(maxOrNull() ?: date, date)
     val length = ChronoUnit.DAYS.between(from, to).toInt() + 1
     if (length <= MAX_SWAP_SELECTION_DAYS) {
         return generateSequence(from) { it.plusDays(1) }.takeWhile { !it.isAfter(to) }.toSet()
