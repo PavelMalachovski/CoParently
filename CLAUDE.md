@@ -321,19 +321,22 @@ Data flow: UI → ViewModel → UseCase → Repository → Room (source of truth
   no FX conversion between currencies (spec §10) — deliberately: totals stay honest within each
   currency rather than being normalised. Do not reintroduce a single cross-currency total.
 
-- **A failed chat Firestore listener is never re-established** (known, accepted at merge time —
-  backlog with the time-zone item below). Both mirror branches in `MessageRepositoryImpl` end in
-  `.catch { Log.w(...) }`, which *completes* the mirror flow, so `merge(mirror, local)` then runs
-  on Room alone for the rest of the process. `SharingStarted.WhileSubscribed` cannot restart it:
-  `rememberChatUnreadCount()` in `NavGraph` holds an Activity-scoped `ChatViewModel` collecting
-  `unreadCount` for the whole process lifetime, so the subscriber count never reaches zero.
-  Observed once in production, on the first launch after install — both chat listeners were
-  denied ~0.5 s before `ensureConversation` created the canonical conversation document, and that
-  session ran on local data only. Nothing is lost and a cold restart clears it, but the app looks
-  entirely healthy while receiving nothing. Recurs on any reinstall, factory reset or account
-  switch. Fix when touching this code: `retryWhen` with backoff on both branches, or await
-  `ensureConversation` before subscribing the observers. Don't "fix" it by removing the `.catch` —
-  an uncaught failure in `viewModelScope.launch` terminates the process.
+- **A failed chat Firestore listener now reconnects, but only for a while.** Both mirror branches
+  in `MessageRepositoryImpl` go through `reconnecting()` — `retryWhen` with exponential backoff,
+  eight attempts, capped at a minute apart — before reaching the `.catch` that ends the mirror.
+  That covers the case seen in production: on the first launch after install both listeners were
+  denied ~0.5 s before `ensureConversation` created the conversation document, and the whole
+  session then ran on local data while looking entirely healthy. **What is still open (CQ-8 in
+  `docs/BACKLOG.md`):** an outage longer than the backoff still ends in that degraded state, and
+  still lasts until the process restarts. `catch` *completes* the mirror flow, so
+  `merge(mirror, local)` runs on Room alone afterwards, and `SharingStarted.WhileSubscribed`
+  cannot restart it — `rememberChatUnreadCount()` in `NavGraph` holds an Activity-scoped
+  `ChatViewModel` collecting `unreadCount` for the whole process lifetime, so the subscriber count
+  never reaches zero. The structural fixes are awaiting `ensureConversation` before subscribing,
+  or dropping that Activity-scoped collector. Don't "fix" it by removing the `.catch` — an
+  uncaught failure in `viewModelScope.launch` terminates the process — and don't make the retry
+  unbounded: a genuinely broken rule would then reconnect for the life of the process, and any
+  test of the give-up path spins on the virtual clock instead of finishing.
 
 - **Cross-time-zone chat is implemented but never verified on two devices.** The August 2026
   chat sync moved message times to epoch millis specifically so two parents in different zones
