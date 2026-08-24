@@ -50,6 +50,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.coparently.app.R
 import com.coparently.app.domain.custody.CustodyResolver
+import com.coparently.app.domain.custody.DaySwapInbox
 import com.coparently.app.domain.holidays.CzechHolidays
 import com.coparently.app.domain.holidays.Holiday
 import com.coparently.app.domain.model.Event
@@ -66,7 +67,6 @@ import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.YearMonth
-import java.time.ZoneId
 import java.util.Locale
 
 /**
@@ -244,8 +244,12 @@ fun CalendarScreen(
 
     var showDatePicker by remember { mutableStateOf(false) }
     val datePickerState = rememberDatePickerState(
-        initialSelectedDateMillis = displayedMonth.atDay(1).atStartOfDay(ZoneId.systemDefault())
-            .toInstant().toEpochMilli(),
+        // Material3's DatePickerState speaks UTC-midnight millis, so the conversion must go
+        // through UTC — a system-zone start-of-day lands one day off west of Greenwich. Opens
+        // on the selected day (or today), never on the 1st: "jump to a date" should start from
+        // where the user is, and proposing the 1st is what read as "schedule from the 1st".
+        initialSelectedDateMillis = (selectedDate ?: today)
+            .atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli(),
         yearRange = IntRange(now.year - 5, now.year + 5)
     )
     val scope = rememberCoroutineScope()
@@ -304,6 +308,17 @@ fun CalendarScreen(
     val pendingSwapDates: Set<LocalDate> = remember(dayOverrides) {
         dayOverrides
             .filterValues { it.isPending }
+            .keys
+            .mapNotNull { iso -> runCatching { LocalDate.parse(iso) }.getOrNull() }
+            .toSet()
+    }
+
+    // The dates an accepted swap decides. `getCustody` already answers whose day each one is;
+    // this set only tells the grid the answer came from a swap, so the cell (and the one after
+    // it) draws one solid fill instead of the handover diagonal.
+    val swappedDates: Set<LocalDate> = remember(dayOverrides) {
+        dayOverrides
+            .filterValues { it.isAccepted }
             .keys
             .mapNotNull { iso -> runCatching { LocalDate.parse(iso) }.getOrNull() }
             .toSet()
@@ -392,6 +407,27 @@ fun CalendarScreen(
 
     val pendingChangeRequests by changeRequestViewModel.pendingIncomingCount.collectAsState()
 
+    // Day swaps live on the custody document, not in `change_requests`, so the banner count
+    // must add them explicitly — an incoming swap used to raise no banner at all, leaving the
+    // co-parent no visible route to the inbox that answers it.
+    val inboxUserId by changeRequestViewModel.currentUserId.collectAsState()
+    val pendingSwapsAwaitingMe = remember(dayOverrides, inboxUserId) {
+        if (inboxUserId.isEmpty()) {
+            0
+        } else {
+            DaySwapInbox.visible(dayOverrides, LocalDate.now())
+                .count { DaySwapInbox.awaitsAnswerFrom(it, inboxUserId) }
+        }
+    }
+    val pendingInboxCount = pendingChangeRequests + pendingSwapsAwaitingMe
+
+    // A custody-pattern proposal draws two different banners (item 7): the parent who must
+    // answer gets a Review into the inbox; the one who proposed it gets a passive "waiting".
+    // `pendingProposal` (CalendarViewModel) is either party's; `proposalAwaitingMe`
+    // (ChangeRequestViewModel) is only the co-parent's, so the difference tells them apart.
+    val proposalAwaitingMe by changeRequestViewModel.pendingProposal.collectAsState()
+    val proposerWaiting = pendingProposal != null && proposalAwaitingMe == null
+
     Scaffold(
         topBar = {
             CalendarHeader(
@@ -444,11 +480,13 @@ fun CalendarScreen(
                     }
                 }
 
-                // Regular "+" button
+                // Regular "+" button. Pre-fills the day on screen: the selected day when there
+                // is one, otherwise the anchor of the current view — a null date made the form
+                // default to today even with another day highlighted.
                 FloatingActionButton(
                     onClick = {
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        onAddEventClick(null, null)
+                        onAddEventClick(selectedDate ?: anchorDate, null)
                     },
                     containerColor = MaterialTheme.colorScheme.primaryContainer,
                     contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
@@ -508,10 +546,42 @@ fun CalendarScreen(
                 // `VacationBanner` itself is left in `CalendarBanners.kt`; the label helper
                 // that fed it is recoverable from this commit's parent.
 
+                // A custody proposal the co-parent must answer: a Review banner into the inbox.
+                proposalAwaitingMe?.let { proposal ->
+                    if (onChangeRequestsClick != null) {
+                        ChangeRequestBanner(
+                            pendingCount = 1,
+                            message = stringResource(
+                                R.string.custody_proposal_review,
+                                parentNames.labelForUid(proposal.proposedBy)
+                            ),
+                            onReview = onChangeRequestsClick,
+                            modifier = Modifier.padding(
+                                horizontal = dims.paddingMedium,
+                                vertical = dims.paddingSmall / 2
+                            )
+                        )
+                    }
+                }
+
+                // The proposer's own view: a passive note that the change is not live yet.
+                if (proposerWaiting) {
+                    Text(
+                        text = stringResource(R.string.custody_proposal_waiting),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(
+                            horizontal = dims.paddingMedium,
+                            vertical = dims.paddingSmall
+                        )
+                    )
+                }
+
                 // Change requests as a labelled banner rather than a badged glyph in the bar.
-                if (pendingChangeRequests > 0 && onChangeRequestsClick != null) {
+                // The count folds in day swaps awaiting this parent — see pendingSwapsAwaitingMe.
+                if (pendingInboxCount > 0 && onChangeRequestsClick != null) {
                     ChangeRequestBanner(
-                        pendingCount = pendingChangeRequests,
+                        pendingCount = pendingInboxCount,
                         onReview = onChangeRequestsClick,
                         modifier = Modifier.padding(
                             horizontal = dims.paddingMedium,
@@ -599,6 +669,7 @@ fun CalendarScreen(
                                     getProposedCustody = getProposedCustody,
                                     parentNames = parentNames,
                                     pendingSwapDates = pendingSwapDates,
+                                    swappedDates = swappedDates,
                                     // Only a paired account may offer a swap: unpaired there is
                                     // nobody to accept, and a swap that applies itself is just an
                                     // edit the custody editor already does. Null here removes the
@@ -607,12 +678,15 @@ fun CalendarScreen(
                                     onDayLongClick = parents.coParent?.let {
                                         { date: LocalDate -> swapDate = date }
                                     },
-                                    // Selects the day (highlight ring). Tapping used to jump
-                                    // straight into Day view; Day remains a deliberate choice
-                                    // from the title menu, and the day's titles live on the
-                                    // home screen's today card and in the event preview.
+                                    // Selects the day and opens Day view, where an empty hour
+                                    // slot creates an event — the owner's walkthrough found the
+                                    // select-only tap a dead end: two redesign passes removed
+                                    // first the jump, then the agenda card that replaced it,
+                                    // leaving a tap with no visible outcome and no tap route to
+                                    // creating an event on a chosen day.
                                     onDayClick = { clickedDate ->
                                         calendarViewModel.setSelectedDate(clickedDate)
+                                        calendarViewModel.setViewMode(CalendarViewMode.DAY)
                                     },
                                     // Paging is not choosing: the new month gets today if it
                                     // holds today, and no selection at all otherwise.
@@ -642,9 +716,11 @@ fun CalendarScreen(
                 Button(
                     onClick = {
                         datePickerState.selectedDateMillis?.let { millis ->
-                            // LocalDate.ofInstant requires API 34; atZone works from minSdk 26
+                            // LocalDate.ofInstant requires API 34; atZone works from minSdk 26.
+                            // The millis are UTC midnight (DatePickerState's contract), so read
+                            // them back in UTC — a system-zone read is a day early west of it.
                             val pickedDate = java.time.Instant.ofEpochMilli(millis)
-                                .atZone(ZoneId.systemDefault())
+                                .atZone(java.time.ZoneOffset.UTC)
                                 .toLocalDate()
 
                             calendarViewModel.setSelectedDate(pickedDate)

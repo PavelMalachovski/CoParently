@@ -20,6 +20,7 @@ import com.coparently.app.R
 @StringRes
 fun AuthError.messageRes(): Int = when (this) {
     AuthError.EmptyFields -> R.string.auth_error_empty_fields
+    AuthError.EmptyEmail -> R.string.auth_error_empty_email
     AuthError.InvalidCredentials -> R.string.auth_error_invalid_credentials
     AuthError.EmailAlreadyInUse -> R.string.auth_error_email_already_in_use
     AuthError.WeakPassword -> R.string.auth_error_weak_password

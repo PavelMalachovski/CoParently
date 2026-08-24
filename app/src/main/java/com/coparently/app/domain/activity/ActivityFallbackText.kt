@@ -38,6 +38,9 @@ object ActivityFallbackText {
             ActivityKind.DAY_SWAP_OFFERED -> "Day swap offered"
             ActivityKind.DAY_SWAP_ACCEPTED -> "Day swap agreed"
             ActivityKind.DAY_SWAP_DECLINED -> "Day swap turned down"
+            ActivityKind.CUSTODY_PROPOSED -> "Custody schedule proposed"
+            ActivityKind.CUSTODY_ACCEPTED -> "Custody schedule agreed"
+            ActivityKind.CUSTODY_DECLINED -> "Custody proposal turned down"
         }
         return if (announcement.title.isBlank()) prefix else "$prefix: ${announcement.title}"
     }

@@ -53,6 +53,10 @@
     <string name="pairing_unpair_confirm_title">Разорвать связь?</string>
     <string name="pairing_unpair_confirm_message">Вы перестанете делиться календарём, чатом и расходами с %1$s. Данные на этом телефоне сохранятся.</string>
     <string name="pairing_unpair_confirm_action">Отвязаться</string>
+    <string name="pairing_unpair_final_title">Вы хотите отказаться от опеки?</string>
+    <string name="pairing_unpair_final_message">При отказе от опеки вы теряете данные о своём ребёнке, занесённые в приложение: у вас не будет доступа к календарю, событиям, важным контактам и общим расходам. Вся опека перейдёт ко второму родителю.</string>
+    <string name="pairing_unpair_final_yes">Да</string>
+    <string name="pairing_unpair_final_no">Нет</string>
     <!-- Deep link confirmation from a bare code (no sender identity known yet) -->
     <string name="pairing_deep_link_confirm_title">Связать аккаунты по этому коду?</string>
     <string name="pairing_deep_link_confirm_message">%1$s — человек, приславший вам этот код, увидит ваш общий календарь, чат и расходы.</string>

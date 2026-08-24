@@ -87,6 +87,7 @@ fun ChatScreen(
     onRequestChangeForEvent: (String) -> Unit = {},
     onOpenSettings: (() -> Unit)? = null,
     onOpenChangeRequest: ((String) -> Unit)? = null,
+    onOpenInbox: (() -> Unit)? = null,
     viewModel: ChatViewModel = hiltViewModel()
 ) {
     val messages by viewModel.messages.collectAsState()
@@ -167,6 +168,7 @@ fun ChatScreen(
                     viewModel.refreshThread()
                 },
                 onEventLinkClick = onOpenChangeRequest,
+                onOpenInbox = onOpenInbox,
                 modifier = Modifier.weight(1f)
             )
 

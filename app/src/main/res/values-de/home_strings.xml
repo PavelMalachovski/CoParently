@@ -44,4 +44,11 @@
     <string name="home_activity_change_requested">Änderung angefragt: %1$s</string>
     <string name="home_activity_review">Prüfen</string>
 
+    <string name="home_awaiting_title">Warten auf deine Antwort</string>
+    <string name="home_dialog_swap_title">Tagestausch</string>
+    <string name="home_dialog_swap_message">%1$s schlägt vor zu ändern, bei wem das Kind am %2$s ist.</string>
+    <string name="home_dialog_requests_title">Änderungsanfragen</string>
+    <string name="home_dialog_requests_message">Dein Co-Elternteil wartet auf deine Antwort auf Anfragen.</string>
+    <string name="home_dialog_later">Später</string>
+    <string name="home_dialog_review">Ansehen</string>
 </resources>

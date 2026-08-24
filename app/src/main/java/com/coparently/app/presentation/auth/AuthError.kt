@@ -20,6 +20,9 @@ sealed interface AuthError {
     /** Email or password left blank. Caught before any network call. */
     data object EmptyFields : AuthError
 
+    /** Password reset requested with a blank email field. Caught before any network call. */
+    data object EmptyEmail : AuthError
+
     /** Wrong password, unknown account, or a credential Firebase would not accept. */
     data object InvalidCredentials : AuthError
 

@@ -37,7 +37,9 @@ replace) the July 2026 overhaul below — those invariants still hold except whe
 5. **Calendar header is one row**: title (which *is* the Month/Week/Day picker), Today,
    Filters, gear. Change requests and school vacation are inline banners over the grid
    (`components/CalendarBanners.kt`), not a badged glyph and a per-day teal strip. Month
-   cells carry event **dots**, tapping a day selects it rather than jumping to Day view, and
+   cells carry event **dots**, tapping a day selects it **and opens Day view** (an owner
+   decision from the Aug 2026 walkthrough — a select-only tap left no route to creating an
+   event on a chosen day; an empty hour slot in Day view is that route), and
    the grid fills its screen. *(Aug 2026, second pass: the `DayAgendaCard` no longer sits
    under the grid — it renders on Home as the "today" card (`HomeWeek.todayOf`), fed by the
    same `DayAgendaCard` composable so the two surfaces cannot drift. Month paging is snapped

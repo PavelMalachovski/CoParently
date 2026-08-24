@@ -52,4 +52,10 @@
     <string name="custody_conflict_keep_local">Залишити графік цього телефона</string>
     <string name="custody_conflict_use_shared">Використати спільний графік</string>
     <string name="custody_conflict_save_failed">Графік не вдалося зберегти. Спробуйте ще раз.</string>
+    <string name="custody_proposal_inbox_title">Запропоновано новий розклад опіки</string>
+    <string name="custody_proposal_inbox_body">%1$s пропонує новий розклад опіки. Ваш календар не зміниться, доки ви не приймете його.</string>
+    <string name="custody_proposal_accept">Прийняти</string>
+    <string name="custody_proposal_decline">Відхилити</string>
+    <string name="custody_proposal_waiting">Очікування, поки другий з батьків схвалить новий розклад</string>
+    <string name="custody_proposal_review">%1$s запропонував новий розклад опіки</string>
 </resources>

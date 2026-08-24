@@ -52,4 +52,10 @@
     <string name="custody_conflict_keep_local">Ponechat rozvrh z tohoto telefonu</string>
     <string name="custody_conflict_use_shared">Použít sdílený rozvrh</string>
     <string name="custody_conflict_save_failed">Rozvrh se nepodařilo uložit. Zkuste to znovu.</string>
+    <string name="custody_proposal_inbox_title">Navržen nový rozvrh péče</string>
+    <string name="custody_proposal_inbox_body">%1$s navrhuje nový rozvrh péče. Váš kalendář se nezmění, dokud jej nepřijmete.</string>
+    <string name="custody_proposal_accept">Přijmout</string>
+    <string name="custody_proposal_decline">Odmítnout</string>
+    <string name="custody_proposal_waiting">Čeká se, až druhý rodič schválí nový rozvrh</string>
+    <string name="custody_proposal_review">%1$s navrhl nový rozvrh péče</string>
 </resources>

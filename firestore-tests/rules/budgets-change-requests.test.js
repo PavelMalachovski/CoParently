@@ -137,13 +137,16 @@ describe('Part 1d: expenses (read, create, update)', () => {
     await seed(env, PAIRED_USERS);
   });
 
-  it('lets the owner create and the co-parent read and update', async () => {
+  it('lets the owner create and update, and the co-parent read but not update', async () => {
+    // Update went creator-only in the Aug 2026 walkthrough round (see
+    // expenses-update.test.js); the co-parent keeps read access.
     const alice = env.authenticatedContext(ALICE).firestore();
     await assertSucceeds(alice.doc('expenses/expense-1').set(expenseDoc({})));
+    await assertSucceeds(alice.doc('expenses/expense-1').update({amount: 55}));
 
     const bob = env.authenticatedContext(BOB).firestore();
     await assertSucceeds(bob.doc('expenses/expense-1').get());
-    await assertSucceeds(bob.doc('expenses/expense-1').update({amount: 55}));
+    await assertFails(bob.doc('expenses/expense-1').update({amount: 55}));
   });
 
   it('denies stamping somebody else as the creator', async () => {

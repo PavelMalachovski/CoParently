@@ -88,6 +88,7 @@ fun ExpenseScreen(
     val selectedMonth by viewModel.selectedMonth.collectAsState()
     val balancesByCurrency by viewModel.balancesByCurrency.collectAsState()
     val roleByUid by viewModel.roleByUid.collectAsState()
+    val currentUserId by viewModel.currentUserId.collectAsState()
     val parentNames = rememberParentNames(viewModel.parents.collectAsState().value)
     val budgets by budgetViewModel.budgets.collectAsState()
     val breakdowns by viewModel.breakdowns.collectAsState()
@@ -241,6 +242,8 @@ fun ExpenseScreen(
                             payers = analyticsPayers,
                             selectedPayer = analyticsPayer,
                             parentNames = parentNames,
+                            expenses = monthExpenses,
+                            roleByUid = roleByUid,
                             onSelectCurrency = viewModel::selectAnalyticsCurrency,
                             onSelectPayer = viewModel::selectAnalyticsPayer,
                             modifier = Modifier.weight(1f)
@@ -261,6 +264,13 @@ fun ExpenseScreen(
                             parentNames = parentNames,
                             onDelete = deleteWithUndo,
                             onExpenseClick = { onEditExpense(it.id) },
+                            // Only the creator edits or deletes an expense. A row whose creator
+                            // was never recorded (pre-schema-23, or written signed-out) stays
+                            // editable by both — all this device can honestly say about it.
+                            canModify = { expense ->
+                                expense.createdByFirebaseUid == null ||
+                                    expense.createdByFirebaseUid == currentUserId
+                            },
                             modifier = Modifier.weight(1f)
                         )
                     }

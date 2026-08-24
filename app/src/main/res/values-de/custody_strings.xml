@@ -52,4 +52,10 @@
     <string name="custody_conflict_keep_local">Zeitplan dieses Telefons behalten</string>
     <string name="custody_conflict_use_shared">Geteilten Zeitplan verwenden</string>
     <string name="custody_conflict_save_failed">Der Zeitplan konnte nicht gespeichert werden. Versuchen Sie es erneut.</string>
+    <string name="custody_proposal_inbox_title">Neuer Betreuungsplan vorgeschlagen</string>
+    <string name="custody_proposal_inbox_body">%1$s schlägt einen neuen Betreuungsplan vor. Dein Kalender ändert sich erst, wenn du ihn annimmst.</string>
+    <string name="custody_proposal_accept">Annehmen</string>
+    <string name="custody_proposal_decline">Ablehnen</string>
+    <string name="custody_proposal_waiting">Warten auf die Zustimmung des Co-Elternteils zum neuen Plan</string>
+    <string name="custody_proposal_review">%1$s hat einen neuen Betreuungsplan vorgeschlagen</string>
 </resources>

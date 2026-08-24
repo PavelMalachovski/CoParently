@@ -85,6 +85,7 @@ fun ConversationsScreen(
     draft: String = "",
     onRequestChangeForEvent: (eventId: String) -> Unit = {},
     onOpenChangeRequest: ((String) -> Unit)? = null,
+    onOpenInbox: (() -> Unit)? = null,
     viewModel: ChatViewModel = hiltViewModel()
 ) {
     val conversations by viewModel.conversations.collectAsState()
@@ -127,7 +128,8 @@ fun ConversationsScreen(
             draft = draft,
             onRequestChangeForEvent = onRequestChangeForEvent,
             onOpenSettings = onOpenSettings,
-            onOpenChangeRequest = onOpenChangeRequest
+            onOpenChangeRequest = onOpenChangeRequest,
+            onOpenInbox = onOpenInbox
         )
         return
     }

@@ -58,6 +58,8 @@ class HomeViewModelTest {
         }
         val custodyModelRepository = mockk<CustodyModelRepository> {
             every { getActiveModel() } returns flowOf(null)
+            // The awaiting-swaps flow (items 4/13) subscribes at construction.
+            every { observeDayOverrides() } returns flowOf(emptyMap())
         }
         val expenseRepository = mockk<ExpenseRepository> {
             every { getAllExpenses() } returns flowOf(emptyList())

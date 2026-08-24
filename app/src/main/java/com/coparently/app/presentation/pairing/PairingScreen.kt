@@ -206,18 +206,38 @@ private fun PairingSideEffects(
     }
 }
 
-/** Confirms ending the co-parent link once [visible] is set, e.g. from the paired screen's danger action. */
+/**
+ * Confirms ending the co-parent link once [visible] is set, e.g. from the paired screen's danger
+ * action — **twice**. The first dialog is the reversible-sounding one; the second spells out what
+ * is lost and takes a red Yes. Two steps are an owner decision (Aug 2026 walkthrough): unpairing
+ * severs the shared calendar, and one habitual tap should never be enough.
+ */
 @Composable
 private fun UnpairFlow(state: PairingState, visible: MutableState<Boolean>, onUnpair: () -> Unit) {
     if (!visible.value) return
-    UnpairConfirmationDialog(
-        partnerName = (state as? PairingState.Paired)?.partner?.name.orEmpty(),
-        onConfirm = {
-            onUnpair()
-            visible.value = false
-        },
-        onDismiss = { visible.value = false }
-    )
+    // Keyed on visible.value so reopening the flow always starts back at step one; saveable so a
+    // config change mid-flow keeps whichever dialog was up.
+    val finalStep = rememberSaveable(visible.value) { mutableStateOf(false) }
+    if (!finalStep.value) {
+        UnpairConfirmationDialog(
+            partnerName = (state as? PairingState.Paired)?.partner?.name.orEmpty(),
+            onConfirm = { finalStep.value = true },
+            onDismiss = { visible.value = false }
+        )
+    } else {
+        ConfirmationDialog(
+            title = stringResource(R.string.pairing_unpair_final_title),
+            message = stringResource(R.string.pairing_unpair_final_message),
+            confirmText = stringResource(R.string.pairing_unpair_final_yes),
+            dismissText = stringResource(R.string.pairing_unpair_final_no),
+            onConfirm = {
+                onUnpair()
+                visible.value = false
+            },
+            onDismiss = { visible.value = false },
+            isDestructive = true
+        )
+    }
 }
 
 /**

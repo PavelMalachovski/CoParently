@@ -20,6 +20,9 @@ import java.time.LocalDateTime
  * @property notes Optional notes about the expense
  * @property createdAt Timestamp when the expense was created
  * @property syncedToFirestore Whether the expense has been synced to Firestore
+ * @property createdByFirebaseUid Who created this expense — the uid edits are gated on. Null on
+ *   rows recorded before the field existed, which read as "editable by both", exactly what they
+ *   were.
  */
 data class Expense(
     val id: String,
@@ -34,7 +37,8 @@ data class Expense(
     val receiptUrl: String? = null,
     val notes: String? = null,
     val createdAt: LocalDateTime = LocalDateTime.now(),
-    val syncedToFirestore: Boolean = false
+    val syncedToFirestore: Boolean = false,
+    val createdByFirebaseUid: String? = null
 )
 
 /**

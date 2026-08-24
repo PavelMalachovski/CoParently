@@ -38,5 +38,8 @@ object ActivityCardText {
         ActivityKind.DAY_SWAP_OFFERED -> R.string.activity_day_swap_offered
         ActivityKind.DAY_SWAP_ACCEPTED -> R.string.activity_day_swap_accepted
         ActivityKind.DAY_SWAP_DECLINED -> R.string.activity_day_swap_declined
+        ActivityKind.CUSTODY_PROPOSED -> R.string.activity_custody_proposed
+        ActivityKind.CUSTODY_ACCEPTED -> R.string.activity_custody_accepted
+        ActivityKind.CUSTODY_DECLINED -> R.string.activity_custody_declined
     }
 }

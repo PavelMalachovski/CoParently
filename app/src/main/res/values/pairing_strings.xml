@@ -56,6 +56,10 @@
     <string name="pairing_unpair_confirm_title">Unlink your co-parent?</string>
     <string name="pairing_unpair_confirm_message">You will stop sharing the calendar, chat and expenses with %1$s. Data already on this phone is kept.</string>
     <string name="pairing_unpair_confirm_action">Unlink</string>
+    <string name="pairing_unpair_final_title">Do you want to give up custody sharing?</string>
+    <string name="pairing_unpair_final_message">If you give it up, you lose the child data entered in this app: you will no longer have access to the calendar, events, important contacts or shared expenses. All of it stays with the other parent.</string>
+    <string name="pairing_unpair_final_yes">Yes</string>
+    <string name="pairing_unpair_final_no">No</string>
     <!-- Deep link confirmation from a bare code (no sender identity known yet) -->
     <string name="pairing_deep_link_confirm_title">Link with this invite code?</string>
     <string name="pairing_deep_link_confirm_message">%1$s — the person who sent you this code will see your shared calendar, chat and expenses.</string>

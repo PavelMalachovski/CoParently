@@ -24,12 +24,15 @@ import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.ChildCare
 import androidx.compose.material.icons.filled.Contacts
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Pets
 import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material.icons.filled.PriorityHigh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SwapHoriz
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
@@ -42,10 +45,14 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -65,6 +72,7 @@ import com.coparently.app.domain.custody.HandoverInfo
 import com.coparently.app.domain.expenses.CurrencyBalance
 import com.coparently.app.domain.home.WeekEntry
 import com.coparently.app.presentation.calendar.components.DayAgendaCard
+import com.coparently.app.presentation.changerequests.ChangeRequestViewModel
 import com.coparently.app.presentation.common.ParentNames
 import com.coparently.app.presentation.common.PillChip
 import com.coparently.app.presentation.common.SectionGroup
@@ -74,6 +82,7 @@ import com.coparently.app.presentation.theme.ParentColors
 import java.text.NumberFormat
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
 import java.util.Currency
 import java.util.Locale
 import kotlin.math.abs
@@ -101,6 +110,8 @@ private const val SETTLED_EPSILON = 0.01
  * @param onOpenEvent Opens an event by id
  * @param onOpenChangeRequests Opens the change-request inbox
  * @param onOpenContacts Opens the contacts list
+ * @param onOpenChildInfo Opens the child records
+ * @param onOpenPets Opens the pet records
  * @param onOpenSettings Opens settings
  * @param onNavigateToPairing Opens the pairing screen
  * @param onOpenExpenses Switches to the Expenses tab — the spend tile's deep link
@@ -116,14 +127,18 @@ fun HomeScreen(
     onOpenEvent: (String) -> Unit,
     onOpenChangeRequests: () -> Unit,
     onOpenContacts: () -> Unit,
+    onOpenChildInfo: () -> Unit,
+    onOpenPets: () -> Unit,
     onOpenSettings: () -> Unit,
     onNavigateToPairing: () -> Unit,
     onOpenExpenses: () -> Unit,
     onOpenChat: () -> Unit,
-    viewModel: HomeViewModel = hiltViewModel()
+    viewModel: HomeViewModel = hiltViewModel(),
+    changeRequestViewModel: ChangeRequestViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val parentNames = rememberParentNames(viewModel.parents.collectAsState().value)
+    val pendingProposal by changeRequestViewModel.pendingProposal.collectAsState()
 
     Scaffold(
         topBar = {
@@ -157,19 +172,164 @@ fun HomeScreen(
                     .padding(padding)
             )
 
-            is HomeUiState.Dashboard -> Dashboard(
-                state = state,
-                parentNames = parentNames,
-                contentPadding = padding,
-                onOpenEvent = onOpenEvent,
-                onOpenChangeRequests = onOpenChangeRequests,
-                onOpenContacts = onOpenContacts,
-                onOpenExpenses = onOpenExpenses,
-                onOpenChat = onOpenChat
-            )
+            is HomeUiState.Dashboard -> {
+                Dashboard(
+                    state = state,
+                    parentNames = parentNames,
+                    hasPendingProposal = pendingProposal != null,
+                    contentPadding = padding,
+                    onOpenEvent = onOpenEvent,
+                    onOpenChangeRequests = onOpenChangeRequests,
+                    onOpenContacts = onOpenContacts,
+                    onOpenChildInfo = onOpenChildInfo,
+                    onOpenPets = onOpenPets,
+                    onOpenExpenses = onOpenExpenses,
+                    onOpenChat = onOpenChat
+                )
+                AwaitingDialogs(
+                    state = state,
+                    parentNames = parentNames,
+                    pendingProposal = pendingProposal,
+                    onAcceptSwap = changeRequestViewModel::acceptSwap,
+                    onDeclineSwap = changeRequestViewModel::declineSwap,
+                    onAcceptProposal = changeRequestViewModel::acceptProposal,
+                    onDeclineProposal = changeRequestViewModel::declineProposal,
+                    onOpenChangeRequests = onOpenChangeRequests
+                )
+            }
         }
     }
 }
+
+/**
+ * The pop-up ask the owner walkthrough called for (items 4/13): what waits on this parent's
+ * answer confronts them on open, instead of hiding behind a row they may never tap.
+ *
+ * One dialog at a time, day swaps first — a swap carries enough context to answer right here
+ * (who, which day), so it gets real Accept/Decline buttons; event change requests carry times
+ * and notes, so their dialog routes to the inbox that can show them. "Later" (or tapping
+ * outside) puts the ask away for this screen instance only — it returns on the next visit,
+ * which is the level of insistence a request that blocks the other parent deserves.
+ */
+@Composable
+private fun AwaitingDialogs(
+    state: HomeUiState.Dashboard,
+    parentNames: ParentNames,
+    pendingProposal: com.coparently.app.domain.custody.CustodyProposal?,
+    onAcceptSwap: (LocalDate) -> Unit,
+    onDeclineSwap: (LocalDate) -> Unit,
+    onAcceptProposal: () -> Unit,
+    onDeclineProposal: () -> Unit,
+    onOpenChangeRequests: () -> Unit
+) {
+    // rememberSaveable so a rotation mid-"Later" does not resurrect the dialog; a List because
+    // a Set has no built-in saver.
+    var dismissed by rememberSaveable { mutableStateOf(listOf<String>()) }
+
+    // A custody proposal is the largest ask and leads. Keyed on proposedAt so a fresh proposal
+    // (or a re-proposal) re-opens the dialog even after the last was put off.
+    if (pendingProposal != null) {
+        val key = "proposal_${pendingProposal.proposedAt}"
+        if (key !in dismissed) {
+            AlertDialog(
+                onDismissRequest = { dismissed = dismissed + key },
+                title = { Text(stringResource(R.string.custody_proposal_inbox_title)) },
+                text = {
+                    Text(
+                        stringResource(
+                            R.string.custody_proposal_inbox_body,
+                            parentNames.labelForUid(pendingProposal.proposedBy)
+                        )
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        dismissed = dismissed + key
+                        onAcceptProposal()
+                    }) { Text(stringResource(R.string.custody_proposal_accept)) }
+                },
+                dismissButton = {
+                    Row {
+                        TextButton(onClick = { dismissed = dismissed + key }) {
+                            Text(stringResource(R.string.home_dialog_later))
+                        }
+                        TextButton(onClick = {
+                            dismissed = dismissed + key
+                            onDeclineProposal()
+                        }) { Text(stringResource(R.string.custody_proposal_decline)) }
+                    }
+                }
+            )
+            return
+        }
+    }
+
+    val swap = state.awaitingSwaps.firstOrNull { "swap_${it.date}" !in dismissed }
+    if (swap != null) {
+        val key = "swap_${swap.date}"
+        AlertDialog(
+            onDismissRequest = { dismissed = dismissed + key },
+            title = { Text(stringResource(R.string.home_dialog_swap_title)) },
+            text = {
+                Text(
+                    stringResource(
+                        R.string.home_dialog_swap_message,
+                        parentNames.labelForUid(swap.override.requestedBy),
+                        swap.date.format(DateTimeFormatter.ofLocalizedDate(FormatStyle.FULL))
+                    )
+                )
+            },
+            confirmButton = {
+                // Dismissed on tap as well: the answer's round trip through Firestore takes a
+                // moment, and the dialog must not sit there inviting a second tap meanwhile.
+                TextButton(onClick = {
+                    dismissed = dismissed + key
+                    onAcceptSwap(swap.date)
+                }) {
+                    Text(stringResource(R.string.day_swap_accept))
+                }
+            },
+            dismissButton = {
+                Row {
+                    TextButton(onClick = { dismissed = dismissed + key }) {
+                        Text(stringResource(R.string.home_dialog_later))
+                    }
+                    TextButton(onClick = {
+                        dismissed = dismissed + key
+                        onDeclineSwap(swap.date)
+                    }) {
+                        Text(stringResource(R.string.day_swap_decline))
+                    }
+                }
+            }
+        )
+        return
+    }
+
+    if (state.awaitingRequestCount > 0 && REQUESTS_DIALOG_KEY !in dismissed) {
+        AlertDialog(
+            onDismissRequest = { dismissed = dismissed + REQUESTS_DIALOG_KEY },
+            title = { Text(stringResource(R.string.home_dialog_requests_title)) },
+            text = { Text(stringResource(R.string.home_dialog_requests_message)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    dismissed = dismissed + REQUESTS_DIALOG_KEY
+                    onOpenChangeRequests()
+                }) {
+                    Text(stringResource(R.string.home_dialog_review))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { dismissed = dismissed + REQUESTS_DIALOG_KEY }) {
+                    Text(stringResource(R.string.home_dialog_later))
+                }
+            }
+        )
+    }
+}
+
+/** The one requests-summary dialog's dismissal key — swaps key on their date instead. */
+private const val REQUESTS_DIALOG_KEY = "requests"
 
 /**
  * The whole unpaired page: a short explanation and one button.
@@ -218,6 +378,8 @@ private fun PairingInvitation(
  * @param onOpenEvent Opens an event by id
  * @param onOpenChangeRequests Opens the change-request inbox
  * @param onOpenContacts Opens the contacts list
+ * @param onOpenChildInfo Opens the child records
+ * @param onOpenPets Opens the pet records
  * @param onOpenExpenses Switches to the Expenses tab
  * @param onOpenChat Switches to the Chat tab
  */
@@ -228,10 +390,13 @@ private fun PairingInvitation(
 private fun Dashboard(
     state: HomeUiState.Dashboard,
     parentNames: ParentNames,
+    hasPendingProposal: Boolean,
     contentPadding: PaddingValues,
     onOpenEvent: (String) -> Unit,
     onOpenChangeRequests: () -> Unit,
     onOpenContacts: () -> Unit,
+    onOpenChildInfo: () -> Unit,
+    onOpenPets: () -> Unit,
     onOpenExpenses: () -> Unit,
     onOpenChat: () -> Unit
 ) {
@@ -242,6 +407,64 @@ private fun Dashboard(
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
+        item {
+            // First, by owner decision (Aug 2026 walkthrough): the emergency surface — who to
+            // call and the child's own record — belongs above the schedule, because the moment
+            // it is needed is the moment nobody scrolls. Child and pet records used to be
+            // reachable only through Settings; the rows reuse Settings' own titles so the two
+            // entrances can never drift apart.
+            SectionGroup {
+                SectionRow(
+                    title = stringResource(R.string.home_contacts),
+                    icon = Icons.Default.Contacts,
+                    supporting = stringResource(R.string.home_contacts_supporting),
+                    onClick = onOpenContacts,
+                    trailing = { HomeChevron() }
+                )
+                Divider()
+                SectionRow(
+                    title = stringResource(R.string.settings_child_info_title),
+                    icon = Icons.Default.ChildCare,
+                    supporting = stringResource(R.string.settings_child_info_description),
+                    onClick = onOpenChildInfo,
+                    trailing = { HomeChevron() }
+                )
+                Divider()
+                SectionRow(
+                    title = stringResource(R.string.settings_pets_title),
+                    icon = Icons.Default.Pets,
+                    supporting = stringResource(R.string.settings_pets_description),
+                    onClick = onOpenPets,
+                    trailing = { HomeChevron() }
+                )
+            }
+        }
+
+        // Items 4/13 (Aug 2026 walkthrough): whatever waits on this parent's answer — a day
+        // swap, an event change, a pending event — must be visible on the main page, with one
+        // tap into the inbox that answers it. Day swaps were previously reachable from nowhere.
+        val awaitingCount = state.awaitingSwaps.size + state.awaitingRequestCount +
+            if (hasPendingProposal) 1 else 0
+        if (awaitingCount > 0) {
+            item {
+                SectionGroup {
+                    SectionRow(
+                        title = stringResource(R.string.home_awaiting_title),
+                        icon = Icons.Default.SwapHoriz,
+                        onClick = onOpenChangeRequests,
+                        trailing = {
+                            Text(
+                                text = awaitingCount.toString(),
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    )
+                }
+            }
+        }
+
         state.nextHandover?.let { handover ->
             item {
                 HandoverHero(
@@ -267,8 +490,8 @@ private fun Dashboard(
             )
         }
 
-        // The week leads, per spec §3: it is what a separated parent opens the app to see, and
-        // it is where the timeline rail already sat.
+        // The week follows the emergency group and the day cards (spec §3 had it lead; the
+        // Aug 2026 walkthrough moved the emergency surface above it).
         item { SectionHeader(stringResource(R.string.home_section_this_week)) }
         if (state.week.isEmpty()) {
             item {
@@ -339,27 +562,6 @@ private fun Dashboard(
         }
 
         item {
-            // Item 16: the numbers worth finding in a hurry, behind one button. It sits here
-            // rather than in the top bar because it is a destination, not a screen action, and
-            // an unlabelled icon up there is exactly what the design refresh removed elsewhere.
-            SectionGroup {
-                SectionRow(
-                    title = stringResource(R.string.home_contacts),
-                    icon = Icons.Default.Contacts,
-                    supporting = stringResource(R.string.home_contacts_supporting),
-                    onClick = onOpenContacts,
-                    trailing = {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                )
-            }
-        }
-
-        item {
             // Last, as spec §3 asks. The unread tile travels with it rather than being
             // stranded alone at the top: the two are one row, and the Chat tab already
             // carries its own unread badge, so nothing is lost by it sitting here.
@@ -373,6 +575,16 @@ private fun Dashboard(
             )
         }
     }
+}
+
+/** The trailing chevron every navigation row in the top group carries. */
+@Composable
+private fun HomeChevron() {
+    Icon(
+        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+        contentDescription = null,
+        tint = MaterialTheme.colorScheme.onSurfaceVariant
+    )
 }
 
 @Composable

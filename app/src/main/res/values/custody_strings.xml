@@ -59,4 +59,10 @@
     <string name="custody_conflict_keep_local">Keep the schedule on this phone</string>
     <string name="custody_conflict_use_shared">Use the shared schedule</string>
     <string name="custody_conflict_save_failed">The schedule could not be saved. Try again.</string>
+    <string name="custody_proposal_inbox_title">New custody schedule proposed</string>
+    <string name="custody_proposal_inbox_body">%1$s proposes a new custody schedule. It will not change your calendar until you accept it.</string>
+    <string name="custody_proposal_accept">Accept</string>
+    <string name="custody_proposal_decline">Decline</string>
+    <string name="custody_proposal_waiting">Waiting for your co-parent to approve the new schedule</string>
+    <string name="custody_proposal_review">%1$s proposed a new custody schedule</string>
 </resources>

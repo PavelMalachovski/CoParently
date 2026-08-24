@@ -48,4 +48,11 @@
     <string name="home_activity_change_requested">Žádost o změnu: %1$s</string>
     <string name="home_activity_review">Zkontrolovat</string>
 
+    <string name="home_awaiting_title">Čekají na vaši odpověď</string>
+    <string name="home_dialog_swap_title">Výměna dnů</string>
+    <string name="home_dialog_swap_message">%1$s navrhuje změnit, u koho bude dítě %2$s.</string>
+    <string name="home_dialog_requests_title">Žádosti o změnu</string>
+    <string name="home_dialog_requests_message">Druhý rodič čeká na vaši odpověď na žádosti.</string>
+    <string name="home_dialog_later">Později</string>
+    <string name="home_dialog_review">Zobrazit</string>
 </resources>

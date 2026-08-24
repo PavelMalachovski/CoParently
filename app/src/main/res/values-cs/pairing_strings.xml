@@ -53,6 +53,10 @@
     <string name="pairing_unpair_confirm_title">Zrušit propojení s druhým rodičem?</string>
     <string name="pairing_unpair_confirm_message">Přestanete sdílet kalendář, chat a výdaje s %1$s. Data již uložená v telefonu zůstanou zachována.</string>
     <string name="pairing_unpair_confirm_action">Odpojit</string>
+    <string name="pairing_unpair_final_title">Chcete se vzdát péče?</string>
+    <string name="pairing_unpair_final_message">Pokud se jí vzdáte, ztratíte údaje o svém dítěti uložené v aplikaci: nebudete mít přístup ke kalendáři, událostem, důležitým kontaktům ani společným výdajům. Veškerá péče přejde na druhého rodiče.</string>
+    <string name="pairing_unpair_final_yes">Ano</string>
+    <string name="pairing_unpair_final_no">Ne</string>
     <!-- Deep link confirmation from a bare code (no sender identity known yet) -->
     <string name="pairing_deep_link_confirm_title">Propojit pomocí tohoto pozvánkového kódu?</string>
     <string name="pairing_deep_link_confirm_message">%1$s — osoba, která vám tento kód poslala, uvidí váš sdílený kalendář, chat a výdaje.</string>

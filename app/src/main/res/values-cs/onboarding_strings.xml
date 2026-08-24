@@ -8,7 +8,7 @@
     <string name="onboarding_skip">Přeskočit</string>
     <string name="onboarding_finish">Hotovo</string>
     <string name="onboarding_intro_title">Několik otázek, než začnete</string>
-    <string name="onboarding_intro_body">CoPlanly umí uchovat údaje o vaší rodině, aby ten, kdo je zrovna s dítětem, mohl jednat, když se stane něco nečekaného — krevní skupinu, alergii, telefon na babičku.\n\nVšechno kromě vašeho jména je nepovinné a můžete to doplnit později v nastavení.</string>
+    <string name="onboarding_intro_body">CoPlanly umí uchovat důležité údaje o vaší rodině — krevní skupinu, alergie, telefon na babičku — aby se ten, kdo je zrovna s dítětem, dokázal v nečekané situaci rychle zorientovat.\n\nVšechno kromě vašeho jména je nepovinné a můžete to doplnit později v nastavení.</string>
     <string name="onboarding_footnote">Uchováváme pro vás a druhého rodiče, pro případ nouze.</string>
     <string name="onboarding_profile_title">O vás</string>
     <string name="onboarding_profile_name_required">Jméno je jediné, co aplikace potřebuje — podepisuje se jím každá událost i každý výdaj.</string>

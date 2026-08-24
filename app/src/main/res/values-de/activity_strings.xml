@@ -15,4 +15,7 @@
     <string name="activity_day_swap_offered">Tagestausch angeboten: %1$s</string>
     <string name="activity_day_swap_accepted">Tagestausch vereinbart: %1$s</string>
     <string name="activity_day_swap_declined">Tagestausch abgelehnt: %1$s</string>
+    <string name="activity_custody_proposed">Neuer Betreuungsplan vorgeschlagen</string>
+    <string name="activity_custody_accepted">Neuer Betreuungsplan vereinbart</string>
+    <string name="activity_custody_declined">Betreuungsvorschlag abgelehnt</string>
 </resources>

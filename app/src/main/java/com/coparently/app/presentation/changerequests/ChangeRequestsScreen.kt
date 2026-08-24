@@ -96,6 +96,7 @@ fun ChangeRequestsScreen(
     val outgoing = requests.filter { it.requestedBy == currentUserId }
 
     val daySwaps by viewModel.daySwaps.collectAsState()
+    val pendingProposal by viewModel.pendingProposal.collectAsState()
     val parents by viewModel.parents.collectAsState()
     val parentNames = rememberParentNames(parents)
     // Header plus one card per swap, or nothing at all. `indexInInbox` needs the count because
@@ -162,7 +163,7 @@ fun ChangeRequestsScreen(
         }
     ) { padding ->
         if (incoming.isEmpty() && outgoing.isEmpty() && daySwaps.isEmpty() &&
-            eventsAwaitingMe.isEmpty()
+            eventsAwaitingMe.isEmpty() && pendingProposal == null
         ) {
             Column(
                 modifier = Modifier
@@ -192,6 +193,19 @@ fun ChangeRequestsScreen(
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
+                // A custody-pattern proposal leads: it is the largest change the inbox can carry
+                // — the whole schedule, not one day — and until it is answered the co-parent's
+                // calendar is held at the old pattern (item 7).
+                pendingProposal?.let { proposal ->
+                    item {
+                        CustodyProposalCard(
+                            proposal = proposal,
+                            parentNames = parentNames,
+                            onAccept = { viewModel.acceptProposal() },
+                            onDecline = { viewModel.declineProposal() }
+                        )
+                    }
+                }
                 // An event waiting on this parent comes first of all: until they answer it, it
                 // is in nobody's calendar, so this screen is the only place it exists at all.
                 if (eventsAwaitingMe.isNotEmpty()) {
@@ -381,6 +395,46 @@ private fun DaySwapCard(
                     TextButton(onClick = onDecline) {
                         Text(stringResource(R.string.day_swap_decline))
                     }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * A pending custody-pattern proposal from the co-parent, with Accept/Decline. Only ever shown
+ * to the parent who must answer — the ViewModel filters out one's own proposal (item 7).
+ */
+@Composable
+private fun CustodyProposalCard(
+    proposal: com.coparently.app.domain.custody.CustodyProposal,
+    parentNames: ParentNames,
+    onAccept: () -> Unit,
+    onDecline: () -> Unit
+) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = stringResource(R.string.custody_proposal_inbox_title),
+                style = MaterialTheme.typography.titleMedium
+            )
+            Text(
+                text = stringResource(
+                    R.string.custody_proposal_inbox_body,
+                    parentNames.labelForUid(proposal.proposedBy)
+                ),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = onAccept) {
+                    Text(stringResource(R.string.custody_proposal_accept))
+                }
+                TextButton(onClick = onDecline) {
+                    Text(stringResource(R.string.custody_proposal_decline))
                 }
             }
         }

@@ -15,4 +15,7 @@
     <string name="activity_day_swap_offered">Запропоновано обмін днями: %1$s</string>
     <string name="activity_day_swap_accepted">Обмін днями погоджено: %1$s</string>
     <string name="activity_day_swap_declined">Обмін днями відхилено: %1$s</string>
+    <string name="activity_custody_proposed">Запропоновано новий розклад опіки</string>
+    <string name="activity_custody_accepted">Новий розклад опіки прийнято</string>
+    <string name="activity_custody_declined">Пропозицію щодо опіки відхилено</string>
 </resources>

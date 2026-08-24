@@ -53,6 +53,10 @@
     <string name="pairing_unpair_confirm_title">Kopplung mit dem Co-Elternteil aufheben?</string>
     <string name="pairing_unpair_confirm_message">Sie teilen dann keinen Kalender, Chat und keine Ausgaben mehr mit %1$s. Bereits auf diesem Telefon gespeicherte Daten bleiben erhalten.</string>
     <string name="pairing_unpair_confirm_action">Trennen</string>
+    <string name="pairing_unpair_final_title">Möchtest du die Betreuung aufgeben?</string>
+    <string name="pairing_unpair_final_message">Wenn du sie aufgibst, verlierst du die in der App hinterlegten Daten deines Kindes: Du hast keinen Zugriff mehr auf Kalender, Termine, wichtige Kontakte und gemeinsame Ausgaben. Die gesamte Betreuung geht an den anderen Elternteil über.</string>
+    <string name="pairing_unpair_final_yes">Ja</string>
+    <string name="pairing_unpair_final_no">Nein</string>
     <!-- Deep link confirmation from a bare code (no sender identity known yet) -->
     <string name="pairing_deep_link_confirm_title">Mit diesem Einladungscode verknüpfen?</string>
     <string name="pairing_deep_link_confirm_message">%1$s — die Person, die Ihnen diesen Code geschickt hat, sieht dann Ihren gemeinsamen Kalender, Chat und Ausgaben.</string>

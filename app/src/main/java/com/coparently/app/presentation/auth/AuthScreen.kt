@@ -239,6 +239,60 @@ fun AuthScreen(
                         shape = RoundedCornerShape(12.dp)
                     )
 
+                    // Sign-in only: a fresh account has no password to have forgotten. Needs only
+                    // the email field — the reset link goes to the inbox, not through the form.
+                    if (uiState.isSignInMode) {
+                        TextButton(
+                            onClick = { viewModel.sendPasswordReset() },
+                            modifier = Modifier.align(Alignment.End),
+                            enabled = !uiState.isLoading
+                        ) {
+                            Text(
+                                text = stringResource(R.string.auth_forgot_password_link),
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+                    }
+
+                    // Reset-link confirmation. Resolved outside the block for the same reason as
+                    // the error card below: the exit animation runs after the value is null.
+                    val resetSentTo = uiState.resetEmailSentTo
+                    AnimatedVisibility(
+                        visible = resetSentTo != null,
+                        enter = slideInVertically() + fadeIn(),
+                        exit = slideOutVertically() + fadeOut()
+                    ) {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.secondaryContainer
+                            ),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(dims.paddingSmall * 1.5f),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Email,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Text(
+                                    text = resetSentTo
+                                        ?.let { stringResource(R.string.auth_reset_email_sent, it) }
+                                        .orEmpty(),
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                        }
+                    }
+
                     // Error Message
                     // Resolved outside the block: AnimatedVisibility still runs its content
                     // while the card animates out, when the error is already null.

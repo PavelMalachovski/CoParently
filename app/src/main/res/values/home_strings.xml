@@ -57,4 +57,11 @@
     <string name="home_activity_review">Review</string>
 
     <!-- Parent identity labels. -->
+    <string name="home_awaiting_title">Awaiting your answer</string>
+    <string name="home_dialog_swap_title">Day swap</string>
+    <string name="home_dialog_swap_message">%1$s proposes changing who has the child on %2$s.</string>
+    <string name="home_dialog_requests_title">Change requests</string>
+    <string name="home_dialog_requests_message">Your co-parent has requests waiting for your answer.</string>
+    <string name="home_dialog_later">Later</string>
+    <string name="home_dialog_review">Review</string>
 </resources>

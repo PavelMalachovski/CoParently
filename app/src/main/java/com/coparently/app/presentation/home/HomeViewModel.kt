@@ -8,6 +8,8 @@ import com.coparently.app.domain.chat.ChatReadState
 import com.coparently.app.domain.chat.ConversationKey
 import com.coparently.app.domain.custody.CustodyResolver
 import com.coparently.app.domain.custody.DayOverride
+import com.coparently.app.domain.custody.DaySwap
+import com.coparently.app.domain.custody.DaySwapInbox
 import com.coparently.app.domain.custody.HandoverCalculator
 import com.coparently.app.domain.custody.HandoverInfo
 import com.coparently.app.domain.expenses.CurrencyBalance
@@ -149,6 +151,11 @@ sealed interface HomeUiState {
      * @property monthSpend This month's spending, one subtotal per currency.
      * @property monthBalances This month's settle-up position, per currency.
      * @property unreadCount Unread messages from the co-parent.
+     * @property awaitingSwaps Day swaps still waiting for **this** parent's answer, soonest
+     *   first. Owner ask (Aug 2026 walkthrough, items 4/13): an incoming swap must be visible —
+     *   and answerable — from the main page, not only from an inbox nothing pointed at.
+     * @property awaitingRequestCount Incoming event change requests and pending events still
+     *   waiting for this parent's answer, for the same reason.
      */
     data class Dashboard(
         val partner: PartnerSummary?,
@@ -158,7 +165,9 @@ sealed interface HomeUiState {
         val recentChanges: List<ActivityItem>,
         val monthSpend: MonthSpend,
         val monthBalances: List<CurrencyBalance>,
-        val unreadCount: Int
+        val unreadCount: Int,
+        val awaitingSwaps: List<DaySwap> = emptyList(),
+        val awaitingRequestCount: Int = 0
     ) : HomeUiState
 }
 
@@ -456,6 +465,46 @@ class HomeViewModel @Inject constructor(
     )
 
     /**
+     * Day swaps still waiting for this parent's answer, soonest first.
+     *
+     * Same source and same filter as the inbox (`DaySwapInbox`), so the main page can never
+     * disagree with the screen that answers them. `LocalDate.now()` is read per emission for
+     * the reason `ChangeRequestViewModel.daySwaps` documents: this flow outlives midnight.
+     */
+    private val awaitingSwaps: StateFlow<List<DaySwap>> = combine(
+        custodyModelRepository.observeDayOverrides(),
+        _userId
+    ) { overrides, uid ->
+        if (uid.isEmpty()) {
+            emptyList()
+        } else {
+            DaySwapInbox.visible(overrides, LocalDate.now())
+                .filter { DaySwapInbox.awaitsAnswerFrom(it, uid) }
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), emptyList())
+
+    /**
+     * Incoming change requests plus pending events still waiting for this parent's answer.
+     *
+     * The event half mirrors the inbox's `eventsAwaitingMe`: `getAllEvents` is deliberately not
+     * acceptance-filtered, and only events this parent did not create count — the creator cannot
+     * decide their own.
+     */
+    private val awaitingRequestCount: StateFlow<Int> = combine(
+        _userId.flatMapLatest { uid ->
+            if (uid.isEmpty()) flowOf(0) else changeRequestRepository.getPendingIncomingCount(uid)
+        },
+        combine(eventRepository.getAllEvents(), _userId) { events, uid ->
+            if (uid.isEmpty()) {
+                0
+            } else {
+                events.count { it.acceptance.isPending && it.createdByFirebaseUid != uid }
+            }
+        }
+    ) { requests, events -> requests + events }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), 0)
+
+    /**
      * The paired dashboard's own content, kept whole so [uiState] has one thing to wrap.
      *
      * Combined from flows that each carry their own initial value rather than from bare
@@ -471,8 +520,9 @@ class HomeViewModel @Inject constructor(
         combine(monthSpend, monthBalances, unreadCount) { spend, balances, unread ->
             Triple(spend, balances, unread)
         },
-        recentChanges
-    ) { (coParent, handover, sections), (spend, balances, unread), changes ->
+        recentChanges,
+        combine(awaitingSwaps, awaitingRequestCount) { swaps, requests -> swaps to requests }
+    ) { (coParent, handover, sections), (spend, balances, unread), changes, (swaps, requests) ->
         HomeUiState.Dashboard(
             partner = coParent,
             nextHandover = handover,
@@ -481,7 +531,9 @@ class HomeViewModel @Inject constructor(
             recentChanges = changes,
             monthSpend = spend,
             monthBalances = balances,
-            unreadCount = unread
+            unreadCount = unread,
+            awaitingSwaps = swaps,
+            awaitingRequestCount = requests
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), EMPTY_DASHBOARD)
 

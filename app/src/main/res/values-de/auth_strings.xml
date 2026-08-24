@@ -34,4 +34,6 @@
     <string name="auth_error_no_google_account">Es wurde kein Google-Konto ausgewählt</string>
     <string name="auth_error_no_saved_password">Für CoPlanly ist noch kein Passwort gespeichert</string>
     <string name="auth_error_unknown">Etwas ist schiefgelaufen. Bitte versuche es erneut.</string>
+    <string name="auth_error_empty_email">Gib deine E-Mail-Adresse ein, um das Passwort zurückzusetzen</string>
+    <string name="auth_reset_email_sent">Wir haben einen Link zum Zurücksetzen des Passworts an %1$s gesendet. Prüfe dein Postfach.</string>
 </resources>

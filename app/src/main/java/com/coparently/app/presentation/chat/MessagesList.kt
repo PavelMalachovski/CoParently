@@ -158,6 +158,7 @@ fun MessagesList(
     currentUserId: String,
     onRefresh: (() -> Unit)? = null,
     onEventLinkClick: ((String) -> Unit)? = null,
+    onOpenInbox: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val listState = rememberLazyListState()
@@ -237,7 +238,8 @@ fun MessagesList(
                             isCurrentUser = entry.message.senderId == currentUserId,
                             startsGroup = entry.startsGroup,
                             endsGroup = entry.endsGroup,
-                            onEventLinkClick = onEventLinkClick
+                            onEventLinkClick = onEventLinkClick,
+                            onOpenInbox = onOpenInbox
                         )
                     }
                 }
@@ -286,6 +288,8 @@ private fun DaySeparator(date: LocalDate) {
  * @param endsGroup Last of a run — carries the tail corner
  * @param onEventLinkClick Handler for tapping a change-request card, given the linked event id,
  *   or null to render such cards inert
+ * @param onOpenInbox Opens the change-request inbox with nothing highlighted — the tap target
+ *   for a day-swap card, whose entity is a date and not an event id, or null to render it inert
  */
 @Composable
 // Already over detekt's LongMethod threshold before this task added the clickable chevron (the
@@ -297,21 +301,25 @@ fun MessageItem(
     isCurrentUser: Boolean,
     startsGroup: Boolean = true,
     endsGroup: Boolean = true,
-    onEventLinkClick: ((String) -> Unit)? = null
+    onEventLinkClick: ((String) -> Unit)? = null,
+    onOpenInbox: (() -> Unit)? = null
 ) {
     // A change-request card is the one bubble that goes somewhere. It carries the event id in
     // `attachments`; the inbox resolves that to the request itself.
     //
     // An announcement about an event or a change request goes to the same place, by the same id.
-    // One about an expense or a day swap renders without a tap target: neither has a route
-    // reachable from chat today, and a bubble that looks tappable and does nothing is worse than
-    // one that plainly is not.
+    // A day-swap announcement opens the same inbox unhighlighted — its entity is a date, which
+    // the route's event-id argument would misread as a request that no longer exists. An
+    // expense announcement stays inert: expenses have no route reachable from chat, and a
+    // bubble that looks tappable and does nothing is worse than one that plainly is not.
     val activity = message.activity
-    val linkedEventId = when {
-        onEventLinkClick == null -> null
-        message.messageType == MessageType.EVENT_LINK -> message.attachments.firstOrNull()
+    val onCardTap: (() -> Unit)? = when {
+        message.messageType == MessageType.EVENT_LINK ->
+            message.attachments.firstOrNull()?.let { id -> onEventLinkClick?.let { { it(id) } } }
         activity?.entityType == ActivityEntityType.EVENT ||
-            activity?.entityType == ActivityEntityType.CHANGE_REQUEST -> activity.entityId
+            activity?.entityType == ActivityEntityType.CHANGE_REQUEST ->
+            onEventLinkClick?.let { { it(activity.entityId) } }
+        activity?.entityType == ActivityEntityType.DAY_SWAP -> onOpenInbox
         else -> null
     }
 
@@ -344,11 +352,11 @@ fun MessageItem(
                     }
                 )
                 .then(
-                    if (linkedEventId != null) {
+                    if (onCardTap != null) {
                         Modifier.clickable(
                             onClickLabel = openLabel,
                             role = Role.Button
-                        ) { onEventLinkClick?.invoke(linkedEventId) }
+                        ) { onCardTap() }
                     } else {
                         Modifier
                     }
@@ -368,7 +376,7 @@ fun MessageItem(
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.weight(1f, fill = false)
             )
-            if (linkedEventId != null) {
+            if (onCardTap != null) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                     contentDescription = null,
