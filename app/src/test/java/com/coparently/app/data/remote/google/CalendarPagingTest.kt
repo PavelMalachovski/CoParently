@@ -111,7 +111,7 @@ class CalendarPagingTest {
 
     @Test
     fun `an empty first page is a complete, empty answer`() {
-        val result = collectPages(noLimitInSight, plentyOfPages) { PageOf(emptyList(), null) }
+        val result = collectPages(noLimitInSight, plentyOfPages) { PageOf<String>(emptyList(), null) }
 
         assertTrue(result.items.isEmpty())
         assertFalse(result.truncated)

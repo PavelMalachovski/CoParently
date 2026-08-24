@@ -26,11 +26,27 @@ if (hasGoogleServicesJson) {
 }
 
 android {
+    // The Kotlin package, and therefore where `R` and `BuildConfig` are generated. Deliberately
+    // *not* the same as `applicationId` below: renaming the package would touch every file in
+    // the tree for no user-visible gain, while the applicationId is the identity Play and
+    // Firebase key on. The two are allowed to differ and this is exactly the case for it.
     namespace = "com.coparently.app"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.coparently.app"
+        // The app's permanent identity. Changed from `com.coparently.app` (REL-1) while it still
+        // could be: after the first Play upload an applicationId can never change — a different
+        // one is a different app, with no upgrade path for anyone who installed the first. The
+        // product is CoPlanly, the deep-link scheme is `coplanly://`, and the old id said
+        // "coparently".
+        //
+        // **This breaks a local build until Firebase is updated**, and it is meant to: the
+        // Google Services plugin matches `google-services.json` on the package name and will
+        // fail with "No matching client found for package name 'app.coplanly'". Register the new
+        // app in the Firebase console, download a fresh `google-services.json`, and update the
+        // OAuth client's package name and SHA-1. CI is unaffected — `google-services.json` is
+        // gitignored, so the plugin is not applied there at all.
+        applicationId = "app.coplanly"
         minSdk = 26
         targetSdk = 36
         versionCode = 2

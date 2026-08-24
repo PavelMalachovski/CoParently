@@ -32,20 +32,40 @@ product**. §7 orders them into an actual sequence — read that one if you only
 
 None of these is engineering. They are decisions, accounts, and a lawyer.
 
-### REL-1 · P0 · Decide the `applicationId` — **this decision expires permanently**
+### REL-1 · **decided, half done** · `applicationId` is now `app.coplanly`
 
-`applicationId` is `com.coparently.app`; the product is called CoPlanly. After the first Play
-upload it can never be changed — a different id is a different app, with no upgrade path for
-anyone who installed the first one. The Firebase project id (`coparently-a39c9`) and the
-deep-link scheme (`coplanly://`) already disagree with each other.
+Decided and changed in code while it still could be. After the first Play upload an
+`applicationId` can never change — a different one is a different app, with no upgrade path for
+anyone who installed the first. The old id said `com.coparently.app` while the product is
+CoPlanly and the deep-link scheme is `coplanly://`.
 
-- [ ] Decide: keep `com.coparently.app`, or move to `app.coplanly` / `com.coplanly.app`.
-- [ ] If changing: register a new app in the Firebase console, download a fresh
-      `google-services.json`, update the OAuth client's package name and SHA-1, re-check the
-      deep-link filters.
+`namespace` stays `com.coparently.app` on purpose: it is the Kotlin package and therefore where
+`R` and `BuildConfig` are generated. Renaming it would touch every file in the tree for no
+user-visible gain, and the two are allowed to differ.
 
-**Cost today: an afternoon. Cost after the first upload: impossible.** This is first in the
-document for that reason alone.
+- [x] Change `applicationId` in `app/build.gradle.kts`.
+
+**The rest needs the consoles, and until it is done a local build fails.** That is deliberate,
+not a mistake: the Google Services plugin matches `google-services.json` on the package name and
+will report *"No matching client found for package name 'app.coplanly'"*. CI is unaffected —
+`google-services.json` is gitignored, so the plugin is not applied there.
+
+- [ ] **Firebase console** → project `coparently-a39c9` → Add app → Android → package name
+      `app.coplanly`. Register it alongside the existing app rather than deleting that one;
+      nothing has shipped, but keeping it costs nothing and deleting it is irreversible.
+- [ ] Download the new `google-services.json` and replace `app/google-services.json`. The file
+      can hold both clients, so one download covers it.
+- [ ] **Google Cloud console** → APIs & Services → Credentials → the Android OAuth client used
+      for Calendar: set the package name to `app.coplanly` and re-enter the debug SHA-1
+      (`keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -storepass
+      android -keypass android`). Google Sign-In and the Calendar scope both stop working
+      otherwise, and the failure looks like a generic sign-in error rather than a config one.
+- [ ] Add the **release** SHA-1 too, once **REL-2** produces a keystore.
+- [ ] Re-check that pairing, guest and chat deep links still open the app. They use a custom
+      scheme rather than the applicationId, so they should be unaffected — confirm rather than
+      assume.
+- [ ] Uninstall the old build from any test device before installing the new one: to Android
+      these are two different apps and both will sit on the launcher otherwise.
 
 ### REL-2 · P0 · Signing configuration and the keystore
 
