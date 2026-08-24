@@ -50,4 +50,30 @@
 
     <!-- Accessibility label for the change-request card's clickable bubble. -->
     <string name="chat_open_change_request">Open the change request</string>
+
+    <!-- Message templates (domain/model/MessageTemplate.kt). The body is seeded into the
+         composer for the user to edit before sending, so the bracketed hints are translated
+         too: they are prompts to the reader, not substitution tokens. -->
+    <string name="chat_templates_sheet_title">Message Templates</string>
+    <string name="chat_template_category_pickup_drop">Pickup &amp; Drop-off</string>
+    <string name="chat_template_category_illness">Illness &amp; Medical</string>
+    <string name="chat_template_category_school_events">School Events</string>
+    <string name="chat_template_category_holidays">Holidays &amp; Vacation</string>
+    <string name="chat_template_category_conflict_resolution">Conflict Resolution</string>
+    <string name="chat_template_pickup_delay_title">Running late for handover</string>
+    <string name="chat_template_pickup_delay_content">I am running late for the handover of [child]. I should be there in about [number of minutes]. Sorry for the inconvenience.</string>
+    <string name="chat_template_pickup_early_title">Arriving earlier</string>
+    <string name="chat_template_pickup_early_content">I will arrive earlier than usual, at around [time]. Does that work for you?</string>
+    <string name="chat_template_doctor_visit_title">Doctor\'s visit</string>
+    <string name="chat_template_doctor_visit_content">[Child] saw the doctor today about [symptom]. Diagnosis: [diagnosis]. The doctor recommends [recommendation].</string>
+    <string name="chat_template_child_sick_title">Child is unwell</string>
+    <string name="chat_template_child_sick_content">[Child] is not feeling well. Symptoms: [symptoms]. Temperature: [temperature]. I am staying at home with them.</string>
+    <string name="chat_template_school_event_title">School event</string>
+    <string name="chat_template_school_event_content">The school has [event] on [date] at [time]. Will you be able to attend?</string>
+    <string name="chat_template_parent_teacher_meeting_title">Parent-teacher meeting</string>
+    <string name="chat_template_parent_teacher_meeting_content">The parent-teacher meeting is on [date] at [time]. The teacher would like to discuss [topic].</string>
+    <string name="chat_template_holiday_plan_title">Holiday plan</string>
+    <string name="chat_template_holiday_plan_content">Let\'s agree on the plan for [holiday]. My suggestion is [proposal]. What do you think?</string>
+    <string name="chat_template_schedule_change_title">Schedule change</string>
+    <string name="chat_template_schedule_change_content">I need to change the schedule for [date]. Could we swap? I would take [alternative date].</string>
 </resources>

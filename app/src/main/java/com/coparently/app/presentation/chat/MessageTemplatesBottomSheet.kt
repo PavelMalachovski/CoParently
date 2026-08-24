@@ -17,7 +17,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.coparently.app.R
 import com.coparently.app.domain.model.DefaultMessageTemplates
 import com.coparently.app.domain.model.MessageTemplate
 
@@ -38,7 +40,7 @@ fun MessageTemplatesBottomSheet(
                 .padding(16.dp)
         ) {
             Text(
-                text = "Message Templates",
+                text = stringResource(R.string.chat_templates_sheet_title),
                 style = MaterialTheme.typography.headlineSmall,
                 modifier = Modifier.padding(bottom = 16.dp)
             )
@@ -46,7 +48,7 @@ fun MessageTemplatesBottomSheet(
             LazyColumn {
                 items(templates.groupBy { it.category }.toList()) { (category, categoryTemplates) ->
                     Text(
-                        text = category.displayName,
+                        text = stringResource(category.labelRes),
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.padding(vertical = 8.dp)
@@ -72,10 +74,10 @@ fun TemplateItem(
     onClick: () -> Unit
 ) {
     ListItem(
-        headlineContent = { Text(template.title) },
+        headlineContent = { Text(stringResource(template.titleRes)) },
         supportingContent = {
             Text(
-                text = template.content,
+                text = stringResource(template.contentRes),
                 maxLines = 2,
                 style = MaterialTheme.typography.bodySmall
             )

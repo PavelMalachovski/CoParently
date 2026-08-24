@@ -39,8 +39,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.coparently.app.R
 import com.coparently.app.domain.model.Event
 import com.coparently.app.presentation.components.TimePickerDialog
 import java.time.Instant
@@ -77,10 +79,13 @@ fun RequestChangeScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Request Change") },
+                title = { Text(stringResource(R.string.change_request_form_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            stringResource(R.string.change_request_back)
+                        )
                     }
                 }
             )
@@ -174,11 +179,16 @@ private fun RequestChangeForm(
                     text = event.title,
                     style = MaterialTheme.typography.titleMedium
                 )
+                // The resource takes the date and the time as two arguments; the end time,
+                // when the event has one, is appended to the second one as a range.
+                val currentTime = event.startDateTime.format(timeFormatter) +
+                    (event.endDateTime?.let { " – " + it.format(timeFormatter) } ?: "")
                 Text(
-                    text = "Currently: " +
-                        event.startDateTime.format(dateFormatter) + " at " +
-                        event.startDateTime.format(timeFormatter) +
-                        (event.endDateTime?.let { " – " + it.format(timeFormatter) } ?: ""),
+                    text = stringResource(
+                        R.string.change_request_currently,
+                        event.startDateTime.format(dateFormatter),
+                        currentTime
+                    ),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -186,7 +196,7 @@ private fun RequestChangeForm(
         }
 
         Text(
-            text = "Proposed new time",
+            text = stringResource(R.string.change_request_proposed_new_time),
             style = MaterialTheme.typography.titleSmall,
             color = MaterialTheme.colorScheme.primary
         )
@@ -206,20 +216,32 @@ private fun RequestChangeForm(
                 onClick = { showStartTimePicker = true },
                 modifier = Modifier.weight(1f)
             ) {
-                Text("From " + proposedStartTime.format(timeFormatter))
+                Text(
+                    stringResource(
+                        R.string.change_request_from_time,
+                        proposedStartTime.format(timeFormatter)
+                    )
+                )
             }
             OutlinedButton(
                 onClick = { showEndTimePicker = true },
                 modifier = Modifier.weight(1f)
             ) {
-                Text(proposedEndTime?.let { "To " + it.format(timeFormatter) } ?: "To —")
+                val endTime = proposedEndTime
+                Text(
+                    if (endTime != null) {
+                        stringResource(R.string.change_request_to_time, endTime.format(timeFormatter))
+                    } else {
+                        stringResource(R.string.change_request_to_unset)
+                    }
+                )
             }
         }
 
         OutlinedTextField(
             value = note,
             onValueChange = { note = it },
-            label = { Text("Message to your co-parent (optional)") },
+            label = { Text(stringResource(R.string.change_request_note_label)) },
             modifier = Modifier.fillMaxWidth(),
             minLines = 3
         )
@@ -241,7 +263,7 @@ private fun RequestChangeForm(
                     strokeWidth = 2.dp
                 )
             } else {
-                Text("Send Request")
+                Text(stringResource(R.string.change_request_send))
             }
         }
     }
@@ -265,10 +287,12 @@ private fun RequestChangeForm(
                         }
                         showDatePicker = false
                     }
-                ) { Text("OK") }
+                ) { Text(stringResource(R.string.change_request_ok)) }
             },
             dismissButton = {
-                TextButton(onClick = { showDatePicker = false }) { Text("Cancel") }
+                TextButton(onClick = { showDatePicker = false }) {
+                    Text(stringResource(R.string.change_request_cancel))
+                }
             }
         ) {
             DatePicker(state = datePickerState)

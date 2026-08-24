@@ -54,4 +54,30 @@
 
     <!-- Accessibility label for the change-request card's clickable bubble. -->
     <string name="chat_open_change_request">Otevřít žádost o změnu</string>
+
+    <!-- Message templates (domain/model/MessageTemplate.kt). The body is seeded into the
+         composer for the user to edit before sending, so the bracketed hints are translated
+         too: they are prompts to the reader, not substitution tokens. -->
+    <string name="chat_templates_sheet_title">Šablony zpráv</string>
+    <string name="chat_template_category_pickup_drop">Vyzvednutí a předání</string>
+    <string name="chat_template_category_illness">Nemoc a zdraví</string>
+    <string name="chat_template_category_school_events">Školní akce</string>
+    <string name="chat_template_category_holidays">Svátky a prázdniny</string>
+    <string name="chat_template_category_conflict_resolution">Řešení neshod</string>
+    <string name="chat_template_pickup_delay_title">Zpoždění při předání</string>
+    <string name="chat_template_pickup_delay_content">Při předávání [dítěte] se opozdím. Dorazím přibližně za [počet minut]. Omlouvám se za komplikace.</string>
+    <string name="chat_template_pickup_early_title">Dřívější příjezd</string>
+    <string name="chat_template_pickup_early_content">Přijedu dříve než obvykle, přibližně v [čas]. Vyhovuje ti to?</string>
+    <string name="chat_template_doctor_visit_title">Návštěva lékaře</string>
+    <string name="chat_template_doctor_visit_content">[Dítě] bylo dnes u lékaře kvůli [potíže]. Diagnóza: [diagnóza]. Lékař doporučuje [doporučení].</string>
+    <string name="chat_template_child_sick_title">Dítě je nemocné</string>
+    <string name="chat_template_child_sick_content">[Dítě] se necítí dobře. Příznaky: [příznaky]. Teplota: [teplota]. Zůstávám s dítětem doma.</string>
+    <string name="chat_template_school_event_title">Školní akce</string>
+    <string name="chat_template_school_event_content">Ve škole se koná [akce] dne [datum] v [čas]. Budeš se moci zúčastnit?</string>
+    <string name="chat_template_parent_teacher_meeting_title">Třídní schůzka</string>
+    <string name="chat_template_parent_teacher_meeting_content">Třídní schůzka je [datum] v [čas]. Učitel chce probrat [téma].</string>
+    <string name="chat_template_holiday_plan_title">Plán na prázdniny</string>
+    <string name="chat_template_holiday_plan_content">Domluvme se na plánu na [prázdniny]. Navrhuji [návrh]. Co si o tom myslíš?</string>
+    <string name="chat_template_schedule_change_title">Změna rozpisu</string>
+    <string name="chat_template_schedule_change_content">Potřebuji změnit rozpis na [datum]. Mohli bychom si termíny vyměnit? Nabízím [náhradní datum].</string>
 </resources>
