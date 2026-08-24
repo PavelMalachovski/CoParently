@@ -79,6 +79,7 @@ import androidx.compose.ui.unit.dp
 import com.coparently.app.R
 import com.coparently.app.domain.model.Event
 import com.coparently.app.presentation.common.ParentNames
+import com.coparently.app.presentation.common.rememberToday
 import com.coparently.app.presentation.theme.CoPlanlyColors
 import com.coparently.app.presentation.theme.Dimensions
 import com.coparently.app.presentation.theme.dimensions
@@ -243,6 +244,7 @@ private fun DayWeekPage(
     holidays: Map<LocalDate, com.coparently.app.domain.holidays.Holiday> = emptyMap()
 ) {
     val dims = dimensions()
+    val today by rememberToday()
     val hours = (0..23).toList()
     val density = LocalDensity.current
     // Match the actually-rendered theme, not the system one (the app can force light while
@@ -361,7 +363,7 @@ private fun DayWeekPage(
                     )
 
                     currentDates.forEach { date ->
-                        val isToday = date == LocalDate.now()
+                        val isToday = date == today
                         val holiday = holidays[date]
                         val isPublicHoliday = holiday != null && !holiday.isSchoolVacation
 
@@ -524,7 +526,7 @@ private fun DayWeekPage(
                                 horizontalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
                                 currentDates.forEachIndexed { dayIndex, date ->
-                                    val isToday = date == LocalDate.now()
+                                    val isToday = date == today
                                     val custody = getCustody(date)
                                     val isWeekend = CustodyHelper.isWeekend(date)
                                     // Custody wins over the today tint, matching MonthView:
@@ -711,7 +713,7 @@ private fun DayWeekPage(
                             }
 
                             // Current-time indicator (red line + dot) on today's column
-                            if (date == LocalDate.now()) {
+                            if (date == today) {
                                 val nowY = yOffsetFor(LocalDateTime.now())
                                 Row(
                                     modifier = Modifier

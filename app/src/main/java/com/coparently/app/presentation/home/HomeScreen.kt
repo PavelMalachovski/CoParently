@@ -78,6 +78,7 @@ import com.coparently.app.presentation.common.PillChip
 import com.coparently.app.presentation.common.SectionGroup
 import com.coparently.app.presentation.common.SectionRow
 import com.coparently.app.presentation.common.rememberParentNames
+import com.coparently.app.presentation.common.rememberToday
 import com.coparently.app.presentation.theme.ParentColors
 import java.text.NumberFormat
 import java.time.LocalDate
@@ -137,6 +138,7 @@ fun HomeScreen(
     changeRequestViewModel: ChangeRequestViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val today by rememberToday()
     val parentNames = rememberParentNames(viewModel.parents.collectAsState().value)
     val pendingProposal by changeRequestViewModel.pendingProposal.collectAsState()
 
@@ -150,7 +152,7 @@ fun HomeScreen(
                             style = MaterialTheme.typography.titleLarge
                         )
                         Text(
-                            text = LocalDate.now().format(todayFormatter),
+                            text = today.format(todayFormatter),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )

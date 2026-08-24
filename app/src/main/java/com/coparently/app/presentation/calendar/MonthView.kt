@@ -57,6 +57,7 @@ import com.coparently.app.R
 import com.coparently.app.domain.holidays.Holiday
 import com.coparently.app.domain.model.Event
 import com.coparently.app.presentation.common.ParentNames
+import com.coparently.app.presentation.common.rememberToday
 import com.coparently.app.presentation.theme.CoPlanlyColors
 import com.coparently.app.presentation.theme.dimensions
 import com.kizitonwose.calendar.compose.CalendarState
@@ -266,6 +267,7 @@ fun MonthView(
 @Composable
 private fun WeekdayHeader(firstDayOfWeek: DayOfWeek) {
     val dims = dimensions()
+    val today by rememberToday()
     // Resolved here: the semantics lambda is not a composable context.
     val headerDescription = stringResource(R.string.calendar_weekday_header_description)
 
@@ -284,7 +286,7 @@ private fun WeekdayHeader(firstDayOfWeek: DayOfWeek) {
         }
 
         weekdays.forEach { dayOfWeek ->
-            val isToday = dayOfWeek == LocalDate.now().dayOfWeek
+            val isToday = dayOfWeek == today.dayOfWeek
 
             Box(
                 modifier = Modifier
