@@ -164,11 +164,41 @@ class ExpenseViewModel @Inject constructor(
         _selectedMonth.value = _selectedMonth.value.plusMonths(1)
     }
 
-    /** Expenses dated within [selectedMonth], newest first. */
-    val monthExpenses: StateFlow<List<Expense>> = combine(loadedExpenses, _selectedMonth) { all, month ->
-        all.filter { YearMonth.from(it.date) == month }
+    /**
+     * The selected month and the figures that belong to **that** month, as one value.
+     *
+     * Computed in a single `combine` from the raw sources rather than chained one off another,
+     * so the month can never be observed alongside another month's expenses. Two separate flows
+     * derived from `_selectedMonth` do allow exactly that: `combine` re-emits per upstream
+     * change, so paging emitted the new month beside the old list for an instant.
+     *
+     * Invisible while the swap is instant. Not invisible once the screen animates between
+     * months — the outgoing half of a slide renders the state it is leaving, so a bundle is what
+     * lets it show the month it is actually leaving rather than the one arriving.
+     */
+    val monthOfExpenses: StateFlow<MonthOfExpenses> = combine(
+        loadedExpenses,
+        _selectedMonth,
+        _currentUserId,
+        roleByUid
+    ) { all, month, userId, roles ->
+        val ofMonth = all.filter { YearMonth.from(it.date) == month }
             .sortedByDescending { it.date }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), emptyList())
+        MonthOfExpenses(
+            month = month,
+            expenses = ofMonth,
+            balances = calculateExpenseBalancesByCurrency(ofMonth, userId, roles)
+        )
+    }.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS),
+        MonthOfExpenses(YearMonth.now(), emptyList(), emptyList())
+    )
+
+    /** Expenses dated within [selectedMonth], newest first. */
+    val monthExpenses: StateFlow<List<Expense>> = monthOfExpenses
+        .map { it.expenses }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), emptyList())
 
     /**
      * The selected month's who-paid-what split and settle-up figure, one entry per currency.
@@ -177,17 +207,9 @@ class ExpenseViewModel @Inject constructor(
      * cannot drift out of sync with the list they summarise. Split by currency because the app
      * does no FX conversion — a month mixing currencies must not be added into one wrong total.
      */
-    val balancesByCurrency: StateFlow<List<CurrencyBalance>> = combine(
-        monthExpenses,
-        _currentUserId,
-        roleByUid
-    ) { monthExpenses, userId, roles ->
-        calculateExpenseBalancesByCurrency(monthExpenses, userId, roles)
-    }.stateIn(
-        viewModelScope,
-        SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS),
-        emptyList()
-    )
+    val balancesByCurrency: StateFlow<List<CurrencyBalance>> = monthOfExpenses
+        .map { it.balances }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), emptyList())
 
     /**
      * Whose spending the analytics view is showing: a Firebase uid, or null for everyone.
@@ -501,3 +523,20 @@ class ExpenseViewModel @Inject constructor(
         }
     }
 }
+
+/**
+ * One month of expenses, carried together with the month they belong to.
+ *
+ * The month is part of the value rather than a separate flow beside it, so nothing can render
+ * September's heading over August's rows — not for a frame, and not for the 500 ms a slide
+ * between months lasts.
+ *
+ * @property month The month these figures describe.
+ * @property expenses Expenses dated within [month], newest first.
+ * @property balances Who-paid-what and the settle-up figure, one entry per currency present.
+ */
+data class MonthOfExpenses(
+    val month: YearMonth,
+    val expenses: List<Expense>,
+    val balances: List<CurrencyBalance>
+)

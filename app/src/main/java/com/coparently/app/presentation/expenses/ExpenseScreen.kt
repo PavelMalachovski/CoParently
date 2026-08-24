@@ -1,5 +1,6 @@
 package com.coparently.app.presentation.expenses
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -44,6 +45,7 @@ import com.coparently.app.domain.model.Expense
 import com.coparently.app.presentation.common.ListSkeleton
 import com.coparently.app.presentation.common.Loadable
 import com.coparently.app.presentation.common.animations.AnimatedEmptyState
+import com.coparently.app.presentation.common.monthPagingTransition
 import com.coparently.app.presentation.common.rememberParentNames
 import com.coparently.app.presentation.common.valueOrNull
 import kotlinx.coroutines.launch
@@ -88,9 +90,9 @@ fun ExpenseScreen(
 ) {
     val expensesState by viewModel.expenses.collectAsState()
     val expenses = expensesState.valueOrNull.orEmpty()
-    val monthExpenses by viewModel.monthExpenses.collectAsState()
-    val selectedMonth by viewModel.selectedMonth.collectAsState()
-    val balancesByCurrency by viewModel.balancesByCurrency.collectAsState()
+    // One value, not three. The month and its figures travel together so the outgoing half of a
+    // month slide renders the month it is leaving — see `MonthOfExpenses`.
+    val monthOfExpenses by viewModel.monthOfExpenses.collectAsState()
     val roleByUid by viewModel.roleByUid.collectAsState()
     val currentUserId by viewModel.currentUserId.collectAsState()
     val parentNames = rememberParentNames(viewModel.parents.collectAsState().value)
@@ -174,113 +176,129 @@ fun ExpenseScreen(
                     )
                 }
             } else {
-                val monthNavigation = MonthNavigation(
-                    label = rememberMonthLabel(selectedMonth),
-                    expenseCount = monthExpenses.size,
-                    onPrevious = viewModel::showPreviousMonth,
-                    onNext = viewModel::showNextMonth
-                )
-
-                if (monthExpenses.isEmpty()) {
-                    // The switcher has to stay reachable, or a month with no expenses becomes a
-                    // dead end you cannot page out of. Other months may still hold expenses
-                    // (e.g. an older receipt), so this is a per-month empty note, not the
-                    // global empty state handled above.
-                    MonthSwitcherBar(
-                        navigation = monthNavigation,
-                        modifier = Modifier
-                            .monthSwipe(monthNavigation)
-                            .padding(horizontal = 14.dp, vertical = 8.dp)
-                    )
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f)
-                            // Swipe-to-delete is why the populated list below is never a swipe
-                            // surface — there are no rows here to conflict with the gesture, so
-                            // this empty-month placeholder can safely carry month navigation too.
-                            .monthSwipe(monthNavigation),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = stringResource(R.string.expenses_month_empty),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                // Months change with the calendar's animation, from the calendar's constants —
+                // see `MonthPaging`. Not a pager, and the comment on `monthSwipe` says why: the
+                // rows own a horizontal gesture of their own (swipe to delete), so a pager
+                // wrapping the list would fight it. This animates the *result* of the gesture
+                // instead, which is the half a parent actually sees.
+                AnimatedContent(
+                    targetState = monthOfExpenses,
+                    transitionSpec = { monthPagingTransition(initialState.month, targetState.month) },
+                    label = "expenses-month",
+                    modifier = Modifier.weight(1f)
+                ) { shownMonth ->
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        val monthExpenses = shownMonth.expenses
+                        val balancesByCurrency = shownMonth.balances
+                        val monthNavigation = MonthNavigation(
+                            label = rememberMonthLabel(shownMonth.month),
+                            expenseCount = monthExpenses.size,
+                            onPrevious = viewModel::showPreviousMonth,
+                            onNext = viewModel::showNextMonth
                         )
-                    }
-                } else {
-                    val monthLabel = remember(selectedMonth) {
-                        selectedMonth.month
-                            .getDisplayName(java.time.format.TextStyle.FULL_STANDALONE, Locale.getDefault())
-                            .replaceFirstChar { it.uppercase() }
-                    }
-                    // One summary card per currency present this month — the app does no FX
-                    // conversion, so a mixed-currency month is shown as separate honest totals
-                    // rather than one wrong sum. Only the first card carries the month
-                    // switcher; repeating it per currency would switch the same month N times.
-                    balancesByCurrency.forEachIndexed { index, currencyBalance ->
-                        ExpenseSummaryHeader(
-                            balance = currencyBalance.balance,
-                            currency = currencyBalance.currency,
-                            parentNames = parentNames,
-                            onSettleUp = onSettleUp,
-                            monthLabel = monthLabel,
-                            modifier = Modifier
-                                .then(
-                                    if (index == 0) Modifier.monthSwipe(monthNavigation) else Modifier
+
+                        if (monthExpenses.isEmpty()) {
+                            // The switcher has to stay reachable, or a month with no expenses becomes a
+                            // dead end you cannot page out of. Other months may still hold expenses
+                            // (e.g. an older receipt), so this is a per-month empty note, not the
+                            // global empty state handled above.
+                            MonthSwitcherBar(
+                                navigation = monthNavigation,
+                                modifier = Modifier
+                                    .monthSwipe(monthNavigation)
+                                    .padding(horizontal = 14.dp, vertical = 8.dp)
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .weight(1f)
+                                    // Swipe-to-delete is why the populated list below is never a swipe
+                                    // surface — there are no rows here to conflict with the gesture, so
+                                    // this empty-month placeholder can safely carry month navigation too.
+                                    .monthSwipe(monthNavigation),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.expenses_month_empty),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
-                                .padding(horizontal = 14.dp, vertical = 4.dp),
-                            monthNavigation = monthNavigation.takeIf { index == 0 }
-                        )
-                    }
-
-                    // One month control, two views of it. A separate analytics route would need
-                    // its own month control, and the two could drift — a parent looking at
-                    // August's chart and September's list with nothing on screen saying so.
-                    ViewSwitcher(
-                        showAnalytics = showAnalytics,
-                        onSelect = { showAnalytics = it },
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp)
-                    )
-
-                    if (showAnalytics) {
-                        ExpenseAnalytics(
-                            breakdown = selectedBreakdown,
-                            currencies = breakdowns.map { it.currency },
-                            payers = analyticsPayers,
-                            selectedPayer = analyticsPayer,
-                            parentNames = parentNames,
-                            expenses = monthExpenses,
-                            roleByUid = roleByUid,
-                            onSelectCurrency = viewModel::selectAnalyticsCurrency,
-                            onSelectPayer = viewModel::selectAnalyticsPayer,
-                            modifier = Modifier.weight(1f)
-                        )
-                    } else {
-                        // Budgets belong to the list: they are about what is left to spend, not
-                        // about what was spent.
-                        onOpenBudgets?.let { openBudgets ->
-                            val progress = remember(budgets, monthExpenses) {
-                                budgetProgress(budgets, monthExpenses)
                             }
-                            BudgetChips(progress = progress, onOpenBudgets = openBudgets)
-                        }
+                        } else {
+                            val monthLabel = remember(shownMonth.month) {
+                                shownMonth.month.month
+                                    .getDisplayName(java.time.format.TextStyle.FULL_STANDALONE, Locale.getDefault())
+                                    .replaceFirstChar { it.uppercase() }
+                            }
+                            // One summary card per currency present this month — the app does no FX
+                            // conversion, so a mixed-currency month is shown as separate honest totals
+                            // rather than one wrong sum. Only the first card carries the month
+                            // switcher; repeating it per currency would switch the same month N times.
+                            balancesByCurrency.forEachIndexed { index, currencyBalance ->
+                                ExpenseSummaryHeader(
+                                    balance = currencyBalance.balance,
+                                    currency = currencyBalance.currency,
+                                    parentNames = parentNames,
+                                    onSettleUp = onSettleUp,
+                                    monthLabel = monthLabel,
+                                    modifier = Modifier
+                                        .then(
+                                            if (index == 0) Modifier.monthSwipe(monthNavigation) else Modifier
+                                        )
+                                        .padding(horizontal = 14.dp, vertical = 4.dp),
+                                    monthNavigation = monthNavigation.takeIf { index == 0 }
+                                )
+                            }
 
-                        ExpenseList(
-                            expenses = monthExpenses,
-                            roleByUid = roleByUid,
-                            parentNames = parentNames,
-                            onDelete = deleteWithUndo,
-                            onExpenseClick = { onEditExpense(it.id) },
-                            // Only the creator edits or deletes an expense. A row whose creator
-                            // was never recorded (pre-schema-23, or written signed-out) stays
-                            // editable by both — all this device can honestly say about it.
-                            canModify = { expense ->
-                                expense.createdByFirebaseUid == null ||
-                                    expense.createdByFirebaseUid == currentUserId
-                            },
-                            modifier = Modifier.weight(1f)
-                        )
+                            // One month control, two views of it. A separate analytics route would need
+                            // its own month control, and the two could drift — a parent looking at
+                            // August's chart and September's list with nothing on screen saying so.
+                            ViewSwitcher(
+                                showAnalytics = showAnalytics,
+                                onSelect = { showAnalytics = it },
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp)
+                            )
+
+                            if (showAnalytics) {
+                                ExpenseAnalytics(
+                                    breakdown = selectedBreakdown,
+                                    currencies = breakdowns.map { it.currency },
+                                    payers = analyticsPayers,
+                                    selectedPayer = analyticsPayer,
+                                    parentNames = parentNames,
+                                    expenses = monthExpenses,
+                                    roleByUid = roleByUid,
+                                    onSelectCurrency = viewModel::selectAnalyticsCurrency,
+                                    onSelectPayer = viewModel::selectAnalyticsPayer,
+                                    modifier = Modifier.weight(1f)
+                                )
+                            } else {
+                                // Budgets belong to the list: they are about what is left to spend, not
+                                // about what was spent.
+                                onOpenBudgets?.let { openBudgets ->
+                                    val progress = remember(budgets, monthExpenses) {
+                                        budgetProgress(budgets, monthExpenses)
+                                    }
+                                    BudgetChips(progress = progress, onOpenBudgets = openBudgets)
+                                }
+
+                                ExpenseList(
+                                    expenses = monthExpenses,
+                                    roleByUid = roleByUid,
+                                    parentNames = parentNames,
+                                    onDelete = deleteWithUndo,
+                                    onExpenseClick = { onEditExpense(it.id) },
+                                    // Only the creator edits or deletes an expense. A row whose creator
+                                    // was never recorded (pre-schema-23, or written signed-out) stays
+                                    // editable by both — all this device can honestly say about it.
+                                    canModify = { expense ->
+                                        expense.createdByFirebaseUid == null ||
+                                            expense.createdByFirebaseUid == currentUserId
+                                    },
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                        }
                     }
                 }
             }
