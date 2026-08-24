@@ -406,11 +406,31 @@ same. There is a third option neither branch takes: `PairingState` already has `
 `SkeletonLoading.kt` is written and unreferenced. Assert nothing until the answer is known.
 Audit §9.2.
 
-### UX-2 · P1 · M · No main screen has a loading state
+### UX-2 · **DONE** · No main screen had a loading state
 
-None of the six. Home is worst, because `EMPTY_DASHBOARD` **asserts facts** — "$0.00", "All
-settled", no events this week — that are contradicted a frame later. `SkeletonLoading.kt` is
-written and unreferenced. Audit §9.3.
+None of the six had one. Every list exposed `StateFlow<List<T>>` starting at `emptyList()` and
+branched on `isEmpty()`, so "nothing yet" and "nothing at all" were the same value and each screen
+**asserted a fact it did not have** for the first frames after a cold start. Home was worst
+because it asserted several — "$0.00", "All settled", no events this week — and Contacts was the
+most costly, because a parent opening the emergency surface in a hurry was told there were no
+contacts a frame before being shown them. Audit §9.3.
+
+Fixed with one type rather than six ad-hoc flags: `Loadable<T>` in `presentation/common/`, with a
+`stateInLoadable` helper that seeds `Loading` instead of a fabricated empty value. Home (UX-1),
+Chat, Expenses, Budgets, Contacts and Child info now render the shared `ListSkeleton` while the
+answer is unknown, and their empty states only when the answer is genuinely empty. The Russian
+KDoc in `presentation/components/SkeletonLoading.kt` was translated with it — it had been left
+there precisely until something wired the skeletons up.
+
+**The calendar is deliberately not among them.** Its grid is structurally present whichever way
+the query is going: the days are drawn, only the event dots are missing, so a skeleton would
+replace a correct calendar with a shimmer. It is also the one screen where `CLAUDE.md` forbids
+rendering `Loading` outright, because the query flips to `Loading` on every re-anchor and the grid
+would flash on every settle. A first-load-only skeleton is possible via a sticky "has ever
+loaded" flag, but it buys little against that cost and is not obviously an improvement.
+
+Still open, and separate: `presentation/common/animations/LoadingSkeleton.kt` duplicates
+`SkeletonBox` and remains unreferenced. One of the two files should go — see **CQ-15**.
 
 ### UX-3 · P1 · S · Budgets cannot be edited or deleted
 

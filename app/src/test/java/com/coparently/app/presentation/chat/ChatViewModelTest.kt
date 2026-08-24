@@ -12,6 +12,7 @@ import com.coparently.app.domain.repository.EventRepository
 import com.coparently.app.domain.repository.MessageRepository
 import com.coparently.app.domain.repository.PairingRepository
 import com.coparently.app.domain.repository.UserRepository
+import com.coparently.app.presentation.common.Loadable
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -219,13 +220,16 @@ class ChatViewModelTest {
         val viewModel = createViewModel()
 
         viewModel.conversations.test {
-            // The StateFlow's seed value, before the Room-backed flow is subscribed.
-            assertEquals(emptyList<Conversation>(), awaitItem())
-            assertEquals(1, awaitItem().size)
+            // The seed is `Loading`, not an empty list. Those used to be the same value, which
+            // is what made the Chat tab show "no conversations yet" for the frames before Room
+            // answered (UX-2).
+            assertEquals(Loadable.Loading, awaitItem())
+            assertEquals(1, (awaitItem() as Loadable.Loaded).value.size)
 
             signedInUid.value = null
 
-            assertEquals(emptyList<Conversation>(), awaitItem())
+            // Signed out is a real answer — an empty list that is *known* to be empty.
+            assertEquals(Loadable.Loaded(emptyList<Conversation>()), awaitItem())
         }
     }
 

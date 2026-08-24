@@ -32,6 +32,7 @@ import com.coparently.app.presentation.childinfo.components.GuestInviteSheet
 import com.coparently.app.presentation.childinfo.components.MedicalPhotoStrip
 import com.coparently.app.presentation.common.ConfirmationDialog
 import com.coparently.app.presentation.common.GroupLabel
+import com.coparently.app.presentation.common.ListSkeleton
 import com.coparently.app.presentation.common.SectionGroup
 import com.coparently.app.presentation.common.SectionGroupScope
 import com.coparently.app.presentation.common.SectionRow
@@ -120,9 +121,11 @@ fun ChildInfoScreen(
         ) {
             when (val state = uiState) {
                 is ChildInfoUiState.Loading -> {
-                    CircularProgressIndicator(
-                        modifier = Modifier.align(Alignment.Center)
-                    )
+                    // A skeleton rather than a spinner, matching every other list in the app: a
+                    // centred spinner says "something is happening", a skeleton says what is
+                    // about to be there, and consistency across the tabs is worth more here than
+                    // either on its own.
+                    ListSkeleton(rows = 3)
                 }
                 is ChildInfoUiState.Error -> {
                     Column(

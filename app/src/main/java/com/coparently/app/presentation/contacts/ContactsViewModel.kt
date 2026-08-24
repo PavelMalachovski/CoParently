@@ -5,6 +5,8 @@ import androidx.lifecycle.viewModelScope
 import com.coparently.app.domain.contacts.ContactDirectory
 import com.coparently.app.domain.contacts.ContactGroup
 import com.coparently.app.domain.repository.ChildInfoRepository
+import com.coparently.app.presentation.common.Loadable
+import com.coparently.app.presentation.common.stateInLoadable
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -36,7 +38,9 @@ class ContactsViewModel @Inject constructor(
      * `getAllChildInfo()` is the right subscription here, unlike in the child editor: this screen
      * owns showing *every* child's contacts, so the whole list is exactly what it is about.
      */
-    val groups: StateFlow<List<ContactGroup>> = childInfoRepository.getAllChildInfo()
+    val groups: StateFlow<Loadable<List<ContactGroup>>> = childInfoRepository.getAllChildInfo()
         .map(ContactDirectory::of)
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), emptyList())
+        // This is the emergency surface. Telling a parent in a hurry that there are no contacts,
+        // a frame before showing them, is the worst instance of the defect Loadable exists for.
+        .stateInLoadable(viewModelScope, STOP_TIMEOUT_MS)
 }

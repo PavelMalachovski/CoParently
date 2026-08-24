@@ -43,7 +43,10 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.coparently.app.R
 import com.coparently.app.domain.model.Conversation
+import com.coparently.app.presentation.common.ListSkeleton
+import com.coparently.app.presentation.common.Loadable
 import com.coparently.app.presentation.common.animations.AnimatedEmptyState
+import com.coparently.app.presentation.common.valueOrNull
 import java.time.format.DateTimeFormatter
 
 /**
@@ -88,7 +91,8 @@ fun ConversationsScreen(
     onOpenInbox: (() -> Unit)? = null,
     viewModel: ChatViewModel = hiltViewModel()
 ) {
-    val conversations by viewModel.conversations.collectAsState()
+    val conversationsState by viewModel.conversations.collectAsState()
+    val conversations = conversationsState.valueOrNull.orEmpty()
     val isOpening by viewModel.isOpeningConversation.collectAsState()
     val currentUserId by viewModel.currentUserId.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -171,7 +175,11 @@ fun ConversationsScreen(
             }
         }
     ) { padding ->
-        if (conversations.isEmpty()) {
+        if (conversationsState is Loadable.Loading) {
+            // Not the empty state: nothing is known yet, and "you have no conversations" is a
+            // claim. It was made for the frames between opening the tab and Room answering.
+            ListSkeleton(modifier = Modifier.padding(padding), rows = 3)
+        } else if (conversations.isEmpty()) {
             // Issue 8.2: Empty state for conversations
             AnimatedEmptyState(
                 icon = Icons.Default.Chat,

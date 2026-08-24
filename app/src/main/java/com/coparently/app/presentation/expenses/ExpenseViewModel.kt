@@ -17,8 +17,11 @@ import com.coparently.app.domain.repository.ExpenseRepository
 import com.coparently.app.domain.repository.PreferencesRepository
 import com.coparently.app.domain.repository.ReceiptStorage
 import com.coparently.app.domain.repository.UserRepository
+import com.coparently.app.presentation.common.Loadable
 import com.coparently.app.presentation.common.Parents
 import com.coparently.app.presentation.common.ParentsSource
+import com.coparently.app.presentation.common.stateInLoadable
+import com.coparently.app.presentation.common.valueOrNull
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -105,12 +108,20 @@ class ExpenseViewModel @Inject constructor(
         }
     }
 
-    val expenses: StateFlow<List<Expense>> = expenseRepository.getAllExpenses()
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = emptyList()
-        )
+    val expenses: StateFlow<Loadable<List<Expense>>> = expenseRepository.getAllExpenses()
+        .stateInLoadable(viewModelScope)
+
+    /**
+     * The same expenses, flattened to a plain list for everything derived from them.
+     *
+     * The derivations below — the month's slice, the per-currency balances, the pie chart — are
+     * all "given these expenses, compute that", and none of them has anything different to say
+     * while the list is still loading. Only the screen does, which is why [expenses] carries the
+     * distinction and this does not.
+     */
+    private val loadedExpenses: StateFlow<List<Expense>> = expenses
+        .map { it.valueOrNull.orEmpty() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), emptyList())
 
     private val _expenseSummary = MutableStateFlow<ExpenseSummary?>(null)
     val expenseSummary: StateFlow<ExpenseSummary?> = _expenseSummary.asStateFlow()
@@ -154,7 +165,7 @@ class ExpenseViewModel @Inject constructor(
     }
 
     /** Expenses dated within [selectedMonth], newest first. */
-    val monthExpenses: StateFlow<List<Expense>> = combine(expenses, _selectedMonth) { all, month ->
+    val monthExpenses: StateFlow<List<Expense>> = combine(loadedExpenses, _selectedMonth) { all, month ->
         all.filter { YearMonth.from(it.date) == month }
             .sortedByDescending { it.date }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), emptyList())

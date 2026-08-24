@@ -34,7 +34,10 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.coparently.app.R
 import com.coparently.app.domain.model.Budget
 import com.coparently.app.domain.model.BudgetAlert
+import com.coparently.app.presentation.common.ListSkeleton
+import com.coparently.app.presentation.common.Loadable
 import com.coparently.app.presentation.common.animations.AnimatedEmptyState
+import com.coparently.app.presentation.common.valueOrNull
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -42,7 +45,8 @@ fun BudgetScreen(
     onBack: (() -> Unit)? = null,
     viewModel: BudgetViewModel = hiltViewModel()
 ) {
-    val budgets by viewModel.budgets.collectAsState()
+    val budgetsState by viewModel.budgets.collectAsState()
+    val budgets = budgetsState.valueOrNull.orEmpty()
     val alerts by viewModel.activeAlerts.collectAsState()
     var showAddSheet by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf<Budget?>(null) }
@@ -77,7 +81,9 @@ fun BudgetScreen(
             }
         }
     ) { padding ->
-        if (budgets.isEmpty()) {
+        if (budgetsState is Loadable.Loading) {
+            ListSkeleton(modifier = Modifier.padding(padding), rows = 3)
+        } else if (budgets.isEmpty()) {
             AnimatedEmptyState(
                 icon = Icons.Default.Savings,
                 title = stringResource(R.string.budgets_empty_title),

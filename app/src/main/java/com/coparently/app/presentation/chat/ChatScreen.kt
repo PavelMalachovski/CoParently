@@ -54,6 +54,7 @@ import com.coparently.app.domain.model.Event
 import com.coparently.app.domain.model.Message
 import com.coparently.app.domain.model.MessageSendStatus
 import com.coparently.app.presentation.common.PillChip
+import com.coparently.app.presentation.common.valueOrNull
 import java.time.format.DateTimeFormatter
 
 /**
@@ -93,7 +94,7 @@ fun ChatScreen(
 ) {
     val messages by viewModel.messages.collectAsState()
     val currentUserId by viewModel.currentUserId.collectAsState()
-    val conversations by viewModel.conversations.collectAsState()
+    val conversations = viewModel.conversations.collectAsState().value.valueOrNull.orEmpty()
     val upcomingEvents by viewModel.upcomingEvents.collectAsState()
 
     val conversation = conversations.find { it.id == conversationId }

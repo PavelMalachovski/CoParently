@@ -15,6 +15,8 @@ import com.coparently.app.domain.repository.EventRepository
 import com.coparently.app.domain.repository.MessageRepository
 import com.coparently.app.domain.repository.PairingRepository
 import com.coparently.app.domain.repository.UserRepository
+import com.coparently.app.presentation.common.Loadable
+import com.coparently.app.presentation.common.stateInLoadable
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -213,7 +215,7 @@ class ChatViewModel @Inject constructor(
      * then — the empty string.
      */
     @OptIn(ExperimentalCoroutinesApi::class)
-    val conversations: StateFlow<List<Conversation>> =
+    val conversations: StateFlow<Loadable<List<Conversation>>> =
         combine(currentUserId, coParentLink) { userId, link -> userId to link }
             .flatMapLatest { (userId, link) ->
                 val conversationId = (link as? CoParentLink.Linked)
@@ -225,11 +227,10 @@ class ChatViewModel @Inject constructor(
                 }
             }
             .catch { e -> failSoft("observe conversation", e) { emit(emptyList()) } }
-            .stateIn(
-                scope = viewModelScope,
-                started = SharingStarted.WhileSubscribed(SUBSCRIPTION_TIMEOUT_MS),
-                initialValue = emptyList()
-            )
+            // Loadable, not a bare list: `emptyList()` as an initial value made "the thread has
+            // not loaded" and "there is no thread" the same value, and the screen showed the
+            // empty state for the frames in between.
+            .stateInLoadable(viewModelScope, SUBSCRIPTION_TIMEOUT_MS)
 
     /**
      * The selected conversation's raw messages, tagged with the id they belong to.

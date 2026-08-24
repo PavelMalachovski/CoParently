@@ -9,6 +9,8 @@ import com.coparently.app.domain.money.SupportedCurrency
 import com.coparently.app.domain.repository.BudgetRepository
 import com.coparently.app.domain.repository.PreferencesRepository
 import com.coparently.app.domain.repository.UserRepository
+import com.coparently.app.presentation.common.Loadable
+import com.coparently.app.presentation.common.stateInLoadable
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -43,12 +45,8 @@ class BudgetViewModel @Inject constructor(
         }
     }
 
-    val budgets: StateFlow<List<Budget>> = budgetRepository.getActiveBudgets()
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = emptyList()
-        )
+    val budgets: StateFlow<Loadable<List<Budget>>> = budgetRepository.getActiveBudgets()
+        .stateInLoadable(viewModelScope)
 
     private val _activeAlerts = MutableStateFlow<List<BudgetAlert>>(emptyList())
     val activeAlerts: StateFlow<List<BudgetAlert>> = _activeAlerts.asStateFlow()
