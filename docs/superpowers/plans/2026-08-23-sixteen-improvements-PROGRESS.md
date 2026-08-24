@@ -134,3 +134,27 @@ SDD package with a build, decomposed as: (1) friend grant + profile model + migr
 events read gate + emulator tests; (4) the filter third segment + participation field;
 (5) the profile/invite/accept UI. Items 1–3 are fully verifiable here; 4–5 follow the guest UI
 that already exists.
+
+### Design proven this round (held out of the tree)
+
+The **`friend_profiles` collection and its rules were drafted and run on the emulator** — 9 cases,
+suite green at **295 passing** — before being reverted, because the repo forbids shipping rules for
+a collection no client code reaches yet ("don't add rules for unreachable collections
+speculatively", CLAUDE.md). The verified design, for the next package to adopt as-is:
+
+- `friend_profiles/{friendUid}` — the friend authors their own profile (`name`, `role`
+  guardian/friend/grandparent, `phones`, `bloodGroup`, `photoUrl`); the two parents read it and
+  never write it.
+- `familyParents: [uidA, uidB]` is the read gate: set by the friend at create (from the pair who
+  admitted them), **immutable** on update, and read as a plain array-membership check so a parent's
+  read needs no per-document `get()`. A friend widening it only ever exposes their *own* profile.
+- read: `auth.uid == friendUid || auth.uid in familyParents`; create: `isOwner(friendUid)` + a
+  1–100-char `name` + a two-element `familyParents`; update: `isOwner` + `familyParents` unchanged;
+  delete: `isOwner`.
+
+The photo reuses the medical-photo Storage path (package G1). Calendar read access for the friend
+is best modelled **without a per-event fan-out**: a central `calendar_friends` grant plus an
+`events` read-rule disjunct that `get()`s it, with the friend querying by the two parents' uids via
+`whereIn('createdByFirebaseUid', [a, b])` — the exact shape `expenses`/`budgets` already use — so
+no event document is ever rewritten to admit or remove a friend. That events-rule change is the one
+genuinely higher-stakes edit and belongs in the dedicated package with its own emulator cases.
