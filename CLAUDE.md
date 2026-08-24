@@ -6,8 +6,10 @@ Guidance for Claude Code (and other AI assistants) working in this repository.
 
 CoPlanly — an Android shared-calendar app for separated parents. Kotlin + Jetpack Compose
 (Material 3), Clean Architecture with Hilt, Room as the offline-first source of truth,
-Firebase (Auth/Firestore/FCM) for sync between the two parents, Google Calendar integration,
-Gemini for AI features.
+Firebase (Auth/Firestore/FCM) for sync between the two parents, Google Calendar integration.
+**No AI:** the Gemini subsystem was deleted in August 2026 (MON-7) — ~3,200 lines reachable from
+no navigation graph, with the API key shipping in every APK. If AI returns it goes behind the
+Cloud Function proxy (SEC-1), never with a key in the client. See `docs/AUDIT-2026-08.md` §6.
 
 **The authoritative roadmap is `docs/CoPlanly/MVP_phases.md`** (not `.cursor/roadmap.md`,
 which is the historical original plan). MVP 1 is complete, and **MVP 2 appears to be complete
@@ -254,8 +256,9 @@ Data flow: UI → ViewModel → UseCase → Repository → Room (source of truth
    schedule on create/update, cancel on delete.
 10. **Receipt OCR is on-device only** (`ReceiptTextRecognizer`/ML Kit, parsed by
     `ReceiptParser`, wired up in `AddExpenseScreen`/`ExpenseViewModel.scanReceipt`) — no
-    receipt text or photo may be sent to Gemini or any other remote service without an
-    explicit product decision.
+    receipt text or photo may be sent to a model or any other remote service without an
+    explicit product decision. The rule outlived the AI subsystem on purpose: on-device OCR is
+    a privacy asset worth keeping, not an accident of what happened to be wired up.
 11. **Pairing writes never touch the other parent's user document from the client.**
     Accepting an invitation and unpairing go through the `acceptPairingInvitation` /
     `unpairCoParent` callables (`functions/index.js`) — `firestore.rules` allows a user
@@ -429,8 +432,9 @@ Data flow: UI → ViewModel → UseCase → Repository → Room (source of truth
     `custody_schedules` block just because the Room table name is still there.
 - `strings.xml` is **no longer gitignored** (older docs/audit §2.1 claim otherwise —
   stale). No secrets live in resources: the OAuth client secret is injected via
-  BuildConfig (`GOOGLE_CLIENT_SECRET` gradle property / env var), `GEMINI_API_KEY`
-  likewise. Real secrets belong in `gradle.properties`/env vars only.
+  BuildConfig (`GOOGLE_CLIENT_SECRET` gradle property / env var). `GEMINI_API_KEY` is gone
+  with the AI subsystem — don't reintroduce a model key in the client. Real secrets belong in
+  `gradle.properties`/env vars only.
 - User-facing strings produced **inside ViewModels/services** (e.g.
   `GoogleCalendarSyncState.message`, sync/status errors) are still hardcoded English —
   extracting them needs a resource-provider abstraction and is a tracked follow-up of the

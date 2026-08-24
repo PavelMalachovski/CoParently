@@ -38,13 +38,15 @@ Firebase sync between the two households.
   including a medical profile, 🐾 **pet records**, 👵 **guest and calendar-friend access**
 - 🌍 **Localization** — English, Czech, German, Russian, Ukrainian; light & dark themes
 
-> **Not shipped yet:** an AI subsystem exists in `domain/usecase/ai`, `data/remote/ai` and
-> `presentation/ai` (~3,100 lines: natural-language event entry, conflict monitoring, tone
-> analysis, summaries), but **none of its screens is reachable from navigation**. The README
-> advertised it as a feature until the August 2026 audit. See `docs/AUDIT-2026-08.md` §6 for
-> what to do with it (**MON-7** in `docs/BACKLOG.md` is the decision), and `docs/BACKLOG.md`
-> for everything left to build, fix or decide — release blockers, security, code quality,
-> UI/UX and monetisation, each item with a stable id and a priority.
+> **No AI features.** An AI subsystem used to sit in the tree — ~3,200 lines across
+> `domain/usecase/ai`, `data/remote/ai` and `presentation/ai` — reachable from no navigation
+> graph, while the Gemini key shipped in every APK. The README advertised it as a feature until
+> the August 2026 audit; it was deleted in **MON-7** rather than left half-alive. The reasoning,
+> and what to build if AI returns, is in `docs/AUDIT-2026-08.md` §6 — and if it returns it goes
+> behind the Cloud Function proxy (**SEC-1**), never with a key in the client.
+>
+> See `docs/BACKLOG.md` for everything left to build, fix or decide — release blockers,
+> security, code quality, UI/UX and monetisation, each item with a stable id and a priority.
 
 ---
 
@@ -60,7 +62,7 @@ Firebase sync between the two households.
 | Background work | WorkManager (+ HiltWorkerFactory) |
 | Backend | Firebase: Auth, Firestore, Cloud Messaging, Crashlytics, Analytics, Remote Config |
 | Cloud Functions | `functions/` (Node.js) — notification fan-out |
-| APIs | Google Calendar API, Gemini (generative AI) |
+| APIs | Google Calendar API |
 | Min / target SDK | 26 / 34 |
 
 ### Project structure
@@ -69,7 +71,7 @@ Firebase sync between the two households.
 app/src/main/java/com/coparently/app/
 ├── data/
 │   ├── local/            # Room database, DAOs, entities, migrations, encrypted prefs
-│   ├── remote/           # Firebase (auth, Firestore, FCM, pairing), Google, AI clients
+│   ├── remote/           # Firebase (auth, Firestore, FCM, pairing), Google clients
 │   ├── repository/       # Repository implementations
 │   ├── notification/     # FCM setup + event reminder scheduling (WorkManager)
 │   └── sync/             # Google Calendar & Firestore sync, conflict resolution
@@ -78,11 +80,11 @@ app/src/main/java/com/coparently/app/
 │   ├── holidays/         # Czech public holidays & school vacations provider
 │   ├── notification/     # ReminderScheduler abstraction
 │   ├── repository/       # Repository interfaces
-│   └── usecase/          # Business logic (event CRUD, recurrence expansion, AI, …)
+│   └── usecase/          # Business logic (event CRUD, recurrence expansion, …)
 ├── presentation/
 │   ├── calendar/         # Calendar screens, views, filters, custody helpers
 │   ├── event/            # Event list + add/edit screens
-│   ├── chat/ expenses/ childinfo/ custody/ pairing/ settings/ ai/ auth/ sync/
+│   ├── chat/ expenses/ childinfo/ custody/ pairing/ settings/ auth/ sync/
 │   └── theme/            # Material 3 theme: colors, typography, shapes, dimensions
 └── di/                   # Hilt modules
 ```
@@ -110,10 +112,7 @@ app/src/main/java/com/coparently/app/
    - Download `google-services.json` into `app/`
    - Follow [docs/google-oauth-setup.md](docs/google-oauth-setup.md) for Google Calendar OAuth
 
-3. **(Optional) Gemini AI** — put `GEMINI_API_KEY=…` into `gradle.properties`
-   or export it as an environment variable.
-
-4. **Build & run**
+3. **Build & run**
    ```bash
    ./gradlew assembleDebug
    ```

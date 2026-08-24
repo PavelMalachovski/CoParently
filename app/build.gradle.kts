@@ -47,8 +47,6 @@ android {
             isMinifyEnabled = false
             buildConfigField("Boolean", "ENABLE_CRASHLYTICS", "false")
             buildConfigField("Boolean", "ENABLE_ANALYTICS", "false")
-            // Gemini API key from gradle.properties or environment variable
-            buildConfigField("String", "GEMINI_API_KEY", "\"${project.findProperty("GEMINI_API_KEY") ?: System.getenv("GEMINI_API_KEY") ?: ""}\"")
             // Google OAuth client secret — never committed; supplied via ~/.gradle/gradle.properties or env
             buildConfigField("String", "GOOGLE_CLIENT_SECRET", "\"${project.findProperty("GOOGLE_CLIENT_SECRET") ?: System.getenv("GOOGLE_CLIENT_SECRET") ?: ""}\"")
         }
@@ -61,8 +59,6 @@ android {
             )
             buildConfigField("Boolean", "ENABLE_CRASHLYTICS", "true")
             buildConfigField("Boolean", "ENABLE_ANALYTICS", "true")
-            // Gemini API key from gradle.properties or environment variable
-            buildConfigField("String", "GEMINI_API_KEY", "\"${project.findProperty("GEMINI_API_KEY") ?: System.getenv("GEMINI_API_KEY") ?: ""}\"")
             // Google OAuth client secret — never committed; supplied via ~/.gradle/gradle.properties or env
             buildConfigField("String", "GOOGLE_CLIENT_SECRET", "\"${project.findProperty("GOOGLE_CLIENT_SECRET") ?: System.getenv("GOOGLE_CLIENT_SECRET") ?: ""}\"")
         }
@@ -235,16 +231,11 @@ dependencies {
     // and from first launch (~4 MB) instead of waiting on a Play Services download.
     implementation("com.google.mlkit:text-recognition:16.0.1")
 
-    // Generative AI - Gemini API
-    implementation("com.google.ai.client.generativeai:generativeai:0.9.0")
-
-    // Retrofit for AI API calls
-    implementation("com.squareup.retrofit2:retrofit:2.9.0")
-    implementation("com.squareup.retrofit2:converter-gson:2.9.0")
-
-    // OkHttp for HTTP client
-    implementation("com.squareup.okhttp3:okhttp:4.12.0")
-    implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
+    // Removed with the AI subsystem (MON-7): `generativeai`, `retrofit`, `converter-gson`,
+    // `okhttp` and `logging-interceptor`. All five were declared for it and, after it went,
+    // had no consumer left in `app/src` at all — retrofit already had none before. OkHttp
+    // stays on the classpath transitively via coil, at the same 4.12.0, for anything that
+    // needs it.
 
     // Firebase - Updated to latest BOM
     val firebaseBom = platform("com.google.firebase:firebase-bom:33.7.0")

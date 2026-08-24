@@ -4,7 +4,8 @@ Everything known to be missing, broken or worth improving, in one place. Sourced
 `docs/AUDIT-2026-08.md` (the full reasoning behind most items lives there, under the § numbers
 cited), from `CLAUDE.md`'s "Known issues", and from what CI found on its first four runs.
 
-Last updated: 2026-08-24, after PR #68 and #69 merged.
+Last updated: 2026-08-24. #68 and #69 are merged; the items marked **DONE** below landed
+after them and are listed rather than deleted, so the reasoning stays findable.
 
 ## How to read this
 
@@ -52,7 +53,7 @@ document for that reason alone.
 - [ ] **Back it up in two places.** Losing it means the app can never be updated again — not
       re-signed, not recovered, not appealed. The single most irreversible item here.
 - [ ] Add a `signingConfig` reading passwords from `~/.gradle/gradle.properties` or the
-      environment, never a tracked file — the pattern `GEMINI_API_KEY` already uses.
+      environment, never a tracked file — the pattern `GOOGLE_CLIENT_SECRET` already uses.
 - [ ] Decide whether to enrol in Play App Signing.
 
 ### REL-3 · P0 · Deploy the rules and the functions
@@ -139,11 +140,13 @@ The single highest-value piece of infrastructure left. Audit §3.1, §3.2, §6.2
    app itself offers them.
 2. **OAuth token exchange** — the Google client secret ships in every APK, with no PKCE.
    Carried over unfixed from the July 2026 audit.
-3. **Gemini calls** — the API key likewise ships in the APK, an open-ended billing liability.
+3. **Model calls, if AI ever returns.** The Gemini key used to ship in the APK too; the
+   subsystem and the key are gone (**MON-7**), so this is now a precondition rather than a live
+   hole — nothing goes to a model again without the proxy in front of it.
 
-One proxy, resolving the caller against Firestore, is the answer to all three. It also makes
-per-user rate limits possible at all, and turns prompts and the model version into server-side
-config instead of an app release.
+One proxy, resolving the caller against Firestore, answers all three. It also makes per-user rate
+limits possible at all, and turns prompts and the model version into server-side config instead
+of an app release.
 
 ### SEC-2 · P1 · M · Room is not encrypted at rest
 
@@ -207,7 +210,7 @@ For a co-parenting app, "a cancelled event only one parent can see" is not cosme
 argument the app exists to prevent. Needs soft-delete, a reconciliation pass on the downstream
 path, a Room migration and a rules change. Audit §8.3.
 
-### CQ-4 · P1 · S · Daily recurring events vanish after ~2 years
+### CQ-4 · **DONE** · Daily recurring events vanished after ~2 years
 
 `RecurrenceExpander.MAX_OCCURRENCES = 730`, and `count++` runs on **every loop iteration**, not
 per occurrence emitted. The walk always starts at `event.startDateTime`, so a *daily* event
@@ -215,8 +218,9 @@ stops 730 days after its start regardless of the window queried. Ask for a month
 out and you get an empty list — the master row is intact, the calendar simply lies. Weekly hits
 the cap at 14 years, monthly at 60, so daily is the live case.
 
-Fix: jump to the first occurrence at or after `rangeStart` arithmetically, and count only what
-is emitted. `RecurrenceExpanderTest` exists — add a three-years-out case. Audit §8.4.
+Fixed: occurrences are indexed rather than walked, so the cap bounds what is emitted and a
+distant range costs the same as a near one. The month-end drift went with it — a monthly event on
+the 31st no longer becomes the 28th permanently after one February.
 
 ### CQ-5 · P1 · M · Sync downloads the entire event collection every 15 minutes
 
@@ -238,13 +242,15 @@ attaches a snapshot listener with no `limitToLast`. Ten messages a day for three
 ~11,000 loaded in full on every open — and `HomeViewModel` runs `ChatReadState.unreadCount`
 across all of them on every emission, on the home screen. Audit §8.7.
 
-### CQ-7 · P1 · S · Google Calendar import silently truncates at 50 events
+### CQ-7 · **DONE** · The Google Calendar import silently truncated at 50 events
 
-`GoogleCalendarApi` sets `maxResults = 50` and never follows `pageToken`, while both callers
-pass `timeMin = null, timeMax = null` — asking for all history and taking the first fifty. The
-user is told "Found 50 events" and believes the import is complete. Audit §8.8.
+`GoogleCalendarApi` set `maxResults = 50` and never followed `pageToken`. "Found 50 events" is
+also what a complete import reports, so the user believed it had finished. Audit §8.8.
 
-### CQ-8 · P1 · S · A failed chat Firestore listener is never re-established
+Fixed: every page is followed, within a stated window (twelve months by default) and an event cap
+that produces a *different* message when it is reached.
+
+### CQ-8 · **PARTLY DONE** · P2 · S · A failed chat listener now reconnects, but only for a while
 
 Both mirror branches in `MessageRepositoryImpl` end in `.catch { Log.w(...) }`, which
 *completes* the flow — so `merge(mirror, local)` runs on Room alone for the rest of the
@@ -259,7 +265,7 @@ account switch. Fix: `retryWhen` with backoff on both branches, or await `ensure
 before subscribing. **Do not** "fix" it by removing the `.catch` — an uncaught failure in
 `viewModelScope.launch` kills the process. `CLAUDE.md`, Known issues.
 
-### CQ-9 · P1 · S · `ChildInfoViewModel` can overwrite the wrong child's record
+### CQ-9 · **DONE** · `ChildInfoViewModel` could overwrite the wrong child's record
 
 `init` subscribes to the whole child list for the editor's entire lifetime, and every emission
 unconditionally sets `_currentChildInfo` to `list.first()`. While a user edits child B, any
@@ -279,15 +285,18 @@ adding the expense one beside it by analogy would make `performFullSync()` **nev
 — with no exception and no log. Rename to `pullOnce()` / `observeRemote()`. Cheap, five files,
 prevents a silent outage. Audit §8.11.
 
-### CQ-11 · P2 · S · Error handling is declared but not wired
+### CQ-11 · **PARTLY DONE** · P3 · S · Error handling is declared but not wired
 
-`domain/error/AppError.kt` and `ErrorHandler.kt` have three references outside their own
-package; `presentation/common/ErrorDialog.kt` is never called. Actual practice: 228 `catch`
-blocks, 116 of them `catch (e: Exception)`, and **ten `printStackTrace()` calls** in
-notifications, Google sign-in and calendar import — which in release go to logcat and *not* to
-Crashlytics, so failures in three subsystems are unobservable. `SyncWorker` catches, discards
-the exception unlogged, retries, and has no `NetworkType.CONNECTED` constraint, so it wakes
-every 15 minutes offline to fail on the first network call. Audit §8.12.
+**Done:** all ten `printStackTrace()` calls — in notifications, Google sign-in and calendar
+import — now record to Crashlytics, and the three that had no logging at all also log.
+`SyncWorker` logs and reports both its failure paths (it discarded the exception unlogged under a
+comment claiming to log it) and gained the `NetworkType.CONNECTED` constraint it was missing, so
+it no longer wakes every 15 minutes offline to fail on its first network call.
+
+**Still open:** `domain/error/AppError.kt` and `ErrorHandler.kt` have three references outside
+their own package and `presentation/common/ErrorDialog.kt` is never called — the declared error
+model is still not the one in use, and 228 `catch` blocks, 116 of them
+`catch (e: Exception)`, are. Audit §8.12.
 
 ### CQ-12 · P2 · S · Regenerate the detekt baseline, then let detekt gate again
 
@@ -566,22 +575,25 @@ A Czech parent's first screen should contain their own arrangement in their own 
 `EVERY_OTHER_WEEKEND` (consider a two-week alternation too, common when parents live far apart)
 and reconsider whether the American patterns earn their place in a Czech-first launch. Audit §7.4.
 
-### MON-7 · P1 · decision · What happens to the AI subsystem
+### MON-7 · **DONE** · The AI subsystem is deleted
 
-22 files, ~3,100 lines, unreachable from any navigation graph — while the Gemini key ships in
-every APK. Either ship one feature behind **SEC-1**'s proxy, or delete the subsystem. What it
-must not do is stay half-alive and documented as shipped.
+23 files and ~3,200 lines, reachable from no navigation graph, while the Gemini key shipped in
+every APK. Deleted — along with `generativeai`, `retrofit`, `converter-gson`, `okhttp` and
+`logging-interceptor`, which had no consumer left once it went (retrofit had none before). The
+code is in git history and comes back whenever it is wanted.
 
-If one feature: **tone check before sending** (audit §6.3) is what competitors charge for
-everywhere — OFW's ToneMeter, TalkingParents' Sentiment Scanner, CoParently.de's tone detector at
-€4.99. Two hard constraints, both non-negotiable: it must **never block** sending, and the
-analysis must **never be stored** — a saved "your message was aggressive" verdict is discoverable
-material in a custody dispute, which would make it a liability to the user rather than a feature.
+**When AI returns, it returns behind SEC-1's proxy**, never with a key in the client, and as
+*one* feature rather than eight. The ranking, if it helps: **tone check before sending** (audit
+§6.3) is what competitors charge for everywhere — OFW's ToneMeter, TalkingParents' Sentiment
+Scanner, CoParently.de's tone detector at €4.99. Two hard constraints, both non-negotiable: it
+must **never block** sending, and the analysis must **never be stored** — a saved "your message
+was aggressive" verdict is discoverable material in a custody dispute, which makes it a liability
+to the user rather than a feature.
 
-Boundaries to keep whatever is decided (audit §6.5): receipt OCR stays on-device; AI never acts
-on the co-parent's behalf; AI never adjudicates who is right or who is late more often; chat
-content reaches a model only on an explicit user action. Anything resembling emotion inference
-deserves a legal read under the EU AI Act before launch.
+Boundaries that outlive the deletion (audit §6.5): receipt OCR stays on-device; AI never acts on
+the co-parent's behalf; AI never adjudicates who is right or who is late more often; chat content
+reaches a model only on an explicit user action. Anything resembling emotion inference deserves a
+legal read under the EU AI Act before launch.
 
 ### MON-8 · P2 · L · Bakaláři / EduPage school import
 

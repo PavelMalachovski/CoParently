@@ -42,8 +42,8 @@
 -dontwarn sun.misc.**
 
 # ---- Strip verbose logging from the release binary -----------------------
-# `Log.d`/`v`/`i` calls in this codebase carry family data: Gemini prompt responses
-# (calendar contents, chat text), sign-in emails, sync payloads. In a release build
+# `Log.d`/`v`/`i` calls in this codebase carry family data: calendar contents, chat text,
+# sign-in emails, sync payloads. In a release build
 # those land in logcat, where any app holding READ_LOGS on a rooted or developer
 # device — and any bug-report capture — can read them. The call sites that logged
 # personal data outright were removed in the same audit; this is the backstop that
