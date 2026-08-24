@@ -5,6 +5,7 @@ import com.coparently.app.data.local.dao.CustodyModelDao
 import com.coparently.app.data.local.entity.CustodyModelEntity
 import com.coparently.app.data.remote.firebase.FcmService
 import com.coparently.app.data.remote.firebase.FirestoreCustodyDataSource
+import com.coparently.app.data.remote.firebase.PushPayload
 import com.coparently.app.domain.activity.ActivityAnnouncement
 import com.coparently.app.domain.activity.ActivityAnnouncer
 import com.coparently.app.domain.activity.ActivityEntityType
@@ -351,25 +352,17 @@ class CustodyModelRepository(
 
     /**
      * Best-effort push to the parent who did not perform this proposal write — same mechanism
-     * and same hardcoded-English caveat as [notifyPartnerOfSwap].
+     * as [notifyPartnerOfSwap], and like it, carries no text of its own.
      */
     private suspend fun notifyPartnerOfProposal(pair: CustodyPair, action: String) {
         val partnerUid = pair.participants.firstOrNull { it != pair.myUid } ?: return
         fcmService.queueNotificationForUser(
             targetUserId = partnerUid,
             notificationData = mapOf(
-                "type" to "custody_proposal_$action",
-                "title" to when (action) {
-                    "proposed" -> "Custody schedule proposed"
-                    "accepted" -> "Custody schedule agreed"
-                    else -> "Custody proposal turned down"
-                },
-                "body" to when (action) {
-                    "proposed" -> "Your co-parent proposes a new custody schedule"
-                    "accepted" -> "Your co-parent agreed to the new custody schedule"
-                    else -> "Your co-parent turned down the proposed schedule"
-                },
-                "timestamp" to System.currentTimeMillis().toString()
+                // The type is the whole payload: this notification names nothing a person
+                // typed, so the receiving device has everything it needs to write the sentence
+                // in the reader's language (SEC-3).
+                PushPayload.TYPE to "custody_proposal_$action"
             )
         )
     }
@@ -439,6 +432,24 @@ class CustodyModelRepository(
             id = UUID.randomUUID().toString(),
             startDate = startDate,
             momFirst = momFirst
+        )
+        return submitPattern(model)
+    }
+
+    /**
+     * Creates and saves an every-other-weekend model — `výhradní péče se stykem` (MON-6).
+     *
+     * @param startDate The anchor date, expected to be the Monday the fortnight opens on
+     * @param momIsResident True when slot 1 is the parent the child lives with
+     */
+    suspend fun createEveryOtherWeekend(
+        startDate: LocalDate,
+        momIsResident: Boolean = true
+    ): PatternSubmission {
+        val model = CustodyModel.everyOtherWeekend(
+            id = UUID.randomUUID().toString(),
+            startDate = startDate,
+            momIsResident = momIsResident
         )
         return submitPattern(model)
     }
@@ -729,9 +740,11 @@ class CustodyModelRepository(
      * A best-effort push to the parent who did **not** perform this write, mirroring
      * `ChangeRequestRepositoryImpl.notifyCounterparty`: the owner's walkthrough asked for a
      * pop-up on the other phone (items 4/13), and the Cloud Function behind `notification_queue`
-     * already fans these out. Delivery is a nicety — the document write above is the record —
-     * and payload text is hardcoded English like every other service-layer payload (a tracked
-     * follow-up of the July 2026 localization pass).
+     * already fans these out. Delivery is a nicety — the document write above is the record.
+     *
+     * The payload carries the type and the date and no text at all: the receiving device writes
+     * the sentence from its own resources, in the reader's language (SEC-3). It used to be
+     * composed here, in English, which is what made a push able to claim to be anything.
      */
     private suspend fun notifyPartnerOfSwap(pair: CustodyPair, date: String, status: DayOverrideStatus) {
         val partnerUid = pair.participants.firstOrNull { it != pair.myUid } ?: return
@@ -743,19 +756,8 @@ class CustodyModelRepository(
         fcmService.queueNotificationForUser(
             targetUserId = partnerUid,
             notificationData = mapOf(
-                "type" to "day_swap_$action",
-                "date" to date,
-                "title" to when (status) {
-                    DayOverrideStatus.PENDING -> "Day swap proposed"
-                    DayOverrideStatus.ACCEPTED -> "Day swap agreed"
-                    DayOverrideStatus.DECLINED -> "Day swap turned down"
-                },
-                "body" to when (status) {
-                    DayOverrideStatus.PENDING -> "Your co-parent proposes swapping $date"
-                    DayOverrideStatus.ACCEPTED -> "Your co-parent agreed to swap $date"
-                    DayOverrideStatus.DECLINED -> "Your co-parent turned down swapping $date"
-                },
-                "timestamp" to System.currentTimeMillis().toString()
+                PushPayload.TYPE to "day_swap_$action",
+                PushPayload.DATE to date
             )
         )
     }

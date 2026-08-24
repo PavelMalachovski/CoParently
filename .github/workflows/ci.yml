@@ -5,10 +5,11 @@
 # Two of them had already shipped — a release-only Gson corruption of a child's medical
 # profile, and a functions test that had been failing on `main`.
 #
-# Three jobs run on every push and pull request. The instrumented migration job is
-# deliberately absent: `app/schemas/` stops at v14 while the database is at v24, so it would
-# be red from its first run for a reason unrelated to any change. Add it once the schemas are
-# restored (see docs/BACKLOG.md, CQ-1).
+# Three jobs run on every pull request, and on every push to `main`. A push to a feature
+# branch with no pull request open is therefore **not** built — open the pull request to get
+# it checked. The instrumented migration job is deliberately absent: `app/schemas/` stops at
+# v14 while the database is at v25, so it would be red from its first run for a reason
+# unrelated to any change. Add it once the schemas are restored (see docs/BACKLOG.md, CQ-1).
 
 name: CI
 

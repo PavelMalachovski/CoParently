@@ -190,7 +190,7 @@ describe('notifyOfChatMessage', () => {
     assert.strictEqual(db._added[0].data.targetUserId, 'bob');
   });
 
-  it('truncates the body to the named preview length rather than inlining a number', async () => {
+  it('truncates the preview to the named length rather than inlining a number', async () => {
     const longBody = 'x'.repeat(500);
     const db = fakeDb({participants: ['alice', 'bob']});
     const message = {
@@ -200,12 +200,15 @@ describe('notifyOfChatMessage', () => {
 
     await notifyOfChatMessage(db, message);
 
-    const body = db._added[0].data.data.body;
-    assert.ok(body.length < longBody.length, 'body must be truncated');
-    assert.ok(body.length > 0);
+    const preview = db._added[0].data.data.preview;
+    assert.ok(preview.length < longBody.length, 'preview must be truncated');
+    assert.ok(preview.length > 0);
   });
 
-  it('falls back to the sender name for the title, and CoPlanly when absent', async () => {
+  it('carries the sender name, and an empty one when the sender has none', async () => {
+    // SEC-3 moved the wording to the receiving device, so this no longer substitutes
+    // 'CoPlanly' here: the app does it, from a string resource, in the reader's language.
+    // Sending an English placeholder from the server would win over that translation.
     const db = fakeDb({participants: ['alice', 'bob']});
     const message = {
       conversationId: 'alice__bob', senderId: 'alice', senderName: '',
@@ -214,7 +217,26 @@ describe('notifyOfChatMessage', () => {
 
     await notifyOfChatMessage(db, message);
 
-    assert.strictEqual(db._added[0].data.data.title, 'CoPlanly');
+    assert.strictEqual(db._added[0].data.data.actorName, '');
+  });
+
+  it('never writes a title or a body', async () => {
+    // The property the security rule enforces for clients, held here for the one producer
+    // that bypasses rules: if this function wrote pre-composed text, the receiving device
+    // would have something to render for `chat_message` that nobody had checked.
+    const db = fakeDb({participants: ['alice', 'bob']});
+    const message = {
+      conversationId: 'alice__bob', senderId: 'alice', senderName: 'Alice',
+      content: 'Hi', timestamp: '2026-08-02T10:00:00',
+    };
+
+    await notifyOfChatMessage(db, message);
+
+    const payload = db._added[0].data.data;
+    assert.ok(!('title' in payload), 'no title');
+    assert.ok(!('body' in payload), 'no body');
+    assert.strictEqual(payload.actorName, 'Alice');
+    assert.strictEqual(payload.preview, 'Hi');
   });
 
   it('reads a numeric timestamp, which is what the app writes now', async () => {

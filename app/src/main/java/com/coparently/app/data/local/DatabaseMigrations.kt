@@ -501,6 +501,25 @@ object DatabaseMigrations {
     }
 
     /**
+     * Migration from version 24 to 25: tombstones for events and expenses (CQ-3).
+     *
+     * `deletedAtMillis` is the epoch-millis moment a row was deleted, and null on every row that
+     * predates the column — which is correct without a rewrite, because a row that exists is a
+     * row nobody deleted. Nullable and unindexed on purpose: the column is read by the same
+     * queries that already scan these tables, and a pending tombstone is a transient state that
+     * a healthy account holds zero of.
+     *
+     * `INTEGER` covers it — SQLite's INTEGER is up to 8 bytes, so an epoch in millis fits with
+     * room to spare, and Room maps a nullable `Long` onto exactly this affinity.
+     */
+    val MIGRATION_24_25 = object : Migration(24, 25) {
+        override fun migrate(database: SupportSQLiteDatabase) {
+            database.execSQL("ALTER TABLE events ADD COLUMN deletedAtMillis INTEGER")
+            database.execSQL("ALTER TABLE expenses ADD COLUMN deletedAtMillis INTEGER")
+        }
+    }
+
+    /**
      * List of all migrations in order.
      */
     val ALL_MIGRATIONS = arrayOf(
@@ -522,6 +541,7 @@ object DatabaseMigrations {
         MIGRATION_20_21,
         MIGRATION_21_22,
         MIGRATION_22_23,
-        MIGRATION_23_24
+        MIGRATION_23_24,
+        MIGRATION_24_25
     )
 }

@@ -118,6 +118,52 @@ data class CustodyModel(
         }
 
         /**
+         * Creates an every-other-weekend pattern — one parent's home, the other's alternate
+         * weekends.
+         *
+         * This is **výhradní péče se stykem**, the arrangement a large share of Czech families
+         * actually have, and until now the only preset list it appeared in was `CUSTOM`. The
+         * three patterns beside it split the time roughly in half; this one does not, and a
+         * parent whose court order says every second weekend had to build fourteen days by hand
+         * on the first screen they meet.
+         *
+         * Fourteen days, anchored the same way [weekOnWeekOff] is: [startDate] is day 0 and is
+         * expected to be the **Monday** the cycle opens on, which makes days 5 and 6 the first
+         * Saturday and Sunday. The resident parent holds everything else. There is no separate
+         * anchor validation here because there is none for the other patterns either — the
+         * preview card is what shows a parent they picked the wrong day.
+         *
+         * **Whole days only, and that is a real limitation rather than a simplification.** Most
+         * such orders also give the other parent a midweek afternoon, and this model assigns a
+         * day to exactly one parent — there is no half-day to give. Folding the afternoon into a
+         * whole Wednesday would hand over an overnight nobody agreed to, which is the sort of
+         * quiet wrongness this schedule must never produce, so the preset leaves it out and says
+         * so. A parent who needs it can still describe the fortnight in `CUSTOM`.
+         *
+         * @param momIsResident True when slot 1 is the parent the child lives with; false when
+         *   slot 1 is the parent with the alternate weekends.
+         */
+        fun everyOtherWeekend(
+            id: String,
+            startDate: LocalDate,
+            momIsResident: Boolean = true
+        ): CustodyModel {
+            val contactWeekend = setOf(5, 6)
+            val momDays = if (momIsResident) {
+                (0..13).toSet() - contactWeekend
+            } else {
+                contactWeekend
+            }
+            return CustodyModel(
+                id = id,
+                modelType = CustodyModelType.EVERY_OTHER_WEEKEND,
+                patternDays = 14,
+                momDayIndices = momDays,
+                startDate = startDate
+            )
+        }
+
+        /**
          * Creates a 2-2-3 pattern.
          * Pattern over 2 weeks:
          * Week 1: Mom Mon-Tue, Dad Wed-Thu, Mom Fri-Sun
@@ -195,6 +241,18 @@ data class CustodyModel(
  */
 enum class CustodyModelType(val displayName: String) {
     WEEK_ON_WEEK_OFF("Week On / Week Off"),
+
+    /**
+     * Sole custody with contact every second weekend — `výhradní péče se stykem`.
+     *
+     * Listed second, immediately after week-on-week-off, because those two are the arrangements
+     * Czech families actually have; the two below them are US family-law vocabulary. The order
+     * of this enum *is* the order of the picker (`CustodyModelType.entries.forEach`), so this is
+     * the whole of the placement decision. Whether the two American patterns still earn a place
+     * in a Czech-first launch is an owner's call and is deliberately not made here — removing
+     * one would leave existing users' saved `modelType` unparseable.
+     */
+    EVERY_OTHER_WEEKEND("Every Other Weekend"),
     TWO_TWO_THREE("2-2-3 Split"),
     THREE_FOUR_FOUR_THREE("3-4-4-3 Split"),
     CUSTOM("Custom Schedule");
@@ -203,6 +261,7 @@ enum class CustodyModelType(val displayName: String) {
         fun fromString(value: String): CustodyModelType {
             return when (value.lowercase()) {
                 "week_on_week_off" -> WEEK_ON_WEEK_OFF
+                "every_other_weekend" -> EVERY_OTHER_WEEKEND
                 "2_2_3" -> TWO_TWO_THREE
                 "3_4_4_3" -> THREE_FOUR_FOUR_THREE
                 "custom" -> CUSTOM
@@ -213,6 +272,7 @@ enum class CustodyModelType(val displayName: String) {
         fun toString(type: CustodyModelType): String {
             return when (type) {
                 WEEK_ON_WEEK_OFF -> "week_on_week_off"
+                EVERY_OTHER_WEEKEND -> "every_other_weekend"
                 TWO_TWO_THREE -> "2_2_3"
                 THREE_FOUR_FOUR_THREE -> "3_4_4_3"
                 CUSTOM -> "custom"

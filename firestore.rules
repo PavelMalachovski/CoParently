@@ -660,31 +660,57 @@ service cloud.firestore {
     // The Cloud Functions that write here (`onEventCreated`, `onChildInfoUpdated`,
     // `acceptPairingInvitation`, `unpairCoParent`) all use the Admin SDK, which bypasses
     // security rules entirely, so this restriction does not affect them.
+    // Types a client may enqueue. An **allow-list**, and the asymmetry is the point: forgetting
+    // to add a new client type here makes its push fail to enqueue, which is obvious, while
+    // forgetting to add a new server-only type to a deny-list would let any co-parent forge it,
+    // which is not. `pairing_accepted`, `pairing_removed` and `chat_message` are absent because
+    // only Cloud Functions produce them, and those write as admin and bypass these rules — so a
+    // co-parent cannot announce a pairing that did not happen, or a chat message they did not
+    // send under a name that is not theirs.
+    //
+    // The same list lives in `PushPayload.CLIENT_TYPES` on the client; this is the half that is
+    // enforced.
+    function isClientPushType(type) {
+      return type in [
+        'event_created', 'event_updated', 'event_deleted',
+        'child_info_updated',
+        'change_request_created', 'change_request_accepted',
+        'change_request_declined', 'change_request_cancelled',
+        'custody_proposal_proposed', 'custody_proposal_accepted', 'custody_proposal_declined',
+        'day_swap_offered', 'day_swap_accepted', 'day_swap_declined'
+      ];
+    }
+
     match /notification_queue/{notificationId} {
       allow read: if false;
       // The addressee check stops a stranger notifying anyone. It does not stop a *live*
-      // co-parent, and it cannot: they are entitled to notify you. What the bounds below add
-      // is a cap on how much text rides along. `sendNotification` relays `data.title`/
-      // `data.body` for the client to render verbatim, so an unbounded body is a wall of text
-      // rendered with the app's own branding, on a lock screen, by someone the user may be
-      // trying to keep at a distance.
+      // co-parent, and it cannot: they are entitled to notify you. What the rest adds is a
+      // limit on *what they can make the notification say* (SEC-3).
       //
-      // 200/500 clear every legitimate payload with room to spare — the longest is the chat
-      // preview, which `functions/index.js` already truncates to 120 characters, and event
-      // titles are capped at 200 by the `events` rule above. The absent-key defaults keep a
-      // payload that carries neither field (a pure data ping) valid.
+      // **A client may not write `title` or `body` at all.** They used to be the payload: the
+      // sending device composed the sentence and `sendNotification` relayed it for the other
+      // phone to render verbatim, with the app's own icon, on a lock screen, by someone the
+      // user may be trying to keep at a distance. The bounds that used to be here capped how
+      // *long* that text could be and nothing else. Now the payload carries a type and a few
+      // names, and the receiving device writes the sentence from its own string resources —
+      // so the frame cannot be forged, and it arrives in the reader's language rather than the
+      // sender's. Refusing the two keys is what keeps a client from going back to the old way.
       //
-      // Not fixed here, and worth doing: the text itself is composed on the *client*, so a
-      // notification can still claim to be anything. Composing it server-side from `type` is
-      // the real answer, and it drags the localization of service-layer strings with it.
+      // The names that do ride along are still bounded. They are an event's title, a child's
+      // name, a parent's display name and an ISO date — all things the co-parent legitimately
+      // chooses, so the cap is against a wall of text rather than against the content.
       allow create: if isAuthenticated() &&
                       'targetUserId' in request.resource.data &&
                       (
                         request.resource.data.targetUserId == request.auth.uid ||
                         isPartnerOf(request.resource.data.targetUserId)
                       ) &&
-                      isValidLength(request.resource.data.get('data', {}).get('title', ''), 0, 200) &&
-                      isValidLength(request.resource.data.get('data', {}).get('body', ''), 0, 500);
+                      isClientPushType(request.resource.data.get('data', {}).get('type', '')) &&
+                      !('title' in request.resource.data.get('data', {})) &&
+                      !('body' in request.resource.data.get('data', {})) &&
+                      isValidLength(request.resource.data.get('data', {}).get('subject', ''), 0, 200) &&
+                      isValidLength(request.resource.data.get('data', {}).get('actorName', ''), 0, 100) &&
+                      isValidLength(request.resource.data.get('data', {}).get('date', ''), 0, 20);
       allow update, delete: if false;
     }
 

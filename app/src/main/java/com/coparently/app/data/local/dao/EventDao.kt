@@ -19,7 +19,7 @@ interface EventDao {
     /**
      * Gets all events as a Flow.
      */
-    @Query("SELECT * FROM events ORDER BY startDateTime ASC")
+    @Query("SELECT * FROM events WHERE deletedAtMillis IS NULL ORDER BY startDateTime ASC")
     fun getAllEvents(): Flow<List<EventEntity>>
 
     /**
@@ -31,7 +31,8 @@ interface EventDao {
     @Query(
         """
         SELECT * FROM events
-        WHERE isRecurring = 0
+        WHERE deletedAtMillis IS NULL
+        AND isRecurring = 0
         AND startDateTime <= :end
         AND (endDateTime IS NULL OR endDateTime >= :start)
         ORDER BY startDateTime ASC
@@ -43,7 +44,10 @@ interface EventDao {
      * Gets all recurring events that started on or before the given moment,
      * so their occurrences can be expanded into any later date range.
      */
-    @Query("SELECT * FROM events WHERE isRecurring = 1 AND startDateTime <= :end ORDER BY startDateTime ASC")
+    @Query(
+        "SELECT * FROM events WHERE deletedAtMillis IS NULL " +
+            "AND isRecurring = 1 AND startDateTime <= :end ORDER BY startDateTime ASC"
+    )
     fun getRecurringEventsStartedBefore(end: LocalDateTime): Flow<List<EventEntity>>
 
     /**
@@ -54,7 +58,8 @@ interface EventDao {
     @Query(
         """
         SELECT * FROM events
-        WHERE date(startDateTime) <= date(:date)
+        WHERE deletedAtMillis IS NULL
+        AND date(startDateTime) <= date(:date)
         AND (endDateTime IS NULL OR date(endDateTime) >= date(:date))
         ORDER BY startDateTime ASC
         """
@@ -62,7 +67,15 @@ interface EventDao {
     fun getEventsByDate(date: LocalDateTime): Flow<List<EventEntity>>
 
     /**
-     * Gets an event by ID.
+     * Gets an event by ID, **including a pending tombstone**.
+     *
+     * The one read that is deliberately not filtered on `deletedAtMillis`. Its callers are the
+     * sync and delete paths, and for them "there is no such row" and "there is a row this
+     * device has deleted" are opposite answers: the downstream half must recognise a local
+     * tombstone rather than treat the id as unknown and insert the remote document over it,
+     * which would resurrect exactly the event the parent just deleted. A caller answering a
+     * *user's* question filters at the repository boundary instead — see
+     * `EventRepositoryImpl.getEventById`.
      */
     @Query("SELECT * FROM events WHERE id = :id")
     suspend fun getEventById(id: String): EventEntity?
@@ -70,7 +83,10 @@ interface EventDao {
     /**
      * Gets events for a specific parent owner.
      */
-    @Query("SELECT * FROM events WHERE parentOwner = :parentOwner ORDER BY startDateTime ASC")
+    @Query(
+        "SELECT * FROM events WHERE deletedAtMillis IS NULL " +
+            "AND parentOwner = :parentOwner ORDER BY startDateTime ASC"
+    )
     fun getEventsByParent(parentOwner: String): Flow<List<EventEntity>>
 
     /**
@@ -92,19 +108,17 @@ interface EventDao {
     suspend fun updateEvent(event: EventEntity)
 
     /**
-     * Deletes an event.
-     */
-    @Delete
-    suspend fun deleteEvent(event: EventEntity)
-
-    /**
      * Deletes an event by ID.
      */
     @Query("DELETE FROM events WHERE id = :id")
     suspend fun deleteEventById(id: String)
 
     /**
-     * Gets all events that have not been synced to Firestore.
+     * Gets all events that have not been synced to Firestore — **tombstones included**.
+     *
+     * This is the outbox, and a pending deletion is the one thing in it that must never be
+     * filtered out: a tombstone that no upload pass picks up is a delete that stays on one
+     * phone forever, which is the whole of CQ-3.
      */
     @Query("SELECT * FROM events WHERE syncedToFirestore = 0")
     suspend fun getUnsyncedEvents(): List<EventEntity>
@@ -138,7 +152,8 @@ interface EventDao {
      */
     @Query("""
         SELECT * FROM events
-        WHERE parentOwner = :parentOwner
+        WHERE deletedAtMillis IS NULL
+        AND parentOwner = :parentOwner
         AND startDateTime BETWEEN :start AND :end
         ORDER BY startDateTime ASC
         LIMIT :limit OFFSET :offset
@@ -156,7 +171,8 @@ interface EventDao {
      */
     @Query("""
         SELECT COUNT(*) FROM events
-        WHERE parentOwner = :parentOwner
+        WHERE deletedAtMillis IS NULL
+        AND parentOwner = :parentOwner
         AND startDateTime BETWEEN :start AND :end
     """)
     suspend fun getEventsCountForParent(
@@ -183,7 +199,7 @@ interface EventDao {
      */
     @Query(
         "UPDATE events SET parentOwner = :to, syncedToFirestore = 0 " +
-            "WHERE parentOwner = :from AND createdByFirebaseUid = :myUid"
+            "WHERE parentOwner = :from AND createdByFirebaseUid = :myUid AND deletedAtMillis IS NULL"
     )
     suspend fun reslotOwner(from: String, to: String, myUid: String): Int
 
@@ -194,7 +210,7 @@ interface EventDao {
      */
     @Query(
         "UPDATE events SET pickupConfirmedBy = :to, syncedToFirestore = 0 " +
-            "WHERE pickupConfirmedBy = :from AND createdByFirebaseUid = :myUid"
+            "WHERE pickupConfirmedBy = :from AND createdByFirebaseUid = :myUid AND deletedAtMillis IS NULL"
     )
     suspend fun reslotPickup(from: String, to: String, myUid: String): Int
 
@@ -221,13 +237,42 @@ interface EventDao {
      * this user's un-stamped event from anybody else's, and a statement that guessed would
      * publish the wrong person's history.
      *
+     * `deletedAtMillis IS NULL` excludes pending tombstones. They are queued already — a
+     * tombstone is a row with the flag cleared, by definition — so this changes nothing about
+     * what gets uploaded; what it changes is the returned count, which is logged as "how many
+     * events were republished for the co-parent" and should not include events nobody will
+     * ever see.
+     *
      * @param myUid Firebase UID of the signed-in user.
      * @return How many rows were re-queued.
      */
     @Query(
         "UPDATE events SET syncedToFirestore = 0 " +
-            "WHERE createdByFirebaseUid = :myUid AND isPrivate = 0"
+            "WHERE createdByFirebaseUid = :myUid AND isPrivate = 0 AND deletedAtMillis IS NULL"
     )
     suspend fun markOwnEventsUnsynced(myUid: String): Int
-}
 
+    /**
+     * Marks an event deleted, and queues the deletion for upload.
+     *
+     * `syncedToFirestore = 0` is part of the statement rather than a separate write, for the
+     * same reason it is part of [reslotOwner]: a row the upload half does not select is a change
+     * that never leaves the device, and here that change is the deletion itself.
+     *
+     * `deletedAtMillis IS NULL` in the WHERE clause makes a second delete a no-op instead of
+     * re-dating the first one. Two deletes of the same event are not hypothetical — a failed
+     * upload leaves the row in place, visible to nothing, and the sync retries it.
+     *
+     * `updatedAt` is deliberately **not** bumped. It is a naive `LocalDateTime` with the
+     * cross-time-zone ordering defect SEC-4 describes, and nothing about a deletion is decided
+     * by comparing it: see `SyncService.syncEvents`, where a tombstone wins outright rather
+     * than by timestamp.
+     *
+     * @return 1 if this call is what deleted the event, 0 if it was already deleted or absent.
+     */
+    @Query(
+        "UPDATE events SET deletedAtMillis = :deletedAtMillis, syncedToFirestore = 0 " +
+            "WHERE id = :id AND deletedAtMillis IS NULL"
+    )
+    suspend fun markDeleted(id: String, deletedAtMillis: Long): Int
+}

@@ -54,7 +54,7 @@ describe('buildFcmMessage', () => {
     assert.strictEqual(message.data.ratio, '1.5');
   });
 
-  it('coerces a non-string title and body rather than throwing', () => {
+  it('coerces a non-string value rather than throwing', () => {
     // title/body were the only two values excluded from the String(...) coercion, so a
     // queue document with a non-string title made admin.messaging().send throw and the
     // push was lost.
@@ -64,18 +64,20 @@ describe('buildFcmMessage', () => {
     assert.strictEqual(typeof message.data.body, 'string');
   });
 
-  it('defaults a missing title and body to empty strings, not "undefined"', () => {
+  it('does not invent a title or a body for a payload that carries none', () => {
+    // SEC-3: the notification's text is written by the receiving device, so these two keys
+    // are no longer part of the contract and defaulting them here would suggest they are.
     const message = buildFcmMessage('token-1', {type: 'event_created'});
 
-    assert.strictEqual(message.data.title, '');
-    assert.strictEqual(message.data.body, '');
+    assert.ok(!('title' in message.data), 'no title');
+    assert.ok(!('body' in message.data), 'no body');
   });
 
   it('tolerates a missing data payload entirely', () => {
     const message = buildFcmMessage('token-1', undefined);
 
-    assert.strictEqual(message.data.title, '');
     assert.strictEqual(message.data.type, 'general');
+    assert.strictEqual(message.data.eventId, '');
   });
 
   it('falls back to the general type when type is absent or empty', () => {

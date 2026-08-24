@@ -11,9 +11,12 @@ import com.coparently.app.domain.model.Message
 import com.coparently.app.domain.model.MessageSendStatus
 import com.coparently.app.domain.repository.MessageRepository
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.onEach
@@ -112,6 +115,26 @@ class MessageRepositoryImpl @Inject constructor(
 
         return merge(mirror, local)
     }
+
+    /**
+     * Live unread count for one thread, straight out of Room.
+     *
+     * Two Room reads chained rather than combined: the mark is a *parameter* of the count, not
+     * another value to fold with it, so a change to the mark has to restart the count query
+     * rather than be recombined with a stale one. `distinctUntilChanged` on the mark is what
+     * keeps that from being churn — the conversation row is rewritten on every
+     * `lastDeliveredAt` write too, and `lastReadAt` is usually unchanged by those.
+     *
+     * `Long.MIN_VALUE` for a thread never opened, matching what `ChatReadState.unreadCount`
+     * substitutes for a null mark. Any real timestamp is greater, so every message counts —
+     * which is the right answer for a thread the reader has never seen.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    override fun observeUnreadCount(conversationId: String, myUid: String): Flow<Int> =
+        messageDao.observeConversationById(conversationId)
+            .map { it?.toDomain()?.lastReadAt?.get(myUid) ?: Long.MIN_VALUE }
+            .distinctUntilChanged()
+            .flatMapLatest { mark -> messageDao.observeUnreadCount(conversationId, myUid, mark) }
 
     override suspend fun ensureConversation(myUid: String, partnerUid: String, title: String): String {
         val conversationId = ConversationKey.of(myUid, partnerUid)

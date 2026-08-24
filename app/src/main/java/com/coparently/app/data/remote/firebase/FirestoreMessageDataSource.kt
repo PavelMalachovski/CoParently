@@ -52,12 +52,31 @@ class FirestoreMessageDataSource @Inject constructor(
     }
 
     /**
-     * Gets messages for a conversation as a Flow.
+     * Gets the most recent messages of a conversation as a Flow, oldest of them first.
+     *
+     * **Bounded to [MESSAGE_WINDOW]** (CQ-6). This listener had no limit at all, so every
+     * snapshot carried the entire thread — ten messages a day for three years is about eleven
+     * thousand documents, re-delivered on each change, on both parents' phones, for the life of
+     * the process. A chat's cost should scale with how much is being said, not with how long
+     * the pair has been using the app.
+     *
+     * `limitToLast` rather than `limit`: the order is ascending, so `limit` would pin the window
+     * to the *oldest* messages and a live thread would stop updating the moment it passed the
+     * bound. `limitToLast` keeps the newest, which is the window a chat screen is looking at,
+     * and Firestore requires the `orderBy` it already has.
+     *
+     * Nothing is lost on a device that has been running: the mirror writes into Room, Room keeps
+     * every message it has ever received, and that is what the UI reads. What does change is a
+     * **fresh install**, which now receives the last [MESSAGE_WINDOW] messages of the thread
+     * rather than all of them. That is ordinary chat behaviour, and it is a deliberate trade
+     * rather than an oversight — but it is a behaviour change, and history older than the window
+     * is not fetched by anything else yet.
      */
     fun getMessages(conversationId: String): Flow<List<Map<String, Any>>> = callbackFlow {
         val subscription = messagesCollection
             .whereEqualTo("conversationId", conversationId)
             .orderBy("timestamp", Query.Direction.ASCENDING)
+            .limitToLast(MESSAGE_WINDOW)
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
                     close(error)
@@ -205,4 +224,15 @@ class FirestoreMessageDataSource @Inject constructor(
             .documents
             .map { it.id }
             .toSet()
+
+    private companion object {
+        /**
+         * How many of a thread's newest messages the live listener carries.
+         *
+         * Large enough that scrolling a normal conversation never reaches the edge, small enough
+         * that the per-snapshot cost stops growing with the pair's tenure. It bounds the network
+         * and the mirror, not what the device knows: Room keeps everything it has ever received.
+         */
+        const val MESSAGE_WINDOW = 200L
+    }
 }

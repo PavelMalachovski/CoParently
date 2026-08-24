@@ -249,7 +249,7 @@ fun CustodySetupScreen(
             // Mom first toggle (for non-custom models)
             if (uiState.selectedModelType != CustodyModelType.CUSTOM) {
                 Text(
-                    text = stringResource(R.string.custody_who_starts_first),
+                    text = stringResource(rolesQuestionFor(uiState.selectedModelType)),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(vertical = dims.paddingSmall)
@@ -274,7 +274,7 @@ fun CustodySetupScreen(
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             text = stringResource(
-                                R.string.custody_starts_first,
+                                rolesAnswerFor(uiState.selectedModelType),
                                 parentNames.labelFor(if (uiState.momFirst) "mom" else "dad")
                             ),
                             style = MaterialTheme.typography.bodyLarge
@@ -643,11 +643,37 @@ private fun ModelTypeCard(
 private fun modelTypeLabel(modelType: CustodyModelType): String = stringResource(
     when (modelType) {
         CustodyModelType.WEEK_ON_WEEK_OFF -> R.string.custody_model_week_on_week_off
+        CustodyModelType.EVERY_OTHER_WEEKEND -> R.string.custody_model_every_other_weekend
         CustodyModelType.TWO_TWO_THREE -> R.string.custody_model_two_two_three
         CustodyModelType.THREE_FOUR_FOUR_THREE -> R.string.custody_model_three_four_four_three
         CustodyModelType.CUSTOM -> R.string.custody_model_custom
     }
 )
+
+/**
+ * Which question the switch above the preview is actually asking, for the selected pattern.
+ *
+ * Three of the four patterns alternate blocks of time, so "who starts first" is the whole of
+ * it. [CustodyModelType.EVERY_OTHER_WEEKEND] does not alternate: one parent has the child and
+ * the other has every second weekend, and asking a parent who "starts" invites them to answer
+ * about the first weekend — which sets the switch backwards and hands over the school days.
+ * A schedule that is wrong in that direction is exactly the failure this app exists to prevent,
+ * so the question changes with the pattern rather than the parent being expected to translate it.
+ *
+ * `CUSTOM` never reaches here: the switch is not rendered for it.
+ */
+@StringRes
+private fun rolesQuestionFor(modelType: CustodyModelType): Int = when (modelType) {
+    CustodyModelType.EVERY_OTHER_WEEKEND -> R.string.custody_who_is_resident
+    else -> R.string.custody_who_starts_first
+}
+
+/** The matching answer line — see [rolesQuestionFor]. */
+@StringRes
+private fun rolesAnswerFor(modelType: CustodyModelType): Int = when (modelType) {
+    CustodyModelType.EVERY_OTHER_WEEKEND -> R.string.custody_is_resident
+    else -> R.string.custody_starts_first
+}
 
 /**
  * A brief description of each model type, in the reader's language. See [modelTypeLabel] —
@@ -657,6 +683,7 @@ private fun modelTypeLabel(modelType: CustodyModelType): String = stringResource
 private fun getModelTypeDescription(modelType: CustodyModelType): String = stringResource(
     when (modelType) {
         CustodyModelType.WEEK_ON_WEEK_OFF -> R.string.custody_model_week_on_week_off_desc
+        CustodyModelType.EVERY_OTHER_WEEKEND -> R.string.custody_model_every_other_weekend_desc
         CustodyModelType.TWO_TWO_THREE -> R.string.custody_model_two_two_three_desc
         CustodyModelType.THREE_FOUR_FOUR_THREE -> R.string.custody_model_three_four_four_three_desc
         CustodyModelType.CUSTOM -> R.string.custody_model_custom_desc
@@ -673,6 +700,12 @@ private fun createTempModel(state: CustodySetupUiState): com.coparently.app.doma
                 id = "preview",
                 startDate = state.startDate,
                 momFirst = state.momFirst
+            )
+        CustodyModelType.EVERY_OTHER_WEEKEND ->
+            com.coparently.app.domain.model.CustodyModel.everyOtherWeekend(
+                id = "preview",
+                startDate = state.startDate,
+                momIsResident = state.momFirst
             )
         CustodyModelType.TWO_TWO_THREE ->
             com.coparently.app.domain.model.CustodyModel.twoTwoThree(
@@ -715,6 +748,8 @@ private fun custodyPreviewText(uiState: CustodySetupUiState, parentNames: Parent
     return when (uiState.selectedModelType) {
         CustodyModelType.WEEK_ON_WEEK_OFF ->
             stringResource(R.string.custody_preview_week_on_week_off, first)
+        CustodyModelType.EVERY_OTHER_WEEKEND ->
+            stringResource(R.string.custody_preview_every_other_weekend, first, second)
         CustodyModelType.TWO_TWO_THREE ->
             stringResource(R.string.custody_preview_two_two_three, first, second)
         CustodyModelType.THREE_FOUR_FOUR_THREE ->

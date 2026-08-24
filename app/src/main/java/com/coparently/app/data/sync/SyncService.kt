@@ -117,7 +117,31 @@ class SyncService @Inject constructor(
         backfillAudienceForPartner(userId, partnerId)
 
         // Upload unsynced local events; private events never leave the device
-        val unsyncedEvents = eventDao.getUnsyncedEvents().filterNot { it.isPrivate }
+        val unsynced = eventDao.getUnsyncedEvents().filterNot { it.isPrivate }
+        val (pendingDeletions, unsyncedEvents) = unsynced.partition { it.deletedAtMillis != null }
+
+        // Deletions first. They are the half of this queue that used to have no path at all:
+        // a delete was a fire-and-forget document removal whose failure was logged and dropped,
+        // so an offline or rejected delete stayed undone forever and the download half below
+        // put the event back. A pending tombstone is retried here on every sync until the write
+        // lands, and only then does the row go for real.
+        for (entity in pendingDeletions) {
+            val deletedAtMillis = entity.deletedAtMillis ?: continue
+            val tombstoned = firestoreEventDataSource.tombstoneEvent(
+                id = entity.id,
+                deletedAtMillis = deletedAtMillis,
+                deletedBy = userId
+            )
+            if (tombstoned.isSuccess) {
+                eventDao.deleteEventById(entity.id)
+            } else {
+                Log.w(
+                    TAG,
+                    "Event tombstone for ${entity.id} not written; it stays queued",
+                    tombstoned.exceptionOrNull()
+                )
+            }
+        }
 
         for (entity in unsyncedEvents) {
             val audience = shareTargets(
@@ -171,8 +195,35 @@ class SyncService @Inject constructor(
         // the query is authorized by `sharedWith` alone, so there is nothing to gate on.
         firestoreEventDataSource.observeEventsSharedWith(userId).collect { firestoreEvents ->
             for (firestoreData in firestoreEvents) {
+                val remoteId = firestoreData["id"] as? String ?: continue
+
+                // A tombstone is the co-parent telling this device the event is gone. It is
+                // answered from the raw document, before it is mapped to an entity: a deletion
+                // is the one thing that must not depend on the rest of the document still
+                // parsing. And it is answered regardless of timestamps — `updatedAt` is a naive
+                // `LocalDateTime` whose cross-time-zone ordering is known wrong (SEC-4), and a
+                // rule that cannot be wrong beats one that is usually right when the question is
+                // whether a cancelled event stays on a parent's calendar.
+                //
+                // It therefore also wins over a *concurrent edit* on this device, deliberately:
+                // an event that should not exist is at least visible and can be deleted again,
+                // whereas an edit that loses is simply gone.
+                if (Tombstone.isDeleted(firestoreData)) {
+                    eventDao.deleteEventById(remoteId)
+                    continue
+                }
+
+                val localEntity = eventDao.getEventById(remoteId)
+
+                // The mirror image: this device has deleted the event and the deletion has not
+                // been written yet, so the document is still alive remotely. Inserting it would
+                // undo the parent's own delete a few lines after the upload half tried to
+                // deliver it.
+                if (localEntity?.deletedAtMillis != null) {
+                    continue
+                }
+
                 val remoteEntity = firestoreData.toEventEntity()
-                val localEntity = eventDao.getEventById(remoteEntity.id)
 
                 if (localEntity != null && !localEntity.syncedToFirestore) {
                     // Conflict detected - resolve it
@@ -557,12 +608,15 @@ class SyncService @Inject constructor(
         val currentUser = firebaseAuthService.getCurrentUser() ?: return
         val userData = userDao.getUserById(currentUser.uid) ?: return
 
+        // Null for an action nothing announces. Skipping is the whole of the handling: the
+        // receiving device composes the sentence from the type now, so a payload it has no
+        // type for is a push that would be dropped on arrival.
         val notificationPayload = fcmService.createEventNotificationPayload(
             eventId = eventId,
             eventTitle = eventTitle,
             action = action,
             performedBy = userData.name
-        )
+        ) ?: return
 
         fcmService.queueNotificationForUser(partnerId, notificationPayload)
     }

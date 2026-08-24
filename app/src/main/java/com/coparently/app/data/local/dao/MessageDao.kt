@@ -69,6 +69,34 @@ interface MessageDao {
     @Query("SELECT * FROM messages WHERE conversationId = :conversationId ORDER BY sentAtMillis ASC")
     fun getMessages(conversationId: String): Flow<List<MessageEntity>>
 
+    /**
+     * How many messages in [conversationId] were sent by somebody other than [myUid] after
+     * [afterMillis], as a live count.
+     *
+     * **The second implementation of `ChatReadState.unreadCount`, and it has to agree with it.**
+     * The rule is the same in both: a message from the other parent whose timestamp is
+     * *strictly* greater than the mark. Strictly, because the mark is written after the messages
+     * it covers, so a message whose timestamp equals the mark has been read. Read
+     * `ChatReadState.unreadCount` before changing either.
+     *
+     * Duplicating a rule is a cost, and this one is paid for the difference between counting a
+     * number and materialising a thread to count it. `HomeViewModel` subscribed to every message
+     * in the conversation and mapped all of them into domain objects on every emission, to
+     * render one integer on a tile — about eleven thousand rows after three years of ten
+     * messages a day, on the screen the app opens to. `COUNT(*)` over the same predicate touches
+     * an index and returns an `Int`.
+     *
+     * A caller with no mark yet — the thread has never been opened — passes `Long.MIN_VALUE`,
+     * which is exactly what `ChatReadState` substitutes for a null mark.
+     */
+    @Query(
+        "SELECT COUNT(*) FROM messages " +
+            "WHERE conversationId = :conversationId " +
+            "AND senderId != :myUid " +
+            "AND sentAtMillis > :afterMillis"
+    )
+    fun observeUnreadCount(conversationId: String, myUid: String, afterMillis: Long): Flow<Int>
+
     /** One-shot read of a conversation's messages, oldest first — used by the legacy-conversation merge. */
     @Query("SELECT * FROM messages WHERE conversationId = :conversationId ORDER BY sentAtMillis ASC")
     suspend fun getMessagesOnce(conversationId: String): List<MessageEntity>

@@ -4,7 +4,7 @@ Everything known to be missing, broken or worth improving, in one place. Sourced
 `docs/AUDIT-2026-08.md` (the full reasoning behind most items lives there, under the § numbers
 cited), from `CLAUDE.md`'s "Known issues", and from what CI found on its first four runs.
 
-Last updated: 2026-08-24. #68 and #69 are merged; the items marked **DONE** below landed after
+Last updated: 2026-08-24. #68, #69, #70 and #71 are merged; the items marked **DONE** below landed after
 them, in #70, and are listed rather than deleted so the reasoning stays findable. **DONE** means
 merged or awaiting review in #70 — not verified on a device, which for anything visual is a
 different claim (see **REL-7**).
@@ -177,11 +177,39 @@ database**. A child's medical profile, the full chat history and every expense s
 SQLite. SQLCipher plus a migration, or — as a smaller first step — field-level encryption of
 the medical profile alone. Audit §3.3.
 
-### SEC-3 · P1 · S · Notification text is composed on the client
+### SEC-3 · **DONE** · Notification text is composed on the client
 
-So a push can claim to be anything. Length is now bounded (audit §2.7); composition is not.
-Blocked behind CQ-14 (service-layer strings are still hardcoded English, so moving composition
-server-side needs the localisation story settled first).
+So a push could claim to be anything. Length was bounded (audit §2.7); composition was not —
+the sending device wrote `title` and `body`, and the other phone rendered them verbatim with the
+app's own icon, on a lock screen, from someone the reader may be trying to keep at a distance.
+
+**Composed on the receiving device now**, not on the sender and not on a server. A payload
+carries a `type` and the few names that type needs (`PushPayload`); the app writes the sentence
+from its own string resources, and **drops a type it has no wording for** rather than falling
+back to whatever text arrived — the fallback is what would have left the forgery open.
+
+Two rules make it hold rather than be a convention, both pinned in
+`firestore-tests/rules/notification-payload.test.js`:
+
+- a client-written payload carrying `title` or `body` **at all** is refused (a length bound
+  would have let an empty one through, which is why this is presence and not size);
+- `data.type` must be in an **allow-list** of the fourteen types a client produces. The three
+  server-only types — `pairing_accepted`, `pairing_removed`, `chat_message` — are absent, so a
+  co-parent cannot announce a pairing that did not happen or a chat message under a name that is
+  not theirs. Cloud Functions write as admin and bypass rules, which is what makes an allow-list
+  safe here.
+
+**The CQ-14 blocker was wrong**, and worth recording as an error rather than quietly dropping.
+It assumed *server-side* was the only alternative to *sender-side*, which would indeed have
+needed a stored locale and a JavaScript string catalogue. But `buildFcmMessage` already sends
+**data-only** messages precisely so the app always renders the push itself — so the receiving
+device was already drawing the notification, and it is the device that holds all five
+translations and knows which one the reader wants. Composing there is both safer and better
+localized than composing on a server, and it needed no new profile field.
+
+Thirty-three strings in five locales. Remaining gap: the chat preview still relays rather than
+composes — its title *is* the sender and its body *is* the message — but only the Cloud Function
+that saw the message can produce that type, and the rule refuses it from a client.
 
 ### SEC-4 · P2 · S · `CustodyModelEntity.lastModifiedAt` is a naive local date-time
 
@@ -219,18 +247,44 @@ deliberately does not fall back to destructive migration above v4: a broken migr
       `.github/workflows/ci.yml` today because it would be red from its first run.
 - [ ] Have CI assert `version == max(schemas)` so this cannot silently recur.
 
-### CQ-3 · P0 · L · Deletions never reach the other parent
+### CQ-3 · **DONE** · Deletions never reach the other parent
 
-`deleteEvent` hard-deletes locally and calls Firestore. The **downstream** path in
-`SyncService` only ever inserts: no branch removes a local row absent from the remote snapshot,
-and there are no tombstones anywhere. So parent A deletes an event and **parent B keeps it
-forever**. Worse: if the remote delete fails (offline, permission), the exception is logged and
-dropped with no retry queue — the document survives in Firestore and the next sync **restores
-it locally**. `ExpenseRepositoryImpl` is the same.
+`deleteEvent` hard-deleted locally and called Firestore. The **downstream** path in
+`SyncService` only ever inserted: no branch removed a local row absent from the remote snapshot,
+and there were no tombstones anywhere. So parent A deleted an event and **parent B kept it
+forever**. Worse: if the remote delete failed (offline, permission), the exception was logged and
+dropped with no retry queue — the document survived in Firestore and the next sync **restored
+it locally**. `ExpenseRepositoryImpl` was the same.
 
 For a co-parenting app, "a cancelled event only one parent can see" is not cosmetic. It is the
-argument the app exists to prevent. Needs soft-delete, a reconciliation pass on the downstream
-path, a Room migration and a rules change. Audit §8.3.
+argument the app exists to prevent. Audit §8.3.
+
+**Fixed with tombstones**, in `data/sync/Tombstone.kt` — one definition of what a deleted
+document looks like on the wire (`deletedAtMillis`, epoch millis, plus `deletedBy`). A delete
+marks the document instead of removing it, so the deletion travels down the same query that
+delivers every other change; Room gains `deletedAtMillis` on `events` and `expenses`
+(schema 25) as a **pending-tombstone outbox**, hidden from every read query and retried on each
+sync until the write lands, then removed for real. `sweepDeletedDocuments` (Cloud Functions,
+daily) purges tombstones after 90 days.
+
+Three decisions worth knowing before touching it:
+
+- **Not reconciliation by absence.** "Delete whatever is not in the remote snapshot" would take
+  the whole calendar the first time `sharedWith` narrowed at unpair, or CQ-5 bounded the
+  download window, or a snapshot came back partial. Absence is not deletion.
+- **A deletion wins outright, never by timestamp.** `updatedAt` is a naive `LocalDateTime`
+  with SEC-4's cross-time-zone ordering defect, so a tombstone beats a concurrent edit by rule
+  rather than by comparison. An event that should not exist is at least visible; an edit that
+  loses is simply gone.
+- **No rule was widened.** Tombstoning turns a `delete` into an `update`, so `events` admits a
+  `read_write` co-parent (who could already rewrite every field) and `expenses` stays
+  creator-only (the August 2026 owner decision). Pinned in
+  `firestore-tests/rules/deletion-tombstones.test.js`, including that a tombstoned document
+  stays readable — a deletion nobody may read is a deletion nobody is told about.
+
+**Left open:** a device offline for longer than the 90-day retention keeps that one event, since
+the document it would have learned from is gone. Bounded, rare, and the reason the window is not
+smaller.
 
 ### CQ-4 · **DONE** · Daily recurring events vanished after ~2 years
 
@@ -257,12 +311,34 @@ subscriptions to the whole events table plus one to all expenses and filters the
 **in memory**, while `EventDao.getEventsForParentPaginated` sits written and never called.
 Audit §8.6.
 
-### CQ-6 · P1 · M · Chat has no limit at either end
+### CQ-6 · **PARTLY DONE** · P2 · M · Chat has no limit at either end
 
-`MessageDao` selects a whole conversation with no `LIMIT`; `FirestoreMessageDataSource`
-attaches a snapshot listener with no `limitToLast`. Ten messages a day for three years is
-~11,000 loaded in full on every open — and `HomeViewModel` runs `ChatReadState.unreadCount`
+`MessageDao` selected a whole conversation with no `LIMIT`; `FirestoreMessageDataSource`
+attached a snapshot listener with no `limitToLast`. Ten messages a day for three years is
+~11,000 loaded in full on every open — and `HomeViewModel` ran `ChatReadState.unreadCount`
 across all of them on every emission, on the home screen. Audit §8.7.
+
+**Two of the three costs are gone.**
+
+- **The home screen no longer loads the thread to count it.**
+  `MessageRepository.observeUnreadCount` answers with a Room `COUNT(*)` over the same
+  predicate `ChatReadState.unreadCount` states, so rendering one integer costs an index
+  lookup instead of eleven thousand entity-to-domain mappings per emission. It also drops
+  Home's second subscription to the remote message listener.
+- **The remote listener is bounded** to the newest 200 messages (`limitToLast`, not `limit` —
+  the order is ascending, so `limit` would pin the window to the oldest messages and a live
+  thread would stop updating at the bound). Room keeps everything it has already received, so
+  only a **fresh install** sees less: it now receives the last 200 messages of the thread
+  rather than all of them.
+
+**What is left, and why it was not done here.** `MessageDao.getMessages` is still unbounded,
+so the chat screen and `ChatViewModel` still materialise the whole thread out of Room.
+Bounding it needs a "load earlier" affordance — silently showing only the tail would be the
+CQ-7 defect again, in a different collection. It is also entangled with **CQ-8**:
+`ChatViewModel.unreadCount` is the subscription `NavGraph.rememberChatUnreadCount()` holds for
+the process lifetime, and it is the only thing keeping the remote mirror alive, so it cannot be
+converted to the cheap count until something else keeps the mirror running. Do those two
+together.
 
 ### CQ-7 · **DONE** · The Google Calendar import silently truncated at 50 events
 
@@ -347,7 +423,12 @@ are not coverage.
 `GoogleCalendarSyncState.message`, sync/status errors, `NavGraph`'s "Checking authentication…"
 — hardcoded English, unreachable by `stringResource`. Extracting them needs a resource-provider
 abstraction. **Do not** inject `Context` into a ViewModel ad hoc to fix one; that is the rule
-`SwapError` and `CLAUDE.md` both exist to protect. Blocks **SEC-3** and part of **UX-14**.
+`SwapError` and `CLAUDE.md` both exist to protect. Blocks part of **UX-14**.
+
+It used to be recorded as blocking **SEC-3** too. It did not: push text moved to the *receiving*
+device, which has a `Context` and all five translations, so no resource-provider abstraction was
+involved. Worth remembering when the next item claims to be blocked behind this one — the
+question to ask is which side of the wire the string is finally read on.
 
 ### CQ-15 · P3 · S · Dead code
 
@@ -625,16 +706,31 @@ competitor has, is hard for a non-Czech team to copy, fits the post-2026 legal e
 agreement, and hands the mediator channel a concrete reason to recommend the app. Cheaper than
 the school import and lands in the same place. Audit §10.6.
 
-### MON-6 · P1 · S · Add the Czech custody preset that is actually common
+### MON-6 · **DONE** · Add the Czech custody preset that is actually common
 
-`CustodyModelType` offers `WEEK_ON_WEEK_OFF`, `TWO_TWO_THREE`, `THREE_FOUR_FOUR_THREE`,
+`CustodyModelType` offered `WEEK_ON_WEEK_OFF`, `TWO_TWO_THREE`, `THREE_FOUR_FOUR_THREE`,
 `CUSTOM` — the two middle ones are US family-law vocabulary. The arrangement a large share of
 Czech families have, **výhradní péče se stykem** (sole custody, every other weekend plus a
-midweek afternoon), has no preset and must be built by hand.
+midweek afternoon), had no preset and had to be built by hand. Audit §7.4.
 
-A Czech parent's first screen should contain their own arrangement in their own words. Add
-`EVERY_OTHER_WEEKEND` (consider a two-week alternation too, common when parents live far apart)
-and reconsider whether the American patterns earn their place in a Czech-first launch. Audit §7.4.
+`EVERY_OTHER_WEEKEND` is in, listed **second** — the enum's order is the picker's order, so the
+two arrangements Czech families actually have now lead. Five strings in all five locales, and a
+test that names the days as weekdays rather than indices, because this pattern read backwards
+produces an equally plausible schedule that has simply handed over the school days.
+
+**The switch above the preview asks a different question for it.** The other three alternate
+blocks of time, so "who starts first" is the whole of it; this one does not, and a parent asked
+who "starts" would answer about the first weekend and set it inverted. It asks "who does the
+child live with" instead.
+
+**Deliberately not done, and both are decisions rather than work:**
+
+- **The midweek afternoon is not in the preset.** `CustodyModel` assigns a whole day to exactly
+  one parent, so there is no half-day to give; folding the afternoon into a whole Wednesday
+  would hand over an overnight nobody agreed to. Half-day granularity is a real feature and a
+  real schema change — see below.
+- **The two US patterns stay.** Removing one would make an existing user's saved `modelType`
+  unparseable, and whether they earn their place in a Czech-first launch is an owner's call.
 
 ### MON-7 · **DONE** · The AI subsystem is deleted
 
@@ -655,6 +751,19 @@ Boundaries that outlive the deletion (audit §6.5): receipt OCR stays on-device;
 the co-parent's behalf; AI never adjudicates who is right or who is late more often; chat content
 reaches a model only on an explicit user action. Anything resembling emotion inference deserves a
 legal read under the EU AI Act before launch.
+
+### MON-6b · P2 · L · Half-day custody, so contact afternoons can be described
+
+`CustodyModel` assigns each day of the cycle to exactly one parent (`momDayIndices`), so an
+arrangement of the form "every second weekend **plus Wednesday afternoon**" — which is most
+Czech contact orders, not an edge case — can only be entered by rounding the afternoon up to a
+whole day or dropping it. MON-6's preset drops it and says so; `CUSTOM` cannot express it
+either.
+
+Not a small change: it touches the pattern representation, the Room entity, the Firestore
+document, `getCustodyFor`, `complemented`, `isEquivalentTo`, the custom-pattern editor and the
+day-cell fills. Worth doing before claiming the app describes a Czech family's real schedule;
+worth costing properly first.
 
 ### MON-8 · P2 · L · Bakaláři / EduPage school import
 
@@ -734,32 +843,43 @@ Not a wish-list ordering — a dependency ordering. Each block assumes the one a
 
 5. **REL-2, REL-4, REL-5, REL-6, REL-7** — keystore, legal, consent, Play Console, and the one
    device test CI cannot run.
-6. **SEC-1** — the Cloud Function proxy. Now two holes rather than three, MON-7 having removed
+6. ~~**SEC-3** — notification text composed on the client.~~ **Done**, and it was not blocked
+   behind CQ-14 after all — see the item.
+7. **SEC-1** — the Cloud Function proxy. Now two holes rather than three, MON-7 having removed
    the AI key from the APK by deleting the subsystem — and it is the precondition for AI ever
    coming back.
-7. **CQ-3** — deletions that replicate. "A cancelled event only one parent can see" is the
-   argument this app exists to prevent.
-8. ~~**UX-1 → UX-7** — the P1 usability set.~~ **Done.** What remains in `UX` is P2 and below:
+8. ~~**CQ-3** — deletions that replicate.~~ **Done.** Tombstones, an outbox that retries, and a
+   daily server-side sweep. See the item for the three decisions it rests on.
+9. ~~**UX-1 → UX-7** — the P1 usability set.~~ **Done.** What remains in `UX` is P2 and below:
    the empty-state anatomies (**UX-9**), budget status carried by colour alone (**UX-10**), the
    Settings row with three interaction models (**UX-11**), and the English success strings
    (**UX-12**, blocked on **CQ-14**).
 
 **Then, the product bets, in descending confidence**
 
-9. **MON-4 then MON-3** — settle what the record guarantees, then sell the export. This order is
+10. **MON-4 then MON-3** — settle what the record guarantees, then sell the export. This order is
    not negotiable: an export of a record nobody can vouch for is worth nothing to a lawyer.
-10. **MON-5** — the Rodičovský plán. The cheapest local moat and the reason a mediator recommends
+11. **MON-5** — the Rodičovský plán. The cheapest local moat and the reason a mediator recommends
     you.
-11. **MON-6** — the Czech custody preset. A day's work on the first screen a Czech parent sees.
-12. ~~**MON-7** — one AI feature behind the proxy, or delete the subsystem.~~ **Deleted.** If AI
+12. ~~**MON-6** — the Czech custody preset.~~ **Done.** What it exposed is **MON-6b**: the
+    schedule cannot describe a half-day, so the contact afternoon most Czech orders include has
+    nowhere to go.
+13. ~~**MON-7** — one AI feature behind the proxy, or delete the subsystem.~~ **Deleted.** If AI
     returns it returns behind **SEC-1**, as one feature rather than eight.
-13. **MON-8** — the school import.
+14. **MON-8** — the school import.
 
 **Structural, whenever it fits**
 
-14. **CQ-5, CQ-6** — the sync window and chat limits. Both grow worse with tenure, so they land
-    on your longest-standing users first.
-15. **CQ-12, CQ-13** — make detekt gate again, and write the ViewModel tests. The first four CI
+15. **CQ-5**, and the rest of **CQ-6**. Both grow worse with tenure, so they land on your
+    longest-standing users first. CQ-6's network and home-screen halves are done; what remains
+    is the Room query behind the chat screen, which needs a "load earlier" affordance and has
+    to be done together with **CQ-8** — see the item. CQ-5 is the harder one and is *not* a
+    rolling window plus a `lastSyncAt` delta, as this document used to say: a delta on
+    `updatedAt` would miss every deletion, because tombstones deliberately do not move it (and
+    `updatedAt` carries SEC-4's ordering defect anyway), and a date window on `startDateTime`
+    cuts off the master row of a recurring series that began before it. Settle those two before
+    writing any of it.
+16. **CQ-12, CQ-13** — make detekt gate again, and write the ViewModel tests. The first four CI
     runs are the argument for both.
 
 **One thread runs through this document.** The security holes, the release-only Gson corruption,

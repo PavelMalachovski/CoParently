@@ -571,6 +571,55 @@ class CoPlanlyDatabaseMigrationTest {
         }
     }
 
+    /**
+     * 24-to-25 gives events and expenses somewhere to record a deletion, and declares every
+     * existing row alive.
+     *
+     * Null on every migrated row is the true answer, not merely a convenient default: a row that
+     * is in the table is a row nobody deleted. It is asserted rather than assumed because the
+     * column is read by every query in both DAOs — a row that came out of this migration with a
+     * non-null `deletedAtMillis` would not throw, it would simply stop appearing on the
+     * calendar, which is the failure mode hardest to notice and hardest to attribute.
+     */
+    @Test
+    fun migration24To25_leavesEveryExistingRowAlive() {
+        val db = helper.createDatabase(TEST_DB, VERSION_24)
+        db.execSQL(
+            """
+            INSERT INTO events (id, title, startDateTime, eventType, parentOwner, isRecurring,
+                                createdAt, updatedAt, syncedToFirestore, sharedWithJson,
+                                permissions, isPrivate, acceptance, isImportant)
+            VALUES ('e1', 'Handover', '2026-08-01T17:00:00', 'custody', 'mom', 0,
+                    '2026-07-01T09:00:00', '2026-07-01T09:00:00', 1, '[]',
+                    'read_write', 0, 'NOT_REQUIRED', 0)
+            """.trimIndent()
+        )
+        db.execSQL(
+            """
+            INSERT INTO expenses (id, title, amount, currency, category, paidBy,
+                                  splitBetweenJson, date, createdAt, syncedToFirestore)
+            VALUES ('x1', 'Shoes', 1200.0, 'CZK', 'CLOTHING', 'mom',
+                    '[]', '2026-08-01', '2026-08-01T09:00:00', 1)
+            """.trimIndent()
+        )
+        db.close()
+
+        val migrated = helper.runMigrationsAndValidate(
+            TEST_DB, VERSION_25, true, DatabaseMigrations.MIGRATION_24_25
+        )
+
+        migrated.query("SELECT title, deletedAtMillis FROM events").use {
+            assertTrue(it.moveToFirst())
+            assertEquals("Handover", it.getString(0))
+            assertTrue("an event that exists is an event nobody deleted", it.isNull(1))
+        }
+        migrated.query("SELECT title, deletedAtMillis FROM expenses").use {
+            assertTrue(it.moveToFirst())
+            assertEquals("Shoes", it.getString(0))
+            assertTrue("an expense that exists is an expense nobody deleted", it.isNull(1))
+        }
+    }
+
     private companion object {
         const val TEST_DB = "coplanly-migration-test.db"
         const val VERSION_11 = 11
@@ -584,6 +633,8 @@ class CoPlanlyDatabaseMigrationTest {
         const val VERSION_19 = 19
         const val VERSION_20 = 20
         const val VERSION_21 = 21
+        const val VERSION_24 = 24
+        const val VERSION_25 = 25
 
         /** 2026-08-01T12:00:00 at UTC+05:30, i.e. 06:30:00Z. */
         const val NOON_AT_PLUS_FIVE_THIRTY_MILLIS = 1_785_565_800_000L

@@ -84,76 +84,59 @@ class FcmService @Inject constructor(
     }
 
     /**
-     * Creates a notification payload for event creation/update.
-     * Note: Actual sending should be done via Cloud Functions for security.
+     * The payload for an event being created, updated or deleted.
      *
-     * @param eventId The event ID
-     * @param eventTitle The event title
-     * @param action The action performed (created, updated, deleted)
-     * @param performedBy Name of the user who performed the action
-     * @return Notification data map
+     * Facts, not sentences (SEC-3). This used to build `"New Event: $eventTitle"` and
+     * `"$performedBy created an event"` here and hand them to the other phone to render
+     * verbatim — English regardless of the reader's language, and forgeable, because nothing
+     * between the two devices decided what a notification was allowed to say.
+     * [CoPlanlyMessagingService] now writes the sentence from its own string resources.
+     *
+     * @param eventId The event, for the deep link
+     * @param eventTitle The event's title, as the co-parent typed it
+     * @param action `created`, `updated` or `deleted`
+     * @param performedBy Display name of the parent who did it
+     * @return The payload, or null when [action] is one nothing announces — see
+     *   [PushPayload.eventType].
      */
     fun createEventNotificationPayload(
         eventId: String,
         eventTitle: String,
         action: String,
         performedBy: String
-    ): Map<String, String> {
+    ): Map<String, String>? {
+        val type = PushPayload.eventType(action) ?: return null
         return mapOf(
-            "type" to "event_$action",
-            "eventId" to eventId,
-            "title" to when (action) {
-                "created" -> "New Event: $eventTitle"
-                "updated" -> "Event Updated: $eventTitle"
-                "deleted" -> "Event Deleted: $eventTitle"
-                else -> "Event Notification"
-            },
-            "body" to "$performedBy ${action} an event",
-            "timestamp" to System.currentTimeMillis().toString()
+            PushPayload.TYPE to type,
+            PushPayload.EVENT_ID to eventId,
+            PushPayload.SUBJECT to eventTitle,
+            PushPayload.ACTOR to performedBy
         )
     }
 
     /**
-     * Creates a notification payload for invitation.
+     * The payload for a child's information being updated. Facts, not sentences — see
+     * [createEventNotificationPayload].
      *
-     * @param invitationId The invitation ID
-     * @param fromUserName Name of the user sending the invitation
-     * @return Notification data map
-     */
-    fun createInvitationNotificationPayload(
-        invitationId: String,
-        fromUserName: String
-    ): Map<String, String> {
-        return mapOf(
-            "type" to "invitation_received",
-            "invitationId" to invitationId,
-            "title" to "Co-Parent Invitation",
-            "body" to "$fromUserName invited you to share a calendar",
-            "timestamp" to System.currentTimeMillis().toString()
-        )
-    }
-
-    /**
-     * Creates a notification payload for child info update.
-     *
-     * @param childInfoId The child info ID
+     * @param childInfoId The record, for the deep link
      * @param childName The child's name
-     * @param updatedBy Name of the user who updated the info
-     * @return Notification data map
+     * @param updatedBy Display name of the parent who made the change
      */
     fun createChildInfoNotificationPayload(
         childInfoId: String,
         childName: String,
         updatedBy: String
-    ): Map<String, String> {
-        return mapOf(
-            "type" to "child_info_updated",
-            "childInfoId" to childInfoId,
-            "title" to "Child Info Updated",
-            "body" to "$updatedBy updated information for $childName",
-            "timestamp" to System.currentTimeMillis().toString()
-        )
-    }
+    ): Map<String, String> = mapOf(
+        PushPayload.TYPE to PushPayload.CHILD_INFO_UPDATED,
+        PushPayload.CHILD_INFO_ID to childInfoId,
+        PushPayload.SUBJECT to childName,
+        PushPayload.ACTOR to updatedBy
+    )
+
+    // `createInvitationNotificationPayload` was deleted with SEC-3: it had no caller. An
+    // invitation being accepted is announced by `acceptPairingInvitation` in
+    // `functions/index.js`, which is where it has to be — the accepting device is not the one
+    // that needs telling.
 
     /**
      * Sends notification data to Firestore for Cloud Functions to process.

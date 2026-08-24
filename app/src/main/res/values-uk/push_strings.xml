@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Push notification text (SEC-3). Composed on the receiving device. -->
+<resources>
+    <string name="push_event_created_title">Нова подія</string>
+    <string name="push_event_created_body">%1$s додав(-ла) «%2$s»</string>
+    <string name="push_event_updated_title">Подію змінено</string>
+    <string name="push_event_updated_body">%1$s змінив(-ла) «%2$s»</string>
+    <string name="push_event_deleted_title">Подію скасовано</string>
+    <string name="push_event_deleted_body">%1$s скасував(-ла) «%2$s»</string>
+    <string name="push_child_info_updated_title">Інформацію про дитину оновлено</string>
+    <string name="push_child_info_updated_body">%1$s оновив(-ла) інформацію про %2$s</string>
+    <string name="push_change_request_created_title">Запит на зміну</string>
+    <string name="push_change_request_created_body">%1$s просить змінити «%2$s»</string>
+    <string name="push_change_request_accepted_title">Зміну прийнято</string>
+    <string name="push_change_request_accepted_body">%1$s прийняв(-ла) зміну «%2$s»</string>
+    <string name="push_change_request_declined_title">Зміну відхилено</string>
+    <string name="push_change_request_declined_body">%1$s відхилив(-ла) зміну «%2$s»</string>
+    <string name="push_change_request_cancelled_title">Запит на зміну відкликано</string>
+    <string name="push_change_request_cancelled_body">%1$s відкликав(-ла) запит щодо «%2$s»</string>
+    <string name="push_custody_proposal_proposed_title">Запропоновано новий графік опіки</string>
+    <string name="push_custody_proposal_proposed_body">Другий з батьків пропонує новий графік</string>
+    <string name="push_custody_proposal_accepted_title">Новий графік опіки погоджено</string>
+    <string name="push_custody_proposal_accepted_body">Другий з батьків погодився з новим графіком</string>
+    <string name="push_custody_proposal_declined_title">Пропозицію щодо графіка відхилено</string>
+    <string name="push_custody_proposal_declined_body">Другий з батьків відхилив запропонований графік</string>
+    <string name="push_day_swap_offered_title">Запропоновано обмін днем</string>
+    <string name="push_day_swap_offered_body">Другий з батьків пропонує помінятися на %1$s</string>
+    <string name="push_day_swap_accepted_title">Обмін днем погоджено</string>
+    <string name="push_day_swap_accepted_body">Другий з батьків погодився помінятися на %1$s</string>
+    <string name="push_day_swap_declined_title">Обмін днем відхилено</string>
+    <string name="push_day_swap_declined_body">Другий з батьків відхилив обмін на %1$s</string>
+    <string name="push_pairing_accepted_title">Запрошення прийнято</string>
+    <string name="push_pairing_accepted_body">%1$s тепер ваш співбатько в CoPlanly</string>
+    <string name="push_pairing_removed_title">Зв’язок зі співбатьком розірвано</string>
+    <string name="push_pairing_removed_body">%1$s розірвав(-ла) зв’язок</string>
+    <string name="push_actor_fallback">Другий з батьків</string>
+</resources>

@@ -251,8 +251,11 @@ describe('Part 2: access after unpair', () => {
 
     it('stops the ex-partner enqueueing notifications', async () => {
       const bob = env.authenticatedContext(BOB).firestore();
+      // A payload that is valid in every other respect, so the refusal is the ended pairing
+      // and not the SEC-3 shape checks — a `{title, body}` payload would now fail for the
+      // wrong reason and this test would stop measuring revocation at all.
       await assertFails(bob.collection('notification_queue').add({
-        targetUserId: ALICE, data: {title: 'x', body: 'y'},
+        targetUserId: ALICE, data: {type: 'event_created', subject: 'Swimming'},
         status: 'pending', createdAt: 1,
       }));
     });

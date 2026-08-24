@@ -41,11 +41,16 @@ admin.initializeApp();
  * delivered to onMessageReceived uniformly in all three app states, so the client always
  * decides how to render it. title/body therefore live in `data`.
  *
- * FCM requires every `data` value to be a string and rejects the whole message otherwise.
- * `title` and `body` used to be copied through unconverted, which made them the only two
- * values that were never coerced: a queue document with a missing or non-string title made
- * `admin.messaging().send` throw and the push was lost. Every value is coerced here,
- * `title`/`body` included, and absent keys become '' rather than the string 'undefined'.
+ * FCM requires every `data` value to be a string and rejects the whole message otherwise, so
+ * every value is coerced here and an absent key becomes '' rather than the string 'undefined'.
+ *
+ * **The payload no longer carries the notification's text** (SEC-3). It carries a `type` and the
+ * few names that type needs; the receiving device writes the sentence from its own string
+ * resources, in the reader's language, and drops a `type` it has no wording for. The `title` and
+ * `body` defaults this used to inject are gone with that — they encoded a contract in which the
+ * sender wrote what the other parent's lock screen would say. `type` keeps its 'general'
+ * fallback, which is now a value no client composes and every client therefore discards: the
+ * right outcome for a payload that arrived malformed.
  *
  * @param {string} token The recipient's FCM registration token.
  * @param {Object} data The queued `data` payload.
@@ -64,8 +69,6 @@ function buildFcmMessage(token, data) {
     token: token,
     data: Object.assign(
         {
-          title: '',
-          body: '',
           type: 'general',
           eventId: '',
           childInfoId: '',
@@ -652,13 +655,17 @@ async function acceptPairingInvitationImpl(db, acceptingUserId, acceptingEmail, 
     });
   });
 
-  const accepterName = (await accepterRef.get()).data().name || 'Your co-parent';
+  // The name only. The sentence around it is written by the receiving device, from its own
+  // string resources, in the reader's language (SEC-3) — an English `title`/`body` written here
+  // would reach a Czech parent in English, and would also be the shape that let a *client*
+  // write whatever it liked. An empty name is fine: the app substitutes a translated
+  // "your co-parent" for it.
+  const accepterName = (await accepterRef.get()).data().name || '';
   await db.collection('notification_queue').add({
     targetUserId: invite.fromUserId,
     data: {
       type: 'pairing_accepted',
-      title: 'Invitation accepted',
-      body: `${accepterName} is now your co-parent in CoPlanly`,
+      actorName: accepterName,
     },
     status: 'pending',
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -1217,6 +1224,107 @@ exports.sweepExpiredGuests = functions.pubsub
     });
 
 /**
+ * Collections whose documents are deleted by being tombstoned rather than removed (CQ-3).
+ *
+ * Both are read by the co-parent's phone through a filtered collection query, which is the
+ * channel a deletion travels down: the client marks the document `deletedAtMillis` instead of
+ * removing it, the other device sees the field on its next sync and drops its local row. That
+ * only works while the document is still there, which is what this sweep is bounding.
+ */
+const TOMBSTONED_COLLECTIONS = ['events', 'expenses'];
+
+exports.TOMBSTONED_COLLECTIONS = TOMBSTONED_COLLECTIONS;
+
+/**
+ * How long a tombstone is kept before the document is removed for good.
+ *
+ * This is the deadline for a co-parent's phone to come back and collect the deletion. Long,
+ * because the cost of the two outcomes is not symmetric: sweeping early leaves a cancelled
+ * event on a returning parent's calendar with nothing left to correct it — the exact defect
+ * CQ-3 exists to fix, reintroduced by the cleanup for it — whereas sweeping late costs a few
+ * bytes per deleted row. Ninety days is well past any period a phone that opens this app at
+ * all goes without syncing.
+ *
+ * A device offline for longer than this still keeps that one event. Bounded and rare, and it
+ * is the reason this number is not smaller.
+ */
+const TOMBSTONE_RETENTION_DAYS = 90;
+
+exports.TOMBSTONE_RETENTION_DAYS = TOMBSTONE_RETENTION_DAYS;
+
+const TOMBSTONE_SWEEP_BATCH_LIMIT = 400;
+
+/**
+ * Body of the `sweepDeletedDocuments` schedule — removes tombstones nobody is still waiting for.
+ *
+ * Unlike `sweepExpiredGuestsImpl` this does **not** scan the collection: `deletedAtMillis` is a
+ * top-level number, so "deleted before the cutoff" is an ordinary range query on a field
+ * Firestore indexes by itself. A live document has no such field at all, and a document missing
+ * the field is not returned by a range query on it — so the query cannot match anything that is
+ * not already a tombstone, which is the property that makes a scheduled delete safe to run
+ * unattended.
+ *
+ * @param {FirebaseFirestore.Firestore} db Firestore instance.
+ * @param {number} nowMillis The instant to sweep at.
+ * @param {number=} retentionDays Override the retention window; defaults to
+ *     [TOMBSTONE_RETENTION_DAYS].
+ * @return {Promise<number>} How many documents were removed.
+ */
+async function sweepDeletedDocumentsImpl(db, nowMillis, retentionDays) {
+  const days = typeof retentionDays === 'number' ? retentionDays :
+    TOMBSTONE_RETENTION_DAYS;
+  const cutoff = nowMillis - days * 24 * 60 * 60 * 1000;
+
+  let removed = 0;
+
+  for (const collection of TOMBSTONED_COLLECTIONS) {
+    const snap = await db.collection(collection)
+        .where('deletedAtMillis', '<=', cutoff)
+        .get();
+
+    let batch = db.batch();
+    let pending = 0;
+
+    for (const doc of snap.docs) {
+      batch.delete(doc.ref);
+      pending++;
+      removed++;
+
+      if (pending === TOMBSTONE_SWEEP_BATCH_LIMIT) {
+        await batch.commit();
+        batch = db.batch();
+        pending = 0;
+      }
+    }
+
+    if (pending > 0) {
+      await batch.commit();
+    }
+  }
+
+  return removed;
+}
+
+exports.sweepDeletedDocumentsImpl = sweepDeletedDocumentsImpl;
+
+/**
+ * Daily removal of tombstones past their retention window.
+ *
+ * An hour after `sweepExpiredGuests` so the scheduled jobs never contend, and daily rather
+ * than more often for the same reason that one is: nothing depends on this running promptly.
+ * A tombstone that outlives its window by a day is a document; a tombstone swept a day early
+ * is a deletion that was never delivered.
+ */
+exports.sweepDeletedDocuments = functions.pubsub
+    .schedule('0 4 * * *')
+    .timeZone('UTC')
+    .onRun(async () => {
+      const removed = await sweepDeletedDocumentsImpl(admin.firestore(), Date.now());
+      console.log(`Swept ${removed} tombstoned documents`);
+      return null;
+    });
+
+/**
  * Collections whose visibility is a per-document `sharedWith` audience.
  *
  * These three (`events`, `child_info`, `pets`) each keep a per-document `sharedWith` list
@@ -1460,8 +1568,7 @@ async function unpairCoParentImpl(db, callerUid) {
         targetUserId: result.unpairedFrom,
         data: {
           type: 'pairing_removed',
-          title: 'Co-parent unlinked',
-          body: `${result.callerName} ended the co-parent link`,
+          actorName: result.callerName || '',
         },
         status: 'pending',
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -1922,8 +2029,14 @@ async function notifyOfChatMessage(db, message) {
     data: {
       type: 'chat_message',
       conversationId,
-      title: message.senderName || 'CoPlanly',
-      body: String(message.content || '').slice(0, CHAT_MESSAGE_PREVIEW_LENGTH),
+      // `actorName`/`preview` rather than `title`/`body`, so that no queued payload anywhere
+      // carries pre-written notification text and the security rule can refuse those two keys
+      // outright (SEC-3). This one still relays rather than composes — a chat notification's
+      // title *is* the sender and its body *is* the message — but only this function has seen
+      // the message, and the rule refuses `chat_message` from a client, so relaying it here is
+      // not the hole that relaying the others was.
+      actorName: message.senderName || '',
+      preview: String(message.content || '').slice(0, CHAT_MESSAGE_PREVIEW_LENGTH),
     },
     status: 'pending',
     createdAt: admin.firestore.FieldValue.serverTimestamp(),

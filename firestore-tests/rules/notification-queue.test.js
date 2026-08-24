@@ -32,12 +32,13 @@ const PAIRED_USERS = {
 function queueDoc(targetUid) {
   return {
     targetUserId: targetUid,
+    // The payload shape since SEC-3: a type and the names it needs, never the sentence.
+    // `title`/`body` here would now be refused outright — see notification-payload.test.js.
     data: {
       type: 'event_created',
       eventId: 'event-1',
-      title: 'New Event: Swimming',
-      body: 'Alice created an event',
-      timestamp: '1754000000000',
+      subject: 'Swimming',
+      actorName: 'Alice',
     },
     createdAt: 1754000000000,
     status: 'pending',

@@ -58,4 +58,10 @@
     <string name="custody_proposal_decline">Ablehnen</string>
     <string name="custody_proposal_waiting">Warten auf die Zustimmung des Co-Elternteils zum neuen Plan</string>
     <string name="custody_proposal_review">%1$s hat einen neuen Betreuungsplan vorgeschlagen</string>
+    <!-- MON-6. -->
+    <string name="custody_model_every_other_weekend">Jedes zweite Wochenende</string>
+    <string name="custody_model_every_other_weekend_desc">Das Kind lebt bei einem Elternteil; der andere hat jedes zweite Wochenende.</string>
+    <string name="custody_preview_every_other_weekend">Alle übrigen Tage: %1$s. Jeden zweiten Sa–So: %2$s.</string>
+    <string name="custody_who_is_resident">Bei wem lebt das Kind?</string>
+    <string name="custody_is_resident">Lebt bei: %1$s</string>
 </resources>
