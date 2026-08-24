@@ -1,5 +1,6 @@
 package com.coparently.app.data.sync
 
+import com.coparently.app.data.crashlytics.CrashlyticsManager
 import com.coparently.app.data.local.dao.EventDao
 import com.coparently.app.data.local.entity.EventEntity
 import com.coparently.app.data.remote.google.CredentialProvider
@@ -27,7 +28,8 @@ class CalendarSyncRepository @Inject constructor(
     private val eventDao: EventDao,
     private val googleCalendarApi: GoogleCalendarApi,
     private val credentialProvider: CredentialProvider,
-    private val userRepository: UserRepository
+    private val userRepository: UserRepository,
+    private val crashlyticsManager: CrashlyticsManager
 ) {
     /**
      * Syncs events from Google Calendar to local database (pull).
@@ -130,7 +132,7 @@ class CalendarSyncRepository @Inject constructor(
         } catch (e: Exception) {
             // Log full error for debugging
             android.util.Log.e("CalendarSync", "Unexpected error: ${e.javaClass.simpleName} - ${e.message}", e)
-            e.printStackTrace()
+            crashlyticsManager.recordException(e)
             val errorDetails = buildString {
                 append("Error during sync: ")
                 append(e.javaClass.simpleName)
@@ -205,7 +207,7 @@ class CalendarSyncRepository @Inject constructor(
         } catch (e: Exception) {
             // Log full error for debugging
             android.util.Log.e("CalendarSync", "Unexpected error: ${e.javaClass.simpleName} - ${e.message}", e)
-            e.printStackTrace()
+            crashlyticsManager.recordException(e)
             val errorDetails = buildString {
                 append("Error during sync: ")
                 append(e.javaClass.simpleName)

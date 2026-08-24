@@ -1,6 +1,7 @@
 package com.coparently.app.data.remote.google
 
 import android.content.Context
+import com.coparently.app.data.crashlytics.CrashlyticsManager
 import com.coparently.app.data.local.preferences.EncryptedPreferences
 import com.google.android.gms.auth.GoogleAuthUtil
 import com.google.android.gms.auth.api.signin.GoogleSignIn
@@ -22,7 +23,8 @@ import javax.inject.Singleton
 @Singleton
 class GoogleSignInService @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val encryptedPreferences: EncryptedPreferences
+    private val encryptedPreferences: EncryptedPreferences,
+    private val crashlyticsManager: CrashlyticsManager
 ) {
     private val gso: GoogleSignInOptions = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
         .requestEmail()
@@ -91,12 +93,12 @@ class GoogleSignInService @Inject constructor(
         } catch (e: com.google.android.gms.auth.UserRecoverableAuthException) {
             // User needs to grant permission via Activity
             android.util.Log.e("GoogleSignIn", "UserRecoverableAuthException: ${e.message}", e)
-            e.printStackTrace()
+            crashlyticsManager.recordException(e)
             Pair(null, "Permission required. Please grant access to Google Calendar when prompted: ${e.message}")
         } catch (e: com.google.android.gms.auth.GoogleAuthException) {
             // Auth error - usually means API not enabled or OAuth not configured
             android.util.Log.e("GoogleSignIn", "GoogleAuthException: ${e.message}", e)
-            e.printStackTrace()
+            crashlyticsManager.recordException(e)
             val errorMsg = when {
                 e.message?.contains("API", ignoreCase = true) == true ->
                     "Google Calendar API is not enabled. Please enable it in Google Cloud Console."
@@ -110,17 +112,17 @@ class GoogleSignInService @Inject constructor(
         } catch (e: com.google.android.gms.auth.GooglePlayServicesAvailabilityException) {
             // Google Play Services issue
             android.util.Log.e("GoogleSignIn", "GooglePlayServicesAvailabilityException: ${e.message}", e)
-            e.printStackTrace()
+            crashlyticsManager.recordException(e)
             Pair(null, "Google Play Services error: ${e.message ?: "Please update Google Play Services."}")
         } catch (e: com.google.android.gms.auth.UserRecoverableNotifiedException) {
             // User was notified but didn't grant permission
             android.util.Log.e("GoogleSignIn", "UserRecoverableNotifiedException: ${e.message}", e)
-            e.printStackTrace()
+            crashlyticsManager.recordException(e)
             Pair(null, "Please grant permission to access Google Calendar in your device settings.")
         } catch (e: Exception) {
             // Log error for debugging
             android.util.Log.e("GoogleSignIn", "Exception getting token: ${e.javaClass.simpleName}: ${e.message}", e)
-            e.printStackTrace()
+            crashlyticsManager.recordException(e)
             Pair(null, "Error getting access token: ${e.javaClass.simpleName}: ${e.message ?: "Unknown error"}")
         }
     }

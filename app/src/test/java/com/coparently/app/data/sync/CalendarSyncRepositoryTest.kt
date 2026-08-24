@@ -37,8 +37,13 @@ class CalendarSyncRepositoryTest {
     private val credentialProvider: CredentialProvider = mockk()
     private val userRepository: UserRepository = mockk()
 
-    private fun repository() =
-        CalendarSyncRepository(eventDao, googleCalendarApi, credentialProvider, userRepository)
+    private fun repository() = CalendarSyncRepository(
+        eventDao,
+        googleCalendarApi,
+        credentialProvider,
+        userRepository,
+        mockk(relaxed = true)
+    )
 
     @Test
     fun `an imported event is stamped with the signed-in user's slot, read through UserRepository`() =
