@@ -9,6 +9,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Diversity3
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material3.Button
@@ -23,20 +24,16 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.coparently.app.R
 import com.coparently.app.domain.friends.CalendarFriendGrant
-import com.coparently.app.presentation.common.ConfirmationDialog
+import com.coparently.app.presentation.common.AccountAvatar
 import com.coparently.app.presentation.common.SectionGroup
 import com.coparently.app.presentation.common.SectionRow
-import com.coparently.app.presentation.theme.CoPlanlyColors
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -49,10 +46,12 @@ import java.time.format.FormatStyle
  * usually "who can see this", not "let somebody else in". Every grant states when it ends —
  * an access with no visible expiry is the failure this whole feature is built to avoid.
  *
- * Revoking takes a confirmation, but only one: unlike unpairing it destroys nothing and can be
- * undone by inviting again, which the dialog says.
+ * A row opens that friend's card rather than removing them: their phone number and blood group
+ * are the reason the profile exists, and a list that only ever offered "remove access" would put
+ * a destructive action where a person's name is and hide everything worth reading.
  *
  * @param onNavigateUp Returns to Settings.
+ * @param onOpenFriend Opens one friend's card, by uid.
  * @param onOpenMyProfile Opens the friend's own profile — only reachable when signed in as one.
  * @param viewModel Screen state.
  */
@@ -60,6 +59,7 @@ import java.time.format.FormatStyle
 @Composable
 fun FriendsScreen(
     onNavigateUp: () -> Unit,
+    onOpenFriend: (String) -> Unit,
     onOpenMyProfile: () -> Unit,
     viewModel: FriendViewModel = hiltViewModel()
 ) {
@@ -67,9 +67,6 @@ fun FriendsScreen(
     val invite by viewModel.invite.collectAsState()
     val myGrant by viewModel.myGrant.collectAsState()
     val redeem by viewModel.redeem.collectAsState()
-
-    // Saveable so a rotation mid-confirmation does not silently drop the decision.
-    var pendingRevoke by rememberSaveable { mutableStateOf<String?>(null) }
 
     Scaffold(
         topBar = {
@@ -134,7 +131,7 @@ fun FriendsScreen(
             } else {
                 SectionGroup {
                     friends.forEachIndexed { index, grant ->
-                        FriendRow(grant = grant, onRevoke = { pendingRevoke = grant.friendUid })
+                        FriendRow(grant = grant, onOpen = { onOpenFriend(grant.friendUid) })
                         if (index != friends.lastIndex) Divider()
                     }
                 }
@@ -158,27 +155,11 @@ fun FriendsScreen(
             onDismiss = viewModel::dismissInvite
         )
     }
-
-    pendingRevoke?.let { uid ->
-        val name = friends.firstOrNull { it.friendUid == uid }?.name.orEmpty()
-        ConfirmationDialog(
-            title = stringResource(R.string.friend_revoke_confirm_title, name),
-            message = stringResource(R.string.friend_revoke_confirm_message),
-            confirmText = stringResource(R.string.friend_revoke),
-            dismissText = stringResource(R.string.pairing_cancel),
-            onConfirm = {
-                viewModel.revoke(uid)
-                pendingRevoke = null
-            },
-            onDismiss = { pendingRevoke = null },
-            isDestructive = true
-        )
-    }
 }
 
-/** One friend: their name in the friend colour, when their access ends, and how to end it. */
+/** One friend: their face, their name, when their access ends, and the way into their card. */
 @Composable
-private fun FriendRow(grant: CalendarFriendGrant, onRevoke: () -> Unit) {
+private fun FriendRow(grant: CalendarFriendGrant, onOpen: () -> Unit) {
     val until = remember(grant.expiresAtMillis) {
         DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM)
             .format(
@@ -188,16 +169,18 @@ private fun FriendRow(grant: CalendarFriendGrant, onRevoke: () -> Unit) {
             )
     }
     SectionRow(
-        icon = Icons.Default.Diversity3,
         title = grant.name,
         supporting = stringResource(R.string.friend_access_until, until),
+        // Their Google account's own picture, copied into the grant at accept time so this list
+        // needs no second read; `AccountAvatar` falls back to the initial when there is none.
+        leading = { AccountAvatar(name = grant.name, photoUrl = grant.photoUrl, size = 32.dp) },
         // The one control on the row, per the design language's "at most one trailing control".
-        onClick = onRevoke,
+        onClick = onOpen,
         trailing = {
-            Text(
-                text = stringResource(R.string.friend_revoke),
-                style = MaterialTheme.typography.labelMedium,
-                color = CoPlanlyColors.FriendTeal
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     )

@@ -135,6 +135,10 @@ private class SectionGroupScopeImpl : SectionGroupScope {
  * @param modifier Modifier applied to the row
  * @param icon Leading icon, or null for a text-only row
  * @param iconTint Tint for [icon]; defaults to the primary colour
+ * @param leading A leading slot drawn instead of [icon] — for a row whose subject is a *person*
+ *   and whose leading mark is therefore their avatar, not a glyph. Exactly one of the two is
+ *   ever drawn: an avatar beside an icon would be the double leading mark this anatomy exists
+ *   to prevent.
  * @param supporting Secondary line under [title], or null
  * @param supportingColor Colour of [supporting]; defaults to the muted on-surface variant
  * @param supportingIcon Small status dot colour shown before [supporting], or null for none
@@ -154,6 +158,7 @@ fun SectionRow(
     supportingIcon: Color? = null,
     titleColor: Color = MaterialTheme.colorScheme.onSurface,
     onClick: (() -> Unit)? = null,
+    leading: @Composable (() -> Unit)? = null,
     trailing: @Composable (() -> Unit)? = null
 ) {
     Row(
@@ -165,7 +170,9 @@ fun SectionRow(
         horizontalArrangement = Arrangement.spacedBy(14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        if (icon != null) {
+        if (leading != null) {
+            leading()
+        } else if (icon != null) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,

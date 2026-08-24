@@ -21,7 +21,11 @@ package com.coparently.app.domain.friends
  *   before storage so the UI has one thing to test for.
  * @property bloodGroup The friend's blood group, or null when they did not give one. Free text,
  *   not an enum: the field exists for somebody to read aloud in an emergency, not to validate.
- * @property photoUrl A Firebase Storage download URL for the friend's photo, or null.
+ * @property photoUrl The friend's avatar. For a Google sign-in this is the account's own
+ *   picture, taken from Firebase Auth the first time they save a profile and never overwritten
+ *   afterwards — a friend who has set something of their own keeps it. Null for an
+ *   email/password account and for a Google account with no picture; `AccountAvatar`'s
+ *   initial-letter fallback covers both.
  * @property familyParents The two parent UIDs allowed to read this profile.
  */
 data class FriendProfile(
@@ -59,6 +63,10 @@ enum class FriendRole {
  * @property friendUid Whose access this is; the document's id.
  * @property name The friend's display name at the time the grant was made, so a parent's
  *   "who can see this" list can name them without reading their profile.
+ * @property photoUrl Their avatar at that same moment — a Google account's own picture, copied
+ *   from their `users/{uid}.profilePhotoUrl` by the callable. Stored here for the same reason
+ *   [name] is: the parents' list would otherwise need a second read of a document that is not
+ *   theirs. Null for an account with no picture, and the initial-letter fallback covers it.
  * @property familyParents The two parents whose events the friend may read.
  * @property grantedBy Which parent admitted them. Required by the rule to be the caller.
  * @property grantedAtMillis When access began, epoch millis.
@@ -69,6 +77,7 @@ enum class FriendRole {
 data class CalendarFriendGrant(
     val friendUid: String,
     val name: String,
+    val photoUrl: String? = null,
     val familyParents: List<String>,
     val grantedBy: String,
     val grantedAtMillis: Long,

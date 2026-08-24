@@ -181,7 +181,16 @@ cd firestore-tests && npm test              # firestore.rules against the local 
   records who takes part and is **not** an owner: `parentOwner` stays a slot, because whose day
   an event falls on is a fact about custody. The friend's colour is `CoPlanlyColors.FriendTeal`
   — never a parent hue, and never the theme's neutral `secondary`, which is for controls.
-  Not built: the profile photo upload (the field and rules exist; the Storage wiring does not)
+  **Faces come from the Google account, never from an upload.** A friend's `photoUrl` is seeded
+  from Firebase Auth at their first profile save and copied into `calendar_friends/{uid}` by the
+  callable, so the parents' list names *and* pictures them without a second read of a document
+  that is not theirs; the parents' own faces come from `users/{uid}.profilePhotoUrl` through
+  `NamedParent.photoUrl` and `ParentNames.photoForUid(uid)` — keyed on the uid, because a pair
+  still sharing one slot would otherwise return the same face twice. `AccountAvatar`'s
+  initial-letter fallback is load-bearing, not decorative: an email/password account has no
+  picture. Nothing here is ever overwritten by a later re-derivation — a friend who set their own
+  picture keeps it. Not built: a photo **upload** (the field and rules admit one; the Storage
+  wiring does not exist, and a button that did nothing is the promise item 8 above forbids)
   and a sweep for lapsed grants (nothing leaks — the rule refuses an expired read — but the row
   lingers).
 - **Only the signed-in user has a Room `users` row.** Nothing writes one for the co-parent, so

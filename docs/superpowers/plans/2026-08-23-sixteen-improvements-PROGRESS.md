@@ -161,3 +161,54 @@ both parent hues and is not the theme's neutral `secondary`: a person is not a c
 - **Compose files are not compiled here** — no Android SDK, as in every prior package. The
   screens follow the existing patterns but the first local `assembleDebug` is their first
   compiler.
+
+---
+
+## Follow-up — faces from the Google account
+
+Asked for after item 16 shipped: show the friend's and both parents' photos, taken from their
+Google account where one exists. No upload was added; this is the picture Google already holds.
+
+**Where each face comes from.** A parent's is `users/{uid}.profilePhotoUrl`, which
+`ProfileIdentity.resolvePhotoUrl` already wrote at sign-in — it reaches the UI through
+`NamedParent.photoUrl` (both projections, own and co-parent) and `ParentNames.photoForUid(uid)`.
+Keyed on the **uid**, not the slot, for the reason `labelForUid` exists: a pair that has not been
+through slot assignment still shares one slot, and a slot lookup would return the same face for
+both parents. The expenses ledger's two columns are the first caller.
+
+A friend's is copied into `calendar_friends/{uid}` by `acceptCalendarFriendInvitation`, beside
+the name and for the same reason the name is there: the parents' list would otherwise need a
+second read of a document that is not theirs. `accepterPhoto()` returns a one-key object to
+merge rather than a string, because `photoUrl: undefined` is a write Firestore rejects outright.
+On the friend's own device `saveMyProfile` seeds `friend_profiles/{uid}.photoUrl` from Firebase
+Auth **only when the profile carries none** — a friend who has set their own picture keeps it,
+and nothing re-derives it on a later save.
+
+**`observeFriendProfile` had no callers.** The profile the whole feature is built around — the
+phone number and the blood group — was unreachable from a parent's device: the friend row's only
+action was "remove access". `FriendDetailScreen` is that missing screen. A row now opens the
+friend's card; revoke moved onto it, last, per the destructive-action anatomy. The route carries
+the uid only, so the name comes from the grant the screen already observes and cannot go stale
+against a friend who renamed themselves between the two screens.
+
+`SectionRow` gained a `leading` slot for this — an avatar *instead of* the icon, never beside it,
+which would be the double leading mark the anatomy exists to prevent.
+
+### Verified
+
+- **Pure Kotlin under standalone `kotlinc` 2.1: 15 tests** (`FriendMappersTest` 9,
+  `CalendarFriendPolicyTest` 6) — the new case pins a grant's picture decoding, a blank one
+  becoming null rather than an empty string, and its absence.
+- **Functions: 116 passing** and eslint clean, including the two new cases: the picture copied
+  into the grant, and **no `photoUrl` key at all** when the accepter has none.
+- **Firestore rules: 302 passing**, unchanged — neither `calendar_friends` nor `friend_profiles`
+  validates a key list, so the added field needed no rule change.
+- One new string (`friend_detail_title`) in all five locales; `MaxLineLength` 120 clean over
+  every file touched.
+
+### Known, not fixed
+
+- **The pre-existing `revokeSharedAudience` failure** (`unpair.test.js`, 6 !== 4) still fails and
+  pre-dates this branch — verified against `main`.
+- **Compose is still not compiled here** — no Android SDK. `FriendDetailScreen` and the changed
+  rows follow existing patterns, but the first local `assembleDebug` is their first compiler.

@@ -133,12 +133,18 @@ class FriendRepositoryImpl @Inject constructor(
     }
 
     override suspend fun saveMyProfile(profile: FriendProfile): Result<Unit> = runFriend {
-        val myUid = authService.getCurrentUser()?.uid
+        val user = authService.getCurrentUser()
             ?: throw PairingException(PairingError.Unknown("Not signed in"))
+        // The Google account's own picture, when the profile carries none. The rule
+        // `ProfileIdentity` applies to a parent's avatar, applied here: take the strongest
+        // source that actually has a value, and never let it overwrite something already
+        // stored — a friend who has set a picture of their own keeps it.
+        val photoUrl = profile.photoUrl?.takeIf { it.isNotBlank() }
+            ?: user.photoUrl?.toString()?.takeIf { it.isNotBlank() }
         // The document id is always this account's own uid: the rule refuses any other, and
         // writing one would be an attempt to author somebody else's profile.
-        firestore.collection(FRIEND_PROFILES).document(myUid)
-            .set(FriendMappers.profileToMap(profile.copy(uid = myUid)))
+        firestore.collection(FRIEND_PROFILES).document(user.uid)
+            .set(FriendMappers.profileToMap(profile.copy(uid = user.uid, photoUrl = photoUrl)))
             .await()
     }
 

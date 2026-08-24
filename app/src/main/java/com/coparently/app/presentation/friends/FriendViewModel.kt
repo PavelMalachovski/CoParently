@@ -11,7 +11,10 @@ import com.coparently.app.domain.guests.GuestInvite
 import com.coparently.app.domain.repository.FriendRepository
 import com.coparently.app.presentation.pairing.pairingMessageRes
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -154,6 +157,27 @@ class FriendViewModel @Inject constructor(
                 }
             )
         }
+    }
+
+    private val _viewedFriend = MutableStateFlow<String?>(null)
+
+    /**
+     * The friend whose profile the parents are reading, resolved from `friend_profiles`.
+     *
+     * Read on demand rather than carried on the grant: the grant holds only what the list needs
+     * (a name and a face), while a phone number and a blood group are the reason the profile
+     * exists at all and are worth a read of the one document being looked at.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val viewedProfile: StateFlow<FriendProfile?> = _viewedFriend
+        .flatMapLatest { uid ->
+            if (uid == null) flowOf(null) else friendRepository.observeFriendProfile(uid)
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), null)
+
+    /** Points [viewedProfile] at [friendUid]. */
+    fun openFriend(friendUid: String) {
+        _viewedFriend.value = friendUid
     }
 
     /** Ends [friendUid]'s access. */

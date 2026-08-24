@@ -33,6 +33,22 @@ class FriendMappersTest {
     }
 
     @Test
+    fun `a grant carries the friend's Google picture, and survives without one`() {
+        // Copied into the grant at accept time so the parents' list needs no second read of a
+        // document that is not theirs. A blank one is null, not an empty string, so the
+        // avatar has one thing to test for before falling back to the initial.
+        assertEquals(
+            "https://lh3.googleusercontent.com/a/x",
+            FriendMappers.grantFrom(
+                "friend",
+                goodGrant + ("photoUrl" to "https://lh3.googleusercontent.com/a/x")
+            )?.photoUrl
+        )
+        assertNull(FriendMappers.grantFrom("friend", goodGrant)?.photoUrl)
+        assertNull(FriendMappers.grantFrom("friend", goodGrant + ("photoUrl" to "  "))?.photoUrl)
+    }
+
+    @Test
     fun `a grant naming other than two parents is dropped`() {
         // The events query is a `whereIn` over this list: one uid under-fetches, three reach
         // past the family. Neither is a grant.

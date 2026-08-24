@@ -11,11 +11,11 @@
     <string name="friend_role_guardian">Opatrovník</string>
     <string name="friend_role_friend">Přítel</string>
     <string name="friend_role_grandparent">Prarodič</string>
+    <string name="friend_detail_title">Přítel</string>
     <string name="friend_profile_title">Můj profil</string>
     <string name="friend_profile_name">Jméno</string>
     <string name="friend_profile_phone">Telefonní číslo</string>
     <string name="friend_profile_blood_group">Krevní skupina</string>
-    <string name="friend_profile_photo">Fotka</string>
     <string name="friend_profile_save">Uložit</string>
     <string name="friend_event_participates">Účastní se: %1$s</string>
     <string name="friend_event_none">Nikdo</string>

@@ -11,11 +11,11 @@
     <string name="friend_role_guardian">Guardian</string>
     <string name="friend_role_friend">Friend</string>
     <string name="friend_role_grandparent">Grandparent</string>
+    <string name="friend_detail_title">Friend</string>
     <string name="friend_profile_title">My profile</string>
     <string name="friend_profile_name">Name</string>
     <string name="friend_profile_phone">Phone number</string>
     <string name="friend_profile_blood_group">Blood group</string>
-    <string name="friend_profile_photo">Photo</string>
     <string name="friend_profile_save">Save</string>
     <string name="friend_event_participates">%1$s takes part</string>
     <string name="friend_event_none">Nobody</string>

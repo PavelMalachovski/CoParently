@@ -144,6 +144,29 @@ describe('acceptCalendarFriendInvitation', () => {
     assert.strictEqual(db._docs.users.alice.partnerId, 'bob');
   });
 
+  it('copies the accepter Google picture into the grant', async () => {
+    // The parents' "who can see this" list would otherwise need a second read of a document
+    // that is not theirs. A Google sign-in puts the account picture in profilePhotoUrl.
+    const db = seeded({}, {
+      alice: {id: 'alice', name: 'Alice', role: 'mom', partnerId: 'bob'},
+      bob: {id: 'bob', name: 'Bob', role: 'dad', partnerId: 'alice'},
+      nina: {id: 'nina', name: 'Nina', profilePhotoUrl: 'https://lh3.googleusercontent.com/a/x'},
+    });
+
+    await myFunctions.acceptCalendarFriendInvitationImpl(db, 'nina', 'nina@example.com', ref);
+
+    assert.strictEqual(
+        db._docs.calendar_friends.nina.photoUrl, 'https://lh3.googleusercontent.com/a/x');
+  });
+
+  it('writes no photoUrl key at all when the accepter has no picture', async () => {
+    // Never `photoUrl: undefined` — Firestore rejects that outright, so the helper returns an
+    // object to merge rather than a value.
+    const db = seeded();
+    await myFunctions.acceptCalendarFriendInvitationImpl(db, 'nina', 'nina@example.com', ref);
+    assert.ok(!('photoUrl' in db._docs.calendar_friends.nina));
+  });
+
   it('marks the invitation accepted', async () => {
     const db = seeded();
     await myFunctions.acceptCalendarFriendInvitationImpl(db, 'nina', 'nina@example.com', ref);

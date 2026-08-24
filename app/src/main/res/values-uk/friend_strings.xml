@@ -11,11 +11,11 @@
     <string name="friend_role_guardian">Опікун</string>
     <string name="friend_role_friend">Друг</string>
     <string name="friend_role_grandparent">Бабуся або дідусь</string>
+    <string name="friend_detail_title">Друг</string>
     <string name="friend_profile_title">Мій профіль</string>
     <string name="friend_profile_name">Імʼя</string>
     <string name="friend_profile_phone">Номер телефону</string>
     <string name="friend_profile_blood_group">Група крові</string>
-    <string name="friend_profile_photo">Фото</string>
     <string name="friend_profile_save">Зберегти</string>
     <string name="friend_event_participates">Бере участь %1$s</string>
     <string name="friend_event_none">Ніхто</string>

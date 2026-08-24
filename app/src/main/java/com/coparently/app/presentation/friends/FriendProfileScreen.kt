@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -27,6 +28,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -34,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.coparently.app.R
 import com.coparently.app.domain.friends.FriendRole
+import com.coparently.app.presentation.common.AccountAvatar
 import com.coparently.app.presentation.common.PillChip
 import com.coparently.app.presentation.theme.CoPlanlyColors
 
@@ -98,13 +101,24 @@ fun FriendProfileScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            OutlinedTextField(
-                value = name,
-                onValueChange = { name = it },
-                label = { Text(stringResource(R.string.friend_profile_name)) },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
-            )
+            // The Google account's own picture, taken at the first save. There is no upload
+            // control: the friend changes this where they already manage it, in their Google
+            // account, and a button here that only ever showed what Google already knows would
+            // promise an edit this screen cannot make.
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                AccountAvatar(name = name, photoUrl = stored?.photoUrl, size = 56.dp)
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text(stringResource(R.string.friend_profile_name)) },
+                    singleLine = true,
+                    modifier = Modifier.weight(1f)
+                )
+            }
 
             Text(
                 text = stringResource(R.string.friend_section_title),
@@ -161,9 +175,10 @@ fun FriendProfileScreen(
                         role = role,
                         phones = listOf(phone),
                         bloodGroup = bloodGroup,
-                        // Photo upload arrives with the Storage wiring; a button that did
-                        // nothing would be exactly the promise this project's design rules
-                        // forbid, so the existing value is carried rather than a control shown.
+                        // Null on a first save: the repository then takes the Google
+                        // account's own picture. Once stored it is carried, never re-derived,
+                        // so a friend who later changes it in Google keeps what they had here
+                        // until they say otherwise.
                         photoUrl = stored?.photoUrl
                     )
                 },

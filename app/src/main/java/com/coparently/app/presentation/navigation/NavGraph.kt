@@ -578,7 +578,29 @@ fun NavGraph(
             composable(route = Screen.Friends.route) {
                 com.coparently.app.presentation.friends.FriendsScreen(
                     onNavigateUp = { navController.popBackStack() },
+                    onOpenFriend = { uid ->
+                        navController.navigate(Screen.FriendDetail.createRoute(uid))
+                    },
                     onOpenMyProfile = { navController.navigate(Screen.FriendProfile.route) }
+                )
+            }
+
+            composable(
+                route = Screen.FriendDetail.route,
+                arguments = listOf(
+                    navArgument(Screen.FriendDetail.ARG_FRIEND_UID) {
+                        type = NavType.StringType
+                    }
+                )
+            ) { backStackEntry ->
+                val friendUid = backStackEntry.arguments
+                    ?.getString(Screen.FriendDetail.ARG_FRIEND_UID).orEmpty()
+                com.coparently.app.presentation.friends.FriendDetailScreen(
+                    friendUid = friendUid,
+                    onNavigateUp = { navController.popBackStack() },
+                    // Revoking removes the row this screen was opened from, so it returns to
+                    // the list rather than leaving a card for an access that no longer exists.
+                    onRevoked = { navController.popBackStack() }
                 )
             }
 
@@ -1094,6 +1116,21 @@ sealed class Screen(val route: String) {
 
     /** The parents' list of who outside the family can see the calendar (item 16). */
     data object Friends : Screen("friends")
+
+    /**
+     * One friend as the parents read them — their face, phone number and blood group, and the
+     * control that ends their access.
+     *
+     * Carries the uid only: the name comes from the grant the screen already observes, so it
+     * cannot go stale against a friend who renamed themselves between the two screens.
+     */
+    data object FriendDetail : Screen("friend_detail/{friendUid}") {
+        /** Whose card to open. */
+        const val ARG_FRIEND_UID = "friendUid"
+
+        /** Builds the route for [friendUid]. */
+        fun createRoute(friendUid: String): String = "friend_detail/$friendUid"
+    }
 
     /** The friend's own profile, authored by them and read by the two parents. */
     data object FriendProfile : Screen("friend_profile")

@@ -744,6 +744,28 @@ async function guestName(accepterRef, acceptingEmail) {
 exports.guestName = guestName;
 
 /**
+ * The accepter's avatar, as the one-key object to merge into a grant — `{}` when they have none.
+ *
+ * Returned as an object rather than a string so the caller never writes `photoUrl: undefined`,
+ * which Firestore rejects outright. A Google sign-in puts the account's own picture in
+ * `users/{uid}.profilePhotoUrl` (see `ProfileIdentity.resolvePhotoUrl` on the client); an
+ * email/password account has none, and the reader's initial-letter fallback covers that.
+ *
+ * Copied into the grant for the same reason the name is: the parents' "who can see this" list
+ * would otherwise need a second read of a document that is not theirs to read.
+ *
+ * @param {FirebaseFirestore.DocumentReference} accepterRef The accepter's user document.
+ * @return {Promise<!Object>} `{photoUrl}` or an empty object.
+ */
+async function accepterPhoto(accepterRef) {
+  const snap = await accepterRef.get();
+  const stored = snap.exists && snap.data() ? snap.data().profilePhotoUrl : '';
+  return typeof stored === 'string' && stored.trim() ? {photoUrl: stored} : {};
+}
+
+exports.accepterPhoto = accepterPhoto;
+
+/**
  * Redeems a guest invitation identified either by its short code or by its document id.
  *
  * Runs server-side for the same reason the pairing callable does: it writes a child record
@@ -872,13 +894,13 @@ async function acceptCalendarFriendInvitationImpl(db, acceptingUserId, accepting
     }
     familyParents = [invite.fromUserId, partnerId].sort();
 
-    tx.set(grantRef, {
+    tx.set(grantRef, Object.assign({
       familyParents,
       name: await guestName(accepterRef, acceptingEmail),
       grantedBy: invite.fromUserId,
       grantedAtMillis,
       expiresAtMillis,
-    });
+    }, await accepterPhoto(accepterRef)));
     tx.update(inviteRef, {
       status: 'accepted', acceptedBy: acceptingUserId, acceptedAt: grantedAtMillis,
     });

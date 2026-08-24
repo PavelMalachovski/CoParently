@@ -11,11 +11,11 @@
     <string name="friend_role_guardian">Betreuungsperson</string>
     <string name="friend_role_friend">Freund</string>
     <string name="friend_role_grandparent">Großelternteil</string>
+    <string name="friend_detail_title">Freund</string>
     <string name="friend_profile_title">Mein Profil</string>
     <string name="friend_profile_name">Name</string>
     <string name="friend_profile_phone">Telefonnummer</string>
     <string name="friend_profile_blood_group">Blutgruppe</string>
-    <string name="friend_profile_photo">Foto</string>
     <string name="friend_profile_save">Speichern</string>
     <string name="friend_event_participates">%1$s nimmt teil</string>
     <string name="friend_event_none">Niemand</string>

@@ -37,6 +37,7 @@ object FriendMappers {
         return CalendarFriendGrant(
             friendUid = friendUid,
             name = (data["name"] as? String).orEmpty(),
+            photoUrl = (data["photoUrl"] as? String)?.takeIf { it.isNotBlank() },
             familyParents = parents,
             grantedBy = (data["grantedBy"] as? String).orEmpty(),
             grantedAtMillis = (data["grantedAtMillis"] as? Number)?.toLong() ?: 0L,
