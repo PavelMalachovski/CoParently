@@ -39,6 +39,16 @@ object PreferenceKeys {
     const val CHAT_DRAFT_PREFIX = "chat_draft_"
 
     /**
+     * The agreed split of a shared expense, as slot 1's share in basis points.
+     *
+     * Cached locally rather than read from Firestore on the save path: an expense must be
+     * recordable offline, and blocking a save on a document read would fail it for a reason that
+     * has nothing to do with the expense. The pair's document remains the record; this is what
+     * the balance math and the save path read.
+     */
+    const val SPLIT_RATIO_BASIS_POINTS = "expenses_split_ratio_basis_points"
+
+    /**
      * Prefix for the per-user key that records the parent slot (`"mom"`/`"dad"`) this device's
      * own records are currently stamped with — the actual key is this prefix plus the Firebase
      * UID.

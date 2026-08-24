@@ -86,4 +86,9 @@
     <string name="expenses_row_meta_with_receipt">%1$s · %2$s · чек</string>
     <string name="expenses_budget_chip">%1$s %2$s / %3$s</string>
     <string name="expenses_budget_add">+ Бюджет</string>
+    <string name="expenses_split_proposal_title">Предложено новое деление расходов</string>
+    <string name="expenses_split_proposal_body">Второй родитель предлагает делить общие расходы %1$d / %2$d начиная с этого момента. Уже внесённые расходы сохранят своё деление.</string>
+    <string name="expenses_split_proposal_confirm">Подтвердить</string>
+    <string name="expenses_split_proposal_decline">Отклонить</string>
+    <string name="expenses_split_proposal_later">Позже</string>
 </resources>

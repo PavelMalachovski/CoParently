@@ -400,6 +400,21 @@ class CoPlanlyMessagingService : FirebaseMessagingService() {
                 R.plurals.push_day_swap_group_declined_body,
                 BodyArgs.DAY_COUNT
             ),
+            PushPayload.SPLIT_RATIO_PROPOSED to PushTextSpec(
+                R.string.push_split_ratio_proposed_title,
+                R.string.push_split_ratio_proposed_body,
+                BodyArgs.NONE
+            ),
+            PushPayload.SPLIT_RATIO_ACCEPTED to PushTextSpec(
+                R.string.push_split_ratio_accepted_title,
+                R.string.push_split_ratio_accepted_body,
+                BodyArgs.NONE
+            ),
+            PushPayload.SPLIT_RATIO_DECLINED to PushTextSpec(
+                R.string.push_split_ratio_declined_title,
+                R.string.push_split_ratio_declined_body,
+                BodyArgs.NONE
+            ),
             PushPayload.PAIRING_ACCEPTED to PushTextSpec(
                 R.string.push_pairing_accepted_title,
                 R.string.push_pairing_accepted_body,

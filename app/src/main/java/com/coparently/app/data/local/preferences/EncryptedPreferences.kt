@@ -293,6 +293,27 @@ class EncryptedPreferences @Inject constructor(
             .orEmpty()
 
     /**
+     * Records the agreed split of a shared expense, as slot 1's share in basis points.
+     *
+     * @param basisPoints `0..10000`.
+     */
+    fun putSplitRatioBasisPoints(basisPoints: Int) {
+        encryptedPreferences.edit()
+            .putInt(PreferenceKeys.SPLIT_RATIO_BASIS_POINTS, basisPoints)
+            .apply()
+    }
+
+    /**
+     * The agreed split, or null when the family has never agreed one.
+     *
+     * Null rather than "half each": "we never agreed" and "we agreed on half each" are different
+     * facts, and only the caller knows which fallback belongs to it.
+     */
+    fun getSplitRatioBasisPoints(): Int? =
+        encryptedPreferences.getInt(PreferenceKeys.SPLIT_RATIO_BASIS_POINTS, -1)
+            .takeIf { it >= 0 }
+
+    /**
      * Stores the app-wide default currency.
      *
      * @param code ISO 4217 currency code, e.g. "CZK"

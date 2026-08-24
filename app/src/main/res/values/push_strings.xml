@@ -58,4 +58,10 @@
         <item quantity="one">Your co-parent turned down swapping %1$d day</item>
         <item quantity="other">Your co-parent turned down swapping %1$d days</item>
     </plurals>
+    <string name="push_split_ratio_proposed_title">New expense split proposed</string>
+    <string name="push_split_ratio_proposed_body">Your co-parent proposes a different split. Open the app to confirm or decline.</string>
+    <string name="push_split_ratio_accepted_title">Expense split agreed</string>
+    <string name="push_split_ratio_accepted_body">Your co-parent agreed to the new split. It applies to expenses from now on.</string>
+    <string name="push_split_ratio_declined_title">Expense split turned down</string>
+    <string name="push_split_ratio_declined_body">Your co-parent turned down the new split. Nothing has changed.</string>
 </resources>

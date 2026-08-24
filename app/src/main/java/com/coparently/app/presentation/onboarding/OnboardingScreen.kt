@@ -29,6 +29,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -167,6 +168,7 @@ private fun OnboardingBody(
             OnboardingStep.Intro -> IntroStep()
             OnboardingStep.Family -> FamilyKindStep(state, viewModel)
             OnboardingStep.Pet -> PetStep(state, viewModel)
+            OnboardingStep.Split -> SplitStep(state, viewModel)
             OnboardingStep.Profile -> ProfileStep(state, viewModel)
             OnboardingStep.Child -> ChildStep(state, viewModel)
             OnboardingStep.Relatives -> RelativesStep(state, viewModel)
@@ -384,6 +386,45 @@ private fun PetStep(state: OnboardingUiState, viewModel: OnboardingViewModel) {
 
     Footnote()
 }
+
+/**
+ * How a shared expense divides between the two parents.
+ *
+ * Easier to agree now than after a month of expenses to re-argue, which is why it is here and
+ * not only in Settings. Nobody has to confirm it at this point: pairing is the last step, so
+ * there is no co-parent yet and the answer applies outright — from the moment there *is* one,
+ * changing it becomes a proposal they have to accept.
+ *
+ * Skippable, like everything after the profile. Half each is what a family splits by until they
+ * say otherwise, and that is what a skip leaves in place.
+ */
+@Composable
+private fun SplitStep(state: OnboardingUiState, viewModel: OnboardingViewModel) {
+    StepHeading(title = R.string.onboarding_split_title, body = R.string.onboarding_split_body)
+
+    Text(
+        text = stringResource(
+            R.string.settings_split_ratio_value,
+            state.splitMomPercent,
+            SPLIT_WHOLE_PERCENT - state.splitMomPercent
+        ),
+        style = MaterialTheme.typography.headlineSmall
+    )
+    Slider(
+        value = state.splitMomPercent.toFloat(),
+        onValueChange = { viewModel.setSplitMomPercent(it.toInt()) },
+        valueRange = 0f..SPLIT_WHOLE_PERCENT.toFloat(),
+        steps = SPLIT_SLIDER_STEPS
+    )
+
+    Footnote()
+}
+
+/** A whole share, as a percent. */
+private const val SPLIT_WHOLE_PERCENT = 100
+
+/** Stops on the slider: every 5 %, which is nineteen stops between the two ends. */
+private const val SPLIT_SLIDER_STEPS = 19
 
 /**
  * The people who could collect the child or be called in an emergency.

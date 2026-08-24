@@ -31,4 +31,6 @@
     <string name="onboarding_family_pets_hint">Haustierdaten, Impfungen und die Nummer der Tierarztpraxis</string>
     <string name="onboarding_pet_title">Euer Haustier</string>
     <string name="onboarding_pet_body">Nur Name und Art. Impfungen, Fütterungsnotizen und Tierarzt folgen später auf der Haustierseite.</string>
+    <string name="onboarding_split_title">Wie teilt ihr die Kosten?</string>
+    <string name="onboarding_split_body">Hälfte/Hälfte, sofern ihr nichts anderes vereinbart. Sobald dein Co-Elternteil verknüpft ist, muss es Änderungen bestätigen — bereits erfasste Ausgaben behalten ihre Aufteilung.</string>
 </resources>

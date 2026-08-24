@@ -3,6 +3,8 @@ package com.coparently.app.presentation.onboarding
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.coparently.app.data.repository.FamilySettingsRepository
+import com.coparently.app.domain.expenses.SplitRatio
 import com.coparently.app.domain.model.ChildInfo
 import com.coparently.app.domain.model.EmergencyContact
 import com.coparently.app.domain.model.FamilyKind
@@ -34,6 +36,9 @@ import kotlinx.coroutines.sync.withLock
  * first screen of the app is not a gate. A parent who has pets instead simply changes it.
  */
 private val DEFAULT_CARES_FOR = setOf(FamilyKind.CHILDREN)
+
+/** Half each, which is what a family splits by until they agree otherwise. */
+private const val EVEN_SPLIT_PERCENT = 50
 
 /**
  * Everything the wizard has collected so far, plus which step is showing it.
@@ -74,6 +79,8 @@ data class OnboardingUiState(
     val caresFor: Set<FamilyKind> = DEFAULT_CARES_FOR,
     val petName: String = "",
     val petSpecies: PetSpecies = PetSpecies.DOG,
+    /** Slot 1's share of a shared expense, as a whole percent. Half each until changed. */
+    val splitMomPercent: Int = EVEN_SPLIT_PERCENT,
     val isSaving: Boolean = false,
     val isFinished: Boolean = false
 ) {
@@ -152,7 +159,8 @@ data class OnboardingUiState(
 class OnboardingViewModel @Inject constructor(
     private val userRepository: UserRepository,
     private val childInfoRepository: ChildInfoRepository,
-    private val petRepository: PetRepository
+    private val petRepository: PetRepository,
+    private val familySettingsRepository: FamilySettingsRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(OnboardingUiState())
@@ -224,6 +232,8 @@ class OnboardingViewModel @Inject constructor(
                         caresFor = state.caresFor.takeIf { it != DEFAULT_CARES_FOR }
                             ?: user?.caresFor?.takeIf { it.isNotEmpty() }
                             ?: DEFAULT_CARES_FOR,
+                        splitMomPercent = state.splitMomPercent.takeIf { it != EVEN_SPLIT_PERCENT }
+                            ?: familySettingsRepository.agreedRatioOrDefault().momPercent,
                         petName = state.petName.orStored(pet?.name),
                         petSpecies = if (state.petSpecies == PetSpecies.DOG && pet != null) {
                             pet.species
@@ -302,6 +312,11 @@ class OnboardingViewModel @Inject constructor(
             OnboardingStep.Child -> persist { saveChild(state) }
             OnboardingStep.Relatives -> persist { saveChild(state) }
             OnboardingStep.Pet -> persist { savePet(state) }
+            OnboardingStep.Split -> persist {
+                familySettingsRepository.submitRatio(
+                    SplitRatio.ofMomPercent(state.splitMomPercent)
+                )
+            }
             else -> Unit
         }
         leaveStep(state.step)
@@ -348,6 +363,11 @@ class OnboardingViewModel @Inject constructor(
     /** The pet step's species. */
     fun setPetSpecies(value: PetSpecies) {
         _uiState.update { it.copy(petSpecies = value) }
+    }
+
+    /** The split step's share for slot 1, as a whole percent. */
+    fun setSplitMomPercent(value: Int) {
+        _uiState.update { it.copy(splitMomPercent = value.coerceIn(0, 100)) }
     }
 
     /**

@@ -31,4 +31,6 @@
     <string name="onboarding_family_pets_hint">Карточки питомцев, прививки и телефон ветеринара</string>
     <string name="onboarding_pet_title">Ваш питомец</string>
     <string name="onboarding_pet_body">Только имя и вид. Прививки, заметки о кормлении и ветеринар — потом, на странице питомца.</string>
+    <string name="onboarding_split_title">Как будете делить расходы?</string>
+    <string name="onboarding_split_body">Пополам, если не договоритесь иначе. Как только второй родитель будет подключён, изменение придётся подтверждать ему — а уже внесённые расходы сохранят своё деление.</string>
 </resources>

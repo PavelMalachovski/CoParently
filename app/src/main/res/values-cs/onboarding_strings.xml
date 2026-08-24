@@ -31,4 +31,6 @@
     <string name="onboarding_family_pets_hint">Záznamy o mazlíčcích, očkování a číslo na veterináře</string>
     <string name="onboarding_pet_title">Váš mazlíček</string>
     <string name="onboarding_pet_body">Stačí jméno a druh. Očkování, poznámky ke krmení a veterinář přijdou později na obrazovce mazlíčka.</string>
+    <string name="onboarding_split_title">Jak budete dělit výdaje?</string>
+    <string name="onboarding_split_body">Napůl, pokud se nedohodnete jinak. Jakmile připojíte druhého rodiče, změnu bude potvrzovat on — a již zadané výdaje si ponechají své rozdělení.</string>
 </resources>

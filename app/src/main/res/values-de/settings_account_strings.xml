@@ -52,4 +52,10 @@
     <string name="settings_family_kind_both">%1$s und %2$s</string>
     <string name="settings_family_kind_save">Speichern</string>
     <string name="settings_family_kind_cancel">Abbrechen</string>
+    <string name="settings_split_ratio_title">Kostenaufteilung</string>
+    <string name="settings_split_ratio_value">%1$d / %2$d</string>
+    <string name="settings_split_ratio_hint">Gilt für ab jetzt erfasste Ausgaben. Bereits erfasste behalten die Aufteilung, mit der sie eingetragen wurden.</string>
+    <string name="settings_split_ratio_applied">Aufteilung gespeichert</string>
+    <string name="settings_split_ratio_proposed">Zur Bestätigung an dein Co-Elternteil gesendet</string>
+    <string name="settings_split_ratio_refused">Diese Aufteilung konnte nicht vorgeschlagen werden</string>
 </resources>

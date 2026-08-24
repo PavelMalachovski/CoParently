@@ -1,5 +1,7 @@
 package com.coparently.app.presentation.onboarding
 
+import com.coparently.app.data.repository.FamilySettingsRepository
+import com.coparently.app.domain.expenses.SplitRatio
 import com.coparently.app.domain.model.ChildInfo
 import com.coparently.app.domain.model.EmergencyContact
 import com.coparently.app.domain.model.User
@@ -43,6 +45,7 @@ class OnboardingViewModelTest {
     private lateinit var userRepository: UserRepository
     private lateinit var childInfoRepository: ChildInfoRepository
     private lateinit var petRepository: PetRepository
+    private lateinit var familySettingsRepository: FamilySettingsRepository
     private lateinit var viewModel: OnboardingViewModel
 
     private val storedUser = User(
@@ -67,7 +70,15 @@ class OnboardingViewModelTest {
         petRepository = mockk(relaxed = true) {
             every { getAllPets() } returns flowOf(emptyList())
         }
-        viewModel = OnboardingViewModel(userRepository, childInfoRepository, petRepository)
+        familySettingsRepository = mockk(relaxed = true) {
+            every { agreedRatioOrDefault() } returns SplitRatio.EVEN
+        }
+        viewModel = OnboardingViewModel(
+            userRepository,
+            childInfoRepository,
+            petRepository,
+            familySettingsRepository
+        )
     }
 
     @After
@@ -124,6 +135,7 @@ class OnboardingViewModelTest {
         listOf(
             OnboardingStep.Child,
             OnboardingStep.Relatives,
+            OnboardingStep.Split,
             OnboardingStep.Custody,
             OnboardingStep.CoParent
         ).forEach { expected ->
@@ -198,7 +210,12 @@ class OnboardingViewModelTest {
                 )
             )
         )
-        viewModel = OnboardingViewModel(userRepository, childInfoRepository, petRepository)
+        viewModel = OnboardingViewModel(
+            userRepository,
+            childInfoRepository,
+            petRepository,
+            familySettingsRepository
+        )
         advanceUntilIdle()
 
         walkTo(OnboardingStep.Child)
@@ -302,7 +319,12 @@ class OnboardingViewModelTest {
                 )
             )
         )
-        viewModel = OnboardingViewModel(userRepository, childInfoRepository, petRepository)
+        viewModel = OnboardingViewModel(
+            userRepository,
+            childInfoRepository,
+            petRepository,
+            familySettingsRepository
+        )
         advanceUntilIdle()
 
         val state = viewModel.uiState.value

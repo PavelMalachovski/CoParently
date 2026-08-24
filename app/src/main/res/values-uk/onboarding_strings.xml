@@ -31,4 +31,6 @@
     <string name="onboarding_family_pets_hint">Картки улюбленців, щеплення та телефон ветеринара</string>
     <string name="onboarding_pet_title">Ваш улюбленець</string>
     <string name="onboarding_pet_body">Лише ім'я та вид. Щеплення, нотатки про годування та ветеринар — потім, на сторінці улюбленця.</string>
+    <string name="onboarding_split_title">Як ділитимете витрати?</string>
+    <string name="onboarding_split_body">Навпіл, якщо не домовитеся інакше. Щойно другого з батьків буде під'єднано, зміну підтверджуватиме він — а вже внесені витрати збережуть свій поділ.</string>
 </resources>

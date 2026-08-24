@@ -34,6 +34,16 @@ enum class OnboardingStep {
     /** The pet's name and species. */
     Pet,
 
+    /**
+     * How a shared expense divides between the two parents.
+     *
+     * Here rather than only in Settings because the reporter asked for it at registration, and
+     * because it is genuinely easier to agree before there is a month of expenses to re-argue.
+     * Nobody has to confirm it yet: pairing is the last step, so at this point there is no
+     * co-parent, and `FamilySettingsRepository.submitRatio` applies it outright.
+     */
+    Split,
+
     /** Hands off to `CustodySetupScreen`. */
     Custody,
 
@@ -73,6 +83,7 @@ enum class OnboardingStep {
                     add(Relatives)
                 }
                 if (FamilyKind.PETS in kinds) add(Pet)
+                add(Split)
                 add(Custody)
                 add(CoParent)
             }

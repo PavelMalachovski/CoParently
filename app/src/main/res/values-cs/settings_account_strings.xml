@@ -52,4 +52,10 @@
     <string name="settings_family_kind_both">%1$s a %2$s</string>
     <string name="settings_family_kind_save">Uložit</string>
     <string name="settings_family_kind_cancel">Zrušit</string>
+    <string name="settings_split_ratio_title">Rozdělení výdajů</string>
+    <string name="settings_split_ratio_value">%1$d / %2$d</string>
+    <string name="settings_split_ratio_hint">Platí pro výdaje zadané od této chvíle. Již zadané si ponechají rozdělení, se kterým byly pořízeny.</string>
+    <string name="settings_split_ratio_applied">Rozdělení uloženo</string>
+    <string name="settings_split_ratio_proposed">Odesláno druhému rodiči k potvrzení</string>
+    <string name="settings_split_ratio_refused">Toto rozdělení se nepodařilo navrhnout</string>
 </resources>

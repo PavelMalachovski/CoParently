@@ -53,4 +53,10 @@
     <string name="settings_family_kind_both">%1$s and %2$s</string>
     <string name="settings_family_kind_save">Save</string>
     <string name="settings_family_kind_cancel">Cancel</string>
+    <string name="settings_split_ratio_title">Expense split</string>
+    <string name="settings_split_ratio_value">%1$d / %2$d</string>
+    <string name="settings_split_ratio_hint">Applies to expenses recorded from now on. Ones already recorded keep the split they were entered under.</string>
+    <string name="settings_split_ratio_applied">Split saved</string>
+    <string name="settings_split_ratio_proposed">Sent to your co-parent to confirm</string>
+    <string name="settings_split_ratio_refused">That split could not be proposed</string>
 </resources>

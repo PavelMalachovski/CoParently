@@ -52,4 +52,10 @@
     <string name="settings_family_kind_both">%1$s і %2$s</string>
     <string name="settings_family_kind_save">Зберегти</string>
     <string name="settings_family_kind_cancel">Скасувати</string>
+    <string name="settings_split_ratio_title">Поділ витрат</string>
+    <string name="settings_split_ratio_value">%1$d / %2$d</string>
+    <string name="settings_split_ratio_hint">Діє для витрат, внесених із цього моменту. Уже внесені збережуть свій поділ.</string>
+    <string name="settings_split_ratio_applied">Поділ збережено</string>
+    <string name="settings_split_ratio_proposed">Надіслано другому з батьків на підтвердження</string>
+    <string name="settings_split_ratio_refused">Не вдалося запропонувати цей поділ</string>
 </resources>

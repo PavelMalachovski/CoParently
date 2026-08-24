@@ -52,4 +52,10 @@
         <item quantity="many">Druhý rodič odmítl výměnu %1$d dne</item>
         <item quantity="other">Druhý rodič odmítl výměnu %1$d dnů</item>
     </plurals>
+    <string name="push_split_ratio_proposed_title">Navrženo nové rozdělení výdajů</string>
+    <string name="push_split_ratio_proposed_body">Druhý rodič navrhuje jiné rozdělení. Otevřete aplikaci a potvrďte nebo odmítněte.</string>
+    <string name="push_split_ratio_accepted_title">Rozdělení výdajů schváleno</string>
+    <string name="push_split_ratio_accepted_body">Druhý rodič souhlasil s novým rozdělením. Platí pro výdaje od této chvíle.</string>
+    <string name="push_split_ratio_declined_title">Rozdělení výdajů odmítnuto</string>
+    <string name="push_split_ratio_declined_body">Druhý rodič nové rozdělení odmítl. Nic se nezměnilo.</string>
 </resources>

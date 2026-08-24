@@ -95,4 +95,9 @@
     <string name="expenses_row_meta_with_receipt">%1$s · %2$s · receipt</string>
     <string name="expenses_budget_chip">%1$s %2$s / %3$s</string>
     <string name="expenses_budget_add">+ Budget</string>
+    <string name="expenses_split_proposal_title">New expense split proposed</string>
+    <string name="expenses_split_proposal_body">Your co-parent proposes %1$d / %2$d for shared expenses from now on. Already recorded expenses keep their split.</string>
+    <string name="expenses_split_proposal_confirm">Confirm</string>
+    <string name="expenses_split_proposal_decline">Decline</string>
+    <string name="expenses_split_proposal_later">Later</string>
 </resources>

@@ -2,8 +2,11 @@ package com.coparently.app.presentation.expenses
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.coparently.app.data.repository.FamilySettingsRepository
 import com.coparently.app.domain.expenses.CurrencyBalance
 import com.coparently.app.domain.expenses.CurrencyBreakdown
+import com.coparently.app.domain.expenses.SplitRatio
+import com.coparently.app.domain.expenses.SplitRatioProposal
 import com.coparently.app.domain.expenses.breakdownByCurrency
 import com.coparently.app.domain.expenses.calculateExpenseBalancesByCurrency
 import com.coparently.app.domain.model.Expense
@@ -23,6 +26,11 @@ import com.coparently.app.presentation.common.ParentsSource
 import com.coparently.app.presentation.common.stateInLoadable
 import com.coparently.app.presentation.common.valueOrNull
 import dagger.hilt.android.lifecycle.HiltViewModel
+import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.YearMonth
+import java.util.UUID
+import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -31,11 +39,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import java.time.LocalDate
-import java.time.LocalDateTime
-import java.time.YearMonth
-import java.util.UUID
-import javax.inject.Inject
 
 /** Keeps derived flows warm across brief unsubscriptions (config changes). */
 private const val STOP_TIMEOUT_MS = 5_000L
@@ -79,8 +82,37 @@ class ExpenseViewModel @Inject constructor(
     private val receiptStorage: ReceiptStorage,
     private val preferencesRepository: PreferencesRepository,
     private val receiptTextRecognizer: ReceiptTextRecognizer,
+    private val familySettingsRepository: FamilySettingsRepository,
     parentsSource: ParentsSource
 ) : ViewModel() {
+
+    /**
+     * The agreed split, as this device last saw it.
+     *
+     * Kept warm so the screen can label the ratio and offer a per-expense override without a
+     * read on the save path; the cached value is the one an expense is actually stamped with.
+     */
+    val agreedRatio: StateFlow<SplitRatio> = familySettingsRepository.observeSettings()
+        .map { settings ->
+            settings?.ratio?.also(familySettingsRepository::cacheAgreedRatio)
+                ?: familySettingsRepository.agreedRatioOrDefault()
+        }
+        .stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS),
+            SplitRatio.EVEN
+        )
+
+    /**
+     * The two parents a shared expense is split between.
+     *
+     * Both uids, or just the payer while unpaired: an expense recorded before there is a
+     * co-parent has nobody to owe a share of it, and naming one would invent a debt.
+     */
+    private fun sharedWith(userId: String): List<String> {
+        val coParent = parents.value.coParent?.uid
+        return listOfNotNull(userId, coParent?.takeIf { it != userId })
+    }
 
     /**
      * Signed-in parent and paired co-parent, for naming a payer and for [roleByUid].
@@ -90,6 +122,43 @@ class ExpenseViewModel @Inject constructor(
 
     private val _currentUserId = MutableStateFlow<String>("")
     val currentUserId: StateFlow<String> = _currentUserId.asStateFlow()
+
+    /**
+     * A split the co-parent has put forward and this parent has not answered.
+     *
+     * Only the co-parent's — a parent never decides their own, which the transition and
+     * `firestore.rules` both refuse. The proposer sees theirs as a "waiting" state instead.
+     */
+    val pendingRatioProposal: StateFlow<SplitRatioProposal?> = combine(
+        familySettingsRepository.observeSettings(),
+        _currentUserId
+    ) { settings, uid ->
+        settings?.proposal?.takeIf { uid.isNotEmpty() && it.proposedBy != uid }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), null)
+
+    /**
+     * Answers the co-parent's proposed split.
+     *
+     * **Later is not a third answer.** Dismissing the banner leaves the proposal pending, so it
+     * is still in the inbox and still on the co-parent's side of the conversation — an answer
+     * that quietly meant "no" would be exactly the silent outcome this feature exists to remove.
+     *
+     * @param accept True to agree, false to turn it down.
+     */
+    fun decideRatioProposal(accept: Boolean) {
+        viewModelScope.launch {
+            val result = if (accept) {
+                familySettingsRepository.acceptProposal()
+            } else {
+                familySettingsRepository.declineProposal()
+            }
+            result.onFailure { e ->
+                _saveState.value = ExpenseSaveState.Error(
+                    e.message ?: "The split could not be answered"
+                )
+            }
+        }
+    }
 
     /** App-wide default currency, used to pre-fill the expense form. */
     val defaultCurrency: StateFlow<SupportedCurrency> =
@@ -327,7 +396,9 @@ class ExpenseViewModel @Inject constructor(
         childId: String? = null,
         date: LocalDate = LocalDate.now(),
         notes: String? = null,
-        receiptImageUri: String? = null
+        receiptImageUri: String? = null,
+        shared: Boolean = true,
+        splitOverride: SplitRatio? = null
     ) {
         if (_saveState.value is ExpenseSaveState.Saving) return
 
@@ -359,6 +430,11 @@ class ExpenseViewModel @Inject constructor(
                 }
             }
 
+            // `splitBetween` was never populated by any production path, so the guard in
+            // `calculateExpenseBalance` could not fire, `currentUserOwes` stayed zero, and both
+            // parents were told at once that the other owed them everything they had spent that
+            // month. Every shared expense now names the two parents.
+            val splitBetween = if (shared) sharedWith(userId) else emptyList()
             val expense = Expense(
                 id = expenseId,
                 childId = childId,
@@ -367,10 +443,17 @@ class ExpenseViewModel @Inject constructor(
                 category = category,
                 currency = currency,
                 paidBy = userId,
+                splitBetween = splitBetween,
                 date = date,
                 receiptUrl = receiptUrl,
                 notes = notes,
-                createdAt = LocalDateTime.now()
+                createdAt = LocalDateTime.now(),
+                // Snapshotted, never looked up when the balance is read: a renegotiated split
+                // must not re-price a month the two parents have already settled.
+                splitBasisPoints = splitBetween.takeIf { it.isNotEmpty() }?.let {
+                    (splitOverride ?: familySettingsRepository.agreedRatioOrDefault())
+                        .momShareBasisPoints
+                }
             )
             expenseRepository.addExpense(expense)
 

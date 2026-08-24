@@ -106,6 +106,18 @@ object PushPayload {
     const val DAY_SWAP_GROUP_ACCEPTED = "day_swap_group_accepted"
     const val DAY_SWAP_GROUP_DECLINED = "day_swap_group_declined"
 
+    /**
+     * A change to how a shared expense divides between the two parents.
+     *
+     * No figure rides along, deliberately. A push saying "your co-parent proposes 70/30" would
+     * put a number a reader may act on onto a lock screen, written by the other side and
+     * unverifiable until the app is opened — and the app is where the proposal, with its
+     * Confirm and Decline, actually is.
+     */
+    const val SPLIT_RATIO_PROPOSED = "split_ratio_proposed"
+    const val SPLIT_RATIO_ACCEPTED = "split_ratio_accepted"
+    const val SPLIT_RATIO_DECLINED = "split_ratio_declined"
+
     // ---- types only a Cloud Function may produce -------------------------------
 
     /** Queued by `acceptPairingInvitation`. */
@@ -144,7 +156,10 @@ object PushPayload {
         DAY_SWAP_DECLINED,
         DAY_SWAP_GROUP_OFFERED,
         DAY_SWAP_GROUP_ACCEPTED,
-        DAY_SWAP_GROUP_DECLINED
+        DAY_SWAP_GROUP_DECLINED,
+        SPLIT_RATIO_PROPOSED,
+        SPLIT_RATIO_ACCEPTED,
+        SPLIT_RATIO_DECLINED
     )
 
     /**

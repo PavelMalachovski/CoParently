@@ -46,10 +46,15 @@ data class CurrencyBalance(
  * slot into a person's name; see `presentation/common/ParentLabels.kt`.
  *
  * Each expense leaves its payer out of pocket by the full amount, and every uid in
- * `splitBetween` owes an equal share of it. An expense with an empty `splitBetween` is treated
- * as **unsplit**: it counts towards the payer's total and towards the month total, but creates
- * no debt in either direction — a parent buying something purely for themselves is not a claim
- * on the other.
+ * `splitBetween` owes **their agreed share** of it. An expense with an empty `splitBetween` is
+ * treated as **unsplit**: it counts towards the payer's total and towards the month total, but
+ * creates no debt in either direction — a parent buying something purely for themselves is not a
+ * claim on the other.
+ *
+ * **The share comes from the expense, not from the family's current agreement.** Each expense
+ * carries the ratio it was recorded under (`Expense.splitBasisPoints`), so renegotiating the
+ * split cannot re-price a month the two parents have already settled and argued about. A row
+ * from before the agreement existed carries null and is divided evenly, which is what it was.
  *
  * @param expenses Expenses in the period
  * @param currentUserId Firebase uid of the signed-in parent
@@ -79,7 +84,7 @@ fun calculateExpenseBalance(
             currentUserPaid += expense.amount
         }
         if (expense.splitBetween.isNotEmpty() && currentUserId in expense.splitBetween) {
-            currentUserOwes += expense.amount / expense.splitBetween.size
+            currentUserOwes += expense.amount * shareOf(expense, currentUserId, roleByUid)
         }
     }
 
@@ -94,6 +99,27 @@ fun calculateExpenseBalance(
         netForCurrentUser = currentUserPaid - currentUserOwes,
         splitKnown = splitKnown
     )
+}
+
+/**
+ * The fraction of [expense] that [uid] owes.
+ *
+ * The ratio stored on the expense when both parents' slots are known and it carries one; an even
+ * division among the people it is split between otherwise. The fallback covers three real cases
+ * and gets each of them right: a row recorded before the agreement existed, an unpaired account
+ * where one of the two slots is unknown, and a pair whose two parents both still read `"mom"` —
+ * the same condition that leaves `ExpenseBalance.splitKnown` false, because the two people
+ * genuinely cannot be told apart yet.
+ */
+private fun shareOf(expense: Expense, uid: String, roleByUid: Map<String, String>): Double {
+    val ratio = SplitRatio.fromStored(expense.splitBasisPoints)
+    val slot = roleByUid[uid]
+    val slotsKnown = roleByUid.values.toSet().containsAll(setOf("mom", "dad"))
+    return if (ratio != null && slot != null && slotsKnown) {
+        ratio.shareFor(slot)
+    } else {
+        1.0 / expense.splitBetween.size
+    }
 }
 
 /**

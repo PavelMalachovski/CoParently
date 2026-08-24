@@ -21,6 +21,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.filled.Balance
 import androidx.compose.material.icons.filled.ChildCare
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.DeleteForever
@@ -51,6 +52,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
@@ -61,6 +63,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -77,7 +80,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.coparently.app.R
+import com.coparently.app.data.repository.RatioSubmission
 import com.coparently.app.data.sync.SyncStatus
+import com.coparently.app.domain.expenses.SplitRatio
 import com.coparently.app.domain.model.FamilyKind
 import com.coparently.app.domain.money.SupportedCurrency
 import com.coparently.app.presentation.common.ConfirmationDialog
@@ -154,7 +159,20 @@ fun SettingsScreen(
 
     val settingsUiState by settingsViewModel.settingsState.collectAsState()
     val caresFor by settingsViewModel.caresFor.collectAsState()
+    val agreedRatio by settingsViewModel.agreedRatio.collectAsState()
     var showFamilyKindPicker by rememberSaveable { mutableStateOf(false) }
+    var showSplitPicker by rememberSaveable { mutableStateOf(false) }
+
+    if (showSplitPicker) {
+        SplitRatioDialog(
+            current = agreedRatio,
+            onConfirm = { ratio ->
+                settingsViewModel.submitRatio(ratio)
+                showSplitPicker = false
+            },
+            onDismiss = { showSplitPicker = false }
+        )
+    }
 
     if (showFamilyKindPicker) {
         FamilyKindDialog(
@@ -194,6 +212,23 @@ fun SettingsScreen(
         if (settingsUiState.errorMessage != null) {
             snackbarHostState.showSnackbar(deletionFailed)
             settingsViewModel.clearMessages()
+        }
+    }
+
+    // "Saved" and "sent to your co-parent to confirm" are different outcomes, and a parent told
+    // the first when the second is true will spend against a split nobody has agreed.
+    val splitApplied = stringResource(R.string.settings_split_ratio_applied)
+    val splitProposed = stringResource(R.string.settings_split_ratio_proposed)
+    val splitRefused = stringResource(R.string.settings_split_ratio_refused)
+    LaunchedEffect(Unit) {
+        settingsViewModel.ratioSubmission.collect { outcome ->
+            snackbarHostState.showSnackbar(
+                when (outcome) {
+                    RatioSubmission.APPLIED -> splitApplied
+                    RatioSubmission.PROPOSED -> splitProposed
+                    null -> splitRefused
+                }
+            )
         }
     }
 
@@ -268,6 +303,24 @@ fun SettingsScreen(
                         onClick = {
                             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                             showFamilyKindPicker = true
+                        },
+                        trailing = { Chevron() }
+                    )
+                    Divider()
+                    // The money agreement lives with the family, not under App preferences: it
+                    // is something the two parents agree, like the custody pattern, not a device
+                    // setting like the language.
+                    SectionRow(
+                        icon = Icons.Default.Balance,
+                        title = stringResource(R.string.settings_split_ratio_title),
+                        supporting = stringResource(
+                            R.string.settings_split_ratio_value,
+                            agreedRatio.momPercent,
+                            agreedRatio.dadPercent
+                        ),
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            showSplitPicker = true
                         },
                         trailing = { Chevron() }
                     )
@@ -981,3 +1034,76 @@ private fun FamilyKindDialog(
         }
     )
 }
+
+/**
+ * Picks a new split of a shared expense.
+ *
+ * A slider over whole percents for slot 1, with slot 2 taking the remainder — the two can never
+ * be stored inconsistently because only one of them is a value. Percent rather than a free
+ * amount because a ratio is what the parents agree; an amount is what an individual expense is.
+ *
+ * This dialog **proposes**. Whether it applies straight away depends on whether there is a
+ * co-parent to ask, and the screen says which happened rather than letting a parent believe a
+ * split the other has not agreed.
+ *
+ * @param current The agreed ratio, as the slider opens.
+ * @param onConfirm Called with the chosen ratio.
+ * @param onDismiss Closes without proposing anything.
+ */
+@Composable
+private fun SplitRatioDialog(
+    current: SplitRatio,
+    onConfirm: (SplitRatio) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var momPercent by rememberSaveable(current) { mutableIntStateOf(current.momPercent) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.settings_split_ratio_title)) },
+        text = {
+            Column {
+                Text(
+                    text = stringResource(
+                        R.string.settings_split_ratio_value,
+                        momPercent,
+                        SPLIT_WHOLE_PERCENT - momPercent
+                    ),
+                    style = MaterialTheme.typography.titleMedium
+                )
+                Slider(
+                    value = momPercent.toFloat(),
+                    onValueChange = { momPercent = it.toInt() },
+                    valueRange = 0f..SPLIT_WHOLE_PERCENT.toFloat(),
+                    steps = SPLIT_SLIDER_STEPS
+                )
+                Text(
+                    text = stringResource(R.string.settings_split_ratio_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(SplitRatio.ofMomPercent(momPercent)) }) {
+                Text(stringResource(R.string.settings_family_kind_save))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.settings_family_kind_cancel))
+            }
+        }
+    )
+}
+
+/** A whole share, as a percent. */
+private const val SPLIT_WHOLE_PERCENT = 100
+
+/**
+ * Stops on the slider: every 5 %.
+ *
+ * `steps` counts the stops *between* the ends, so twenty 5 % intervals give nineteen. Whole
+ * single percents would be a slider nobody can land on with a thumb.
+ */
+private const val SPLIT_SLIDER_STEPS = 19

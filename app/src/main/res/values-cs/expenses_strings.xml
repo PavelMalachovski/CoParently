@@ -88,4 +88,9 @@
     <string name="expenses_row_meta_with_receipt">%1$s · %2$s · účtenka</string>
     <string name="expenses_budget_chip">%1$s %2$s / %3$s</string>
     <string name="expenses_budget_add">+ Rozpočet</string>
+    <string name="expenses_split_proposal_title">Navrženo nové rozdělení výdajů</string>
+    <string name="expenses_split_proposal_body">Druhý rodič navrhuje pro sdílené výdaje od této chvíle %1$d / %2$d. Již zadané výdaje si ponechají své rozdělení.</string>
+    <string name="expenses_split_proposal_confirm">Potvrdit</string>
+    <string name="expenses_split_proposal_decline">Odmítnout</string>
+    <string name="expenses_split_proposal_later">Později</string>
 </resources>

@@ -52,4 +52,10 @@
         <item quantity="many">Другий з батьків відхилив обмін %1$d днів</item>
         <item quantity="other">Другий з батьків відхилив обмін %1$d днів</item>
     </plurals>
+    <string name="push_split_ratio_proposed_title">Запропоновано новий поділ витрат</string>
+    <string name="push_split_ratio_proposed_body">Другий з батьків пропонує інший поділ. Відкрийте застосунок, щоб підтвердити або відхилити.</string>
+    <string name="push_split_ratio_accepted_title">Поділ витрат погоджено</string>
+    <string name="push_split_ratio_accepted_body">Другий з батьків погодився з новим поділом. Він діє для нових витрат.</string>
+    <string name="push_split_ratio_declined_title">Поділ витрат відхилено</string>
+    <string name="push_split_ratio_declined_body">Другий з батьків відхилив новий поділ. Нічого не змінилося.</string>
 </resources>

@@ -4,8 +4,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.coparently.app.data.analytics.AnalyticsManager
 import com.coparently.app.data.remote.firebase.FcmService
+import com.coparently.app.data.repository.FamilySettingsRepository
+import com.coparently.app.data.repository.RatioSubmission
 import com.coparently.app.data.session.AccountDeletionService
 import com.coparently.app.data.session.SignedInAccountSource
+import com.coparently.app.domain.expenses.SplitRatio
 import com.coparently.app.domain.model.AccountSummary
 import com.coparently.app.domain.model.FamilyKind
 import com.coparently.app.domain.money.SupportedCurrency
@@ -17,10 +20,14 @@ import com.coparently.app.presentation.common.UiState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.io.IOException
 import javax.inject.Inject
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -36,7 +43,8 @@ class SettingsViewModel @Inject constructor(
     private val preferencesRepository: PreferencesRepository,
     private val analyticsManager: AnalyticsManager,
     signedInAccountSource: SignedInAccountSource,
-    familyKindSource: FamilyKindSource
+    familyKindSource: FamilyKindSource,
+    private val familySettingsRepository: FamilySettingsRepository
 ) : ViewModel() {
 
     /**
@@ -75,6 +83,40 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             val fresh = userRepository.getCurrentUser() ?: return@launch
             userRepository.updateUser(fresh.copy(caresFor = kinds))
+        }
+    }
+
+    /**
+     * The agreed split of a shared expense.
+     *
+     * Half each until the family agrees otherwise. Cached locally as it changes, because the
+     * expense save path reads it and cannot wait on a document.
+     */
+    val agreedRatio: StateFlow<SplitRatio> = familySettingsRepository.observeSettings()
+        .map { settings ->
+            settings?.ratio?.also(familySettingsRepository::cacheAgreedRatio)
+                ?: familySettingsRepository.agreedRatioOrDefault()
+        }
+        .stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(ACCOUNT_STOP_TIMEOUT_MS),
+            SplitRatio.EVEN
+        )
+
+    /** How the last submitted ratio landed, for the screen to report once. */
+    private val _ratioSubmission = MutableSharedFlow<RatioSubmission?>(extraBufferCapacity = 1)
+    val ratioSubmission: SharedFlow<RatioSubmission?> = _ratioSubmission.asSharedFlow()
+
+    /**
+     * Puts a new split to the co-parent, or applies it when there is nobody to ask.
+     *
+     * Emits null on a refusal — the transition refuses proposing over the co-parent's pending
+     * one, and refuses a "change" to the ratio already agreed. Either way the screen has to say
+     * something: a control that looks like it worked is worse than one that says it did not.
+     */
+    fun submitRatio(ratio: SplitRatio) {
+        viewModelScope.launch {
+            _ratioSubmission.emit(familySettingsRepository.submitRatio(ratio).getOrNull())
         }
     }
 

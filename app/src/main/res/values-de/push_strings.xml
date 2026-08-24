@@ -46,4 +46,10 @@
         <item quantity="one">Dein Co-Elternteil hat den Tausch von %1$d Tag abgelehnt</item>
         <item quantity="other">Dein Co-Elternteil hat den Tausch von %1$d Tagen abgelehnt</item>
     </plurals>
+    <string name="push_split_ratio_proposed_title">Neue Kostenaufteilung vorgeschlagen</string>
+    <string name="push_split_ratio_proposed_body">Dein Co-Elternteil schlägt eine andere Aufteilung vor. Öffne die App zum Bestätigen oder Ablehnen.</string>
+    <string name="push_split_ratio_accepted_title">Kostenaufteilung vereinbart</string>
+    <string name="push_split_ratio_accepted_body">Dein Co-Elternteil hat der neuen Aufteilung zugestimmt. Sie gilt ab jetzt.</string>
+    <string name="push_split_ratio_declined_title">Kostenaufteilung abgelehnt</string>
+    <string name="push_split_ratio_declined_body">Dein Co-Elternteil hat die neue Aufteilung abgelehnt. Es hat sich nichts geändert.</string>
 </resources>
