@@ -969,8 +969,18 @@ private fun ActivityGroup(
     }
 }
 
+/**
+ * Formats an amount in the reader's own conventions, in the currency the record was entered in.
+ *
+ * The locale and the currency are separate decisions and this needs both: the *currency* comes
+ * from the expense (a Czech family may still record something in EUR), while the *formatting* —
+ * decimal comma, thin space between thousands, symbol after the number — belongs to whoever is
+ * reading. Pinned to `Locale.US`, this rendered `CZK 1,234.56` on the "this month" tile of a
+ * Czech user's home screen, where `1 234,56 Kč` is what they expect on a figure two parents are
+ * about to settle between them.
+ */
 private fun formatMoney(amount: Double, currencyCode: String): String {
-    val format = NumberFormat.getCurrencyInstance(Locale.US)
+    val format = NumberFormat.getCurrencyInstance(Locale.getDefault())
     runCatching { format.currency = Currency.getInstance(currencyCode) }
     return format.format(amount)
 }
