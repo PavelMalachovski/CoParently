@@ -109,15 +109,23 @@ workflow.
 - [ ] Delete `continue-on-error: true` from the detekt step, so new violations fail again.
 - [ ] Optionally, work the debt down afterwards — the baseline records what was accepted.
 
-### 2.3 Verify this branch actually builds
+### 2.3 Verify this branch actually builds — **done by CI, except the device check**
 
-The Kotlin written during the audit and this session is reviewed but **not compiled** — no
-Android SDK was available.
+Written while this section said the opposite: the Kotlin from the audit had never been
+compiled, because no Android SDK was available here. CI has since run all of it on a clean
+checkout, and it is green.
 
-- [ ] `./gradlew clean assembleDebug testDebugUnitTest detekt lint`
-- [ ] `./gradlew assembleRelease` — the first real run of the new `proguard-rules.pro`.
-- [ ] On a device: save a child's medical profile and confirm it reaches the co-parent
-      **non-empty from a release build**. That is the defect R8 was silently causing.
+- [x] `assembleDebug`, `testDebugUnitTest`, `lint`, `detekt` — green on
+      `.github/workflows/ci.yml`. Getting there took four rounds and every failure was
+      pre-existing on `main`, surfaced for the first time because nothing had ever run the
+      build: three compile errors, one lint error, and 30 unit tests whose mocks had gone
+      stale against collaborators added since.
+- [x] `assembleRelease` — R8 ran for the first time in this project's history and succeeded,
+      against the new `proguard-rules.pro`.
+- [ ] **Still needs a device.** Save a child's medical profile from a *release* build and
+      confirm it reaches the co-parent non-empty. A green R8 run proves the build survives
+      shrinking; it does not prove Gson still finds the field names, which is the defect the
+      keep rules exist for. Nothing but a real APK answers this.
 
 ---
 
