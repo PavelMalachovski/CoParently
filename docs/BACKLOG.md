@@ -160,15 +160,36 @@ The single highest-value piece of infrastructure left. Audit §3.1, §3.2, §6.2
    before touching it. Not patched with an owner check on purpose: **both** parents
    legitimately manage the same files, so a uid check would deny the co-parent a deletion the
    app itself offers them.
+
+   **This part does not need the proxy, and the reason it was thought to was a factual error.**
+   Both this item and `storage.rules` asserted that Storage rules cannot read Firestore. They
+   can: cross-service Security Rules (September 2022) give Storage rules `firestore.get()` and
+   `firestore.exists()`, two document reads per evaluation. So the fix is a rules change keyed
+   on the state `firestore.rules` already gates on — **S, not L** — rather than routing image
+   bytes through a Cloud Function.
+
+   Two traps, both found by looking rather than by reasoning:
+   - A receipt is **uploaded before its expense document exists** (`ExpenseViewModel.addExpense`
+     mints a UUID, uploads, then writes the expense). A rule requiring the document would reject
+     every first upload. Gate *overwrite and delete*, which is the harm; a create at a fresh
+     UUID path is an orphan blob.
+   - **The Storage emulator does not resolve cross-service calls.** Verified here with both
+     emulators running and the document confirmed present (firebase-js-sdk#6803,
+     firebase-tools#5251). So this rule cannot be covered by `firestore-tests/` the way every
+     rule in `firestore.rules` is, and this project has already shipped one broken delete rule
+     by testing a rule some other way. **Settle how it will be verified before writing it** —
+     a staging bucket against a real project is the likely answer.
 2. **OAuth token exchange** — the Google client secret ships in every APK, with no PKCE.
    Carried over unfixed from the July 2026 audit.
 3. **Model calls, if AI ever returns.** The Gemini key used to ship in the APK too; the
    subsystem and the key are gone (**MON-7**), so this is now a precondition rather than a live
    hole — nothing goes to a model again without the proxy in front of it.
 
-One proxy, resolving the caller against Firestore, answers all three. It also makes per-user rate
-limits possible at all, and turns prompts and the model version into server-side config instead
-of an app release.
+So this is **two independent pieces, not one**: a cross-service rules change for §1 (small, but
+needing a verification story), and a callable for §2's token exchange (which is what the proxy
+was really for). §3 is a precondition with nothing to build until AI returns. The proxy still
+buys per-user rate limits and server-side model config — but not for §1, and pricing §1 as part
+of an L-sized proxy is what has kept a P0 hole open.
 
 ### SEC-2 · P1 · M · Room is not encrypted at rest
 
