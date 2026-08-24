@@ -627,7 +627,12 @@ private fun DayCell(
                             modifier = Modifier
                                 .size(EVENT_DOT_SIZE)
                                 .background(
-                                    color = eventDotColor(event.parentOwner, isCurrentMonth),
+                                    color = eventDotColor(
+                                        parentOwner = event.parentOwner,
+                                        isCurrentMonth = isCurrentMonth,
+                                        friendParticipates =
+                                            !event.friendParticipates.isNullOrBlank()
+                                    ),
                                     shape = CircleShape
                                 )
                         )
@@ -651,12 +656,22 @@ private fun DayCell(
  *
  * Full-strength parent hue — a dot is a fill, not text, so the AA floor that forces the event
  * *chip* onto the darker `MomChipFill`/`DadChipFill` variants does not apply here.
+ *
+ * An event a calendar friend takes part in wears the friend's teal instead (item 16). It still
+ * belongs to a parent — `parentOwner` is untouched, because whose day it falls on is a fact
+ * about custody — but the dot answers the question the friend's presence actually raises:
+ * *somebody outside the two of us is involved in this one*.
  */
 @Composable
-private fun eventDotColor(parentOwner: String, isCurrentMonth: Boolean): Color {
-    val base = when (parentOwner) {
-        "mom" -> CoPlanlyColors.MomPink
-        "dad" -> CoPlanlyColors.DadBlue
+private fun eventDotColor(
+    parentOwner: String,
+    isCurrentMonth: Boolean,
+    friendParticipates: Boolean = false
+): Color {
+    val base = when {
+        friendParticipates -> CoPlanlyColors.FriendTeal
+        parentOwner == "mom" -> CoPlanlyColors.MomPink
+        parentOwner == "dad" -> CoPlanlyColors.DadBlue
         else -> MaterialTheme.colorScheme.tertiary
     }
     return if (isCurrentMonth) base else base.copy(alpha = OUTSIDE_MONTH_DOT_ALPHA)

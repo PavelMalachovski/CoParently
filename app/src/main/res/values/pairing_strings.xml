@@ -75,4 +75,6 @@
     <string name="pairing_email_invite">Email invite</string>
     <string name="pairing_trust_title">What pairing shares</string>
     <string name="pairing_trust_body">Shared calendar and custody schedule, shared expenses and balances, and chat. Private events never leave your device. You can unlink at any time.</string>
+    <string name="pairing_error_friend_invitation">This is a friend invitation. Open Settings → Friend with calendar access to use it.</string>
+    <string name="pairing_error_not_friend_invitation">This is not a friend invitation.</string>
 </resources>

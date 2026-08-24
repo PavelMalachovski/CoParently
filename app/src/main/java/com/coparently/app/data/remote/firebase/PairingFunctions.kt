@@ -111,6 +111,52 @@ class PairingFunctions @Inject constructor(
     }
 
     /**
+     * Redeems a **calendar friend** invitation by [code] or by [invitationId] — exactly one.
+     *
+     * Reaches `acceptCalendarFriendInvitation`, the third callable beside pairing and guest.
+     * The pairing one refuses this `kind` outright, so a friend code offered there can never
+     * run `assignSlots` and hand a friend a parent slot.
+     *
+     * @return the two parents whose calendar the caller may now read and when that ends, or a
+     *   [PairingException]-wrapped [PairingError] on failure. Both are required: a pair of the
+     *   wrong size or a grant with no end is a contract violation, not something to paper over.
+     * @throws IllegalArgumentException if both or neither of [code] and [invitationId] are
+     *   given — a caller programming error, not a backend failure.
+     */
+    suspend fun acceptCalendarFriendInvitation(
+        code: String? = null,
+        invitationId: String? = null
+    ): Result<AcceptCalendarFriendResult> {
+        require((code == null) != (invitationId == null)) {
+            "acceptCalendarFriendInvitation requires exactly one of code or invitationId, got " +
+                "code=$code, invitationId=$invitationId"
+        }
+        val payload = buildMap<String, Any> {
+            code?.let { put("code", it) }
+            invitationId?.let { put("invitationId", it) }
+        }
+        return call("acceptCalendarFriendInvitation", payload) { data ->
+            @Suppress("UNCHECKED_CAST")
+            val parents = (data["familyParents"] as? List<*>)
+                ?.mapNotNull { it as? String }
+                .orEmpty()
+            val expiresAtMillis = (data["expiresAtMillis"] as? Number)?.toLong() ?: 0L
+            AcceptCalendarFriendResult(
+                familyParents = parents.also {
+                    check(it.size == 2) {
+                        "acceptCalendarFriendInvitation succeeded but named ${it.size} parents"
+                    }
+                },
+                expiresAtMillis = expiresAtMillis.also {
+                    check(it > 0L) {
+                        "acceptCalendarFriendInvitation succeeded but returned no expiry"
+                    }
+                }
+            )
+        }
+    }
+
+    /**
      * Removes the co-parent link.
      *
      * @return the former partner's UID, or null when there was no link.
@@ -154,6 +200,8 @@ class PairingFunctions @Inject constructor(
                 "wrong-recipient" -> PairingError.WrongRecipient
                 "guest-invitation" -> PairingError.GuestInvitation
                 "not-a-guest-invitation" -> PairingError.NotGuestInvitation
+                "friend-invitation" -> PairingError.FriendInvitation
+                "not-a-friend-invitation" -> PairingError.NotFriendInvitation
                 "grant-expired" -> PairingError.GrantEnded
                 "inviter-not-entitled" -> PairingError.InviterNotEntitled
                 "already-entitled" -> PairingError.AlreadyEntitled
@@ -201,3 +249,15 @@ data class AcceptInvitationResult(val partnerId: String, val role: String?)
  *   while a missing expiry would be shown to the guest as access that never ends.
  */
 data class AcceptGuestResult(val childInfoId: String, val expiresAtMillis: Long)
+
+/**
+ * What `acceptCalendarFriendInvitation` returns: the pair whose calendar the caller may now
+ * read, and the instant that access ends.
+ *
+ * @property familyParents Exactly two UIDs — the friend queries events by them.
+ * @property expiresAtMillis Epoch millis, always positive; see [CalendarFriendPolicy].
+ */
+data class AcceptCalendarFriendResult(
+    val familyParents: List<String>,
+    val expiresAtMillis: Long
+)

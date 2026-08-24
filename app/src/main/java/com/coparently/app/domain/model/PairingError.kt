@@ -36,6 +36,18 @@ sealed interface PairingError {
     data object NotGuestInvitation : PairingError
 
     /**
+     * A calendar-friend invitation (item 16) was offered to the co-parent pairing path.
+     *
+     * Named separately from [GuestInvitation] because the remedy differs: a guest code opens a
+     * child record, a friend code opens the calendar, and telling somebody to try "the guest
+     * screen" when they hold a friend code would send them somewhere that also refuses it.
+     */
+    data object FriendInvitation : PairingError
+
+    /** A co-parent or guest invitation was offered to the friend path — mirrored again. */
+    data object NotFriendInvitation : PairingError
+
+    /**
      * A guest invitation whose access window ended before it was redeemed.
      *
      * Distinct from [Expired], which is the *offer* running out. Both mean "too late", but

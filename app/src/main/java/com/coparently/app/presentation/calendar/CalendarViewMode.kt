@@ -10,11 +10,15 @@ enum class CalendarViewMode {
 }
 
 /**
- * Which parent's events are visible in the calendar.
- * BOTH shows the mutual view with both parents' events at the same time.
+ * Whose events are visible in the calendar.
+ *
+ * BOTH shows the mutual view with both parents' events at the same time. FRIEND is not a fourth
+ * owner — a calendar friend never owns a day (item 16) — it narrows to the events a friend
+ * actually takes part in, which is the only question their presence raises.
  */
 enum class ParentFilter {
     BOTH,
     MOM,
-    DAD
+    DAD,
+    FRIEND
 }

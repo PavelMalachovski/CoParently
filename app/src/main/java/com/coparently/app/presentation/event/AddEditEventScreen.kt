@@ -173,9 +173,13 @@ fun AddEditEventScreen(
     onSave: () -> Unit,
     onCancel: () -> Unit,
     onRequestChange: ((String) -> Unit)? = null,
-    viewModel: EventViewModel = hiltViewModel()
+    viewModel: EventViewModel = hiltViewModel(),
+    friendViewModel: com.coparently.app.presentation.friends.FriendViewModel = hiltViewModel()
 ) {
     val haptic = LocalHapticFeedback.current
+    // The family's live calendar friends (item 16). Empty for most families, which is why the
+    // participation toggle below is absent rather than disabled when there is nobody to name.
+    val calendarFriends by friendViewModel.friends.collectAsState()
     val parentNames = rememberParentNames(viewModel.parents.collectAsState().value)
     // The signed-in parent - the one source of truth for "who am I" already threaded into this
     // screen (see ParentsSource). Nothing here learns the signed-in slot any other way.
@@ -210,6 +214,8 @@ fun AddEditEventScreen(
     var reminderMinutes by remember { mutableStateOf<Int?>(null) }
     var isPrivate by remember { mutableStateOf(false) }
     var isImportant by remember { mutableStateOf(false) }
+    // Which calendar friend takes part, or null. Not an owner — see Event.friendParticipates.
+    var friendParticipates by remember { mutableStateOf<String?>(null) }
     // Event photo: URL of an already-attached image, and a freshly picked local image
     // (not yet uploaded). Picking a new one supersedes the existing image on save.
     var existingImageUrl by remember { mutableStateOf<String?>(null) }
@@ -346,6 +352,7 @@ fun AddEditEventScreen(
                     reminderMinutes = it.reminderMinutes
                     isPrivate = it.isPrivate
                     isImportant = it.isImportant
+                    friendParticipates = it.friendParticipates
                     existingImageUrl = it.imageUrl
                 }
             }
@@ -394,6 +401,7 @@ fun AddEditEventScreen(
                 reminderMinutes = null
                 isPrivate = false
                 isImportant = false
+                friendParticipates = null
                 viewModel.clearEventDraft()
             }
             draftRestored = false
@@ -490,6 +498,7 @@ fun AddEditEventScreen(
                     reminderMinutes = reminderMinutes,
                     isPrivate = isPrivate,
                     isImportant = isImportant,
+                    friendParticipates = friendParticipates,
                     imageUrl = finalImageUrl,
                     updatedAt = LocalDateTime.now()
                 )
@@ -1285,6 +1294,41 @@ fun AddEditEventScreen(
                             text = stringResource(R.string.event_form_important_helper),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+
+            // Who else takes part (item 16). Only when the family has admitted a friend: a
+            // toggle naming nobody would be a control for a relationship that does not exist.
+            calendarFriends.firstOrNull()?.let { friend ->
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(dims.paddingMedium),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = stringResource(
+                                R.string.friend_event_participates,
+                                friend.name
+                            ),
+                            style = MaterialTheme.typography.titleSmall,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Switch(
+                            checked = friendParticipates == friend.friendUid,
+                            onCheckedChange = { on ->
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                friendParticipates = if (on) friend.friendUid else null
+                            }
                         )
                     }
                 }

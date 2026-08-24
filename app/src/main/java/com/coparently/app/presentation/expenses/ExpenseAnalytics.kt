@@ -32,6 +32,7 @@ import com.coparently.app.R
 import com.coparently.app.domain.expenses.CategorySlice
 import com.coparently.app.domain.expenses.CurrencyBreakdown
 import com.coparently.app.domain.model.Expense
+import com.coparently.app.presentation.common.AccountAvatar
 import com.coparently.app.presentation.common.ParentNames
 import com.coparently.app.presentation.common.PillChip
 import com.coparently.app.presentation.common.SectionGroup
@@ -424,6 +425,7 @@ private fun ParentLedger(
             LedgerColumn(
                 title = parentNames.labelForUid(uid),
                 titleColor = ParentColors.text(roleByUid[uid].orEmpty()),
+                photoUrl = parentNames.photoForUid(uid),
                 expenses = ordered.filter { it.paidBy == uid },
                 currency = currency,
                 modifier = Modifier.weight(1f)
@@ -449,18 +451,27 @@ private fun LedgerColumn(
     titleColor: androidx.compose.ui.graphics.Color,
     expenses: List<Expense>,
     currency: String,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    photoUrl: String? = null
 ) {
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.SemiBold,
-            color = titleColor,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
+        // The parent's own Google picture beside their name, so a glance at the two columns
+        // reads as two people rather than two labels. Falls back to their initial.
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.padding(start = 4.dp)
-        )
+        ) {
+            AccountAvatar(name = title, photoUrl = photoUrl, size = 20.dp)
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = titleColor,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
         if (expenses.isEmpty()) {
             Text(
                 text = stringResource(R.string.expense_analytics_column_empty),

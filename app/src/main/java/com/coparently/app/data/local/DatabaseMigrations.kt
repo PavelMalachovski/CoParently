@@ -486,6 +486,21 @@ object DatabaseMigrations {
     }
 
     /**
+     * Records which calendar friend takes part in an event (item 16).
+     *
+     * Nullable, no default: an event written before this column had no friend on it, which is
+     * exactly what null says. The friend is never an owner — `parentOwner` stays one of the two
+     * slots, because whose day an event falls on is a fact about custody.
+     */
+    val MIGRATION_23_24 = object : Migration(23, 24) {
+        override fun migrate(database: SupportSQLiteDatabase) {
+            database.execSQL(
+                "ALTER TABLE events ADD COLUMN friendParticipates TEXT"
+            )
+        }
+    }
+
+    /**
      * List of all migrations in order.
      */
     val ALL_MIGRATIONS = arrayOf(
@@ -506,6 +521,7 @@ object DatabaseMigrations {
         MIGRATION_19_20,
         MIGRATION_20_21,
         MIGRATION_21_22,
-        MIGRATION_22_23
+        MIGRATION_22_23,
+        MIGRATION_23_24
     )
 }

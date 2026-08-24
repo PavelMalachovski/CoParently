@@ -73,6 +73,18 @@ data class ParentNames(
     }
 
     /**
+     * That parent's avatar, or null when they have none and the initial-letter fallback applies.
+     *
+     * For a Google sign-in this is the account's own picture (see [NamedParent.photoUrl]). Keyed
+     * on the uid rather than the slot because a payer, an event's author and a friend grant are
+     * all identified by uid, and a pair still sharing one slot would otherwise return the same
+     * face for both parents.
+     */
+    fun photoForUid(uid: String?): String? = uid?.let { id ->
+        listOfNotNull(parents.me, parents.coParent).firstOrNull { it.uid == id }?.photoUrl
+    }
+
+    /**
      * Whether [slot] resolves to a named person rather than to the unknown fallback.
      *
      * [parentLabel] itself is not asked this — it already gives the correct answer to "who is

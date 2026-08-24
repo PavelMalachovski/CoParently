@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="friend_section_title">Přítel s přístupem ke kalendáři</string>
+    <string name="friend_section_supporting">Opatrovník, přítel nebo babička, kdo vidí kalendář</string>
+    <string name="friend_invite_action">Pozvat přítele</string>
+    <string name="friend_invite_code_label">Předejte jim tento kód</string>
+    <string name="friend_access_until">Přístup do %1$s</string>
+    <string name="friend_revoke">Zrušit přístup</string>
+    <string name="friend_revoke_confirm_title">Zrušit přístup pro %1$s?</string>
+    <string name="friend_revoke_confirm_message">Přestanou vidět rodinný kalendář. Kdykoli je můžete pozvat znovu.</string>
+    <string name="friend_role_guardian">Opatrovník</string>
+    <string name="friend_role_friend">Přítel</string>
+    <string name="friend_role_grandparent">Prarodič</string>
+    <string name="friend_detail_title">Přítel</string>
+    <string name="friend_profile_title">Můj profil</string>
+    <string name="friend_profile_name">Jméno</string>
+    <string name="friend_profile_phone">Telefonní číslo</string>
+    <string name="friend_profile_blood_group">Krevní skupina</string>
+    <string name="friend_profile_save">Uložit</string>
+    <string name="friend_event_participates">Účastní se: %1$s</string>
+    <string name="friend_event_none">Nikdo</string>
+    <string name="friend_empty">Nikdo mimo rodinu nemá přístup ke kalendáři.</string>
+</resources>

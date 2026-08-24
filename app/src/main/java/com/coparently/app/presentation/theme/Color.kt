@@ -64,6 +64,16 @@ object CoPlanlyColors {
     val MomChipFill = MomPinkDark
     val DadChipFill = DadBlueDark
 
+    // The third person (item 16): a guardian, friend or grandparent who reads the calendar but
+    // is not a parent. A teal family, deliberately far from both parent hues on the colour
+    // wheel — pink and blue identify the two people with custody, and a third identity that
+    // read as either would undo the one colour rule this app has held throughout. It is also
+    // NOT the theme's `secondary` slot, which stays a neutral indigo for generic Material
+    // selected states; a person is not a control.
+    val FriendTeal = Color(0xFF00796B) // Teal 700 - 4.77:1 on white / 3.36:1 on DarkSurface
+    val FriendTealLight = Color(0xFF80CBC4) // Teal 200 - 1.86:1 on white / 9.21:1 on DarkSurface
+    val FriendTealDark = Color(0xFF004D40) // Teal 900 - 9.65:1 on white / 1.78:1 on DarkSurface
+
     // Neutral colors
     // UNUSED as of 2026-07-30 — no references in app/src/main.
     val EventGray = Color(0xFF616161) // Gray 700 - 6.19:1 on white / 2.77:1 on DarkSurface

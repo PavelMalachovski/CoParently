@@ -149,7 +149,8 @@ class SyncService @Inject constructor(
                 "acceptance" to entity.acceptance,
                 "acceptedBy" to entity.acceptedBy,
                 "acceptedAt" to entity.acceptedAt?.format(formatter),
-                "isImportant" to entity.isImportant
+                "isImportant" to entity.isImportant,
+                "friendParticipates" to (entity.friendParticipates ?: "")
             )
 
             val result = firestoreEventDataSource.insertEvent(entity.id, eventData)
@@ -208,6 +209,7 @@ class SyncService @Inject constructor(
                                 "acceptedBy" to localEntity.acceptedBy,
                                 "acceptedAt" to localEntity.acceptedAt?.format(formatter),
                                 "isImportant" to localEntity.isImportant,
+                                "friendParticipates" to (localEntity.friendParticipates ?: ""),
                                 "reminderMinutes" to localEntity.reminderMinutes
                             )
                             firestoreEventDataSource.updateEvent(localEntity.id, localData)
@@ -623,6 +625,7 @@ class SyncService @Inject constructor(
             // such expectation, and inventing one would put an exclamation mark on somebody
             // else's ordinary event.
             isImportant = this["isImportant"] as? Boolean ?: false,
+            friendParticipates = (this["friendParticipates"] as? String)?.takeIf { it.isNotEmpty() },
             // Firestore returns numbers as Long; null when the document predates the field.
             reminderMinutes = (this["reminderMinutes"] as? Number)?.toInt()
         )

@@ -1,12 +1,17 @@
 package com.coparently.app.presentation.calendar.components
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
@@ -31,6 +36,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -58,6 +65,7 @@ fun EventTypeFilterSheet(
     showHolidays: Boolean,
     parentFilter: ParentFilter,
     parentNames: ParentNames,
+    friendName: String?,
     onParentFilterChange: (ParentFilter) -> Unit,
     onToggleType: (String) -> Unit,
     onAddCustomType: (String) -> Unit,
@@ -89,6 +97,28 @@ fun EventTypeFilterSheet(
                 selected = parentFilter,
                 onSelected = onParentFilterChange
             )
+
+            // The friend is a chip below the row rather than a fourth segment: a segment is
+            // about a third of the sheet's width and the three parent labels already clip at
+            // their fallbacks, so a fourth would clip all of them. It also reads correctly —
+            // a friend is not a fourth owner, it is a narrowing of "show me where they are
+            // expected" (item 16). Absent entirely when the family has no friend.
+            friendName?.let { name ->
+                FilterPill(
+                    label = name,
+                    selected = parentFilter == ParentFilter.FRIEND,
+                    color = CoPlanlyColors.FriendTeal,
+                    onClick = {
+                        onParentFilterChange(
+                            if (parentFilter == ParentFilter.FRIEND) {
+                                ParentFilter.BOTH
+                            } else {
+                                ParentFilter.FRIEND
+                            }
+                        )
+                    }
+                )
+            }
 
             HorizontalDivider()
 
@@ -200,6 +230,56 @@ fun EventTypeFilterSheet(
  * @param onSelected Callback when a segment is chosen
  */
 @OptIn(ExperimentalMaterial3Api::class)
+@Composable
+/**
+ * A single on/off filter chip in a named colour — the calendar friend's (item 16).
+ *
+ * Its own composable rather than a `FilterChip`: the Material chip's selected state comes from
+ * the theme's neutral `secondary` slot, and this one has to carry a *person's* colour, which is
+ * the distinction `CoPlanlyColors` draws between identity and control.
+ */
+@Composable
+private fun FilterPill(
+    label: String,
+    selected: Boolean,
+    color: androidx.compose.ui.graphics.Color,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(50))
+            .background(if (selected) color.copy(alpha = 0.15f) else Color.Transparent)
+            .border(
+                width = if (selected) 1.5.dp else 1.dp,
+                color = if (selected) color else MaterialTheme.colorScheme.outlineVariant,
+                shape = RoundedCornerShape(50)
+            )
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(10.dp)
+                .clip(RoundedCornerShape(50))
+                .background(color)
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+            color = if (selected) {
+                MaterialTheme.colorScheme.onSurface
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            },
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
 @Composable
 private fun ParentFilterSegments(
     selected: ParentFilter,

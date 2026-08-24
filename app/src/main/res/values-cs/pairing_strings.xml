@@ -72,4 +72,6 @@
     <string name="pairing_email_invite">Pozvat e-mailem</string>
     <string name="pairing_trust_title">Co se propojením sdílí</string>
     <string name="pairing_trust_body">Sdílený kalendář a rozvrh péče, sdílené výdaje a zůstatky a chat. Soukromé události nikdy neopustí vaše zařízení. Propojení můžete kdykoli zrušit.</string>
+    <string name="pairing_error_friend_invitation">Toto je pozvánka pro přítele. Otevřete Nastavení → Přítel s přístupem ke kalendáři.</string>
+    <string name="pairing_error_not_friend_invitation">Toto není pozvánka pro přítele.</string>
 </resources>

@@ -40,6 +40,29 @@ service cloud.firestore {
       return str is string && str.size() >= minLen && str.size() <= maxLen;
     }
 
+    // True when the caller is a *live* calendar friend of the family whose events were created by
+    // [ownerUid] — a trusted third person (item 16) let in to read the calendar, never a parent.
+    //
+    // The grant lives centrally at `calendar_friends/{friendUid}` rather than being fanned out
+    // into every event's `sharedWith`, so admitting or removing a friend never rewrites an event
+    // document. This helper is only ever reached on the *third* disjunct of the events read rule,
+    // after the creator and shared-partner checks have already failed — so a parent reading their
+    // own events never triggers the `get()` (Firestore short-circuits `||`). The two `get()`s
+    // resolve to one billed read (Firestore caches identical gets within a request).
+    //
+    // `exists()` guards the missing-grant case the way `isPartnerOf` does — a bare `get()` on a
+    // document that is not there is an evaluation error, not null. Expiry is enforced here against
+    // `request.time`, so access ends the instant the grant lapses, with no sweep in the path.
+    function isCalendarFriendOf(ownerUid) {
+      return isAuthenticated() &&
+             exists(/databases/$(database)/documents/calendar_friends/$(request.auth.uid)) &&
+             ownerUid in get(/databases/$(database)/documents/calendar_friends/$(request.auth.uid))
+                          .data.get('familyParents', []) &&
+             request.time.toMillis() <
+               get(/databases/$(database)/documents/calendar_friends/$(request.auth.uid))
+                 .data.get('expiresAtMillis', 0);
+    }
+
     // True when the map at `key` differs between `before` and `after` in at most the
     // caller's own uid. `get(key, {})` is load-bearing: a conversation created before
     // this change has no such field, and reading a missing key in Firestore Rules is an
@@ -211,13 +234,69 @@ service cloud.firestore {
       allow delete: if isOwner(userId);
     }
 
+    // ---- Friend profiles ------------------------------------------------
+    // A trusted third person (guardian, friend, grandparent — item 16) authors their own
+    // profile; the two parents read it but never write it, so nobody puts words in a
+    // grandmother's mouth. The document id is the friend's own uid.
+    //
+    // `familyParents` is the read gate: the pair allowed to see this profile. The friend sets it
+    // (to the pair who admitted them) and it is immutable afterwards. A friend widening it only
+    // exposes their *own* profile, and it lets a parent's read be a plain array-membership check
+    // with no per-document `get()`.
+    match /friend_profiles/{friendUid} {
+      allow read: if isAuthenticated() && (
+        request.auth.uid == friendUid ||
+        request.auth.uid in resource.data.get('familyParents', [])
+      );
+
+      allow create: if isOwner(friendUid) &&
+                      'name' in request.resource.data &&
+                      isValidLength(request.resource.data.name, 1, 100) &&
+                      request.resource.data.get('familyParents', []).size() == 2;
+
+      // Owner-only, and the read gate is immutable — a friend may edit their name, photo or
+      // blood group but never rewrite who can see the profile.
+      allow update: if isOwner(friendUid) &&
+                      request.resource.data.familyParents == resource.data.familyParents;
+
+      allow delete: if isOwner(friendUid);
+    }
+
+    // ---- Calendar-friend grants ----------------------------------------
+    // The grant that lets a friend read a family's calendar (item 16), keyed on the friend's own
+    // uid so `isCalendarFriendOf` reads it in one `get()`. Written by a parent of the family
+    // (`grantedBy` must be one of `familyParents`, and the caller) — a friend can never grant
+    // themselves access — and read by the friend (to learn which family they may query) or by
+    // either parent. `familyParents` and `expiresAtMillis` are the two fields the events read
+    // rule depends on.
+    match /calendar_friends/{friendUid} {
+      allow read: if isAuthenticated() && (
+        request.auth.uid == friendUid ||
+        request.auth.uid in resource.data.get('familyParents', [])
+      );
+
+      allow create, update: if isAuthenticated() &&
+                      request.resource.data.get('familyParents', []).size() == 2 &&
+                      request.auth.uid in request.resource.data.familyParents &&
+                      request.resource.data.grantedBy == request.auth.uid &&
+                      request.resource.data.expiresAtMillis is int;
+
+      // Either parent may revoke by deleting the grant; the friend cannot delete their own
+      // (that would let a friend hide a revocation from the parents' view).
+      allow delete: if isAuthenticated() &&
+                      request.auth.uid in resource.data.get('familyParents', []);
+    }
+
     // ---- Events --------------------------------------------------------
     // Owners and shared partners have access. Date fields are ISO strings, so
     // no timestamp-type or ordering checks here (that is enforced app-side).
     match /events/{eventId} {
+      // Creator, a shared partner, or a live calendar friend of the creator (item 16). The
+      // friend disjunct is last so a parent's own read short-circuits before any `get()`.
       allow read: if isAuthenticated() && (
         resource.data.createdByFirebaseUid == request.auth.uid ||
-        request.auth.uid in resource.data.sharedWith
+        request.auth.uid in resource.data.sharedWith ||
+        isCalendarFriendOf(resource.data.createdByFirebaseUid)
       );
 
       // Presence-based validation only — the real document carries the full
@@ -422,6 +501,11 @@ service cloud.firestore {
     // with Admin credentials, and it also checks the thing rules cannot cheaply check — that
     // the inviter holds the named record as a parent rather than as a guest. This only stops
     // a malformed invitation existing in the first place.
+    // A **friend** invitation (item 16) names no child record — it opens the whole calendar —
+    // so it carries only the grant's end instant, which must still be in the future. Like the
+    // guest kind, this only stops a malformed document existing;
+    // `acceptCalendarFriendInvitation` re-checks everything with Admin credentials, including
+    // the thing rules cannot cheaply check: that the inviter is a *paired parent*.
     function validInvitationKind(data) {
       return !data.keys().hasAny(['kind']) || (
         data.kind == 'guest' &&
@@ -430,6 +514,11 @@ service cloud.firestore {
         data.childInfoId.size() > 0 &&
         data.guestExpiresAt is number &&
         data.guestExpiresAt > request.time.toMillis()
+      ) || (
+        data.kind == 'friend' &&
+        data.keys().hasAll(['friendExpiresAt']) &&
+        data.friendExpiresAt is number &&
+        data.friendExpiresAt > request.time.toMillis()
       );
     }
 

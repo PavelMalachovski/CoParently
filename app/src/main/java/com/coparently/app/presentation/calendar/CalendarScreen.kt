@@ -228,6 +228,7 @@ fun CalendarScreen(
     val showHolidays by calendarViewModel.showHolidays.collectAsState()
     val custodyChangeAnnouncement by calendarViewModel.custodyChangeAnnouncement.collectAsState()
     val pendingProposal by calendarViewModel.pendingProposal.collectAsState()
+    val calendarFriends by calendarViewModel.calendarFriends.collectAsState()
 
     // Who the two parents are, resolved with the fallback strings once for the whole screen.
     // Every label below this line - ribbon, grid, agenda card, filters, preview sheet - reads
@@ -332,6 +333,9 @@ fun CalendarScreen(
                     ParentFilter.BOTH -> true
                     ParentFilter.MOM -> event.parentOwner == "mom"
                     ParentFilter.DAD -> event.parentOwner == "dad"
+                    // Not an owner check: a friend never owns a day, so this asks the only
+                    // question their presence raises — where are they expected?
+                    ParentFilter.FRIEND -> !event.friendParticipates.isNullOrBlank()
                 }
             }
             .filterNot { it.eventType in hiddenEventTypes }
@@ -812,6 +816,9 @@ fun CalendarScreen(
             showHolidays = showHolidays,
             parentFilter = parentFilter,
             parentNames = parentNames,
+            // Only when the family has actually admitted somebody: the chip is absent rather
+            // than disabled, so a feature nobody uses costs nothing on screen.
+            friendName = calendarFriends.firstOrNull()?.name?.takeIf { it.isNotBlank() },
             onParentFilterChange = { calendarViewModel.setParentFilter(it) },
             onToggleType = { calendarViewModel.toggleEventTypeVisibility(it) },
             onAddCustomType = { calendarViewModel.addCustomEventType(it) },

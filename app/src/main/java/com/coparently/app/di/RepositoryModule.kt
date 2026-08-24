@@ -6,6 +6,7 @@ import com.coparently.app.data.repository.ChangeRequestRepositoryImpl
 import com.coparently.app.data.repository.ChildInfoRepositoryImpl
 import com.coparently.app.data.repository.EventRepositoryImpl
 import com.coparently.app.data.repository.ExpenseRepositoryImpl
+import com.coparently.app.data.repository.FriendRepositoryImpl
 import com.coparently.app.data.repository.GuestRepositoryImpl
 import com.coparently.app.data.repository.MessageRepositoryImpl
 import com.coparently.app.data.repository.PairingRepositoryImpl
@@ -17,6 +18,7 @@ import com.coparently.app.domain.repository.ChildInfoRepository
 import com.coparently.app.domain.repository.EventImageStorage
 import com.coparently.app.domain.repository.EventRepository
 import com.coparently.app.domain.repository.ExpenseRepository
+import com.coparently.app.domain.repository.FriendRepository
 import com.coparently.app.domain.repository.GuestRepository
 import com.coparently.app.domain.repository.MedicalPhotoStorage
 import com.coparently.app.domain.repository.MessageRepository
@@ -131,6 +133,16 @@ abstract class RepositoryModule {
     abstract fun bindMedicalPhotoStorage(
         firebaseImageStorage: FirebaseImageStorage
     ): MedicalPhotoStorage
+
+    /**
+     * Provides FriendRepository implementation — the trusted third person (item 16), bound
+     * separately from GuestRepository because a friend and a guest open different things.
+     */
+    @Binds
+    @Singleton
+    abstract fun bindFriendRepository(
+        friendRepositoryImpl: FriendRepositoryImpl
+    ): FriendRepository
 
     /**
      * Provides PetRepository implementation.

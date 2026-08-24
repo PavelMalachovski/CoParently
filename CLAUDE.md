@@ -168,6 +168,31 @@ cd firestore-tests && npm test              # firestore.rules against the local 
   is part of the schema `EventRepositoryImpl.toFirestoreMap()` defines, and a co-parent on an
   older build must keep reading it. Slot 1 is pink, slot 2 is blue; pairing assigns the slots
   (`functions/index.js`, `assignSlots`), nobody chooses one.
+- **A calendar friend sits beside the two slots and never occupies one** (item 16, Aug 2026).
+  A guardian/friend/grandparent with their own account reads the family's calendar through a
+  **central** grant, `calendar_friends/{friendUid}` — never by being fanned out into every
+  event's `sharedWith`, so admitting or revoking one is a single write and no event document is
+  rewritten. The `events` read rule consults it in a **last** disjunct (a parent's own read
+  short-circuits before the `get()`), with expiry compared against `request.time`; the friend
+  reads by `whereIn("createdByFirebaseUid", [a, b])`, the shape `expenses`/`budgets` use.
+  `acceptCalendarFriendInvitation` is a **third** callable beside pairing and guest and
+  `acceptPairingInvitation` refuses its `kind` outright — redeeming a friend code there would
+  run `assignSlots` and hand a friend a permanent parent slot. `Event.friendParticipates`
+  records who takes part and is **not** an owner: `parentOwner` stays a slot, because whose day
+  an event falls on is a fact about custody. The friend's colour is `CoPlanlyColors.FriendTeal`
+  — never a parent hue, and never the theme's neutral `secondary`, which is for controls.
+  **Faces come from the Google account, never from an upload.** A friend's `photoUrl` is seeded
+  from Firebase Auth at their first profile save and copied into `calendar_friends/{uid}` by the
+  callable, so the parents' list names *and* pictures them without a second read of a document
+  that is not theirs; the parents' own faces come from `users/{uid}.profilePhotoUrl` through
+  `NamedParent.photoUrl` and `ParentNames.photoForUid(uid)` — keyed on the uid, because a pair
+  still sharing one slot would otherwise return the same face twice. `AccountAvatar`'s
+  initial-letter fallback is load-bearing, not decorative: an email/password account has no
+  picture. Nothing here is ever overwritten by a later re-derivation — a friend who set their own
+  picture keeps it. Not built: a photo **upload** (the field and rules admit one; the Storage
+  wiring does not exist, and a button that did nothing is the promise item 8 above forbids)
+  and a sweep for lapsed grants (nothing leaks — the rule refuses an expired read — but the row
+  lingers).
 - **Only the signed-in user has a Room `users` row.** Nothing writes one for the co-parent, so
   `userRepository.getAllUsers()` can never answer "who is the other parent" — it returns one
   row, and on a device where two accounts have signed in over time it returns rows for accounts

@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="friend_section_title">Друг із доступом до календаря</string>
+    <string name="friend_section_supporting">Опікун, друг або бабуся, хто бачить календар</string>
+    <string name="friend_invite_action">Запросити друга</string>
+    <string name="friend_invite_code_label">Передайте цей код</string>
+    <string name="friend_access_until">Доступ до %1$s</string>
+    <string name="friend_revoke">Закрити доступ</string>
+    <string name="friend_revoke_confirm_title">Закрити доступ для %1$s?</string>
+    <string name="friend_revoke_confirm_message">Ця людина перестане бачити сімейний календар. Ви зможете запросити її знову будь-коли.</string>
+    <string name="friend_role_guardian">Опікун</string>
+    <string name="friend_role_friend">Друг</string>
+    <string name="friend_role_grandparent">Бабуся або дідусь</string>
+    <string name="friend_detail_title">Друг</string>
+    <string name="friend_profile_title">Мій профіль</string>
+    <string name="friend_profile_name">Імʼя</string>
+    <string name="friend_profile_phone">Номер телефону</string>
+    <string name="friend_profile_blood_group">Група крові</string>
+    <string name="friend_profile_save">Зберегти</string>
+    <string name="friend_event_participates">Бере участь %1$s</string>
+    <string name="friend_event_none">Ніхто</string>
+    <string name="friend_empty">Ні в кого поза сімʼєю немає доступу до календаря.</string>
+</resources>

@@ -311,7 +311,8 @@ exports.onChildInfoUpdated = functions.firestore
               title: 'Child Info Updated',
               // The child document's name field is `childName`, not `name` — reading `name`
               // rendered every push as "... updated information about undefined".
-              body: `${creatorData.email || 'Your partner'} updated information about ${newData.childName || 'your child'}`,
+              body: `${creatorData.email || 'Your partner'} updated information about ` +
+                `${newData.childName || 'your child'}`,
               type: 'child_info_updated',
               childInfoId: childInfoId,
             },
@@ -442,6 +443,15 @@ async function acceptPairingInvitationImpl(db, acceptingUserId, acceptingEmail, 
     throw new functions.https.HttpsError(
         'failed-precondition', 'This is a guest invitation, not a co-parent invitation',
         {reason: 'guest-invitation'});
+  }
+  // The same hazard for a friend invitation (item 16), and worse: a friend's grant is
+  // read-only and expires, while `assignSlots` here would hand them a permanent parent slot,
+  // the other parent's colour, and write access to the whole family. Absent `kind` still
+  // means co-parent — only these two named kinds are refused.
+  if (invite.kind === FRIEND_INVITATION) {
+    throw new functions.https.HttpsError(
+        'failed-precondition', 'This is a friend invitation, not a co-parent invitation',
+        {reason: 'friend-invitation'});
   }
   if (invite.status !== 'pending') {
     throw new functions.https.HttpsError(
@@ -734,6 +744,28 @@ async function guestName(accepterRef, acceptingEmail) {
 exports.guestName = guestName;
 
 /**
+ * The accepter's avatar, as the one-key object to merge into a grant — `{}` when they have none.
+ *
+ * Returned as an object rather than a string so the caller never writes `photoUrl: undefined`,
+ * which Firestore rejects outright. A Google sign-in puts the account's own picture in
+ * `users/{uid}.profilePhotoUrl` (see `ProfileIdentity.resolvePhotoUrl` on the client); an
+ * email/password account has none, and the reader's initial-letter fallback covers that.
+ *
+ * Copied into the grant for the same reason the name is: the parents' "who can see this" list
+ * would otherwise need a second read of a document that is not theirs to read.
+ *
+ * @param {FirebaseFirestore.DocumentReference} accepterRef The accepter's user document.
+ * @return {Promise<!Object>} `{photoUrl}` or an empty object.
+ */
+async function accepterPhoto(accepterRef) {
+  const snap = await accepterRef.get();
+  const stored = snap.exists && snap.data() ? snap.data().profilePhotoUrl : '';
+  return typeof stored === 'string' && stored.trim() ? {photoUrl: stored} : {};
+}
+
+exports.accepterPhoto = accepterPhoto;
+
+/**
  * Redeems a guest invitation identified either by its short code or by its document id.
  *
  * Runs server-side for the same reason the pairing callable does: it writes a child record
@@ -760,6 +792,163 @@ exports.acceptGuestInvitation = functions.https.onCall(async (data, context) => 
   }
 
   return acceptGuestInvitationImpl(
+      admin.firestore(), context.auth.uid, context.auth.token.email || '', {code, invitationId});
+});
+
+/**
+ * The `kind` marking an invitation as a **calendar friend** invitation (item 16).
+ *
+ * A third kind rather than a flag on the guest one: a guest opens exactly one child record, a
+ * friend opens the whole calendar, and the two redemption paths write different documents. As
+ * with `guest`, absent still means co-parent.
+ */
+const FRIEND_INVITATION = 'friend';
+exports.FRIEND_INVITATION = FRIEND_INVITATION;
+
+/**
+ * Body of the `acceptCalendarFriendInvitation` callable — lets a trusted third person read the
+ * family's calendar without occupying a parent slot.
+ *
+ * A third function beside the pairing and guest ones, for the reason stated on
+ * `acceptGuestInvitationImpl`: paths that grant different things must not be one `kind` branch
+ * apart. This one writes exactly one document — `calendar_friends/{friendUid}` — and touches no
+ * user document, no event and no child record. **No event is ever rewritten to admit a friend**:
+ * the events read rule consults this grant instead, so admitting or revoking is one write rather
+ * than a fan-out over the family's whole history.
+ *
+ * The inviter must be a **paired parent**: `partnerId` is what proves they hold a slot, and it
+ * also supplies the second uid the grant records, so a friend admitted by one parent can read
+ * both parents' events — which is what "see the calendar" means for a family of two.
+ *
+ * @param {FirebaseFirestore.Firestore} db Firestore instance.
+ * @param {string} acceptingUserId The signed-in caller's UID.
+ * @param {string} acceptingEmail The signed-in caller's email, or ''.
+ * @param {{code: ?string, invitationId: ?string}} ref Exactly one identifier.
+ * @return {Promise<{familyParents: !Array<string>, expiresAtMillis: number}>} The pair whose
+ *   calendar the caller may now read, and the instant their access ends.
+ */
+async function acceptCalendarFriendInvitationImpl(db, acceptingUserId, acceptingEmail, ref) {
+  const inviteRef = await findInvitation(db, ref);
+  const invite = (await inviteRef.get()).data();
+
+  if (invite.kind !== FRIEND_INVITATION) {
+    throw new functions.https.HttpsError(
+        'failed-precondition', 'This is not a friend invitation',
+        {reason: 'not-a-friend-invitation'});
+  }
+  if (invite.status !== 'pending') {
+    throw new functions.https.HttpsError(
+        'failed-precondition', 'Invitation is no longer pending',
+        {reason: 'invitation-not-pending'});
+  }
+  if (typeof invite.expiresAt === 'number' && invite.expiresAt < Date.now()) {
+    throw new functions.https.HttpsError(
+        'failed-precondition', 'Invitation has expired', {reason: 'invitation-expired'});
+  }
+  if (invite.fromUserId === acceptingUserId) {
+    throw new functions.https.HttpsError(
+        'invalid-argument', 'You cannot accept your own invitation', {reason: 'self-pairing'});
+  }
+  if (invite.toEmail && invite.toEmail !== acceptingEmail) {
+    throw new functions.https.HttpsError(
+        'permission-denied', 'This invitation is addressed to somebody else',
+        {reason: 'wrong-recipient'});
+  }
+
+  // No fallback duration, for the reason the guest path states: the one default this must never
+  // have is "forever".
+  const expiresAtMillis = typeof invite.friendExpiresAt === 'number' ? invite.friendExpiresAt : 0;
+  if (expiresAtMillis <= Date.now()) {
+    throw new functions.https.HttpsError(
+        'failed-precondition', 'This access has already ended', {reason: 'grant-expired'});
+  }
+
+  const inviterRef = db.collection('users').doc(invite.fromUserId);
+  const accepterRef = db.collection('users').doc(acceptingUserId);
+  const grantRef = db.collection('calendar_friends').doc(acceptingUserId);
+  const grantedAtMillis = Date.now();
+  let familyParents = [];
+
+  await db.runTransaction(async (tx) => {
+    const [inviterSnap, inviteSnap] = await Promise.all([tx.get(inviterRef), tx.get(inviteRef)]);
+    // Re-read inside the transaction: two devices redeeming one code would otherwise both pass
+    // the check above and the second grant would overwrite the first's expiry.
+    if (inviteSnap.data().status !== 'pending') {
+      throw new functions.https.HttpsError(
+          'failed-precondition', 'Invitation is no longer pending',
+          {reason: 'invitation-not-pending'});
+    }
+    const inviter = inviterSnap.exists ? inviterSnap.data() : null;
+    const partnerId = inviter && typeof inviter.partnerId === 'string' ? inviter.partnerId : '';
+    if (!partnerId) {
+      throw new functions.https.HttpsError(
+          'failed-precondition', 'Only a paired parent can invite a friend',
+          {reason: 'inviter-not-paired'});
+    }
+    // A parent must never end up in their own family's friend grant: they would read the
+    // calendar through a door that expires, and a sweep would later "revoke" a parent.
+    if (acceptingUserId === partnerId) {
+      throw new functions.https.HttpsError(
+          'failed-precondition', 'You are already a parent in this family',
+          {reason: 'already-entitled'});
+    }
+    familyParents = [invite.fromUserId, partnerId].sort();
+
+    tx.set(grantRef, Object.assign({
+      familyParents,
+      name: await guestName(accepterRef, acceptingEmail),
+      grantedBy: invite.fromUserId,
+      grantedAtMillis,
+      expiresAtMillis,
+    }, await accepterPhoto(accepterRef)));
+    tx.update(inviteRef, {
+      status: 'accepted', acceptedBy: acceptingUserId, acceptedAt: grantedAtMillis,
+    });
+  });
+
+  // Both parents are told: a third person reading the family's calendar is a fact the parent who
+  // did not send the invitation has as much right to know as the one who did.
+  await Promise.all(familyParents.map((parentUid) =>
+    db.collection('notification_queue').add({
+      targetUserId: parentUid,
+      data: {
+        type: 'calendar_friend_accepted',
+        title: 'Calendar access accepted',
+        body: `${acceptingEmail || 'A friend'} can now see the family calendar`,
+      },
+      status: 'pending',
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    })));
+
+  return {familyParents, expiresAtMillis};
+}
+
+exports.acceptCalendarFriendInvitationImpl = acceptCalendarFriendInvitationImpl;
+
+/**
+ * Redeems a calendar-friend invitation identified either by its short code or by its id.
+ *
+ * Runs server-side because it must read the inviter's `users` document to prove they are a
+ * paired parent — a document the caller cannot read until the grant it is deciding exists.
+ *
+ * @param {{code?: string, invitationId?: string}} data Exactly one identifier.
+ * @return {Promise<{familyParents: !Array<string>, expiresAtMillis: number}>} See
+ *   [acceptCalendarFriendInvitationImpl].
+ */
+exports.acceptCalendarFriendInvitation = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'Sign in first');
+  }
+
+  const code = data && data.code ? String(data.code).trim().toUpperCase() : null;
+  const invitationId = data && data.invitationId ? String(data.invitationId) : null;
+
+  if ((!code && !invitationId) || (code && invitationId)) {
+    throw new functions.https.HttpsError(
+        'invalid-argument', 'Provide exactly one of code or invitationId');
+  }
+
+  return acceptCalendarFriendInvitationImpl(
       admin.firestore(), context.auth.uid, context.auth.token.email || '', {code, invitationId});
 });
 

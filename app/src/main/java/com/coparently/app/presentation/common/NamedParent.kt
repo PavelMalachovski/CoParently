@@ -17,15 +17,22 @@ import com.coparently.app.domain.model.User
  * @property uid Firebase uid of the parent, so a payer can also be attributed by id.
  * @property slot The stored slot identifier, `"mom"` or `"dad"`. Never shown to anyone.
  * @property name Their display name, which may be blank when their profile carries none.
+ * @property photoUrl Their avatar, which for a Google sign-in is the account's own picture —
+ *   `ProfileIdentity.resolvePhotoUrl` puts it there and `users/{uid}.profilePhotoUrl` carries it
+ *   to the co-parent. Null for an email/password account, for a Google account with no picture,
+ *   and for a co-parent whose phone has not yet run a build that stores one, so the
+ *   initial-letter fallback in `AccountAvatar` stays load-bearing rather than decorative.
  */
 data class NamedParent(
     val uid: String,
     val slot: String,
-    val name: String
+    val name: String,
+    val photoUrl: String? = null
 )
 
 /** This device's own parent, projected for labelling. */
-fun User.asNamedParent(): NamedParent = NamedParent(uid = id, slot = role, name = name)
+fun User.asNamedParent(): NamedParent =
+    NamedParent(uid = id, slot = role, name = name, photoUrl = profilePhotoUrl)
 
 /**
  * The co-parent, projected for labelling — or null when their slot is not known.
@@ -36,4 +43,4 @@ fun User.asNamedParent(): NamedParent = NamedParent(uid = id, slot = role, name 
  * so rather than assuming they hold whichever slot is left over.
  */
 fun PartnerSummary.asNamedParent(): NamedParent? =
-    role?.let { NamedParent(uid = id, slot = it, name = name) }
+    role?.let { NamedParent(uid = id, slot = it, name = name, photoUrl = photoUrl) }
