@@ -459,17 +459,34 @@ device, which has a `Context` and all five translations, so no resource-provider
 involved. Worth remembering when the next item claims to be blocked behind this one — the
 question to ask is which side of the wire the string is finally read on.
 
-### CQ-15 · P3 · S · Dead code
+### CQ-15 · **PARTLY DONE** · P3 · S · Dead code
 
-Unreachable today: `utils/ComposeOptimizations.kt`, `ErrorDisplay`, `ErrorDialog`,
-`CoPlanlySnackbarHost`, `LoadingButton`, `SyncStatusIndicator`, `LottieAnimations` (the *only*
-consumer of the `lottie-compose` dependency), `AdaptiveDimensions`, `CalendarNavigation`,
-`AccessibilityUtils`, `SensitiveMedicalData`, five `EventDao` methods including the project's
-only pagination — plus the whole AI subsystem (**MON-7**).
+**Most of the original list was wrong, and it was measured rather than re-read.** Reachability
+was checked per symbol against the tree; three entries had consumers all along and two more had
+since been wired:
 
-Note the overlap with §4: several of these are components the design section is asking for.
-Delete what is genuinely dead; **wire** `SkeletonLoading`, `ErrorDisplay` and
-`CoPlanlySnackbarHost` rather than deleting them (UX-2, UX-3).
+- `AdaptiveDimensions` — **wired** by UX-6; `adaptiveDimensions()` has four call sites.
+- `SkeletonLoading` — **wired** by UX-2.
+- `SensitiveMedicalData` — five references. Never dead.
+- `LottieAnimations` was **not** "the only consumer of `lottie-compose`":
+  `common/animations/AnimatedEmptyState.kt` uses it on five screens, so the dependency and
+  `res/raw/empty_state_animation.json` stay. Only the four unused composables went.
+
+**Deleted** (0 references outside their own file, verified): `utils/ComposeOptimizations.kt`,
+`utils/AccessibilityUtils.kt`, `common/ErrorDialog.kt`, `common/LoadingButton.kt`,
+`sync/SyncStatusIndicator.kt`, `components/LottieAnimations.kt`,
+`calendar/navigation/CalendarNavigation.kt` — 1,264 lines.
+
+**Deliberately kept**: `ErrorDisplay` and `CoPlanlySnackbarHost`, which this item itself asks to
+be *wired* rather than deleted. They are still unreferenced. Whether they should be wired is now
+a live question rather than an assumption — UX-2 decided a failed list read stays a loaded empty
+value rather than an error surface, so the case for `ErrorDisplay` is weaker than it was when
+this was written. Decide it before either wiring or deleting.
+
+**Not checked**: the five `EventDao` methods, including the project's only pagination. Room
+generates an implementation for every `@Dao` method whether or not anything calls it, so these
+cost build output rather than APK behaviour; `getEventsForParentPaginated` is also the thing
+CQ-5's Home-screen half would use, so deleting it now would be deleting the answer.
 
 ### CQ-16 · P3 · S · No Digital Asset Links
 
