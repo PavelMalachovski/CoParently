@@ -111,16 +111,19 @@ class MessageRepositorySyncFailureTest {
     fun `a failed messages query is logged with the conversation and the query shape`() = runTest {
         every { firestoreMessageDataSource.getMessages(CONVERSATION_ID) } returns
             failing(missingIndex())
-        val logged = slot<String>()
+        // A list, not a `slot`: reconnection logs a line per attempt before giving up, and MockK
+        // refuses to capture into a slot when a verified call matched more than once.
+        val logged = mutableListOf<String>()
 
         repository.observeMessages(CONVERSATION_ID).toList()
 
         verify { android.util.Log.w(any<String>(), capture(logged), any<Throwable>()) }
-        // Swallowing silently is what makes an index outage invisible: the message has to
-        // name the conversation, the query and where the index is declared.
-        assertTrue(logged.captured.contains(CONVERSATION_ID))
-        assertTrue(logged.captured.contains("timestamp"))
-        assertTrue(logged.captured.contains("firestore.indexes.json"))
+        // Swallowing silently is what makes an index outage invisible: the message that gives up
+        // has to name the conversation, the query and where the index is declared. Selected by
+        // content rather than by position, so the number of reconnect attempts is free to change.
+        val gaveUp = logged.single { it.contains("firestore.indexes.json") }
+        assertTrue(gaveUp.contains(CONVERSATION_ID))
+        assertTrue(gaveUp.contains("timestamp"))
     }
 
     @Test
