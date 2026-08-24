@@ -157,7 +157,7 @@ cd firestore-tests && npm test              # firestore.rules against the local 
   August 2026 — this line used to say there was none). Three jobs: Gradle
   (`assembleDebug`, `testDebugUnitTest`, `lint`, `detekt`, `assembleRelease`), Cloud
   Functions, and the Firestore rules suite against the emulator. Two caveats, both
-  deliberate and both tracked in `docs/BACKLOG.md` §2: **detekt reports but does not gate**
+  deliberate and both tracked in `docs/BACKLOG.md` (**CQ-12**, **CQ-1**): **detekt reports but does not gate**
   (`continue-on-error`) until its baseline is regenerated locally, and there is **no
   instrumented migration job**, because `app/schemas/` stops at v14 while the database is at
   v24. Still run the build locally before pushing — CI is a backstop, not a substitute.

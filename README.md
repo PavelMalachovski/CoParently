@@ -42,7 +42,9 @@ Firebase sync between the two households.
 > `presentation/ai` (~3,100 lines: natural-language event entry, conflict monitoring, tone
 > analysis, summaries), but **none of its screens is reachable from navigation**. The README
 > advertised it as a feature until the August 2026 audit. See `docs/AUDIT-2026-08.md` §6 for
-> what to do with it, and `docs/BACKLOG.md` for what stands between the app and a release.
+> what to do with it (**MON-7** in `docs/BACKLOG.md` is the decision), and `docs/BACKLOG.md`
+> for everything left to build, fix or decide — release blockers, security, code quality,
+> UI/UX and monetisation, each item with a stable id and a priority.
 
 ---
 

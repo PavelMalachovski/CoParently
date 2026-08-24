@@ -54,7 +54,7 @@ optional**.
 cannot read Firestore, so a photograph's URL is protected by being unguessable rather than by
 a rule that knows who a parent is. This is documented at length in `storage.rules`. It does
 not change the declaration, but it is the honest state of the control and should be fixed
-before this ships (see `docs/BACKLOG.md` §4).
+before this ships (see `docs/BACKLOG.md`, **SEC-1**).
 
 **Receipt OCR is on-device.** ML Kit's bundled model recognises receipt text without the
 photograph or the text leaving the device. Nothing about it is collected or shared, and it is
@@ -64,7 +64,7 @@ worth saying so in the listing — it is a genuine differentiator in this catego
 path. They are not collected in Play's sense.
 
 **Analytics and crash reporting are release-only** as of the August 2026 audit; debug builds
-no longer report. A consent gate is still outstanding (`docs/BACKLOG.md` §1.4) — **update this
+no longer report. A consent gate is still outstanding (`docs/BACKLOG.md`, **REL-5**) — **update this
 declaration when it ships**, because at that point collection becomes optional rather than
 required.
 

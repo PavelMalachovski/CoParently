@@ -8,7 +8,7 @@
 # Three jobs run on every push and pull request. The instrumented migration job is
 # deliberately absent: `app/schemas/` stops at v14 while the database is at v24, so it would
 # be red from its first run for a reason unrelated to any change. Add it once the schemas are
-# restored (see docs/BACKLOG.md).
+# restored (see docs/BACKLOG.md, CQ-1).
 
 name: CI
 
@@ -66,7 +66,7 @@ jobs:
       # needs the Android SDK, which the environment that wrote this workflow did not have.
       #
       # So: run it, print it, do not fail on it. Regenerate the baseline locally and delete
-      # `continue-on-error` — that is one line here and a tracked item in docs/BACKLOG.md.
+      # `continue-on-error` — one line here, and CQ-12 in docs/BACKLOG.md.
       # Until then this step is a report, not a gate, and should not be mistaken for one.
       - name: detekt (reporting only — see docs/BACKLOG.md)
         if: always()
