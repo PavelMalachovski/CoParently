@@ -59,7 +59,6 @@ fun ChildInfoScreen(
     val haptic = LocalHapticFeedback.current
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsState()
-    val currentChildInfo by viewModel.currentChildInfo.collectAsState()
     val guestInvite by viewModel.guestInvite.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -169,7 +168,11 @@ fun ChildInfoScreen(
                             }
                         }
                     } else {
-                        currentChildInfo?.let { childInfo ->
+                        // Read from the list this screen already holds, rather than from
+                        // `currentChildInfo`: that state belongs to the editor and is set by the
+                        // child it was opened on. Feeding it from the head of the list is what
+                        // let an edit of one child be saved over another.
+                        state.childInfoList.firstOrNull()?.let { childInfo ->
                             ChildInfoContent(
                                 childInfo = childInfo,
                                 onEditClick = onEditClick,
