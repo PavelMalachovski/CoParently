@@ -8,10 +8,8 @@ import com.coparently.app.domain.repository.ChildInfoRepository
 import com.coparently.app.presentation.common.Loadable
 import com.coparently.app.presentation.common.stateInLoadable
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
 import javax.inject.Inject
 
 /** Keeps the flow warm across a configuration change. */

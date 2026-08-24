@@ -17,6 +17,7 @@ import com.coparently.app.domain.repository.PairingRepository
 import com.coparently.app.domain.repository.UserRepository
 import com.coparently.app.presentation.common.Loadable
 import com.coparently.app.presentation.common.stateInLoadable
+import com.coparently.app.presentation.common.valueOrNull
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -233,6 +234,23 @@ class ChatViewModel @Inject constructor(
             .stateInLoadable(viewModelScope, SUBSCRIPTION_TIMEOUT_MS)
 
     /**
+     * The same thread, flattened, for everything inside this class that derives from it.
+     *
+     * The derivations below — the message list's delivery ticks, the unread count — are all
+     * "given this thread, compute that", and neither has anything different to say while the
+     * thread is still loading: an unresolved conversation and an absent one both mean there is
+     * nothing to derive. Only the screen needs the distinction, which is why [conversations]
+     * carries it and this does not.
+     */
+    private val loadedConversations: StateFlow<List<Conversation>> = conversations
+        .map { it.valueOrNull.orEmpty() }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(SUBSCRIPTION_TIMEOUT_MS),
+            initialValue = emptyList()
+        )
+
+    /**
      * The selected conversation's raw messages, tagged with the id they belong to.
      *
      * Backs [messages] only — the read/delivered collector in `init` subscribes to
@@ -267,7 +285,7 @@ class ChatViewModel @Inject constructor(
     @OptIn(ExperimentalCoroutinesApi::class)
     val messages: StateFlow<List<Message>> = combine(
         currentThreadMessages,
-        conversations,
+        loadedConversations,
         currentUserId
     ) { (conversationId, rawMessages), convs, myUid ->
         val conversation = convs.firstOrNull { it.id == conversationId }
@@ -301,12 +319,12 @@ class ChatViewModel @Inject constructor(
      */
     @OptIn(ExperimentalCoroutinesApi::class)
     val unreadCount: StateFlow<Int> = combine(
-        conversations.map { it.firstOrNull()?.id }
+        loadedConversations.map { it.firstOrNull()?.id }
             .distinctUntilChanged()
             .flatMapLatest { conversationId ->
                 if (conversationId == null) flowOf(emptyList()) else messageRepository.observeMessages(conversationId)
             },
-        conversations,
+        loadedConversations,
         currentUserId
     ) { rawMessages, convs, myUid ->
         ChatReadState.unreadCount(rawMessages, myUid, convs.firstOrNull()?.lastReadAt?.get(myUid))
