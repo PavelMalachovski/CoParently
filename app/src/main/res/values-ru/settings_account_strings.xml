@@ -48,4 +48,7 @@
     <string name="settings_account_delete_cancel">Оставить аккаунт</string>
     <string name="settings_account_delete_progress">Удаляем ваш аккаунт…</string>
     <string name="settings_account_delete_failed">Аккаунт не удалён. Попробуйте ещё раз.</string>
+    <!-- Disclosure chevron content descriptions (UX-11). -->
+    <string name="settings_expand">Показать настройки</string>
+    <string name="settings_collapse">Скрыть настройки</string>
 </resources>

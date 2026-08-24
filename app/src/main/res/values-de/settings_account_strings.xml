@@ -48,4 +48,7 @@
     <string name="settings_account_delete_cancel">Konto behalten</string>
     <string name="settings_account_delete_progress">Konto wird gelöscht…</string>
     <string name="settings_account_delete_failed">Das Konto wurde nicht gelöscht. Bitte versuchen Sie es erneut.</string>
+    <!-- Disclosure chevron content descriptions (UX-11). -->
+    <string name="settings_expand">Optionen anzeigen</string>
+    <string name="settings_collapse">Optionen ausblenden</string>
 </resources>

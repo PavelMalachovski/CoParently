@@ -49,4 +49,9 @@
     <string name="settings_account_delete_cancel">Keep my account</string>
     <string name="settings_account_delete_progress">Deleting your account…</string>
     <string name="settings_account_delete_failed">Your account was not deleted. Please try again.</string>
+    <!-- Content descriptions for the disclosure chevron on the Google Calendar row (UX-11).
+         The row's trailing slot used to hold a switch and an unnamed chevron, so TalkBack
+         announced a switch and never said the row expands. -->
+    <string name="settings_expand">Show options</string>
+    <string name="settings_collapse">Hide options</string>
 </resources>

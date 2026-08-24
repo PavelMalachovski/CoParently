@@ -48,4 +48,7 @@
     <string name="settings_account_delete_cancel">Ponechat účet</string>
     <string name="settings_account_delete_progress">Mažeme váš účet…</string>
     <string name="settings_account_delete_failed">Účet se nepodařilo smazat. Zkuste to prosím znovu.</string>
+    <!-- Disclosure chevron content descriptions (UX-11). -->
+    <string name="settings_expand">Zobrazit možnosti</string>
+    <string name="settings_collapse">Skrýt možnosti</string>
 </resources>
