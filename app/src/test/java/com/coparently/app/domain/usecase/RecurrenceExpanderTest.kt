@@ -16,12 +16,13 @@ class RecurrenceExpanderTest {
     private fun event(
         start: LocalDateTime,
         pattern: String? = null,
-        endDate: LocalDate? = null
+        endDate: LocalDate? = null,
+        durationHours: Long = 1
     ) = Event(
         id = "e1",
         title = "Training",
         startDateTime = start,
-        endDateTime = start.plusHours(1),
+        endDateTime = start.plusHours(durationHours),
         eventType = "sports",
         parentOwner = "mom",
         isRecurring = pattern != null,
@@ -109,5 +110,125 @@ class RecurrenceExpanderTest {
         val result = RecurrenceExpander.expandAll(listOf(a, b), rangeStart, rangeEnd)
         assertEquals(6, result.size)
         assertTrue(result.zipWithNext().all { (x, y) -> x.startDateTime <= y.startDateTime })
+    }
+
+    // ---- indexed expansion (the 730-iteration horizon, and the month-end drift) ----
+
+    @Test
+    fun `a daily event still exists three years after it started`() {
+        // The defect this file exists to pin: the walk stepped one interval at a time from the
+        // master start and stopped after 730 *iterations*, so a daily event ceased to exist 730
+        // days in. The master row was intact; the calendar simply returned nothing.
+        val e = event(LocalDateTime.of(2026, 1, 1, 8, 0), pattern = "daily")
+
+        val result = RecurrenceExpander.expand(
+            e,
+            LocalDateTime.of(2029, 7, 1, 0, 0),
+            LocalDateTime.of(2029, 7, 31, 23, 59)
+        )
+
+        assertEquals(31, result.size)
+        assertEquals(LocalDate.of(2029, 7, 1), result.first().startDateTime.toLocalDate())
+        assertEquals(LocalDate.of(2029, 7, 31), result.last().startDateTime.toLocalDate())
+    }
+
+    @Test
+    fun `a weekly event a decade out is not truncated either`() {
+        val e = event(LocalDateTime.of(2026, 1, 7, 8, 0), pattern = "weekly")
+
+        val result = RecurrenceExpander.expand(
+            e,
+            LocalDateTime.of(2040, 3, 1, 0, 0),
+            LocalDateTime.of(2040, 3, 31, 23, 59)
+        )
+
+        assertTrue(result.isNotEmpty(), "a weekly event fourteen years out must still expand")
+        result.forEach { assertEquals(e.startDateTime.dayOfWeek, it.startDateTime.dayOfWeek) }
+    }
+
+    @Test
+    fun `a monthly event on the 31st does not drift to the 28th`() {
+        // Walking `plusMonths(1)` clamps to the end of February and then keeps the clamped day
+        // forever, so a monthly event on the 31st silently became a monthly event on the 28th.
+        // Indexing from the master start restores it.
+        val e = event(LocalDateTime.of(2026, 1, 31, 9, 0), pattern = "monthly")
+
+        val march = RecurrenceExpander.expand(
+            e,
+            LocalDateTime.of(2026, 3, 1, 0, 0),
+            LocalDateTime.of(2026, 3, 31, 23, 59)
+        )
+
+        assertEquals(1, march.size)
+        assertEquals(LocalDate.of(2026, 3, 31), march.first().startDateTime.toLocalDate())
+    }
+
+    @Test
+    fun `February still clamps, because it has to`() {
+        val e = event(LocalDateTime.of(2026, 1, 31, 9, 0), pattern = "monthly")
+
+        val february = RecurrenceExpander.expand(
+            e,
+            LocalDateTime.of(2026, 2, 1, 0, 0),
+            LocalDateTime.of(2026, 2, 28, 23, 59)
+        )
+
+        assertEquals(1, february.size)
+        assertEquals(LocalDate.of(2026, 2, 28), february.first().startDateTime.toLocalDate())
+    }
+
+    @Test
+    fun `an occurrence falls on the same day whichever window asks for it`() {
+        // The invariant that makes the two tests above more than a pair of examples: an
+        // occurrence is a function of the master event and its index, not of where a walk began.
+        val e = event(LocalDateTime.of(2026, 1, 31, 9, 0), pattern = "monthly")
+
+        val fromTheWholeYear = RecurrenceExpander.expand(
+            e,
+            LocalDateTime.of(2026, 1, 1, 0, 0),
+            LocalDateTime.of(2026, 12, 31, 23, 59)
+        ).map { it.startDateTime }.filter { it.monthValue == 7 }
+
+        val fromJulyAlone = RecurrenceExpander.expand(
+            e,
+            LocalDateTime.of(2026, 7, 1, 0, 0),
+            LocalDateTime.of(2026, 7, 31, 23, 59)
+        ).map { it.startDateTime }
+
+        assertEquals(fromTheWholeYear, fromJulyAlone)
+    }
+
+    @Test
+    fun `an overnight occurrence that began the previous evening is still returned`() {
+        // The range is matched by overlap, not by start date, so the skip-ahead must offset by
+        // the event's own duration or it would drop the handover that runs 22:00 to 02:00.
+        val e = event(LocalDateTime.of(2026, 6, 25, 22, 0), pattern = "daily", durationHours = 4)
+
+        val result = RecurrenceExpander.expand(
+            e,
+            LocalDateTime.of(2026, 7, 1, 0, 0),
+            LocalDateTime.of(2026, 7, 1, 23, 59)
+        )
+
+        assertEquals(2, result.size)
+        assertEquals(LocalDate.of(2026, 6, 30), result.first().startDateTime.toLocalDate())
+        assertEquals(LocalDate.of(2026, 7, 1), result.last().startDateTime.toLocalDate())
+    }
+
+    @Test
+    fun `a recurrence end date long past still stops expansion`() {
+        val e = event(
+            LocalDateTime.of(2026, 1, 1, 9, 0),
+            pattern = "daily",
+            endDate = LocalDate.of(2026, 1, 10)
+        )
+
+        val result = RecurrenceExpander.expand(
+            e,
+            LocalDateTime.of(2029, 7, 1, 0, 0),
+            LocalDateTime.of(2029, 7, 31, 23, 59)
+        )
+
+        assertTrue(result.isEmpty(), "an event whose recurrence ended in 2026 has no 2029 occurrences")
     }
 }
