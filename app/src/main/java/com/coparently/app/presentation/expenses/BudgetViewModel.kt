@@ -86,6 +86,20 @@ class BudgetViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Changes an existing budget's monthly limit.
+     *
+     * A `copy()` of the loaded budget, never a rebuilt one — the same rule event editing follows.
+     * `createdAt`, `createdByFirebaseUid`, `currency` and the alert threshold are not this
+     * screen's to reset, and rebuilding from the two fields the sheet shows would do exactly that.
+     */
+    fun updateBudget(budget: Budget, monthlyLimit: Double) {
+        viewModelScope.launch {
+            budgetRepository.updateBudget(budget.copy(monthlyLimit = monthlyLimit))
+            refreshAlerts()
+        }
+    }
+
     fun deleteBudget(budgetId: String) {
         viewModelScope.launch {
             budgetRepository.deleteBudget(budgetId)

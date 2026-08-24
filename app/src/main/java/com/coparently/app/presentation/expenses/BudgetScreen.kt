@@ -32,6 +32,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.coparently.app.R
+import com.coparently.app.domain.model.Budget
 import com.coparently.app.domain.model.BudgetAlert
 import com.coparently.app.presentation.common.animations.AnimatedEmptyState
 
@@ -44,6 +45,7 @@ fun BudgetScreen(
     val budgets by viewModel.budgets.collectAsState()
     val alerts by viewModel.activeAlerts.collectAsState()
     var showAddSheet by remember { mutableStateOf(false) }
+    var editing by remember { mutableStateOf<Budget?>(null) }
 
     LaunchedEffect(Unit) {
         viewModel.refreshAlerts()
@@ -97,10 +99,14 @@ fun BudgetScreen(
 
                 // Budget list
                 LazyColumn {
-                    items(budgets) { budget ->
-                        // We need to fetch spent amount for each budget
-                        // In a real app, this might be better handled in the VM with a combined state
-                        var spentAmount by remember { mutableStateOf(0.0) }
+                    // Keyed by budget id, and so is the spent-amount state below. Neither was:
+                    // `remember { mutableStateOf(0.0) }` with no key inside `items {}` survives
+                    // row recycling, so a scrolled row briefly showed another budget's figure
+                    // until its own LaunchedEffect landed. Both halves are needed — the key on
+                    // `items` keeps a row with its budget, the key on `remember` resets the
+                    // amount if it is reused anyway.
+                    items(budgets, key = { it.id }) { budget ->
+                        var spentAmount by remember(budget.id) { mutableStateOf(0.0) }
 
                         LaunchedEffect(budget.id) {
                             spentAmount = viewModel.getSpentForBudget(budget.id)
@@ -108,7 +114,8 @@ fun BudgetScreen(
 
                         BudgetItem(
                             budget = budget,
-                            spentAmount = spentAmount
+                            spentAmount = spentAmount,
+                            onClick = { editing = budget }
                         )
                     }
                 }
@@ -117,11 +124,26 @@ fun BudgetScreen(
     }
 
     if (showAddSheet) {
-        AddBudgetSheet(
+        BudgetSheet(
             onDismiss = { showAddSheet = false },
             onSave = { category, monthlyLimit ->
                 viewModel.addBudget(category = category, monthlyLimit = monthlyLimit)
                 showAddSheet = false
+            }
+        )
+    }
+
+    editing?.let { budget ->
+        BudgetSheet(
+            onDismiss = { editing = null },
+            onSave = { _, monthlyLimit ->
+                viewModel.updateBudget(budget, monthlyLimit)
+                editing = null
+            },
+            existing = budget,
+            onDelete = {
+                viewModel.deleteBudget(budget.id)
+                editing = null
             }
         )
     }

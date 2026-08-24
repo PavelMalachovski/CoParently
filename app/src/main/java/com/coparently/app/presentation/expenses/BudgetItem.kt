@@ -21,13 +21,18 @@ import com.coparently.app.domain.model.Budget
 import kotlin.math.roundToInt
 
 /**
- * A single budget card. Read-only: there is no budget-edit screen yet, so the card carries no
- * tap affordance rather than offering one that does nothing.
+ * A single budget card. Tapping it opens the sheet that edits or deletes the budget.
+ *
+ * The card was read-only, and its doc said so honestly: "there is no budget-edit screen yet, so
+ * the card carries no tap affordance rather than offering one that does nothing." The right half
+ * of that trade has now been paid — there is an editor — so the affordance can exist. Until then
+ * a typo in a monthly limit was permanent.
  */
 @Composable
 fun BudgetItem(
     budget: Budget,
-    spentAmount: Double
+    spentAmount: Double,
+    onClick: () -> Unit
 ) {
     val progress = if (budget.monthlyLimit > 0) (spentAmount / budget.monthlyLimit).coerceIn(0.0, 1.0) else 0.0
     val color = when {
@@ -39,6 +44,7 @@ fun BudgetItem(
     val format = remember(budget.currency) { currencyFormat(budget.currency) }
 
     Card(
+        onClick = onClick,
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 4.dp)

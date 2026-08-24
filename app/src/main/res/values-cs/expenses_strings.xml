@@ -17,6 +17,10 @@
     <string name="budget_field_category">Kategorie</string>
     <string name="budget_field_limit">Měsíční limit</string>
     <string name="budget_save">Uložit rozpočet</string>
+    <string name="budget_edit_title">Upravit rozpočet</string>
+    <string name="budget_delete">Smazat rozpočet</string>
+    <string name="budget_delete_confirm_title">Smazat tento rozpočet?</string>
+    <string name="budget_delete_confirm_message">Limit se odstraní. Výdaje v této kategorii zůstanou.</string>
     <string name="budgets_empty_title">Zatím žádné rozpočty</string>
     <string name="budgets_empty_description">Nastavte měsíční limit pro každou kategorii, ať máte společné výdaje pod kontrolou.</string>
     <string name="expenses_empty_title">Zatím žádné výdaje</string>

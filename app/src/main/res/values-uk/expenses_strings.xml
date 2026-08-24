@@ -17,6 +17,10 @@
     <string name="budget_field_category">Категорія</string>
     <string name="budget_field_limit">Місячний ліміт</string>
     <string name="budget_save">Зберегти бюджет</string>
+    <string name="budget_edit_title">Змінити бюджет</string>
+    <string name="budget_delete">Видалити бюджет</string>
+    <string name="budget_delete_confirm_title">Видалити цей бюджет?</string>
+    <string name="budget_delete_confirm_message">Ліміт буде знято. Витрати в цій категорії залишаться.</string>
     <string name="budgets_empty_title">Поки немає бюджетів</string>
     <string name="budgets_empty_description">Установіть місячний ліміт за категоріями, щоб тримати спільні витрати під контролем.</string>
     <string name="expenses_empty_title">Поки немає витрат</string>
