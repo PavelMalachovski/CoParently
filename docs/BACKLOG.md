@@ -4,8 +4,10 @@ Everything known to be missing, broken or worth improving, in one place. Sourced
 `docs/AUDIT-2026-08.md` (the full reasoning behind most items lives there, under the § numbers
 cited), from `CLAUDE.md`'s "Known issues", and from what CI found on its first four runs.
 
-Last updated: 2026-08-24. #68 and #69 are merged; the items marked **DONE** below landed
-after them and are listed rather than deleted, so the reasoning stays findable.
+Last updated: 2026-08-24. #68 and #69 are merged; the items marked **DONE** below landed after
+them, in #70, and are listed rather than deleted so the reasoning stays findable. **DONE** means
+merged or awaiting review in #70 — not verified on a device, which for anything visual is a
+different claim (see **REL-7**).
 
 ## How to read this
 
@@ -393,7 +395,7 @@ fill-versus-text problem properly, Settings and the month grid exemplary. The ga
 that layer and the screens — roughly 700 lines of tokens and ten shared components sit
 unreferenced while the rules they encode get broken in the screens that matter most.
 
-### UX-1 · P1 · S · A paired parent is told they have no co-parent, on every cold start
+### UX-1 · **DONE** · A paired parent was told they had no co-parent, on every cold start
 
 `PairingState.Loading` collapses to `paired = false` and `HomeUiState` initialises as
 `AskForCoParent`, so an existing user's launch is: splash → a **full screen** saying "add your
@@ -405,6 +407,11 @@ since become the whole screen, so the cost of guessing wrong grew while the gues
 same. There is a third option neither branch takes: `PairingState` already has `Loading`, and
 `SkeletonLoading.kt` is written and unreferenced. Assert nothing until the answer is known.
 Audit §9.2.
+
+Fixed: `Loading` is now its own state and the page asserts nothing while it holds. An answer that
+never arrives falls back to the invitation after a settle window, because `observePairingState`
+also recovers into `Loading` when its listener fails permanently and a page that waits for ever is
+worse than one that offers something to do.
 
 ### UX-2 · **DONE** · No main screen had a loading state
 
@@ -432,38 +439,52 @@ loaded" flag, but it buys little against that cost and is not obviously an impro
 Still open, and separate: `presentation/common/animations/LoadingSkeleton.kt` duplicates
 `SkeletonBox` and remains unreferenced. One of the two files should go — see **CQ-15**.
 
-### UX-3 · P1 · S · Budgets cannot be edited or deleted
+### UX-3 · **DONE** · Budgets could not be edited or deleted
 
 `BudgetItem` has no click handler anywhere; `BudgetViewModel.deleteBudget()` is never called and
 `updateBudget` does not exist. **A typo in a limit is permanent.** Also `BudgetScreen:100` holds
 `var spentAmount by remember { mutableStateOf(0.0) }` **without a key** inside `items{}`, so
 recycled rows show another budget's figure. Audit §9.9.
 
-### UX-4 · P1 · S · There is no way to jump to a date
+Fixed: both, including the keyless `remember`.
+
+### UX-4 · **DONE** · There was no way to jump to a date
 
 `CalendarScreen` declares `showDatePicker`, builds the dialog, and never sets it to `true`.
 Forty lines of unreachable UI, and no route to a date eight months out except swiping. Audit §9.7.
 
-### UX-5 · P1 · S · "Today" does not survive midnight
+Fixed: the dialog opens from the calendar header.
+
+### UX-5 · **DONE** · "Today" did not survive midnight
 
 `val today = remember { LocalDate.now() }`, with no key. An app left open overnight keeps
 highlighting yesterday. For a product whose entire question is *whose day is it today*, that is
 an answer that quietly becomes wrong. Audit §9.8.
 
-### UX-6 · P1 · S · Adaptive sizing and font scale are switched off at the entry point
+Fixed: `rememberToday()` in `presentation/common`. Reading `LocalDate.now()` inline was no better
+on its own — correct whenever it ran, but nothing made it run, because midnight is not a
+recomposition trigger. Now it is one.
+
+### UX-6 · **DONE** · Adaptive sizing and font scale were switched off at the entry point
 
 `MainActivity` calls `CoPlanlyTheme(darkTheme = …)` without a window size class, so `Theme.kt`
 always resolves `compactDimensions` — phone padding on tablets and unfolded folds.
 `adaptiveDimensions()`, the only code that reads `fontScale` and `isTouchExplorationEnabled`, is
 never called. Audit §9.6.
 
-### UX-7 · P1 · S · Touch targets outside `PillChip`
+Fixed: the window size class reaches the theme, so `adaptiveDimensions()` stops being dead code.
+
+### UX-7 · **DONE** · Touch targets outside `PillChip`
 
 `PillChip` is fixed (48dp + `Role.Button`, PR #69). The **calendar header still has no control
 at or above 48dp**: the month title — which *is* the Month/Week/Day switcher — is a bare
 `clickable` at ~28dp, Today sits at 40dp, Filters is a 32dp `FilterChip`.
 `Constants.MIN_TOUCH_TARGET` is declared and referenced nowhere;
 `minimumInteractiveComponentSize()` is never called. Audit §9.5.
+
+Fixed: the calendar header's three controls, the month title included — which is the
+Month/Week/Day switcher and was a bare `clickable`, so TalkBack did not announce it as a control
+either.
 
 ### UX-8 · P2 · S · The answer to "whose day is it" is the smallest, greyest text on screen
 
@@ -700,7 +721,8 @@ Not a wish-list ordering — a dependency ordering. Each block assumes the one a
 
 **This week, before anything else**
 
-1. **REL-1** — decide the `applicationId`. Free today, impossible after the first upload.
+1. **REL-1** — ~~decide the `applicationId`~~ **decided** (`app.coplanly`); the console half is
+   still open, and a local build fails until it is done.
 2. **REL-3** — deploy rules and functions. Every security fix from both audits is inert until
    this runs, and one of them closes a live full-calendar disclosure.
 3. **MON-2 §1** — find out whether app2us "Rodina" has an Android build. One afternoon; it moves
@@ -712,12 +734,15 @@ Not a wish-list ordering — a dependency ordering. Each block assumes the one a
 
 5. **REL-2, REL-4, REL-5, REL-6, REL-7** — keystore, legal, consent, Play Console, and the one
    device test CI cannot run.
-6. **SEC-1** — the Cloud Function proxy. Three holes, one build, and it is a precondition for
-   MON-7.
+6. **SEC-1** — the Cloud Function proxy. Now two holes rather than three, MON-7 having removed
+   the AI key from the APK by deleting the subsystem — and it is the precondition for AI ever
+   coming back.
 7. **CQ-3** — deletions that replicate. "A cancelled event only one parent can see" is the
    argument this app exists to prevent.
-8. **UX-1 → UX-7** — the P1 usability set. Every one is a day or two, and together they are what
-   a first reviewer actually experiences.
+8. ~~**UX-1 → UX-7** — the P1 usability set.~~ **Done.** What remains in `UX` is P2 and below:
+   the empty-state anatomies (**UX-9**), budget status carried by colour alone (**UX-10**), the
+   Settings row with three interaction models (**UX-11**), and the English success strings
+   (**UX-12**, blocked on **CQ-14**).
 
 **Then, the product bets, in descending confidence**
 
@@ -726,7 +751,8 @@ Not a wish-list ordering — a dependency ordering. Each block assumes the one a
 10. **MON-5** — the Rodičovský plán. The cheapest local moat and the reason a mediator recommends
     you.
 11. **MON-6** — the Czech custody preset. A day's work on the first screen a Czech parent sees.
-12. **MON-7** — one AI feature behind the proxy, or delete the subsystem.
+12. ~~**MON-7** — one AI feature behind the proxy, or delete the subsystem.~~ **Deleted.** If AI
+    returns it returns behind **SEC-1**, as one feature rather than eight.
 13. **MON-8** — the school import.
 
 **Structural, whenever it fits**
