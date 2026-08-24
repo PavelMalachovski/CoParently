@@ -103,5 +103,5 @@
     <string name="expense_split_shared">Share with your co-parent</string>
     <string name="expense_split_not_shared_hint">Counts towards your spending, but neither of you owes the other for it.</string>
     <string name="expense_split_ratio">Split %1$d / %2$d</string>
-    <string name="expense_split_override_hint">Different split for this expense only. The family's agreed split does not change.</string>
+    <string name="expense_split_override_hint">Different split for this expense only. The family\'s agreed split does not change.</string>
 </resources>
