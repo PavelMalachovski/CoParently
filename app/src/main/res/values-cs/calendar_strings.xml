@@ -80,7 +80,8 @@
         <item quantity="other">%1$d žádostí o změnu od druhého rodiče</item>
     </plurals>
     <string name="calendar_change_requests_review">Zkontrolovat</string>
-    <string name="calendar_change_view_mode">Změnit zobrazení</string>
+    <string name="calendar_change_view_mode">Změnit zobrazení nebo přejít na datum</string>
+    <string name="calendar_jump_to_date">Přejít na datum…</string>
 
     <!-- Noun phrase, not "X změnil(a)" — Czech inflects that verb for gender and a name cannot
          agree with one; the software would end up guessing or hedging with "(a)". -->

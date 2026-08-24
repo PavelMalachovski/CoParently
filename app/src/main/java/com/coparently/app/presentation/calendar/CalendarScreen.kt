@@ -464,6 +464,7 @@ fun CalendarScreen(
                 viewMode = viewMode,
                 onViewModeChange = { mode -> calendarViewModel.setViewMode(mode) },
                 onNavigateToToday = { calendarViewModel.showMonth(YearMonth.now()) },
+                onJumpToDate = { showDatePicker = true },
                 onFiltersClick = { showTypeFilters = true },
                 filtersActive = parentFilter != ParentFilter.BOTH ||
                     hiddenEventTypes.isNotEmpty() ||

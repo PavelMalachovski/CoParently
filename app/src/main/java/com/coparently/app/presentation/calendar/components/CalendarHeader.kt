@@ -3,6 +3,7 @@ package com.coparently.app.presentation.calendar.components
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -16,6 +17,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -31,12 +33,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.coparently.app.R
 import com.coparently.app.presentation.calendar.CalendarViewMode
+import com.coparently.app.presentation.theme.LayoutConstants
 import com.coparently.app.utils.LightDarkPreviews
 import com.coparently.app.utils.PreviewWrapper
 import java.time.LocalDate
@@ -71,6 +75,7 @@ fun CalendarHeader(
     viewMode: CalendarViewMode,
     onViewModeChange: (CalendarViewMode) -> Unit,
     onNavigateToToday: () -> Unit,
+    onJumpToDate: () -> Unit,
     onFiltersClick: () -> Unit,
     filtersActive: Boolean = false,
     onSettingsClick: (() -> Unit)? = null
@@ -80,7 +85,8 @@ fun CalendarHeader(
             MonthTitle(
                 selectedDate = selectedDate,
                 viewMode = viewMode,
-                onViewModeChange = onViewModeChange
+                onViewModeChange = onViewModeChange,
+                onJumpToDate = onJumpToDate
             )
         },
         actions = {
@@ -94,17 +100,25 @@ fun CalendarHeader(
 }
 
 /**
- * "July 2026 ▾" — the title doubles as the view-mode picker.
+ * "July 2026 ▾" — the title doubles as the view-mode picker, and as the way to reach a date.
  *
  * Month/Week/Day used to occupy a permanent segmented row under the bar, spending a fixed 44dp
  * of a phone screen on a setting most people change rarely. Folding it into the title costs one
  * tap when you do want it and gives the grid the row back when you don't.
+ *
+ * **Jump to date** joins that menu rather than becoming a fifth action in the bar. The date
+ * picker it opens was written, wired to a `showDatePicker` flag, and never set to true — forty
+ * lines of unreachable UI, with no route to a date eight months out except swiping there. The
+ * title is already what a person taps when they want to be somewhere else in time, so this is
+ * where the route belongs; a new unlabelled glyph beside Today, Filters and the gear would cost
+ * the header row the August refresh deliberately gave back to the grid.
  */
 @Composable
 private fun MonthTitle(
     selectedDate: LocalDate,
     viewMode: CalendarViewMode,
-    onViewModeChange: (CalendarViewMode) -> Unit
+    onViewModeChange: (CalendarViewMode) -> Unit,
+    onJumpToDate: () -> Unit
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     val yearMonth = YearMonth.from(selectedDate)
@@ -117,9 +131,14 @@ private fun MonthTitle(
 
     Box {
         Row(
+            // The one control in this bar that Material does not size for us: `FilterChip`,
+            // `OutlinedButton` and `IconButton` all expand their own touch target to 48dp, and a
+            // bare `clickable` Row does not. It measured about 28dp and announced no role, so
+            // TalkBack did not call it a control at all.
             modifier = Modifier
                 .clip(RoundedCornerShape(8.dp))
-                .clickable { menuOpen = true }
+                .clickable(role = Role.Button) { menuOpen = true }
+                .defaultMinSize(minHeight = LayoutConstants.MIN_TOUCH_TARGET)
                 .padding(end = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -151,6 +170,14 @@ private fun MonthTitle(
                     }
                 )
             }
+            HorizontalDivider()
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.calendar_jump_to_date)) },
+                onClick = {
+                    menuOpen = false
+                    onJumpToDate()
+                }
+            )
         }
     }
 }
@@ -238,6 +265,7 @@ private fun CalendarHeaderTodayPreview() {
             viewMode = CalendarViewMode.MONTH,
             onViewModeChange = {},
             onNavigateToToday = {},
+            onJumpToDate = {},
             onFiltersClick = {},
             onSettingsClick = {}
         )
@@ -253,6 +281,7 @@ private fun CalendarHeaderWeekPreview() {
             viewMode = CalendarViewMode.WEEK,
             onViewModeChange = {},
             onNavigateToToday = {},
+            onJumpToDate = {},
             onFiltersClick = {},
             filtersActive = true,
             onSettingsClick = {}

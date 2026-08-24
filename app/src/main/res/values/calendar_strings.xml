@@ -88,7 +88,8 @@
         <item quantity="other">%1$d change requests from your co-parent</item>
     </plurals>
     <string name="calendar_change_requests_review">Review</string>
-    <string name="calendar_change_view_mode">Change view</string>
+    <string name="calendar_change_view_mode">Change view, or jump to a date</string>
+    <string name="calendar_jump_to_date">Jump to date…</string>
 
     <!-- Inline banner for a remote custody-schedule change; last-write-wins, so this is the
          "not silently" part. %1$s is the changer's name, resolved by
