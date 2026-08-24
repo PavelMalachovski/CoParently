@@ -133,15 +133,65 @@ describe('family_settings', () => {
     }));
   });
 
-  it('refuses moving the agreed share while stamping the other parent', async () => {
-    // The same reason `custody_models` validates `lastModifiedBy`: the reader's own uid is what
-    // suppresses the echo of their own write, so an unvalidated author lets one parent change
-    // the money and have the other's phone file it as its own.
+  it('refuses moving the agreed share with no proposal behind it', async () => {
+    // The difference from `custody_models`, and the whole point of this document: a custody
+    // pattern is last-write-wins with a banner, a split that prices every future expense is not.
+    // Stamping yourself as the author is not enough here.
     await seed(env, {[PATH]: settingsDoc({})});
-    const db = env.authenticatedContext(DAD).firestore();
+    const db = env.authenticatedContext(MOM).firestore();
     await assertFails(db.doc(PATH).update({
       momShareBasisPoints: 7000,
       lastModifiedBy: MOM,
+      lastModifiedAtMillis: 1756000200000,
+    }));
+  });
+
+  it('refuses accepting your own proposal', async () => {
+    await seed(env, {[PATH]: settingsDoc({proposal: proposal(MOM, 7000)})});
+    const db = env.authenticatedContext(MOM).firestore();
+    await assertFails(db.doc(PATH).update({
+      momShareBasisPoints: 7000,
+      lastModifiedBy: MOM,
+      lastModifiedAtMillis: 1756000200000,
+      proposal: null,
+    }));
+  });
+
+  it('refuses an acceptance that lands on a figure nobody proposed', async () => {
+    // Otherwise "accept" is a door to any number at all, which is the same unilateral change
+    // wearing the co-parent's agreement.
+    await seed(env, {[PATH]: settingsDoc({proposal: proposal(MOM, 7000)})});
+    const db = env.authenticatedContext(DAD).firestore();
+    await assertFails(db.doc(PATH).update({
+      momShareBasisPoints: 9000,
+      lastModifiedBy: DAD,
+      lastModifiedAtMillis: 1756000200000,
+      proposal: null,
+    }));
+  });
+
+  it('refuses an acceptance that leaves the proposal in place', async () => {
+    // A proposal left standing could be accepted again, at a different figure each time.
+    await seed(env, {[PATH]: settingsDoc({proposal: proposal(MOM, 7000)})});
+    const db = env.authenticatedContext(DAD).firestore();
+    await assertFails(db.doc(PATH).update({
+      momShareBasisPoints: 7000,
+      lastModifiedBy: DAD,
+      lastModifiedAtMillis: 1756000200000,
+    }));
+  });
+
+  it('lets the co-parent decline, leaving the share alone', async () => {
+    await seed(env, {[PATH]: settingsDoc({proposal: proposal(MOM, 7000)})});
+    const db = env.authenticatedContext(DAD).firestore();
+    await assertSucceeds(db.doc(PATH).update({
+      proposal: null,
+      lastDecision: {
+        outcome: 'DECLINED',
+        by: DAD,
+        atMillis: 1756000200000,
+        proposalAtMillis: 1756000100000,
+      },
     }));
   });
 

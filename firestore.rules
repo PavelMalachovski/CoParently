@@ -682,6 +682,31 @@ service cloud.firestore {
              after.get('lastModifiedAtMillis', 0) == before.get('lastModifiedAtMillis', 0);
     }
 
+    // Whether the write is the caller taking up the **co-parent's** proposal.
+    //
+    // This is the *only* update that may move the agreed share, and that is the whole difference
+    // between this document and `custody_models`. A custody pattern is last-write-wins with a
+    // banner; money is not. Requiring "the caller stamped themselves" the way the custody rule
+    // does would have let either parent re-price every future expense on their own and told the
+    // other only through a notification — an announcement, not an agreement.
+    //
+    // Four conditions, and each one closes a way round it: there must be a proposal to accept;
+    // the caller must not be the one who made it; the new share must be exactly the proposed one
+    // (so an "acceptance" cannot smuggle in a third figure); and the proposal must be cleared, so
+    // the same one cannot be accepted twice at two different values.
+    //
+    // The proposal is tested for null as well as for absence: the client writes the whole
+    // document, which omits the key, but a partial `update({proposal: null})` stores an explicit
+    // null, and both mean "there is no longer a proposal".
+    function ratioAcceptance(before, after, uid) {
+      return 'proposal' in before &&
+             before.proposal != null &&
+             before.proposal.proposedBy != uid &&
+             after.momShareBasisPoints == before.proposal.momShareBasisPoints &&
+             after.lastModifiedBy == uid &&
+             (!('proposal' in after) || after.proposal == null);
+    }
+
     function isClientPushType(type) {
       return type in [
         'event_created', 'event_updated', 'event_deleted',
@@ -922,14 +947,19 @@ service cloud.firestore {
                       (isPartnerOf(request.resource.data.participants[0]) ||
                        isPartnerOf(request.resource.data.participants[1]));
 
-      // Two shapes, and the split between them is what makes this an agreement rather than an
-      // announcement:
+      // Exactly two shapes, and the split between them is what makes this an agreement rather
+      // than an announcement:
       //
-      // - a **proposal-only** write (put, withdraw, or record an outcome), which by
-      //   `ratioProposalOnly` cannot move the agreed share and so does not stamp
-      //   `lastModifiedBy`; or
-      // - a write that **moves the agreed share**, which must stamp `lastModifiedBy` with the
-      //   caller. Accepting a proposal is this shape.
+      // - a **proposal-only** write (put one, withdraw one, or record its outcome), which by
+      //   `ratioProposalOnly` cannot move the agreed share; or
+      // - an **acceptance** of the co-parent's proposal, which is the only write that may move
+      //   it, and only to the figure they proposed.
+      //
+      // Deliberately *stricter* than `custody_models`, which admits any write that stamps its
+      // author. A custody pattern is last-write-wins with a banner; a split that priced every
+      // future expense could not be. Under the looser rule, a parent who happened to be the
+      // document's last author could re-price everything unilaterally and the co-parent would
+      // learn of it from a notification.
       //
       // `participants` is immutable either way. Without that, an existing participant could swap
       // the other out for a third account: the array would still hold two uids, but the id —
@@ -945,7 +975,7 @@ service cloud.firestore {
                       request.resource.data.momShareBasisPoints <= 10000 &&
                       (
                         ratioProposalOnly(resource.data, request.resource.data) ||
-                        request.resource.data.lastModifiedBy == request.auth.uid
+                        ratioAcceptance(resource.data, request.resource.data, request.auth.uid)
                       );
 
       // Deletable by either named participant even once the pairing behind it is gone, so an
