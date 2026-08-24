@@ -429,7 +429,7 @@ class HomeViewModel @Inject constructor(
     /**
      * Number of unread **messages** from the co-parent, matching the tile's label.
      *
-     * Counted per message by [ChatReadState.unreadCount], from the co-parent thread's own
+     * Counted per message, by the rule [ChatReadState.unreadCount] states: the co-parent's own
      * messages against this user's `lastReadAt` mark. The interim version counted
      * *conversations* with activity, which — chat being 1:1 — could only ever render 0 or 1
      * under a label that says messages.
@@ -438,6 +438,19 @@ class HomeViewModel @Inject constructor(
      * function of the two uids, so the tile needs no list query. A remote failure inside the
      * repository is already contained there; the [catch] here is the last resort that keeps
      * a Room-level failure from taking down `viewModelScope` and, with it, the process.
+     *
+     * **Counted in SQL rather than by loading the thread** (CQ-6). This used to combine the
+     * conversation with `observeMessages` and run `ChatReadState.unreadCount` over the result —
+     * so the first screen the app opens subscribed to every message in the thread and mapped
+     * all of them into domain objects on every emission, to render one integer. Ten messages a
+     * day for three years is about eleven thousand rows, on the home screen, forever.
+     * `MessageRepository.observeUnreadCount` answers the same question with a `COUNT(*)`.
+     *
+     * That also drops this screen's second subscription to the remote message listener. The
+     * badge stays live because `ChatViewModel.unreadCount`, held for the process lifetime by
+     * `NavGraph.rememberChatUnreadCount()`, is still mirroring into Room — which is what this
+     * now reads. It is the one subscription that has to stay, and CQ-8 explains why untangling
+     * it is a separate job.
      */
     private val unreadCount: StateFlow<Int> = combine(_userId, _partnerId) { userId, partnerId ->
         userId to partnerId
@@ -447,12 +460,7 @@ class HomeViewModel @Inject constructor(
             if (conversationId == null) {
                 flowOf(0)
             } else {
-                combine(
-                    messageRepository.observeConversation(conversationId),
-                    messageRepository.observeMessages(conversationId)
-                ) { conversation, messages ->
-                    ChatReadState.unreadCount(messages, userId, conversation?.lastReadAt?.get(userId))
-                }
+                messageRepository.observeUnreadCount(conversationId, userId)
             }
         }
         .catch { e ->

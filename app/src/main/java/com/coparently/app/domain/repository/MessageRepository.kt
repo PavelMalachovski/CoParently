@@ -36,6 +36,27 @@ interface MessageRepository {
     fun observeMessages(conversationId: String): Flow<List<Message>>
 
     /**
+     * Observes how many of the co-parent's messages [myUid] has not read, as a live count.
+     *
+     * The answer [observeMessages] plus `ChatReadState.unreadCount` would give — computed in
+     * SQL instead, so a caller that only wants the number does not materialise the thread to
+     * get it. That difference is the whole reason this exists: after three years of ten
+     * messages a day, rendering one integer on the home screen meant mapping about eleven
+     * thousand rows into domain objects on every emission.
+     *
+     * **Room only.** Nothing here subscribes to the remote listener, so the count reflects
+     * what has been mirrored into Room rather than opening a second listener of its own. The
+     * badge stays live because `ChatViewModel.unreadCount` — held for the process lifetime by
+     * `NavGraph.rememberChatUnreadCount()` — keeps the mirror running. Do not convert *that*
+     * one to this without replacing what keeps the mirror alive; it is the same entanglement
+     * CQ-8 describes, from the other side.
+     *
+     * @param conversationId The deterministic conversation id.
+     * @param myUid The reader — their own messages never count as unread.
+     */
+    fun observeUnreadCount(conversationId: String, myUid: String): Flow<Int>
+
+    /**
      * Creates the 1:1 conversation between [myUid] and [partnerUid] if it does not exist,
      * and returns its id.
      *

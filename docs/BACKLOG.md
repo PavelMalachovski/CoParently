@@ -283,12 +283,34 @@ subscriptions to the whole events table plus one to all expenses and filters the
 **in memory**, while `EventDao.getEventsForParentPaginated` sits written and never called.
 Audit §8.6.
 
-### CQ-6 · P1 · M · Chat has no limit at either end
+### CQ-6 · **PARTLY DONE** · P2 · M · Chat has no limit at either end
 
-`MessageDao` selects a whole conversation with no `LIMIT`; `FirestoreMessageDataSource`
-attaches a snapshot listener with no `limitToLast`. Ten messages a day for three years is
-~11,000 loaded in full on every open — and `HomeViewModel` runs `ChatReadState.unreadCount`
+`MessageDao` selected a whole conversation with no `LIMIT`; `FirestoreMessageDataSource`
+attached a snapshot listener with no `limitToLast`. Ten messages a day for three years is
+~11,000 loaded in full on every open — and `HomeViewModel` ran `ChatReadState.unreadCount`
 across all of them on every emission, on the home screen. Audit §8.7.
+
+**Two of the three costs are gone.**
+
+- **The home screen no longer loads the thread to count it.**
+  `MessageRepository.observeUnreadCount` answers with a Room `COUNT(*)` over the same
+  predicate `ChatReadState.unreadCount` states, so rendering one integer costs an index
+  lookup instead of eleven thousand entity-to-domain mappings per emission. It also drops
+  Home's second subscription to the remote message listener.
+- **The remote listener is bounded** to the newest 200 messages (`limitToLast`, not `limit` —
+  the order is ascending, so `limit` would pin the window to the oldest messages and a live
+  thread would stop updating at the bound). Room keeps everything it has already received, so
+  only a **fresh install** sees less: it now receives the last 200 messages of the thread
+  rather than all of them.
+
+**What is left, and why it was not done here.** `MessageDao.getMessages` is still unbounded,
+so the chat screen and `ChatViewModel` still materialise the whole thread out of Room.
+Bounding it needs a "load earlier" affordance — silently showing only the tail would be the
+CQ-7 defect again, in a different collection. It is also entangled with **CQ-8**:
+`ChatViewModel.unreadCount` is the subscription `NavGraph.rememberChatUnreadCount()` holds for
+the process lifetime, and it is the only thing keeping the remote mirror alive, so it cannot be
+converted to the cheap count until something else keeps the mirror running. Do those two
+together.
 
 ### CQ-7 · **DONE** · The Google Calendar import silently truncated at 50 events
 
@@ -783,8 +805,15 @@ Not a wish-list ordering — a dependency ordering. Each block assumes the one a
 
 **Structural, whenever it fits**
 
-14. **CQ-5, CQ-6** — the sync window and chat limits. Both grow worse with tenure, so they land
-    on your longest-standing users first.
+14. **CQ-5**, and the rest of **CQ-6**. Both grow worse with tenure, so they land on your
+    longest-standing users first. CQ-6's network and home-screen halves are done; what remains
+    is the Room query behind the chat screen, which needs a "load earlier" affordance and has
+    to be done together with **CQ-8** — see the item. CQ-5 is the harder one and is *not* a
+    rolling window plus a `lastSyncAt` delta, as this document used to say: a delta on
+    `updatedAt` would miss every deletion, because tombstones deliberately do not move it (and
+    `updatedAt` carries SEC-4's ordering defect anyway), and a date window on `startDateTime`
+    cuts off the master row of a recurring series that began before it. Settle those two before
+    writing any of it.
 15. **CQ-12, CQ-13** — make detekt gate again, and write the ViewModel tests. The first four CI
     runs are the argument for both.
 
