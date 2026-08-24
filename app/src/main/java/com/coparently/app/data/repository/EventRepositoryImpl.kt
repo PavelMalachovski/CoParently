@@ -88,7 +88,10 @@ class EventRepositoryImpl @Inject constructor(
     }
 
     override suspend fun getEventById(id: String): Event? {
-        return eventDao.getEventById(id)?.toDomain()
+        // `EventDao.getEventById` deliberately returns pending tombstones — the sync and delete
+        // paths need to tell "deleted here" apart from "never existed". A caller asking on a
+        // user's behalf wants neither: to them the event is gone.
+        return eventDao.getEventById(id)?.takeIf { it.deletedAtMillis == null }?.toDomain()
     }
 
     override fun getEventsByParent(parentOwner: String): Flow<List<Event>> {
@@ -154,27 +157,63 @@ class EventRepositoryImpl @Inject constructor(
         announce(event, event.acceptanceKind() ?: ActivityKind.EVENT_UPDATED)
     }
 
+    /**
+     * Deletes an event, in a way the co-parent can actually find out about (CQ-3).
+     *
+     * The row is **tombstoned** rather than removed: every query hides it immediately, so the
+     * parent sees the event go at once, but it survives in Room as an outbox entry until the
+     * deletion has been written to Firestore. That is the whole difference. Before this, the row
+     * was removed and the remote document deleted on a best-effort call whose failure was logged
+     * and dropped — so an offline or rejected delete left the document standing and the next
+     * sync pulled the event back onto the phone that had just deleted it, while a *successful*
+     * delete made the document vanish with nothing left for the co-parent's downstream pass to
+     * act on. One case undid the delete locally; the other never delivered it. A tombstone fixes
+     * both, because it is a fact that can be retried and a fact that can be read.
+     *
+     * A private event is the one thing dropped outright: it is never uploaded (see
+     * [updateEvent] and `SyncService`), so there is no remote copy to mark and no co-parent
+     * holding one. Everything else keeps its tombstone until a remote write confirms it —
+     * including while signed out, where the deletion simply waits for the next sync.
+     */
     override suspend fun deleteEvent(event: Event) {
-        eventDao.deleteEvent(event.toEntity())
+        val deletedAtMillis = System.currentTimeMillis()
+        eventDao.markDeleted(event.id, deletedAtMillis)
+        announce(event, ActivityKind.EVENT_DELETED)
 
-        val firebaseUser = firebaseAuthService.getCurrentUser()
-        if (firebaseUser != null && event.syncedToFirestore) {
-            // The event is already gone locally. A rejected remote delete arrives from
-            // Firestore's write-rejection path and kills the app if nothing catches it —
-            // the same failure the expense add path was hardened against.
-            try {
-                firestoreEventDataSource.deleteEvent(event.id)
-            } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
-                android.util.Log.w("EventRepo", "Event Firestore delete failed", e)
-            }
+        if (event.isPrivate) {
+            eventDao.deleteEventById(event.id)
+            return
         }
 
-        announce(event, ActivityKind.EVENT_DELETED)
+        val firebaseUser = firebaseAuthService.getCurrentUser() ?: return
+        val tombstoned = firestoreEventDataSource.tombstoneEvent(
+            id = event.id,
+            deletedAtMillis = deletedAtMillis,
+            deletedBy = firebaseUser.uid
+        )
+        if (tombstoned.isSuccess) {
+            // Delivered. Nothing is served by keeping the row: the co-parent learns from the
+            // document, and this device already hides it.
+            eventDao.deleteEventById(event.id)
+        } else {
+            android.util.Log.w(
+                "EventRepo",
+                "Event tombstone not written; the deletion stays queued for the next sync",
+                tombstoned.exceptionOrNull()
+            )
+        }
     }
 
     override suspend fun deleteEventById(id: String) {
         val event = eventDao.getEventById(id)
-        event?.let { deleteEvent(it.toDomain()) } ?: eventDao.deleteEventById(id)
+        when {
+            event == null -> eventDao.deleteEventById(id)
+            // Already tombstoned: the deletion is queued and dated. Running it again would
+            // stamp a second, later time on the remote document than the one Room is holding,
+            // which is not wrong so much as two answers to one question.
+            event.deletedAtMillis != null -> Unit
+            else -> deleteEvent(event.toDomain())
+        }
     }
 
     override suspend fun syncWithFirestore() {

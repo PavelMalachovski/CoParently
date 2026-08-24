@@ -28,6 +28,7 @@ import java.time.LocalDateTime
  * @property pickupConfirmedBy Parent who confirmed the pickup ("mom" or "dad"), null if not confirmed
  * @property pickupConfirmedAt Timestamp when the pickup was confirmed
  * @property reminderMinutes Minutes before start to show a reminder notification (null = no reminder)
+ * @property deletedAtMillis When the event was deleted (epoch millis), or null while it is alive
  */
 @Entity(tableName = "events")
 data class EventEntity(
@@ -77,6 +78,25 @@ data class EventEntity(
      * [com.coparently.app.domain.model.Event.friendParticipates]. Nullable, no default beyond
      * null: an event predating the column had no friend on it, which is what null says.
      */
-    val friendParticipates: String? = null
+    val friendParticipates: String? = null,
+    /**
+     * When this event was deleted, epoch millis — or null while it is alive, which every row
+     * that predates the column is.
+     *
+     * A row with this set is a **pending tombstone**: the parent has deleted the event, every
+     * query hides it, and it survives in Room only until the deletion has been written to
+     * Firestore, at which point the row is removed for real. So it is not a soft delete in the
+     * usual sense of "the data is still there" — it is an outbox entry, and the reason it is one
+     * is that the previous delete had nowhere to fail *to*. A remote delete that was rejected
+     * (offline, or a rule that refuses) was logged and dropped, the document survived, and the
+     * next sync pulled the event back onto the phone that had just deleted it. A row nothing
+     * retries is a delete that undoes itself.
+     *
+     * Epoch millis rather than a `LocalDateTime` because this value crosses to the co-parent's
+     * phone, which may be in another time zone — the same reasoning as `Message.sentAtMillis`,
+     * and deliberately not the reasoning behind [startDateTime], where a naive local time is
+     * the right model for when a handover happens.
+     */
+    val deletedAtMillis: Long? = null
 )
 

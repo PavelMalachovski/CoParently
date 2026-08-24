@@ -29,5 +29,15 @@ data class ExpenseEntity(
      * written before schema 23 (and on legacy documents that never carried the field); a null
      * reads as "editable by both", which is exactly what those rows were.
      */
-    val createdByFirebaseUid: String? = null
+    val createdByFirebaseUid: String? = null,
+    /**
+     * When this expense was deleted, epoch millis — or null while it is alive.
+     *
+     * Same meaning as [com.coparently.app.data.local.entity.EventEntity.deletedAtMillis]: a
+     * pending tombstone, hidden from every query, kept only until the deletion reaches
+     * Firestore. Expenses had the identical defect and one of its own — the `expenses` delete
+     * rule admits only the creator, so a co-parent's delete lost the local row and left the
+     * document standing, and the next sync restored it.
+     */
+    val deletedAtMillis: Long? = null
 )

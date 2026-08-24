@@ -4,7 +4,7 @@ Everything known to be missing, broken or worth improving, in one place. Sourced
 `docs/AUDIT-2026-08.md` (the full reasoning behind most items lives there, under the § numbers
 cited), from `CLAUDE.md`'s "Known issues", and from what CI found on its first four runs.
 
-Last updated: 2026-08-24. #68 and #69 are merged; the items marked **DONE** below landed after
+Last updated: 2026-08-24. #68, #69, #70 and #71 are merged; the items marked **DONE** below landed after
 them, in #70, and are listed rather than deleted so the reasoning stays findable. **DONE** means
 merged or awaiting review in #70 — not verified on a device, which for anything visual is a
 different claim (see **REL-7**).
@@ -219,18 +219,44 @@ deliberately does not fall back to destructive migration above v4: a broken migr
       `.github/workflows/ci.yml` today because it would be red from its first run.
 - [ ] Have CI assert `version == max(schemas)` so this cannot silently recur.
 
-### CQ-3 · P0 · L · Deletions never reach the other parent
+### CQ-3 · **DONE** · Deletions never reach the other parent
 
-`deleteEvent` hard-deletes locally and calls Firestore. The **downstream** path in
-`SyncService` only ever inserts: no branch removes a local row absent from the remote snapshot,
-and there are no tombstones anywhere. So parent A deletes an event and **parent B keeps it
-forever**. Worse: if the remote delete fails (offline, permission), the exception is logged and
-dropped with no retry queue — the document survives in Firestore and the next sync **restores
-it locally**. `ExpenseRepositoryImpl` is the same.
+`deleteEvent` hard-deleted locally and called Firestore. The **downstream** path in
+`SyncService` only ever inserted: no branch removed a local row absent from the remote snapshot,
+and there were no tombstones anywhere. So parent A deleted an event and **parent B kept it
+forever**. Worse: if the remote delete failed (offline, permission), the exception was logged and
+dropped with no retry queue — the document survived in Firestore and the next sync **restored
+it locally**. `ExpenseRepositoryImpl` was the same.
 
 For a co-parenting app, "a cancelled event only one parent can see" is not cosmetic. It is the
-argument the app exists to prevent. Needs soft-delete, a reconciliation pass on the downstream
-path, a Room migration and a rules change. Audit §8.3.
+argument the app exists to prevent. Audit §8.3.
+
+**Fixed with tombstones**, in `data/sync/Tombstone.kt` — one definition of what a deleted
+document looks like on the wire (`deletedAtMillis`, epoch millis, plus `deletedBy`). A delete
+marks the document instead of removing it, so the deletion travels down the same query that
+delivers every other change; Room gains `deletedAtMillis` on `events` and `expenses`
+(schema 25) as a **pending-tombstone outbox**, hidden from every read query and retried on each
+sync until the write lands, then removed for real. `sweepDeletedDocuments` (Cloud Functions,
+daily) purges tombstones after 90 days.
+
+Three decisions worth knowing before touching it:
+
+- **Not reconciliation by absence.** "Delete whatever is not in the remote snapshot" would take
+  the whole calendar the first time `sharedWith` narrowed at unpair, or CQ-5 bounded the
+  download window, or a snapshot came back partial. Absence is not deletion.
+- **A deletion wins outright, never by timestamp.** `updatedAt` is a naive `LocalDateTime`
+  with SEC-4's cross-time-zone ordering defect, so a tombstone beats a concurrent edit by rule
+  rather than by comparison. An event that should not exist is at least visible; an edit that
+  loses is simply gone.
+- **No rule was widened.** Tombstoning turns a `delete` into an `update`, so `events` admits a
+  `read_write` co-parent (who could already rewrite every field) and `expenses` stays
+  creator-only (the August 2026 owner decision). Pinned in
+  `firestore-tests/rules/deletion-tombstones.test.js`, including that a tombstoned document
+  stays readable — a deletion nobody may read is a deletion nobody is told about.
+
+**Left open:** a device offline for longer than the 90-day retention keeps that one event, since
+the document it would have learned from is gone. Bounded, rare, and the reason the window is not
+smaller.
 
 ### CQ-4 · **DONE** · Daily recurring events vanished after ~2 years
 
@@ -737,8 +763,8 @@ Not a wish-list ordering — a dependency ordering. Each block assumes the one a
 6. **SEC-1** — the Cloud Function proxy. Now two holes rather than three, MON-7 having removed
    the AI key from the APK by deleting the subsystem — and it is the precondition for AI ever
    coming back.
-7. **CQ-3** — deletions that replicate. "A cancelled event only one parent can see" is the
-   argument this app exists to prevent.
+7. ~~**CQ-3** — deletions that replicate.~~ **Done.** Tombstones, an outbox that retries, and a
+   daily server-side sweep. See the item for the three decisions it rests on.
 8. ~~**UX-1 → UX-7** — the P1 usability set.~~ **Done.** What remains in `UX` is P2 and below:
    the empty-state anatomies (**UX-9**), budget status carried by colour alone (**UX-10**), the
    Settings row with three interaction models (**UX-11**), and the English success strings

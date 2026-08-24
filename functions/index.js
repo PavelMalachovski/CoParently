@@ -1217,6 +1217,107 @@ exports.sweepExpiredGuests = functions.pubsub
     });
 
 /**
+ * Collections whose documents are deleted by being tombstoned rather than removed (CQ-3).
+ *
+ * Both are read by the co-parent's phone through a filtered collection query, which is the
+ * channel a deletion travels down: the client marks the document `deletedAtMillis` instead of
+ * removing it, the other device sees the field on its next sync and drops its local row. That
+ * only works while the document is still there, which is what this sweep is bounding.
+ */
+const TOMBSTONED_COLLECTIONS = ['events', 'expenses'];
+
+exports.TOMBSTONED_COLLECTIONS = TOMBSTONED_COLLECTIONS;
+
+/**
+ * How long a tombstone is kept before the document is removed for good.
+ *
+ * This is the deadline for a co-parent's phone to come back and collect the deletion. Long,
+ * because the cost of the two outcomes is not symmetric: sweeping early leaves a cancelled
+ * event on a returning parent's calendar with nothing left to correct it — the exact defect
+ * CQ-3 exists to fix, reintroduced by the cleanup for it — whereas sweeping late costs a few
+ * bytes per deleted row. Ninety days is well past any period a phone that opens this app at
+ * all goes without syncing.
+ *
+ * A device offline for longer than this still keeps that one event. Bounded and rare, and it
+ * is the reason this number is not smaller.
+ */
+const TOMBSTONE_RETENTION_DAYS = 90;
+
+exports.TOMBSTONE_RETENTION_DAYS = TOMBSTONE_RETENTION_DAYS;
+
+const TOMBSTONE_SWEEP_BATCH_LIMIT = 400;
+
+/**
+ * Body of the `sweepDeletedDocuments` schedule — removes tombstones nobody is still waiting for.
+ *
+ * Unlike `sweepExpiredGuestsImpl` this does **not** scan the collection: `deletedAtMillis` is a
+ * top-level number, so "deleted before the cutoff" is an ordinary range query on a field
+ * Firestore indexes by itself. A live document has no such field at all, and a document missing
+ * the field is not returned by a range query on it — so the query cannot match anything that is
+ * not already a tombstone, which is the property that makes a scheduled delete safe to run
+ * unattended.
+ *
+ * @param {FirebaseFirestore.Firestore} db Firestore instance.
+ * @param {number} nowMillis The instant to sweep at.
+ * @param {number=} retentionDays Override the retention window; defaults to
+ *     [TOMBSTONE_RETENTION_DAYS].
+ * @return {Promise<number>} How many documents were removed.
+ */
+async function sweepDeletedDocumentsImpl(db, nowMillis, retentionDays) {
+  const days = typeof retentionDays === 'number' ? retentionDays :
+    TOMBSTONE_RETENTION_DAYS;
+  const cutoff = nowMillis - days * 24 * 60 * 60 * 1000;
+
+  let removed = 0;
+
+  for (const collection of TOMBSTONED_COLLECTIONS) {
+    const snap = await db.collection(collection)
+        .where('deletedAtMillis', '<=', cutoff)
+        .get();
+
+    let batch = db.batch();
+    let pending = 0;
+
+    for (const doc of snap.docs) {
+      batch.delete(doc.ref);
+      pending++;
+      removed++;
+
+      if (pending === TOMBSTONE_SWEEP_BATCH_LIMIT) {
+        await batch.commit();
+        batch = db.batch();
+        pending = 0;
+      }
+    }
+
+    if (pending > 0) {
+      await batch.commit();
+    }
+  }
+
+  return removed;
+}
+
+exports.sweepDeletedDocumentsImpl = sweepDeletedDocumentsImpl;
+
+/**
+ * Daily removal of tombstones past their retention window.
+ *
+ * An hour after `sweepExpiredGuests` so the scheduled jobs never contend, and daily rather
+ * than more often for the same reason that one is: nothing depends on this running promptly.
+ * A tombstone that outlives its window by a day is a document; a tombstone swept a day early
+ * is a deletion that was never delivered.
+ */
+exports.sweepDeletedDocuments = functions.pubsub
+    .schedule('0 4 * * *')
+    .timeZone('UTC')
+    .onRun(async () => {
+      const removed = await sweepDeletedDocumentsImpl(admin.firestore(), Date.now());
+      console.log(`Swept ${removed} tombstoned documents`);
+      return null;
+    });
+
+/**
  * Collections whose visibility is a per-document `sharedWith` audience.
  *
  * These three (`events`, `child_info`, `pets`) each keep a per-document `sharedWith` list

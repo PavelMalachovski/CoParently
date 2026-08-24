@@ -162,7 +162,7 @@ cd firestore-tests && npm test              # firestore.rules against the local 
   deliberate and both tracked in `docs/BACKLOG.md` (**CQ-12**, **CQ-1**): **detekt reports but does not gate**
   (`continue-on-error`) until its baseline is regenerated locally, and there is **no
   instrumented migration job**, because `app/schemas/` stops at v14 while the database is at
-  v24. Still run the build locally before pushing — CI is a backstop, not a substitute.
+  v25. Still run the build locally before pushing — CI is a backstop, not a substitute.
   After switching branches, prefer `clean` — stale Hilt/kapt stubs from another branch cause
   errors like "Could not find class file for '…Application'".
 
@@ -223,7 +223,7 @@ cd firestore-tests && npm test              # firestore.rules against the local 
 
 ```
 domain/    — models, repository interfaces, use cases, holidays, ReminderScheduler
-data/      — Room (v24 + migrations), Firestore/Google/AI clients, repository impls, sync
+data/      — Room (v25 + migrations), Firestore/Google clients, repository impls, sync
 presentation/ — Compose screens per feature + ViewModels + theme
 di/        — Hilt modules (Database, Firebase, Google, UseCase, Notification, …)
 ```
@@ -290,7 +290,7 @@ Data flow: UI → ViewModel → UseCase → Repository → Room (source of truth
     the conversation as `{uid: epochMillis}` maps — one write per event — and the ticks and
     unread badge are derived from them by `ChatReadState`, never stored per message.
     Message times are stored the same way: `Message.sentAtMillis`, epoch millis (Room
-    schema v13, since superseded — the database is at v24), not a naive `LocalDateTime`, so two
+    schema v13, since superseded — the database is at v25), not a naive `LocalDateTime`, so two
     parents in different time zones agree
     on what a mark means and on when a message was sent. The Firestore field keeps its name
     (`timestamp`) and the read path still accepts a legacy ISO string, so a co-parent on an
@@ -301,7 +301,25 @@ Data flow: UI → ViewModel → UseCase → Repository → Room (source of truth
     does not belong with those four**: it is not merely displayed, it decides which phone's
     schedule survives. See the custody entry in "Known issues" below before adding to this
     list.
-14. **`sharedWith` is computed at upload time and never recomputed for a row already marked
+14. **A delete is a tombstone, never a document removal** (CQ-3). `data/sync/Tombstone.kt` is
+    the one definition: the client writes `deletedAtMillis` (epoch millis) and `deletedBy` onto
+    the document with `update()` — never `set()`, which would replace the `createdByFirebaseUid`
+    and `sharedWith` the read rules are keyed on and leave a tombstone the co-parent may not
+    read. Room's `deletedAtMillis` on `events`/`expenses` (schema 25) is a **pending-tombstone
+    outbox**: hidden from every read query, retried on each sync, and hard-deleted only once the
+    remote write lands. Four things not to undo. **Do not reconcile by absence** — "delete what
+    is not in the snapshot" takes the whole calendar the first time `sharedWith` narrows at
+    unpair, a download window bounds the query (CQ-5), or a snapshot comes back partial.
+    **Do not decide a deletion by timestamp**: `updatedAt` is a naive `LocalDateTime` with
+    SEC-4's ordering defect, so a tombstone beats a concurrent edit by rule, deliberately —
+    an event that should not exist is visible and can be deleted again, an edit that loses is
+    gone. **Do not filter tombstones out of `getUnsyncedEvents`/`getUnsyncedExpenses`**, which
+    are the outbox. And **do not shorten the 90-day sweep** (`sweepDeletedDocuments`): it is
+    the deadline for a co-parent's phone to come back and collect the deletion, and sweeping
+    early reintroduces exactly the bug. `FirestoreEventDataSource.deleteEvent` still removes a
+    document outright and has exactly one legitimate caller — an event turned private has to
+    leave Firestore with no trace.
+15. **`sharedWith` is computed at upload time and never recomputed for a row already marked
     synced.** An event created while the account was unpaired is uploaded with an audience of
     one uid, and nothing revisits it — so it stays unreadable by a co-parent who arrives later.
     Pairing repaired this only for the *accepter*, and only by accident: `EventDao.reslotOwner`

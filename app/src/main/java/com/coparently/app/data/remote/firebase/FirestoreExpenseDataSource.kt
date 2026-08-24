@@ -1,6 +1,8 @@
 package com.coparently.app.data.remote.firebase
 
+import com.coparently.app.data.sync.Tombstone
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.FirebaseFirestoreException
 import com.google.firebase.firestore.Query
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -77,9 +79,40 @@ class FirestoreExpenseDataSource @Inject constructor(
     }
 
     /**
-     * Deletes an expense from Firestore.
+     * Marks an expense deleted, leaving the document in place so the co-parent can be told.
+     *
+     * Same shape and the same reasoning as [FirestoreEventDataSource.tombstoneEvent], including
+     * that a missing document is a success: there is no remote copy for anyone to be holding.
+     *
+     * One difference is worth naming. The `expenses` update rule is creator-only (an owner
+     * decision: a co-parent must not rewrite the other's recorded expense), so a co-parent's
+     * tombstone is refused here exactly as their hard delete was. That is unchanged behaviour,
+     * not a regression — what changes is that the *creator's* delete now reaches the co-parent's
+     * phone instead of only their own.
      */
-    suspend fun deleteExpense(expenseId: String) {
-        expensesCollection.document(expenseId).delete().await()
+    suspend fun tombstoneExpense(expenseId: String, deletedAtMillis: Long, deletedBy: String): Result<Unit> {
+        return try {
+            expensesCollection
+                .document(expenseId)
+                .update(Tombstone.fields(deletedAtMillis, deletedBy))
+                .await()
+            Result.success(Unit)
+        } catch (e: FirebaseFirestoreException) {
+            if (e.code == FirebaseFirestoreException.Code.NOT_FOUND) {
+                Result.success(Unit)
+            } else {
+                Result.failure(e)
+            }
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+            Result.failure(e)
+        }
     }
+
+    // `deleteExpense` — a bare `document().delete()` — was removed with CQ-3. It had exactly one
+    // caller, the delete path, and removing the document is what made a deletion undeliverable:
+    // there was nothing left for the co-parent's sync to read. `tombstoneExpense` replaced it,
+    // and the documents are removed for good by the `sweepDeletedDocuments` schedule once the
+    // retention window has passed. `FirestoreEventDataSource.deleteEvent` survives only because
+    // it still has a caller that is not a deletion — an event turned private has to leave
+    // Firestore with no trace at all.
 }

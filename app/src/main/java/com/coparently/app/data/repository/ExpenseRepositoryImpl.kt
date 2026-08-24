@@ -5,6 +5,7 @@ import com.coparently.app.data.local.dao.UserDao
 import com.coparently.app.data.local.entity.ExpenseEntity
 import com.coparently.app.data.remote.firebase.FirebaseAuthService
 import com.coparently.app.data.remote.firebase.FirestoreExpenseDataSource
+import com.coparently.app.data.sync.Tombstone
 import com.coparently.app.domain.activity.ActivityAnnouncement
 import com.coparently.app.domain.activity.ActivityAnnouncer
 import com.coparently.app.domain.activity.ActivityEntityType
@@ -63,7 +64,9 @@ class ExpenseRepositoryImpl @Inject constructor(
     }
 
     override suspend fun getExpenseById(id: String): Expense? {
-        return expenseDao.getExpenseById(id)?.toDomain()
+        // The DAO returns pending tombstones so the sync and delete paths can tell "deleted
+        // here" from "never existed". To a caller asking on a user's behalf it is simply gone.
+        return expenseDao.getExpenseById(id)?.takeIf { it.deletedAtMillis == null }?.toDomain()
     }
 
     override suspend fun getExpenseSummary(start: LocalDate, end: LocalDate): ExpenseSummary {
@@ -166,40 +169,45 @@ class ExpenseRepositoryImpl @Inject constructor(
         "createdAt" to expense.createdAt.format(dateTimeFormatter)
     )
 
+    /**
+     * Deletes an expense, in a way the co-parent can actually find out about (CQ-3).
+     *
+     * The row is **tombstoned** rather than removed — hidden from every query at once, kept in
+     * Room as an outbox entry until the deletion reaches Firestore. See
+     * [com.coparently.app.data.repository.EventRepositoryImpl.deleteEvent]; the reasoning is
+     * identical and so is the shape.
+     *
+     * The known gap this replaces was worse here than for events. The `expenses` delete rule
+     * admits only the creator, so a co-parent's delete removed the local row, was refused
+     * remotely, and the next sync pulled the expense back — a delete that undid itself in front
+     * of the person who asked for it. Tombstoning does not widen that rule (`update` is
+     * creator-only too, by an owner decision from the August 2026 walkthrough), so a co-parent's
+     * delete is still refused. What changes is that it now *stays* refused visibly — the
+     * tombstone is queued and retried rather than silently lost — and that the creator's own
+     * delete finally reaches the other phone.
+     */
     override suspend fun deleteExpense(expenseId: String) {
-        // Read before deleting: the announcement names the expense, and after the row is gone
-        // there is nothing left to name it with.
+        // Read before marking: the announcement names the expense, and a tombstoned row is
+        // invisible to every query that could name it afterwards.
         val deleted = expenseDao.getExpenseById(expenseId)?.toDomain()
-        expenseDao.deleteExpense(expenseId)
+        val deletedAtMillis = System.currentTimeMillis()
+        expenseDao.markDeleted(expenseId, deletedAtMillis)
         deleted?.let { announce(it, ActivityKind.EXPENSE_DELETED) }
 
-        val firebaseUser = firebaseAuthService.getCurrentUser()
-        if (firebaseUser != null) {
-            // Same guard as addExpense above, which the delete path never got: the row is
-            // already gone locally, and a rejected remote delete arrives from Firestore's
-            // write-rejection path and takes the whole app down if nothing catches it.
-            //
-            // KNOWN GAP (not a transient failure): the `expenses` delete rule admits only the
-            // creator, so a co-parent deleting a shared expense loses the local row while the
-            // remote document survives, and the next sync pulls it back.
-            //
-            // Widening that rule to `isPartnerOf` the way `update` does was tried on this
-            // branch and reverted after a device sweep reported PERMISSION_DENIED on the
-            // *creator's own* delete. That attribution has since been disproved: under the
-            // exact reverted ruleset the creator's delete succeeds for every shape the
-            // creator's `users` document can have, and the two rulesets differ only for the
-            // co-parent. See firestore-tests/rules/expenses-delete-incident.test.js.
-            //
-            // A denial here is real but comes from document state, not from the rule clause,
-            // and reproduces under the shipped rules too: `resource` is null when the remote
-            // document never landed (pushToFirestore swallows a failed create), and the
-            // ownership read errors on documents written before `createdByFirebaseUid` was
-            // stamped. Both raise exactly the log line the sweep recorded.
-            try {
-                firestoreExpenseDataSource.deleteExpense(expenseId)
-            } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
-                android.util.Log.w("ExpenseRepo", "Expense Firestore delete failed", e)
-            }
+        val firebaseUser = firebaseAuthService.getCurrentUser() ?: return
+        val tombstoned = firestoreExpenseDataSource.tombstoneExpense(
+            expenseId = expenseId,
+            deletedAtMillis = deletedAtMillis,
+            deletedBy = firebaseUser.uid
+        )
+        if (tombstoned.isSuccess) {
+            expenseDao.deleteExpense(expenseId)
+        } else {
+            android.util.Log.w(
+                "ExpenseRepo",
+                "Expense tombstone not written; the deletion stays queued for the next sync",
+                tombstoned.exceptionOrNull()
+            )
         }
     }
 
@@ -208,12 +216,31 @@ class ExpenseRepositoryImpl @Inject constructor(
         val partnerId = userDao.getUserById(firebaseUser.uid)?.partnerId
         val creatorUids = listOfNotNull(firebaseUser.uid, partnerId)
 
+        retryPendingDeletions(firebaseUser.uid)
+
         firestoreExpenseDataSource.getAllExpenses(creatorUids)
             .catch { e -> android.util.Log.w("ExpenseRepo", "Expense sync failed", e) }
             .collect { expenses ->
                 expenses.forEach { data ->
+                    val id = data["id"] as String
+
+                    // The co-parent deleted it. Applied before anything is parsed, and without
+                    // consulting any timestamp — see `SyncService.syncEvents` for why a
+                    // deletion wins outright rather than by comparison.
+                    if (Tombstone.isDeleted(data)) {
+                        expenseDao.deleteExpense(id)
+                        return@forEach
+                    }
+
+                    // The mirror image: this device deleted it and the tombstone has not been
+                    // written yet, so the document is still alive. Writing it back here would
+                    // undo the parent's own delete between two attempts to deliver it.
+                    if (expenseDao.getExpenseById(id)?.deletedAtMillis != null) {
+                        return@forEach
+                    }
+
                     val expense = Expense(
-                        id = data["id"] as String,
+                        id = id,
                         childId = (data["childId"] as? String)?.takeIf { it.isNotEmpty() },
                         title = data["title"] as String,
                         amount = (data["amount"] as Number).toDouble(),
@@ -232,6 +259,41 @@ class ExpenseRepositoryImpl @Inject constructor(
                     expenseDao.insertExpense(expense.toEntity())
                 }
             }
+    }
+
+    /**
+     * Re-attempts every deletion this device has not managed to write yet.
+     *
+     * Expenses have no general upload pass — `getUnsyncedExpenses()` exists but has never had a
+     * caller, because an add or an edit pushes to Firestore inline. Deletions cannot work that
+     * way: the inline push is exactly the one that fails when the phone is offline or the rule
+     * refuses, and a failure there used to be the end of it. This is the retry the delete path
+     * did not have.
+     *
+     * Deliberately scoped to tombstones rather than to everything `getUnsyncedExpenses()`
+     * returns. Uploading the rest would change what an unsynced expense means and could
+     * re-publish rows that were left unsynced on purpose; that is a separate question from
+     * whether a delete survives, and it is not answered here.
+     */
+    private suspend fun retryPendingDeletions(userId: String) {
+        val pending = expenseDao.getUnsyncedExpenses().filter { it.deletedAtMillis != null }
+        for (entity in pending) {
+            val deletedAtMillis = entity.deletedAtMillis ?: continue
+            val tombstoned = firestoreExpenseDataSource.tombstoneExpense(
+                expenseId = entity.id,
+                deletedAtMillis = deletedAtMillis,
+                deletedBy = entity.createdByFirebaseUid ?: userId
+            )
+            if (tombstoned.isSuccess) {
+                expenseDao.deleteExpense(entity.id)
+            } else {
+                android.util.Log.w(
+                    "ExpenseRepo",
+                    "Expense tombstone for ${entity.id} not written; it stays queued",
+                    tombstoned.exceptionOrNull()
+                )
+            }
+        }
     }
 
     /**
