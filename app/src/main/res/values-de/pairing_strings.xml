@@ -74,4 +74,7 @@
     <string name="pairing_trust_body">Gemeinsamer Kalender und Betreuungsplan, gemeinsame Ausgaben und Salden sowie der Chat. Private Termine verlassen Ihr Gerät nie. Sie können die Verbindung jederzeit trennen.</string>
     <string name="pairing_error_friend_invitation">Das ist eine Freundeseinladung. Öffne Einstellungen → Freund mit Kalenderzugriff.</string>
     <string name="pairing_error_not_friend_invitation">Das ist keine Freundeseinladung.</string>
+    <!-- Shown after an email invitation is created. Deliberately does not claim the email
+         arrived: the app cannot know that, and the code works either way. -->
+    <string name="pairing_email_invite_created">Einladung gesendet. Falls sie nicht ankommt, geben Sie den Code direkt weiter.</string>
 </resources>

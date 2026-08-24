@@ -44,6 +44,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -207,12 +208,15 @@ fun ChatScreen(
     }
 
     if (showTemplates) {
+        // The template body is a string resource, and the selection callback is not composable,
+        // so the context is captured here and the body resolved when a template is tapped.
+        val context = LocalContext.current
         MessageTemplatesBottomSheet(
             onTemplateSelected = { template ->
                 // A template prepares the message; it does not send it. Sending on tap put three
                 // identical placeholders-and-all messages into a real thread during the August
                 // 2026 baseline run, because the send was invisible and read as a missed tap.
-                composerText = template.content
+                composerText = context.getString(template.contentRes)
                 composerSeeds++
                 showTemplates = false
             },

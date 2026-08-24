@@ -366,6 +366,8 @@ fun CalendarScreen(
     // Resolved here: stringResource is composable and must not be called inside LaunchedEffect.
     val movedMessage = stringResource(R.string.calendar_event_moved)
     val undoMoveLabel = stringResource(R.string.calendar_undo)
+    val operationFailedMessage = stringResource(R.string.calendar_operation_failed)
+    val retryLabel = stringResource(R.string.calendar_retry)
     LaunchedEffect(uiState) {
         when (val state = uiState) {
             is EventUiState.OperationSuccess -> {
@@ -378,6 +380,26 @@ fun CalendarScreen(
                     if (result == SnackbarResult.ActionPerformed) {
                         eventViewModel.undoLastMove()
                     }
+                }
+            }
+            // The branch that was missing. `EventViewModel` raises `Error` from eleven places
+            // — create, delete, reschedule, resize, and every range query — and all of them
+            // landed in an empty `else`. So a parent dragged an event to a new time, the
+            // optimistic UI moved it, the write failed, and the next sync put it back, with
+            // nothing said. For this audience that is the worst available failure: they
+            // believe an arrangement is recorded when it is not.
+            //
+            // Retry re-collects the query from scratch. `EventViewModel.refresh()` is the
+            // same lever pull-to-refresh already used, which until now the user had to guess
+            // at, having never been told anything went wrong.
+            is EventUiState.Error -> {
+                val result = snackbarHostState.showSnackbar(
+                    message = operationFailedMessage,
+                    actionLabel = retryLabel,
+                    duration = SnackbarDuration.Long
+                )
+                if (result == SnackbarResult.ActionPerformed) {
+                    eventViewModel.refresh()
                 }
             }
             else -> {}

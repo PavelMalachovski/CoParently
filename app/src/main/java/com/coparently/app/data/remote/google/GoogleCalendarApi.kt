@@ -164,6 +164,16 @@ class GoogleCalendarApi @Inject constructor() {
  * This interface should be implemented to provide credentials.
  */
 interface CredentialProvider {
-    fun getCredential(): Credential?
+    /**
+     * The Google credential for this device, refreshing the access token if it has expired.
+     *
+     * `suspend` because obtaining one can perform a **network** refresh. It used to be a plain
+     * function whose implementation wrapped that refresh in `runBlocking`, and
+     * `CalendarSyncRepository` called it from `viewModelScope` — on the main thread — before
+     * entering its own `withContext(Dispatchers.IO)` a few lines later. Enabling Google
+     * Calendar sync on a slow connection therefore blocked the UI thread for the length of an
+     * OAuth round-trip.
+     */
+    suspend fun getCredential(): Credential?
 }
 

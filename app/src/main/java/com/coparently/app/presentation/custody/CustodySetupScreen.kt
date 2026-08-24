@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -77,6 +78,7 @@ import com.coparently.app.domain.model.CustodyModelType
 import com.coparently.app.presentation.common.ParentNames
 import com.coparently.app.presentation.common.rememberParentNames
 import com.coparently.app.presentation.theme.CoPlanlyColors
+import com.coparently.app.presentation.theme.ParentColors
 import com.coparently.app.presentation.theme.dimensions
 import java.time.Instant
 import java.time.LocalDate
@@ -342,17 +344,23 @@ fun CustodySetupScreen(
                                 Column(
                                     horizontalAlignment = Alignment.CenterHorizontally
                                 ) {
+                                    // `MomPink`/`DadBlue` are fill-only — `Color.kt` says so in
+                                    // as many words, and they measure 3.7:1-4.6:1, below AA.
+                                    // Here they were foreground text *over a 30% wash of the
+                                    // same hue*, at 8sp, on the one screen a Czech parent
+                                    // cannot skip. `ParentColors.text()` picks the theme-aware
+                                    // partner; the type scale's own smallest size is 11sp, so
+                                    // the override goes rather than being nudged.
                                     Text(
                                         text = stringResource(R.string.custody_week_abbrev, weekNumber),
                                         style = MaterialTheme.typography.labelSmall,
-                                        fontSize = 8.sp,
-                                        color = if (isMomDay) CoPlanlyColors.MomPink else CoPlanlyColors.DadBlue
+                                        color = ParentColors.text(if (isMomDay) "mom" else "dad")
                                     )
                                     Text(
                                         text = stringResource(R.string.custody_day_abbrev, dayInWeek),
                                         style = MaterialTheme.typography.labelMedium,
                                         fontWeight = FontWeight.Bold,
-                                        color = if (isMomDay) CoPlanlyColors.MomPink else CoPlanlyColors.DadBlue
+                                        color = ParentColors.text(if (isMomDay) "mom" else "dad")
                                     )
                                 }
                             }
@@ -454,7 +462,9 @@ fun CustodySetupScreen(
                             Box(
                                 modifier = Modifier
                                     .weight(1f)
-                                    .height(24.dp)
+                                    // `heightIn`, not `height`: a fixed box clips its own
+                                    // label as soon as the reader's font scale grows.
+                                    .heightIn(min = 24.dp)
                                     .background(
                                         color.copy(alpha = 0.7f),
                                         RoundedCornerShape(4.dp)
@@ -464,7 +474,6 @@ fun CustodySetupScreen(
                                 Text(
                                     text = date.dayOfMonth.toString(),
                                     style = MaterialTheme.typography.labelSmall,
-                                    fontSize = 9.sp,
                                     color = Color.White,
                                     textAlign = TextAlign.Center
                                 )

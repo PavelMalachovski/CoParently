@@ -151,10 +151,18 @@ class OnboardingViewModelTest {
     @Test
     fun `the profile write goes onto a freshly read row, so a stale pairing is never resurrected`() =
         runTest(dispatcher) {
+            // Let the wizard's own prefill read land first, against the row as it then was.
+            advanceUntilIdle()
+
             // The account unpairs while the wizard is open: the row this wizard loaded on init
             // said `partnerId = "bob"`, the row it is about to write onto says null.
-            coEvery { userRepository.getCurrentUser() } returns storedUser andThen
-                storedUser.copy(partnerId = null)
+            //
+            // Staged by *when* the stored row changes, not by an `andThen` sequence: the latter
+            // silently depends on the wizard making exactly one read before this one, so a
+            // second read added anywhere in `init` would hand the save the wrong element of the
+            // sequence and fail here, for a reason that has nothing to do with what this test
+            // is about.
+            coEvery { userRepository.getCurrentUser() } returns storedUser.copy(partnerId = null)
 
             viewModel.next()
             viewModel.updateName("Olya")

@@ -161,10 +161,19 @@ class ExpenseRepositoryImplTest {
         coVerify(exactly = 0) { firestoreExpenseDataSource.getAllExpenses(any()) }
     }
 
-    /** Puts [uid] in the auth service; the Room row is irrelevant to the write paths. */
+    /**
+     * Puts [uid] in the auth service, and answers the one Room read the write paths make.
+     *
+     * `addExpense` and `updateExpense` both call `announce()`, which resolves the sender's
+     * display name from `users/{uid}` — outside the try/catch that guards the Firestore write,
+     * so an unstubbed strict mock there fails the test rather than being swallowed. `null` is
+     * the honest answer: the row may not have synced down yet, and the announcement then names
+     * nobody. Which name it carries is `ActivityAnnouncerTest`'s subject, not this file's.
+     */
     private fun signIn(uid: String) {
         val firebaseUser = mockk<FirebaseUser> { every { this@mockk.uid } returns uid }
         every { firebaseAuthService.getCurrentUser() } returns firebaseUser
+        coEvery { userDao.getUserById(uid) } returns null
     }
 
     private fun expense() = Expense(

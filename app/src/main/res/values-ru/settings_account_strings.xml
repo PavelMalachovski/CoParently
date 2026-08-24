@@ -35,4 +35,17 @@
     <!-- Co-parent sync status line. %1$s = time of the last successful sync. -->
     <string name="settings_sync_idle">Всё актуально</string>
     <string name="settings_sync_last">Синхронизировано в %1$s</string>
+
+    <!-- Account deletion. Irreversible: the server erases the account and everything it
+         holds, and the device is wiped. The second dialog is deliberate, matching unpair. -->
+    <string name="settings_account_delete">Удалить аккаунт</string>
+    <string name="settings_account_delete_description">Стереть аккаунт и все его данные</string>
+    <string name="settings_account_delete_confirm_title">Удалить этот аккаунт?</string>
+    <string name="settings_account_delete_confirm_message">Исчезнет всё, что вы вносили: события, расходы, записи о ребёнке и вся переписка. У второго родителя останется только то, что он создал сам. Отменить это будет нельзя.</string>
+    <string name="settings_account_delete_final_title">Удалить безвозвратно?</string>
+    <string name="settings_account_delete_final_message">Обратного пути нет, копии не останется. Если вы хотите просто выйти на этом устройстве, используйте выход из аккаунта.</string>
+    <string name="settings_account_delete_final_yes">Удалить безвозвратно</string>
+    <string name="settings_account_delete_cancel">Оставить аккаунт</string>
+    <string name="settings_account_delete_progress">Удаляем ваш аккаунт…</string>
+    <string name="settings_account_delete_failed">Аккаунт не удалён. Попробуйте ещё раз.</string>
 </resources>

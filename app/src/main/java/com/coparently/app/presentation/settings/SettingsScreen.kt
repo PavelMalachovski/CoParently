@@ -23,10 +23,11 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.ChildCare
 import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.DeleteForever
+import androidx.compose.material.icons.filled.Diversity3
 import androidx.compose.material.icons.filled.EventAvailable
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.filled.Diversity3
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Language
@@ -48,11 +49,14 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -79,8 +83,8 @@ import com.coparently.app.presentation.common.SectionRow
 import com.coparently.app.presentation.common.SignedInAsRow
 import com.coparently.app.presentation.sync.GoogleCalendarSyncState
 import com.coparently.app.presentation.sync.SyncViewModel
-import kotlinx.coroutines.launch
 import java.time.format.DateTimeFormatter
+import kotlinx.coroutines.launch
 
 private val syncTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 
@@ -153,12 +157,31 @@ fun SettingsScreen(
     var showLanguagePicker by remember { mutableStateOf(false) }
     var showThemePicker by remember { mutableStateOf(false) }
     var showSignOutConfirm by remember { mutableStateOf(false) }
+    // Deletion asks twice, the same shape unpair uses: the first dialog says what is lost,
+    // the second says it is permanent. One tap on a red row must not be able to erase a
+    // family's history.
+    var showDeleteConfirm by remember { mutableStateOf(false) }
+    var showDeleteFinalConfirm by remember { mutableStateOf(false) }
     var googleExpanded by remember { mutableStateOf(false) }
     // AppCompat is the source of truth for the per-app language; selecting a new value
     // recreates the activity, so a plain remember is enough to keep the label fresh.
     var currentLanguage by remember { mutableStateOf(AppLanguage.current()) }
 
+    // Settings had no way to report a failure at all. Account deletion is the first action
+    // here that can fail in a way the user must know about — the account still exists and the
+    // attempt has to be repeated — so the screen grows a snackbar rather than letting the
+    // error message sit unread in the state.
+    val snackbarHostState = remember { SnackbarHostState() }
+    val deletionFailed = stringResource(R.string.settings_account_delete_failed)
+    LaunchedEffect(settingsUiState.errorMessage) {
+        if (settingsUiState.errorMessage != null) {
+            snackbarHostState.showSnackbar(deletionFailed)
+            settingsViewModel.clearMessages()
+        }
+    }
+
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.settings_title)) },
@@ -464,6 +487,24 @@ fun SettingsScreen(
                         titleColor = MaterialTheme.colorScheme.error,
                         onClick = { showSignOutConfirm = true }
                     )
+                    Divider()
+                    // Below sign-out on purpose: the two are neighbours in a user's mind and
+                    // only one of them is reversible, so the reversible one is reached first.
+                    // Google Play requires this path for any app that offers account creation.
+                    SectionRow(
+                        icon = Icons.Default.DeleteForever,
+                        iconTint = MaterialTheme.colorScheme.error,
+                        title = stringResource(R.string.settings_account_delete),
+                        titleColor = MaterialTheme.colorScheme.error,
+                        supporting = if (settingsUiState.isDeletingAccount) {
+                            stringResource(R.string.settings_account_delete_progress)
+                        } else {
+                            stringResource(R.string.settings_account_delete_description)
+                        },
+                        onClick = {
+                            if (!settingsUiState.isDeletingAccount) showDeleteConfirm = true
+                        }
+                    )
                 }
             }
 
@@ -486,6 +527,40 @@ fun SettingsScreen(
                 coroutineScope.launch { syncViewModel.signOut() }
                 authStateViewModel.signOut()
                 onSignOut?.invoke()
+            }
+        )
+    }
+
+    if (showDeleteConfirm) {
+        ConfirmationDialog(
+            title = stringResource(R.string.settings_account_delete_confirm_title),
+            message = stringResource(R.string.settings_account_delete_confirm_message),
+            confirmText = stringResource(R.string.settings_account_delete),
+            dismissText = stringResource(R.string.settings_account_delete_cancel),
+            isDestructive = true,
+            onDismiss = { showDeleteConfirm = false },
+            onConfirm = {
+                showDeleteConfirm = false
+                showDeleteFinalConfirm = true
+            }
+        )
+    }
+
+    if (showDeleteFinalConfirm) {
+        ConfirmationDialog(
+            title = stringResource(R.string.settings_account_delete_final_title),
+            message = stringResource(R.string.settings_account_delete_final_message),
+            confirmText = stringResource(R.string.settings_account_delete_final_yes),
+            dismissText = stringResource(R.string.settings_account_delete_cancel),
+            isDestructive = true,
+            onDismiss = { showDeleteFinalConfirm = false },
+            onConfirm = {
+                showDeleteFinalConfirm = false
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                // The server erases the account and this device is wiped; only then does the
+                // app leave the screen. On failure the account still exists and the row's
+                // error message says so, so the user can try again.
+                settingsViewModel.deleteAccount { onSignOut?.invoke() }
             }
         )
     }

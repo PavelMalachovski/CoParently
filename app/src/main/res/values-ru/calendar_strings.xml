@@ -75,4 +75,8 @@
     <string name="calendar_agenda_header_with_custody">%1$s · день родителя %2$s</string>
     <string name="calendar_agenda_empty">Ничего не запланировано.</string>
     <string name="calendar_agenda_time_range">%1$s–%2$s</string>
+    <!-- Shown when a calendar write or query fails. The calendar used to say nothing at
+         all, so a failed reschedule looked exactly like a successful one. -->
+    <string name="calendar_operation_failed">Не удалось сохранить изменение. Возможно, оно не дошло до второго родителя.</string>
+    <string name="calendar_retry">Повторить</string>
 </resources>

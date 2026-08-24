@@ -96,6 +96,7 @@ class CalendarViewModelCustodyChangeTest {
         val custodyModelRepository = mockk<CustodyModelRepository> {
             every { getActiveModel() } returns flowOf(null)
             every { observeShared() } returns sharedCustody
+            every { observeDayOverrides() } returns flowOf(emptyMap())
         }
         val parentsSource = mockk<ParentsSource> {
             every { observe() } returns flowOf(
@@ -103,10 +104,11 @@ class CalendarViewModelCustodyChangeTest {
             )
         }
         val viewModel = CalendarViewModel(
-            custodyScheduleDao,
-            custodyModelRepository,
-            encryptedPreferences,
-            parentsSource
+            custodyScheduleDao = custodyScheduleDao,
+            custodyModelRepository = custodyModelRepository,
+            encryptedPreferences = encryptedPreferences,
+            friendRepository = noCalendarFriends(),
+            parentsSource = parentsSource
         )
         backgroundScope.launch { viewModel.custodyChangeAnnouncement.collect {} }
         return viewModel
@@ -122,15 +124,17 @@ class CalendarViewModelCustodyChangeTest {
         val custodyModelRepository = mockk<CustodyModelRepository> {
             every { getActiveModel() } returns flowOf(null)
             every { observeShared() } returns sharedCustody
+            every { observeDayOverrides() } returns flowOf(emptyMap())
         }
         val parentsSource = mockk<ParentsSource> {
             every { observe() } returns parentsFlow
         }
         val viewModel = CalendarViewModel(
-            custodyScheduleDao,
-            custodyModelRepository,
-            encryptedPreferences,
-            parentsSource
+            custodyScheduleDao = custodyScheduleDao,
+            custodyModelRepository = custodyModelRepository,
+            encryptedPreferences = encryptedPreferences,
+            friendRepository = noCalendarFriends(),
+            parentsSource = parentsSource
         )
         backgroundScope.launch { viewModel.custodyChangeAnnouncement.collect {} }
         return viewModel

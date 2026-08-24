@@ -74,4 +74,7 @@
     <string name="pairing_trust_body">Общий календарь и график опеки, общие расходы и балансы, а также чат. Личные события никогда не покидают ваше устройство. Связь можно разорвать в любой момент.</string>
     <string name="pairing_error_friend_invitation">Это приглашение для друга. Откройте «Настройки» → «Друг с доступом к календарю».</string>
     <string name="pairing_error_not_friend_invitation">Это не приглашение для друга.</string>
+    <!-- Shown after an email invitation is created. Deliberately does not claim the email
+         arrived: the app cannot know that, and the code works either way. -->
+    <string name="pairing_email_invite_created">Приглашение отправлено. Если письмо не придёт — передайте код напрямую.</string>
 </resources>

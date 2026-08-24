@@ -49,6 +49,7 @@ class CalendarViewModelTest {
         custodyModelRepository = mockk {
             every { getActiveModel() } returns flowOf(null)
             every { observeShared() } returns flowOf(null)
+            every { observeDayOverrides() } returns flowOf(emptyMap())
         }
         encryptedPreferences = mockk {
             every { getString(any(), any()) } returns null
@@ -58,10 +59,11 @@ class CalendarViewModelTest {
             every { putBoolean(any(), any()) } just Runs
         }
         viewModel = CalendarViewModel(
-            custodyScheduleDao,
-            custodyModelRepository,
-            encryptedPreferences,
-            testParentsSource()
+            custodyScheduleDao = custodyScheduleDao,
+            custodyModelRepository = custodyModelRepository,
+            encryptedPreferences = encryptedPreferences,
+            friendRepository = noCalendarFriends(),
+            parentsSource = testParentsSource()
         )
     }
 

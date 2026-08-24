@@ -14,7 +14,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.coparently.app.R
 import com.coparently.app.domain.model.Medication
 
 /**
@@ -89,9 +91,9 @@ fun MedicationEditor(
                 onClick = { isAddingNew = true },
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Icon(Icons.Default.Add, contentDescription = "Add")
+                Icon(Icons.Default.Add, contentDescription = stringResource(R.string.childinfo_add))
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Add Medication")
+                Text(stringResource(R.string.childinfo_add_medication))
             }
         }
     }
@@ -122,13 +124,18 @@ private fun MedicationCard(
                     style = MaterialTheme.typography.titleSmall
                 )
                 Text(
-                    text = "${medication.dosage} - ${medication.frequency}",
+                    text = stringResource(
+                        R.string.childinfo_medication_summary,
+                        medication.dosage,
+                        medication.frequency
+                    ),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                if (!medication.notes.isNullOrBlank()) {
+                val notes = medication.notes
+                if (!notes.isNullOrBlank()) {
                     Text(
-                        text = medication.notes,
+                        text = notes,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -137,12 +144,12 @@ private fun MedicationCard(
 
             Row {
                 IconButton(onClick = onEdit) {
-                    Icon(Icons.Default.Edit, contentDescription = "Edit")
+                    Icon(Icons.Default.Edit, contentDescription = stringResource(R.string.childinfo_edit))
                 }
                 IconButton(onClick = onDelete) {
                     Icon(
                         Icons.Default.Delete,
-                        contentDescription = "Delete",
+                        contentDescription = stringResource(R.string.childinfo_delete),
                         tint = MaterialTheme.colorScheme.error
                     )
                 }
@@ -178,14 +185,18 @@ private fun MedicationForm(
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Text(
-                text = if (medication == null) "New Medication" else "Edit Medication",
+                text = if (medication == null) {
+                    stringResource(R.string.childinfo_new_medication)
+                } else {
+                    stringResource(R.string.childinfo_edit_medication)
+                },
                 style = MaterialTheme.typography.titleSmall
             )
 
             OutlinedTextField(
                 value = name,
                 onValueChange = { name = it },
-                label = { Text("Medication Name") },
+                label = { Text(stringResource(R.string.childinfo_medication_name_label)) },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true
             )
@@ -193,7 +204,7 @@ private fun MedicationForm(
             OutlinedTextField(
                 value = dosage,
                 onValueChange = { dosage = it },
-                label = { Text("Dosage (e.g., 10mg)") },
+                label = { Text(stringResource(R.string.childinfo_dosage_label)) },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true
             )
@@ -201,7 +212,7 @@ private fun MedicationForm(
             OutlinedTextField(
                 value = frequency,
                 onValueChange = { frequency = it },
-                label = { Text("Frequency (e.g., 2 times daily)") },
+                label = { Text(stringResource(R.string.childinfo_frequency_label)) },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true
             )
@@ -209,7 +220,7 @@ private fun MedicationForm(
             OutlinedTextField(
                 value = notes,
                 onValueChange = { notes = it },
-                label = { Text("Notes (optional)") },
+                label = { Text(stringResource(R.string.childinfo_notes_optional_label)) },
                 modifier = Modifier.fillMaxWidth(),
                 minLines = 2,
                 maxLines = 3
@@ -221,7 +232,7 @@ private fun MedicationForm(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 TextButton(onClick = onCancel) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.childinfo_cancel))
                 }
                 Spacer(modifier = Modifier.width(8.dp))
                 Button(
@@ -239,7 +250,7 @@ private fun MedicationForm(
                     },
                     enabled = name.isNotBlank() && dosage.isNotBlank() && frequency.isNotBlank()
                 ) {
-                    Text("Save")
+                    Text(stringResource(R.string.childinfo_save))
                 }
             }
         }

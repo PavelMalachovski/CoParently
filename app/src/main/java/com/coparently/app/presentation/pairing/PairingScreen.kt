@@ -138,6 +138,9 @@ fun PairingScreen(
 
     PairingSideEffects(viewModel, state, prefilledCode, onCustodyConflict)
     ActionErrorSnackbar(form.actionErrorRes, snackbarHostState, context, viewModel::consumeActionError)
+    // Same one-shot shape as the error above: sending an email invitation reported
+    // nothing at all before, so a delivered and an undelivered invitation looked alike.
+    ActionErrorSnackbar(form.actionInfoRes, snackbarHostState, context, viewModel::consumeActionInfo)
 
     Scaffold(
         topBar = { PairingTopBar(onNavigateBack) },

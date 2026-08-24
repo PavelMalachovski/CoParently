@@ -328,92 +328,234 @@ exports.onChildInfoUpdated = functions.firestore
  * Cloud Function for sending email invitations.
  * Triggered when a new invitation is created in Firestore.
  */
+/**
+ * Delivery outcomes recorded on an invitation. Deliberately **not** the invitation's `status`.
+ *
+ * The previous implementation wrote `status: 'failed'` when delivery threw — and `status` is
+ * what every redemption path gates on (`invite.status !== 'pending'` refuses in all three
+ * callables, and the rules only allow a `pending` invitation to be cancelled or rejected). So
+ * a bounced email permanently destroyed a perfectly good invite code, which the inviter could
+ * still read off their own screen and hand over in person. Delivery is a separate fact from
+ * redeemability, and it now lives in its own field.
+ *
+ * @enum {string}
+ */
+const EmailDelivery = {
+  SENT: 'sent',
+  FAILED: 'failed',
+  NOT_CONFIGURED: 'not_configured',
+  /** No address to deliver to: a code, QR or share-link invitation. */
+  NOT_APPLICABLE: 'not_applicable',
+};
+
+exports.EmailDelivery = EmailDelivery;
+
+/**
+ * The configured mail provider, or null when none is set up.
+ *
+ * Read fresh on every call rather than cached at module load, so tests can set it per-case —
+ * the same reason `backfillAdminUids` does. Populated at deploy time from `functions/.env`.
+ *
+ * @return {?{apiKey: string, from: string, fromName: string}} The provider, or null.
+ */
+function emailProviderConfig() {
+  const apiKey = process.env.SENDGRID_API_KEY || '';
+  const from = process.env.INVITE_FROM_EMAIL || '';
+  if (!apiKey || !from) {
+    return null;
+  }
+  return {apiKey, from, fromName: process.env.INVITE_FROM_NAME || 'CoPlanly'};
+}
+
+exports.emailProviderConfig = emailProviderConfig;
+
+/**
+ * Posts one message to SendGrid's v3 API.
+ *
+ * Written against `https` directly rather than pulling in `@sendgrid/mail`: this is a single
+ * JSON POST, and a dependency added for it would be one more thing to keep patched in a
+ * function that runs on every invitation. Swapping providers means replacing this one
+ * function — everything above it is provider-agnostic.
+ *
+ * @param {{apiKey: string, from: string, fromName: string}} config The provider.
+ * @param {{to: string, subject: string, html: string, text: string}} message The email.
+ * @return {Promise<void>} Resolves when the provider accepts the message.
+ */
+function sendViaSendGrid(config, message) {
+  const https = require('https');
+  const payload = JSON.stringify({
+    personalizations: [{to: [{email: message.to}]}],
+    from: {email: config.from, name: config.fromName},
+    subject: message.subject,
+    content: [
+      {type: 'text/plain', value: message.text},
+      {type: 'text/html', value: message.html},
+    ],
+  });
+
+  return new Promise((resolve, reject) => {
+    const request = https.request({
+      hostname: 'api.sendgrid.com',
+      path: '/v3/mail/send',
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${config.apiKey}`,
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(payload),
+      },
+    }, (response) => {
+      // SendGrid answers 202 with an empty body on success. Anything else is drained and
+      // reported, so the failure recorded on the invitation says what the provider said.
+      const chunks = [];
+      response.on('data', (chunk) => chunks.push(chunk));
+      response.on('end', () => {
+        if (response.statusCode >= 200 && response.statusCode < 300) {
+          resolve();
+        } else {
+          reject(new Error(
+              `SendGrid responded ${response.statusCode}: ${Buffer.concat(chunks)}`));
+        }
+      });
+    });
+    request.on('error', reject);
+    request.write(payload);
+    request.end();
+  });
+}
+
+exports.sendViaSendGrid = sendViaSendGrid;
+
+/**
+ * The invitation email, in both parts.
+ *
+ * Carries the **code** as well as the link. A deep link only opens the app on a device that
+ * has it installed, and the recipient of a co-parent invitation frequently does not yet — the
+ * code is what they can type in after installing, and it is what the inviter can also read out
+ * over the phone. A message that omitted it would strand exactly the recipient it is for.
+ *
+ * @param {string} senderName The inviting parent's display name.
+ * @param {!Object} invite The invitation document.
+ * @return {{to: string, subject: string, html: string, text: string}} The email.
+ */
+function invitationEmail(senderName, invite) {
+  const who = senderName || 'A co-parent';
+  const code = invite.code || '';
+  const subject = `${who} invited you to CoPlanly`;
+
+  const text = [
+    `${who} has invited you to share a calendar on CoPlanly.`,
+    '',
+    `Your invite code: ${code}`,
+    '',
+    'Install CoPlanly, sign in, and enter the code on the pairing screen.',
+    'The code expires in 7 days.',
+    '',
+    'If you were not expecting this, you can ignore this email.',
+  ].join('\n');
+
+  const html = `
+    <div style="font-family: -apple-system, Segoe UI, Roboto, sans-serif;
+                max-width: 560px; margin: 0 auto; color: #14171F;">
+      <h1 style="font-size: 20px; margin: 0 0 16px;">${who} invited you to CoPlanly</h1>
+      <p style="margin: 0 0 16px; line-height: 1.6;">
+        CoPlanly is a shared calendar for parents raising a child in two homes.
+      </p>
+      <p style="margin: 0 0 8px; line-height: 1.6;">Your invite code:</p>
+      <p style="font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 28px;
+                letter-spacing: 4px; margin: 0 0 24px;">${code}</p>
+      <p style="margin: 0 0 16px; line-height: 1.6;">
+        Install CoPlanly, sign in, and enter the code on the pairing screen.
+        The code expires in 7 days.
+      </p>
+      <hr style="border: none; border-top: 1px solid #E7EAF1; margin: 24px 0;">
+      <p style="color: #545B6D; font-size: 13px; line-height: 1.5;">
+        If you were not expecting this, you can ignore this email.
+      </p>
+    </div>
+  `;
+
+  return {to: invite.toEmail, subject, html, text};
+}
+
+exports.invitationEmail = invitationEmail;
+
+/**
+ * Delivers an invitation email and records what happened on the invitation.
+ *
+ * **This used to send nothing at all.** It built the message, wrote it to `console.log`, and
+ * returned — under a `// TODO: Replace with actual email sending service`. The client's
+ * "Invite by email" button therefore produced an invitation the recipient was never told
+ * about, while the inviter saw the field clear as though it had worked. For a product that is
+ * worth nothing until the *other* parent installs it, that was the growth path, dead.
+ *
+ * Every outcome is recorded in `emailDelivery`, including the one where no provider is
+ * configured — a deployment without `SENDGRID_API_KEY` should be visibly unconfigured rather
+ * than quietly silent, which is precisely how the old behaviour survived so long.
+ *
+ * A failure here never throws: an `onCreate` trigger retries an uncaught rejection
+ * indefinitely, and a rejected address will be rejected on every retry. The invitation itself
+ * is untouched — see [EmailDelivery].
+ *
+ * @param {FirebaseFirestore.Firestore} db Firestore instance.
+ * @param {FirebaseFirestore.DocumentReference} inviteRef The invitation.
+ * @param {!Object} invite The invitation document.
+ * @param {function(!Object): !Promise<void>} send Delivers one message.
+ * @return {Promise<string>} The recorded [EmailDelivery] outcome.
+ */
+async function deliverInvitationEmailImpl(db, inviteRef, invite, send) {
+  const record = async (outcome, extra) => {
+    await inviteRef.update(Object.assign({
+      emailDelivery: outcome,
+      emailDeliveryAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, extra || {}));
+    return outcome;
+  };
+
+  // Code, QR and share-link invitations carry no address. They are the majority, and this
+  // trigger fires for all of them.
+  if (!invite.toEmail) {
+    return record(EmailDelivery.NOT_APPLICABLE);
+  }
+
+  const senderSnap = await db.collection('users').doc(invite.fromUserId).get();
+  const senderName = senderSnap.exists && senderSnap.data() ? senderSnap.data().name : '';
+
+  try {
+    await send(invitationEmail(senderName, invite));
+    return record(EmailDelivery.SENT);
+  } catch (err) {
+    console.error(`Invitation email to ${invite.toEmail} was not delivered`, err);
+    return record(EmailDelivery.FAILED, {emailDeliveryError: String(err.message || err)});
+  }
+}
+
+exports.deliverInvitationEmailImpl = deliverInvitationEmailImpl;
+
+/**
+ * Sends the invitation email when an invitation is created.
+ *
+ * See [deliverInvitationEmailImpl] for what is recorded and why nothing here throws.
+ */
 exports.sendEmailInvitation = functions.firestore
     .document('invitations/{invitationId}')
-    .onCreate(async (snap, context) => {
-      const invitation = snap.data();
-      const invitationId = context.params.invitationId;
-
-      console.log(`Processing email invitation ${invitationId} to ${invitation.toEmail}`);
-
-      try {
-        // Get sender's information
-        const senderDoc = await admin.firestore()
-            .collection('users')
-            .doc(invitation.fromUserId)
-            .get();
-
-        if (!senderDoc.exists) {
-          console.error('Sender not found for invitation:', invitationId);
-          return null;
-        }
-
-        const senderData = senderDoc.data();
-
-        // Create invitation acceptance URL
-        const acceptUrl = `https://coparently.app/pair?invitation=${invitationId}`;
-
-        // Email content (in production, use a proper email service like SendGrid)
-        const emailContent = {
-          to: invitation.toEmail,
-          subject: 'Co-Parent Invitation from CoParently',
-          html: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-              <h1 style="color: #4CAF50;">Co-Parent Invitation</h1>
-              <p>Hello,</p>
-              <p><strong>${senderData.name}</strong> has invited you to connect as co-parents on CoParently!</p>
-              <p>CoParently helps co-parents coordinate childcare schedules, share information, and stay organized.</p>
-
-              <div style="text-align: center; margin: 30px 0;">
-                <a href="${acceptUrl}"
-                   style="background-color: #4CAF50; color: white; padding: 12px 24px;
-                          text-decoration: none; border-radius: 4px; display: inline-block;">
-                  Accept Invitation
-                </a>
-              </div>
-
-              <p>If the button doesn't work, copy and paste this link into your browser:</p>
-              <p style="word-break: break-all; color: #666;">${acceptUrl}</p>
-
-              <p>This invitation will expire in 7 days.</p>
-              <p>If you didn't expect this invitation, you can safely ignore this email.</p>
-
-              <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
-              <p style="color: #666; font-size: 12px;">
-                CoParently - Making co-parenting easier
-              </p>
-            </div>
-          `,
-        };
-
-        // In production, integrate with email service (SendGrid, Mailgun, etc.)
-        // For now, we'll log the email content
-        console.log('Email invitation prepared:', {
-          to: emailContent.to,
-          subject: emailContent.subject,
-          acceptUrl: acceptUrl,
-        });
-
-        // TODO: Replace with actual email sending service
-        // Example with SendGrid:
-        // const sgMail = require('@sendgrid/mail');
-        // sgMail.setApiKey(process.env.SENDGRID_API_KEY);
-        // await sgMail.send(emailContent);
-
-        console.log(`Email invitation sent to ${invitation.toEmail}`);
-        return null;
-      } catch (error) {
-        console.error('Error sending email invitation:', error);
-
-        // Mark invitation as failed
+    .onCreate(async (snap) => {
+      const config = emailProviderConfig();
+      if (!config) {
+        console.warn(
+            'No mail provider configured (SENDGRID_API_KEY / INVITE_FROM_EMAIL); ' +
+            'email invitations are not being delivered.');
         await snap.ref.update({
-          status: 'failed',
-          error: error.message,
-          sentAt: admin.firestore.FieldValue.serverTimestamp(),
+          emailDelivery: snap.data().toEmail ?
+            EmailDelivery.NOT_CONFIGURED : EmailDelivery.NOT_APPLICABLE,
+          emailDeliveryAt: admin.firestore.FieldValue.serverTimestamp(),
         });
-
-        throw error;
+        return null;
       }
+
+      await deliverInvitationEmailImpl(
+          admin.firestore(), snap.ref, snap.data(),
+          (message) => sendViaSendGrid(config, message));
+      return null;
     });
 
 /**
@@ -1802,4 +1944,240 @@ exports.onChatMessageCreated = functions.firestore
     .onCreate(async (snap) => {
       await notifyOfChatMessage(admin.firestore(), snap.data());
       return null;
+    });
+
+/** Firestore caps a batched write at 500 operations; stay clear of the edge. */
+const ACCOUNT_DELETE_BATCH_LIMIT = 400;
+
+/**
+ * Collections holding documents stamped with their author's uid in `createdByFirebaseUid`.
+ *
+ * Everything here is deleted outright when that author erases their account: it is content
+ * they entered, and this app has no notion of transferring ownership of a record to the other
+ * parent. See [deleteAccountDataImpl] for what that costs the co-parent and why it is still
+ * the right default.
+ */
+const AUTHORED_COLLECTIONS = ['events', 'child_info', 'pets', 'expenses', 'budgets'];
+
+exports.AUTHORED_COLLECTIONS = AUTHORED_COLLECTIONS;
+
+/**
+ * Deletes every document a query returns, in batches below the write cap.
+ *
+ * @param {FirebaseFirestore.Firestore} db Firestore instance.
+ * @param {FirebaseFirestore.Query} query The documents to remove.
+ * @return {Promise<number>} How many documents were deleted.
+ */
+async function deleteQueryInBatches(db, query) {
+  const snap = await query.get();
+  let batch = db.batch();
+  let pending = 0;
+  let deleted = 0;
+
+  for (const doc of snap.docs) {
+    batch.delete(doc.ref);
+    pending++;
+    deleted++;
+    if (pending === ACCOUNT_DELETE_BATCH_LIMIT) {
+      await batch.commit();
+      batch = db.batch();
+      pending = 0;
+    }
+  }
+  if (pending > 0) {
+    await batch.commit();
+  }
+  return deleted;
+}
+
+exports.deleteQueryInBatches = deleteQueryInBatches;
+
+/**
+ * Removes [uid] from the `sharedWith` array of documents somebody else created.
+ *
+ * The counterpart to deleting the user's own records: a document another parent authored is
+ * *their* data and stays, but the departing account must not remain in its audience. Documents
+ * the user created are skipped here — they are deleted wholesale instead, and issuing both a
+ * narrow and a delete for one document would be two writes for one outcome.
+ *
+ * @param {FirebaseFirestore.Firestore} db Firestore instance.
+ * @param {string} uid The departing account.
+ * @return {Promise<number>} How many documents were narrowed.
+ */
+async function scrubFromAudiences(db, uid) {
+  let narrowed = 0;
+
+  for (const collection of SHARED_AUDIENCE_COLLECTIONS) {
+    const snap = await db.collection(collection)
+        .where('sharedWith', 'array-contains', uid)
+        .get();
+
+    let batch = db.batch();
+    let pending = 0;
+
+    for (const doc of snap.docs) {
+      if (doc.data().createdByFirebaseUid === uid) {
+        continue;
+      }
+      batch.update(doc.ref, {
+        sharedWith: admin.firestore.FieldValue.arrayRemove(uid),
+      });
+      pending++;
+      narrowed++;
+      if (pending === ACCOUNT_DELETE_BATCH_LIMIT) {
+        await batch.commit();
+        batch = db.batch();
+        pending = 0;
+      }
+    }
+    if (pending > 0) {
+      await batch.commit();
+    }
+  }
+
+  return narrowed;
+}
+
+exports.scrubFromAudiences = scrubFromAudiences;
+
+/**
+ * Erases everything an account holds, and returns a per-collection tally.
+ *
+ * **Why this exists at all.** `FirebaseAuthService.deleteCurrentUser()` on the client removes
+ * the Auth user and nothing else, so every event, every message, and a child's whole medical
+ * profile stayed in Firestore under a uid nobody could sign in as — unreachable, unerasable,
+ * and still there. Google Play requires an in-app deletion path for any app offering account
+ * creation, and GDPR Art. 17 requires the data to actually go.
+ *
+ * **What is deleted, and the decision behind it.** Documents the user *authored* go
+ * ([AUTHORED_COLLECTIONS]); documents somebody else authored stay, with the departing uid
+ * scrubbed from their `sharedWith`. That is the honest reading of erasure — but it is worth
+ * being plain about the cost, because it is not small: **the co-parent loses the events,
+ * expenses and child records this parent created.** The alternative — transferring authorship
+ * to the co-parent — keeps a shared calendar intact but means an erasure request leaves the
+ * requester's entries in somebody else's account, which is the thing erasure is supposed to
+ * prevent. Neither is free. This picks the one the regulation asks for, and the client warns
+ * the user before calling it.
+ *
+ * Chat is deleted whole. A 1:1 thread whose second participant no longer exists has no reader
+ * the app can serve, and half a conversation is worse than none: the surviving parent would
+ * read their own messages answering nothing.
+ *
+ * **Order matters.** The pairing is torn down first, through the existing
+ * [unpairCoParentImpl], so the co-parent's `partnerId` is cleared and the audience sweep that
+ * unpair already performs runs while both accounts still exist. The Auth user is deleted
+ * **last**, by the callable rather than here: while it exists, a failed run can simply be
+ * retried, and a partial deletion leaves an account the user can still sign into and try
+ * again. Deleting the credential first would strand whatever remained.
+ *
+ * Takes `db` as a parameter for the reason every other `*Impl` in this file does: it is the
+ * only way to exercise the batching and the ordering without a live Firestore.
+ *
+ * @param {FirebaseFirestore.Firestore} db Firestore instance.
+ * @param {string} uid The account being erased.
+ * @return {Promise<!Object>} Counts per collection, plus `unpairedFrom`.
+ */
+async function deleteAccountDataImpl(db, uid) {
+  const removed = {};
+
+  // Tear the co-parent link down first, while both accounts still exist. This also runs the
+  // shared-audience revocation unpair already owns, so the ex-partner is out of this user's
+  // documents before those documents are removed.
+  let unpairedFrom = null;
+  try {
+    const unpair = await unpairCoParentImpl(db, uid);
+    unpairedFrom = unpair.unpairedFrom;
+  } catch (err) {
+    // An account with no partner, or a sweep that could not finish, must not stop an erasure
+    // request. The deletions below remove the same documents the sweep would have narrowed.
+    console.error(`Unpair during account deletion failed for ${uid}`, err);
+  }
+
+  for (const collection of AUTHORED_COLLECTIONS) {
+    removed[collection] = await deleteQueryInBatches(
+        db, db.collection(collection).where('createdByFirebaseUid', '==', uid));
+  }
+
+  removed.sharedWithScrubbed = await scrubFromAudiences(db, uid);
+
+  // Change requests name their two parties directly rather than through an audience array.
+  removed.change_requests =
+    await deleteQueryInBatches(db, db.collection('change_requests').where('requestedBy', '==', uid)) +
+    await deleteQueryInBatches(db, db.collection('change_requests').where('requestedTo', '==', uid));
+
+  // Conversations and their messages, whole — see the block comment above.
+  const conversations = await db.collection('conversations')
+      .where('participants', 'array-contains', uid)
+      .get();
+  removed.messages = 0;
+  for (const conversation of conversations.docs) {
+    removed.messages += await deleteQueryInBatches(
+        db, db.collection('messages').where('conversationId', '==', conversation.id));
+  }
+  removed.conversations = await deleteQueryInBatches(
+      db, db.collection('conversations').where('participants', 'array-contains', uid));
+
+  removed.custody_models = await deleteQueryInBatches(
+      db, db.collection('custody_models').where('participants', 'array-contains', uid));
+
+  // Both directions of the calendar-friend relationship: the grant this user holds over
+  // somebody's family, and the grants their own family handed out.
+  removed.calendar_friends = await deleteQueryInBatches(
+      db, db.collection('calendar_friends').where('familyParents', 'array-contains', uid));
+  await db.collection('calendar_friends').doc(uid).delete();
+  await db.collection('friend_profiles').doc(uid).delete();
+
+  removed.invitations = await deleteQueryInBatches(
+      db, db.collection('invitations').where('fromUserId', '==', uid));
+
+  // Queued pushes addressed to an account that is going away would otherwise be delivered to
+  // whatever device still holds its FCM token.
+  removed.notification_queue = await deleteQueryInBatches(
+      db, db.collection('notification_queue').where('targetUserId', '==', uid));
+
+  // The profile last: while it exists, `isPartnerOf` and the rules keyed on it still resolve,
+  // which keeps the deletions above evaluable if any of them are ever moved behind rules.
+  await db.collection('users').doc(uid).delete();
+
+  return Object.assign({unpairedFrom}, removed);
+}
+
+exports.deleteAccountDataImpl = deleteAccountDataImpl;
+
+/**
+ * Erases the caller's account and everything it holds.
+ *
+ * Deliberately takes no arguments: an account may only ever delete itself. The client is
+ * responsible for confirming the decision — see the warning it must show, in
+ * [deleteAccountDataImpl]'s note on what the co-parent loses.
+ *
+ * The Auth user goes last and only if the data deletion returned cleanly, so a failure leaves
+ * an account the user can sign into and retry rather than an orphaned pile of documents.
+ *
+ * 540 seconds, matching `backfillParentSlots`: the work is bounded by one family's history,
+ * but that history has no cap and the default 60 seconds is not obviously enough for an
+ * account of several years.
+ *
+ * @return {Promise<!Object>} What was removed, for the client to log or show.
+ */
+exports.deleteAccount = functions.runWith({timeoutSeconds: 540}).https.onCall(
+    async (data, context) => {
+      if (!context.auth) {
+        throw new functions.https.HttpsError('unauthenticated', 'Sign in first');
+      }
+      const uid = context.auth.uid;
+
+      const removed = await deleteAccountDataImpl(admin.firestore(), uid);
+
+      try {
+        await admin.auth().deleteUser(uid);
+      } catch (err) {
+        console.error(`Auth user ${uid} could not be deleted after its data was`, err);
+        throw new functions.https.HttpsError(
+            'internal',
+            'Your data was deleted, but the account itself could not be removed. Please try again.',
+            {reason: 'auth-delete-failed'});
+      }
+
+      return removed;
     });

@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.coparently.app.data.analytics.AnalyticsManager
 import com.coparently.app.data.remote.firebase.FcmService
+import com.coparently.app.data.session.AccountDeletionService
 import com.coparently.app.data.session.SignedInAccountSource
 import com.coparently.app.domain.model.AccountSummary
 import com.coparently.app.domain.money.SupportedCurrency
@@ -28,6 +29,7 @@ import javax.inject.Inject
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val fcmService: FcmService,
+    private val accountDeletionService: AccountDeletionService,
     private val userRepository: UserRepository,
     private val preferencesRepository: PreferencesRepository,
     private val analyticsManager: AnalyticsManager,
@@ -232,6 +234,38 @@ class SettingsViewModel @Inject constructor(
         _operationState.value = UiState.Idle
     }
 
+    /**
+     * Erases the account and everything it holds, then wipes this device.
+     *
+     * Irreversible, and the screen says so before calling this — see the confirmation in
+     * `SettingsScreen`. [onDeleted] runs only on success and is where the caller leaves the
+     * screen; on failure the account still exists and the user can try again, which is why
+     * the server deletes the Auth user last.
+     *
+     * @param onDeleted Invoked once the account is gone and local data is cleared.
+     */
+    fun deleteAccount(onDeleted: () -> Unit) {
+        if (_settingsState.value.isDeletingAccount) return
+        _settingsState.value = _settingsState.value.copy(
+            isDeletingAccount = true,
+            errorMessage = null
+        )
+        viewModelScope.launch {
+            accountDeletionService.deleteAccount().fold(
+                onSuccess = {
+                    _settingsState.value = _settingsState.value.copy(isDeletingAccount = false)
+                    onDeleted()
+                },
+                onFailure = { error ->
+                    _settingsState.value = _settingsState.value.copy(
+                        isDeletingAccount = false,
+                        errorMessage = error.message
+                    )
+                }
+            )
+        }
+    }
+
     private companion object {
         /** Keeps the account subscription alive across a configuration change. */
         const val ACCOUNT_STOP_TIMEOUT_MS = 5_000L
@@ -256,6 +290,14 @@ data class SettingsUiState(
     val partnerId: String? = null,
     val isLoading: Boolean = true,
     val successMessage: String? = null,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    /**
+     * True while [SettingsViewModel.deleteAccount] is in flight.
+     *
+     * Separate from [isLoading], which describes the screen's initial load: deletion has to
+     * disable its own control and show progress without making the rest of Settings look
+     * unloaded, and it is the one action here that cannot be repeated by accident.
+     */
+    val isDeletingAccount: Boolean = false
 )
 

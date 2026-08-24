@@ -50,4 +50,30 @@
 
     <!-- Accessibility label for the change-request card's clickable bubble. -->
     <string name="chat_open_change_request">Відкрити запит на зміну</string>
+
+    <!-- Message templates (domain/model/MessageTemplate.kt). The body is seeded into the
+         composer for the user to edit before sending, so the bracketed hints are translated
+         too: they are prompts to the reader, not substitution tokens. -->
+    <string name="chat_templates_sheet_title">Шаблони повідомлень</string>
+    <string name="chat_template_category_pickup_drop">Передавання дитини</string>
+    <string name="chat_template_category_illness">Хвороба та здоров\'я</string>
+    <string name="chat_template_category_school_events">Шкільні заходи</string>
+    <string name="chat_template_category_holidays">Свята та канікули</string>
+    <string name="chat_template_category_conflict_resolution">Вирішення розбіжностей</string>
+    <string name="chat_template_pickup_delay_title">Затримка з передаванням</string>
+    <string name="chat_template_pickup_delay_content">Я затримаюся з передаванням [дитини]. Буду приблизно через [скільки хвилин]. Вибач за незручності.</string>
+    <string name="chat_template_pickup_early_title">Ранній приїзд</string>
+    <string name="chat_template_pickup_early_content">Я приїду раніше, ніж зазвичай, приблизно о [час]. Тобі так зручно?</string>
+    <string name="chat_template_doctor_visit_title">Візит до лікаря</string>
+    <string name="chat_template_doctor_visit_content">[Дитина] сьогодні була в лікаря через [скарги]. Діагноз: [діагноз]. Лікар рекомендує [рекомендації].</string>
+    <string name="chat_template_child_sick_title">Дитина захворіла</string>
+    <string name="chat_template_child_sick_content">[Дитина] почувається погано. Симптоми: [симптоми]. Температура: [температура]. Я залишаюся вдома з дитиною.</string>
+    <string name="chat_template_school_event_title">Шкільний захід</string>
+    <string name="chat_template_school_event_content">У школі буде [захід] [дата] о [час]. Ти зможеш прийти?</string>
+    <string name="chat_template_parent_teacher_meeting_title">Батьківські збори</string>
+    <string name="chat_template_parent_teacher_meeting_content">Батьківські збори — [дата] о [час]. Учитель хоче обговорити [тема].</string>
+    <string name="chat_template_holiday_plan_title">План на канікули</string>
+    <string name="chat_template_holiday_plan_content">Погодьмо план на [канікули]. Я пропоную [пропозиція]. Що думаєш?</string>
+    <string name="chat_template_schedule_change_title">Зміна розкладу</string>
+    <string name="chat_template_schedule_change_content">Мені потрібно змінити розклад на [дата]. Можемо помінятися? Я візьму [інша дата].</string>
 </resources>

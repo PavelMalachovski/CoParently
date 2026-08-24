@@ -36,4 +36,17 @@
     <!-- Co-parent sync status line. %1$s = time of the last successful sync. -->
     <string name="settings_sync_idle">Up to date</string>
     <string name="settings_sync_last">Synced at %1$s</string>
+
+    <!-- Account deletion. Irreversible: the server erases the account and everything it
+         holds, and the device is wiped. The second dialog is deliberate, matching unpair. -->
+    <string name="settings_account_delete">Delete account</string>
+    <string name="settings_account_delete_description">Erase this account and all its data</string>
+    <string name="settings_account_delete_confirm_title">Delete this account?</string>
+    <string name="settings_account_delete_confirm_message">Everything you entered goes: your events, expenses, your child\'s records and the whole chat. Your co-parent keeps only what they created themselves. This cannot be undone.</string>
+    <string name="settings_account_delete_final_title">Delete permanently?</string>
+    <string name="settings_account_delete_final_message">There is no way back and no copy afterwards. If you only want to leave this device, sign out instead.</string>
+    <string name="settings_account_delete_final_yes">Delete permanently</string>
+    <string name="settings_account_delete_cancel">Keep my account</string>
+    <string name="settings_account_delete_progress">Deleting your account…</string>
+    <string name="settings_account_delete_failed">Your account was not deleted. Please try again.</string>
 </resources>

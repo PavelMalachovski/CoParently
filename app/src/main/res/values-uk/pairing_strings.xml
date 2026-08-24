@@ -74,4 +74,7 @@
     <string name="pairing_trust_body">Спільний календар і графік опіки, спільні витрати та баланси, а також чат. Приватні події ніколи не залишають ваш пристрій. Зв’язок можна розірвати будь-коли.</string>
     <string name="pairing_error_friend_invitation">Це запрошення для друга. Відкрийте «Налаштування» → «Друг із доступом до календаря».</string>
     <string name="pairing_error_not_friend_invitation">Це не запрошення для друга.</string>
+    <!-- Shown after an email invitation is created. Deliberately does not claim the email
+         arrived: the app cannot know that, and the code works either way. -->
+    <string name="pairing_email_invite_created">Запрошення надіслано. Якщо лист не надійде — передайте код напряму.</string>
 </resources>

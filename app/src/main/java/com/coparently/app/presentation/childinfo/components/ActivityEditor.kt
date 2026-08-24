@@ -12,7 +12,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.coparently.app.R
 import com.coparently.app.domain.model.Activity
 
 /**
@@ -87,9 +89,9 @@ fun ActivityEditor(
                 onClick = { isAddingNew = true },
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Icon(Icons.Default.Add, contentDescription = "Add")
+                Icon(Icons.Default.Add, contentDescription = stringResource(R.string.childinfo_add))
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Add Activity")
+                Text(stringResource(R.string.childinfo_add_activity))
             }
         }
     }
@@ -124,17 +126,27 @@ private fun ActivityCard(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                if (!activity.location.isNullOrBlank()) {
+                val location = activity.location
+                if (!location.isNullOrBlank()) {
                     Text(
-                        text = "📍 ${activity.location}",
+                        text = stringResource(R.string.childinfo_activity_location_marker, location),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                if (!activity.contactPerson.isNullOrBlank()) {
+                val contactPerson = activity.contactPerson
+                val contactPhone = activity.contactPhone
+                if (!contactPerson.isNullOrBlank()) {
                     Text(
-                        text = "👤 ${activity.contactPerson}" +
-                                if (!activity.contactPhone.isNullOrBlank()) " • ${activity.contactPhone}" else "",
+                        text = if (!contactPhone.isNullOrBlank()) {
+                            stringResource(
+                                R.string.childinfo_activity_contact_phone_marker,
+                                contactPerson,
+                                contactPhone
+                            )
+                        } else {
+                            stringResource(R.string.childinfo_activity_contact_marker, contactPerson)
+                        },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -143,12 +155,12 @@ private fun ActivityCard(
 
             Row {
                 IconButton(onClick = onEdit) {
-                    Icon(Icons.Default.Edit, contentDescription = "Edit")
+                    Icon(Icons.Default.Edit, contentDescription = stringResource(R.string.childinfo_edit))
                 }
                 IconButton(onClick = onDelete) {
                     Icon(
                         Icons.Default.Delete,
-                        contentDescription = "Delete",
+                        contentDescription = stringResource(R.string.childinfo_delete),
                         tint = MaterialTheme.colorScheme.error
                     )
                 }
@@ -185,15 +197,19 @@ private fun ActivityForm(
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Text(
-                text = if (activity == null) "New Activity" else "Edit Activity",
+                text = if (activity == null) {
+                    stringResource(R.string.childinfo_new_activity)
+                } else {
+                    stringResource(R.string.childinfo_edit_activity)
+                },
                 style = MaterialTheme.typography.titleSmall
             )
 
             OutlinedTextField(
                 value = name,
                 onValueChange = { name = it },
-                label = { Text("Activity Name") },
-                placeholder = { Text("e.g., Soccer, Piano lessons") },
+                label = { Text(stringResource(R.string.childinfo_activity_name_label)) },
+                placeholder = { Text(stringResource(R.string.childinfo_activity_name_placeholder)) },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true
             )
@@ -201,8 +217,8 @@ private fun ActivityForm(
             OutlinedTextField(
                 value = schedule,
                 onValueChange = { schedule = it },
-                label = { Text("Schedule") },
-                placeholder = { Text("e.g., Mon & Wed, 4-5 PM") },
+                label = { Text(stringResource(R.string.childinfo_schedule_label)) },
+                placeholder = { Text(stringResource(R.string.childinfo_schedule_placeholder)) },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true
             )
@@ -210,7 +226,7 @@ private fun ActivityForm(
             OutlinedTextField(
                 value = location,
                 onValueChange = { location = it },
-                label = { Text("Location (optional)") },
+                label = { Text(stringResource(R.string.childinfo_location_optional_label)) },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true
             )
@@ -218,7 +234,7 @@ private fun ActivityForm(
             OutlinedTextField(
                 value = contactPerson,
                 onValueChange = { contactPerson = it },
-                label = { Text("Contact Person (optional)") },
+                label = { Text(stringResource(R.string.childinfo_contact_person_optional_label)) },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true
             )
@@ -226,7 +242,7 @@ private fun ActivityForm(
             OutlinedTextField(
                 value = contactPhone,
                 onValueChange = { contactPhone = it },
-                label = { Text("Contact Phone (optional)") },
+                label = { Text(stringResource(R.string.childinfo_contact_phone_optional_label)) },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true
             )
@@ -237,7 +253,7 @@ private fun ActivityForm(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 TextButton(onClick = onCancel) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.childinfo_cancel))
                 }
                 Spacer(modifier = Modifier.width(8.dp))
                 Button(
@@ -256,7 +272,7 @@ private fun ActivityForm(
                     },
                     enabled = name.isNotBlank() && schedule.isNotBlank()
                 ) {
-                    Text("Save")
+                    Text(stringResource(R.string.childinfo_save))
                 }
             }
         }
