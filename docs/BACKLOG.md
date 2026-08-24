@@ -673,16 +673,31 @@ competitor has, is hard for a non-Czech team to copy, fits the post-2026 legal e
 agreement, and hands the mediator channel a concrete reason to recommend the app. Cheaper than
 the school import and lands in the same place. Audit §10.6.
 
-### MON-6 · P1 · S · Add the Czech custody preset that is actually common
+### MON-6 · **DONE** · Add the Czech custody preset that is actually common
 
-`CustodyModelType` offers `WEEK_ON_WEEK_OFF`, `TWO_TWO_THREE`, `THREE_FOUR_FOUR_THREE`,
+`CustodyModelType` offered `WEEK_ON_WEEK_OFF`, `TWO_TWO_THREE`, `THREE_FOUR_FOUR_THREE`,
 `CUSTOM` — the two middle ones are US family-law vocabulary. The arrangement a large share of
 Czech families have, **výhradní péče se stykem** (sole custody, every other weekend plus a
-midweek afternoon), has no preset and must be built by hand.
+midweek afternoon), had no preset and had to be built by hand. Audit §7.4.
 
-A Czech parent's first screen should contain their own arrangement in their own words. Add
-`EVERY_OTHER_WEEKEND` (consider a two-week alternation too, common when parents live far apart)
-and reconsider whether the American patterns earn their place in a Czech-first launch. Audit §7.4.
+`EVERY_OTHER_WEEKEND` is in, listed **second** — the enum's order is the picker's order, so the
+two arrangements Czech families actually have now lead. Five strings in all five locales, and a
+test that names the days as weekdays rather than indices, because this pattern read backwards
+produces an equally plausible schedule that has simply handed over the school days.
+
+**The switch above the preview asks a different question for it.** The other three alternate
+blocks of time, so "who starts first" is the whole of it; this one does not, and a parent asked
+who "starts" would answer about the first weekend and set it inverted. It asks "who does the
+child live with" instead.
+
+**Deliberately not done, and both are decisions rather than work:**
+
+- **The midweek afternoon is not in the preset.** `CustodyModel` assigns a whole day to exactly
+  one parent, so there is no half-day to give; folding the afternoon into a whole Wednesday
+  would hand over an overnight nobody agreed to. Half-day granularity is a real feature and a
+  real schema change — see below.
+- **The two US patterns stay.** Removing one would make an existing user's saved `modelType`
+  unparseable, and whether they earn their place in a Czech-first launch is an owner's call.
 
 ### MON-7 · **DONE** · The AI subsystem is deleted
 
@@ -703,6 +718,19 @@ Boundaries that outlive the deletion (audit §6.5): receipt OCR stays on-device;
 the co-parent's behalf; AI never adjudicates who is right or who is late more often; chat content
 reaches a model only on an explicit user action. Anything resembling emotion inference deserves a
 legal read under the EU AI Act before launch.
+
+### MON-6b · P2 · L · Half-day custody, so contact afternoons can be described
+
+`CustodyModel` assigns each day of the cycle to exactly one parent (`momDayIndices`), so an
+arrangement of the form "every second weekend **plus Wednesday afternoon**" — which is most
+Czech contact orders, not an edge case — can only be entered by rounding the afternoon up to a
+whole day or dropping it. MON-6's preset drops it and says so; `CUSTOM` cannot express it
+either.
+
+Not a small change: it touches the pattern representation, the Room entity, the Firestore
+document, `getCustodyFor`, `complemented`, `isEquivalentTo`, the custom-pattern editor and the
+day-cell fills. Worth doing before claiming the app describes a Czech family's real schedule;
+worth costing properly first.
 
 ### MON-8 · P2 · L · Bakaláři / EduPage school import
 
@@ -798,7 +826,9 @@ Not a wish-list ordering — a dependency ordering. Each block assumes the one a
    not negotiable: an export of a record nobody can vouch for is worth nothing to a lawyer.
 10. **MON-5** — the Rodičovský plán. The cheapest local moat and the reason a mediator recommends
     you.
-11. **MON-6** — the Czech custody preset. A day's work on the first screen a Czech parent sees.
+11. ~~**MON-6** — the Czech custody preset.~~ **Done.** What it exposed is **MON-6b**: the
+    schedule cannot describe a half-day, so the contact afternoon most Czech orders include has
+    nowhere to go.
 12. ~~**MON-7** — one AI feature behind the proxy, or delete the subsystem.~~ **Deleted.** If AI
     returns it returns behind **SEC-1**, as one feature rather than eight.
 13. **MON-8** — the school import.

@@ -58,4 +58,10 @@
     <string name="custody_proposal_decline">Відхилити</string>
     <string name="custody_proposal_waiting">Очікування, поки другий з батьків схвалить новий розклад</string>
     <string name="custody_proposal_review">%1$s запропонував новий розклад опіки</string>
+    <!-- MON-6. -->
+    <string name="custody_model_every_other_weekend">Кожні другі вихідні</string>
+    <string name="custody_model_every_other_weekend_desc">Дитина живе в одного з батьків, у другого — кожні другі вихідні.</string>
+    <string name="custody_preview_every_other_weekend">Усі інші дні: %1$s. Кожні другі сб–нд: %2$s.</string>
+    <string name="custody_who_is_resident">З ким живе дитина?</string>
+    <string name="custody_is_resident">Живе з: %1$s</string>
 </resources>

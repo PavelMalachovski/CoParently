@@ -69,6 +69,10 @@ class CustodySetupViewModel @Inject constructor(
             startDate = model.startDate,
             momFirst = when (model.modelType) {
                 CustodyModelType.WEEK_ON_WEEK_OFF -> model.momDayIndices.contains(0)
+                // Day 0 is a resident day for whoever the child lives with, and the contact
+                // parent's set is only the two weekend days — so "does slot 1 hold day 0" is
+                // still the right question, and still answers "is slot 1 the resident parent".
+                CustodyModelType.EVERY_OTHER_WEEKEND -> model.momDayIndices.contains(0)
                 CustodyModelType.TWO_TWO_THREE -> model.momDayIndices.contains(0)
                 CustodyModelType.THREE_FOUR_FOUR_THREE -> model.momDayIndices.contains(0)
                 CustodyModelType.CUSTOM -> true
@@ -144,6 +148,10 @@ class CustodySetupViewModel @Inject constructor(
                     CustodyModelType.WEEK_ON_WEEK_OFF -> custodyModelRepository.createWeekOnWeekOff(
                         startDate = state.startDate,
                         momFirst = state.momFirst
+                    )
+                    CustodyModelType.EVERY_OTHER_WEEKEND -> custodyModelRepository.createEveryOtherWeekend(
+                        startDate = state.startDate,
+                        momIsResident = state.momFirst
                     )
                     CustodyModelType.TWO_TWO_THREE -> custodyModelRepository.createTwoTwoThree(
                         startDate = state.startDate,

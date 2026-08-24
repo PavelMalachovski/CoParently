@@ -444,6 +444,24 @@ class CustodyModelRepository(
     }
 
     /**
+     * Creates and saves an every-other-weekend model — `výhradní péče se stykem` (MON-6).
+     *
+     * @param startDate The anchor date, expected to be the Monday the fortnight opens on
+     * @param momIsResident True when slot 1 is the parent the child lives with
+     */
+    suspend fun createEveryOtherWeekend(
+        startDate: LocalDate,
+        momIsResident: Boolean = true
+    ): PatternSubmission {
+        val model = CustodyModel.everyOtherWeekend(
+            id = UUID.randomUUID().toString(),
+            startDate = startDate,
+            momIsResident = momIsResident
+        )
+        return submitPattern(model)
+    }
+
+    /**
      * Creates and saves a 2-2-3 custody model.
      */
     suspend fun createTwoTwoThree(startDate: LocalDate, momStartsFirst: Boolean = true): PatternSubmission {
