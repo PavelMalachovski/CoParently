@@ -90,6 +90,19 @@ android {
         // Completing translations is tracked separately; verify locale completeness with
         // a direct grep across values*/ instead of relying on lint for it.
         disable += "MissingTranslation"
+
+        // CredManMissingDal fires because CredentialAuthenticator offers password sign-in
+        // through Credential Manager (GetPasswordOption / CreatePasswordRequest) without an
+        // `asset_statements` <meta-data> in the manifest. That meta-data exists to associate
+        // the app with a *website* via Digital Asset Links, so a password saved on one is
+        // offered on the other. CoPlanly owns no domain — the same reason the pairing deep
+        // link in AndroidManifest.xml is a custom scheme rather than an App Link — so there
+        // is no assetlinks.json to point at, and inventing one would fail verification
+        // rather than satisfy anything. Password sign-in itself works without it: the
+        // credential is then scoped to this package and signing certificate alone.
+        // Re-enable this check together with the App Links work, when a domain exists
+        // (docs/BACKLOG.md).
+        disable += "CredManMissingDal"
     }
 
     // Compose compiler is applied via the org.jetbrains.kotlin.plugin.compose plugin

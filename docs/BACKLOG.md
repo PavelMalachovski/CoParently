@@ -151,7 +151,8 @@ Android SDK was available.
 | 5 | **Room is not encrypted at rest.** `EncryptionManager` (AES-256-GCM, Keystore) exists, is correct, and is not applied to the database. | SQLCipher plus a migration, or field-level encryption of the medical profile as a smaller first step. |
 | 6 | **`syncWithFirestore()` means two incompatible things** — a one-shot in two repositories, an endless listener in three. Adding the wrong one to `performFullSync()` would make it never return, and `SyncWorker` would die at WorkManager's ten-minute ceiling with no error. | Rename to `pullOnce()` / `observeRemote()`. Cheap, but touches five files. |
 | 7 | **Notification text is composed on the client**, so a push can claim to be anything. Length is now bounded; composition is not. | Needs the service-layer strings localised first, itself a tracked follow-up. |
-| 8 | **`ChildInfoViewModel` can overwrite the wrong child's record.** Documented in `CLAUDE.md`, still open, still untested. | Fixing the subscription strategy is its own change. |
+| 8 | **No Digital Asset Links, so `CredManMissingDal` is disabled in `app/build.gradle.kts`.** Credential Manager's password sign-in cannot share a credential with a website, and the pairing deep link stays a custom scheme rather than an App Link. | Both need a domain the project does not own; the same domain the legal documents in §1.1 need hosting on. Do all three together. |
+| 9 | **`ChildInfoViewModel` can overwrite the wrong child's record.** Documented in `CLAUDE.md`, still open, still untested. | Fixing the subscription strategy is its own change. |
 
 ---
 

@@ -103,10 +103,11 @@ class CalendarViewModelCustodyChangeTest {
             )
         }
         val viewModel = CalendarViewModel(
-            custodyScheduleDao,
-            custodyModelRepository,
-            encryptedPreferences,
-            parentsSource
+            custodyScheduleDao = custodyScheduleDao,
+            custodyModelRepository = custodyModelRepository,
+            encryptedPreferences = encryptedPreferences,
+            friendRepository = noCalendarFriends(),
+            parentsSource = parentsSource
         )
         backgroundScope.launch { viewModel.custodyChangeAnnouncement.collect {} }
         return viewModel
@@ -127,10 +128,11 @@ class CalendarViewModelCustodyChangeTest {
             every { observe() } returns parentsFlow
         }
         val viewModel = CalendarViewModel(
-            custodyScheduleDao,
-            custodyModelRepository,
-            encryptedPreferences,
-            parentsSource
+            custodyScheduleDao = custodyScheduleDao,
+            custodyModelRepository = custodyModelRepository,
+            encryptedPreferences = encryptedPreferences,
+            friendRepository = noCalendarFriends(),
+            parentsSource = parentsSource
         )
         backgroundScope.launch { viewModel.custodyChangeAnnouncement.collect {} }
         return viewModel

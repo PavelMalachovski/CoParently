@@ -58,10 +58,11 @@ class CalendarViewModelTest {
             every { putBoolean(any(), any()) } just Runs
         }
         viewModel = CalendarViewModel(
-            custodyScheduleDao,
-            custodyModelRepository,
-            encryptedPreferences,
-            testParentsSource()
+            custodyScheduleDao = custodyScheduleDao,
+            custodyModelRepository = custodyModelRepository,
+            encryptedPreferences = encryptedPreferences,
+            friendRepository = noCalendarFriends(),
+            parentsSource = testParentsSource()
         )
     }
 
