@@ -16,6 +16,7 @@
     "@firebase/rules-unit-testing": "^4.0.1",
     "eslint": "^8.57.0",
     "firebase": "^11.0.0",
+    "firebase-tools": "^15.28.1",
     "mocha": "^10.2.0"
   }
 }

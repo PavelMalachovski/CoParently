@@ -1,0 +1,125 @@
+# Continuous integration for CoPlanly.
+#
+# Written during the August 2026 audit, which found four defects that were invisible for
+# exactly one reason: nothing ran the build, the tests or a release build automatically.
+# Two of them had already shipped — a release-only Gson corruption of a child's medical
+# profile, and a functions test that had been failing on `main`.
+#
+# Three jobs run on every push and pull request. The instrumented migration job is
+# deliberately absent: `app/schemas/` stops at v14 while the database is at v24, so it would
+# be red from its first run for a reason unrelated to any change. Add it once the schemas are
+# restored (see docs/BACKLOG.md).
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  android:
+    name: Android — build, unit tests, static analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: temurin
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      # `google-services.json` is gitignored, and `app/build.gradle.kts` applies the Google
+      # Services and Crashlytics plugins only when it is present — so a fresh clone builds
+      # without it. The secrets below are read through `project.findProperty(...)`, which
+      # falls back to an empty string; nothing here exercises Google sign-in or Gemini.
+      - name: Assemble debug
+        run: ./gradlew --no-daemon assembleDebug
+
+      - name: Unit tests
+        run: ./gradlew --no-daemon testDebugUnitTest
+
+      # Runs even when the tests fail, so one push reports every problem rather than the
+      # first one. `lint` is the Android linter; `detekt` reads its own baseline.
+      - name: Static analysis
+        if: always()
+        run: ./gradlew --no-daemon detekt lint
+
+      # A release build is the only place R8 runs, and R8 is what silently rewrote the field
+      # names Gson depends on. Building it here is what stops that class of defect from
+      # reaching a device again. No signing config exists yet, so this produces an unsigned
+      # bundle — which is exactly the part worth checking.
+      - name: Assemble release (R8)
+        run: ./gradlew --no-daemon assembleRelease
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-reports
+          path: |
+            app/build/reports/
+            app/build/test-results/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  functions:
+    name: Cloud Functions
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: functions
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+
+      - run: npm ci
+      - run: npm test
+      - name: Lint
+        if: always()
+        run: npm run lint
+
+  rules:
+    name: Firestore security rules
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: firestore-tests
+    steps:
+      - uses: actions/checkout@v4
+
+      # The Firestore emulator is a Java process, and it needs a JDK on PATH — not merely in
+      # JAVA_HOME. See firestore-tests/README.md.
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: temurin
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: firestore-tests/package-lock.json
+
+      - run: npm ci
+      - run: npm test
+      - name: Lint
+        if: always()
+        run: npm run lint
