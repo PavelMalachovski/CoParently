@@ -29,6 +29,29 @@ class GoogleCalendarApi @Inject constructor() {
         private val APPLICATION_NAME = "CoPlanly"
         private val JSON_FACTORY = GsonFactory.getDefaultInstance()
         private val HTTP_TRANSPORT = NetHttpTransport()
+
+        /** Google's own per-page ceiling is 2500; 250 keeps any single request small. */
+        private const val PAGE_SIZE = 250
+
+        /**
+         * How many events one import may take. Reached only by a very full calendar, and when it
+         * is reached the caller is told — the point of [CalendarEvents.truncated].
+         */
+        const val IMPORT_LIMIT = 2_000
+
+        /**
+         * How far ahead an import reaches when the caller names no end.
+         *
+         * A horizon is not a nicety here. `setSingleEvents(true)` expands recurrences into
+         * instances, so "everything from now on" is not a finite request at all — a single
+         * open-ended weekly event generates instances forever, and without an end date the
+         * event cap alone would silently decide where the calendar stopped. One year is a
+         * co-parenting horizon: school years, holidays and custody rotations all fit inside it.
+         */
+        private const val HORIZON_MONTHS = 12L
+
+        /** Refuses to page forever if a server ever returns a token that does not advance. */
+        private const val MAX_PAGES = 64
     }
 
     /**
@@ -41,7 +64,17 @@ class GoogleCalendarApi @Inject constructor() {
     }
 
     /**
-     * Lists events from Google Calendar.
+     * Lists events from Google Calendar, following every page.
+     *
+     * The previous version asked for one page of 50 and returned it, while its only caller passed
+     * no bounds at all — so an import of a real calendar stopped at the 50th event and reported
+     * "Found 50 events", which is what a complete import also looks like. Nothing said otherwise.
+     *
+     * Two bounds now exist and both are reported rather than assumed: the window
+     * ([CalendarEvents.from]/[CalendarEvents.until], defaulting to the next [HORIZON_MONTHS]
+     * months) and the event cap ([IMPORT_LIMIT], surfaced as [CalendarEvents.truncated]).
+     *
+     * @param limit Most events to return. Reaching it sets [CalendarEvents.truncated].
      */
     @Throws(IOException::class)
     fun listEvents(
@@ -49,29 +82,34 @@ class GoogleCalendarApi @Inject constructor() {
         calendarId: String = "primary",
         timeMin: LocalDateTime? = null,
         timeMax: LocalDateTime? = null,
-        maxResults: Int = 50
-    ): List<GoogleCalendarEvent> {
+        limit: Int = IMPORT_LIMIT
+    ): CalendarEvents {
         val calendar = getCalendarService(credential)
-        val now = DateTime(System.currentTimeMillis())
+        val from = timeMin ?: LocalDateTime.now()
+        val until = timeMax ?: from.plusMonths(HORIZON_MONTHS)
 
-        val timeMinDateTime = timeMin?.let {
-            DateTime(it.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli())
-        } ?: now
-
-        val timeMaxDateTime = timeMax?.let {
-            DateTime(it.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli())
+        val paged = collectPages(limit, MAX_PAGES) { pageToken ->
+            val response: Events = calendar.events().list(calendarId)
+                .setTimeMin(from.toGoogleDateTime())
+                .setTimeMax(until.toGoogleDateTime())
+                .setMaxResults(PAGE_SIZE)
+                .setOrderBy("startTime")
+                .setSingleEvents(true)
+                .setPageToken(pageToken)
+                .execute()
+            PageOf(response.items.orEmpty(), response.nextPageToken)
         }
 
-        val events: Events = calendar.events().list(calendarId)
-            .setTimeMin(timeMinDateTime)
-            .apply { timeMaxDateTime?.let { setTimeMax(it) } }
-            .setMaxResults(maxResults.toInt())
-            .setOrderBy("startTime")
-            .setSingleEvents(true)
-            .execute()
-
-        return events.items ?: emptyList()
+        return CalendarEvents(
+            events = paged.items,
+            truncated = paged.truncated,
+            from = from,
+            until = until
+        )
     }
+
+    private fun LocalDateTime.toGoogleDateTime(): DateTime =
+        DateTime(atZone(ZoneId.systemDefault()).toInstant().toEpochMilli())
 
     /**
      * Creates an event in Google Calendar.
