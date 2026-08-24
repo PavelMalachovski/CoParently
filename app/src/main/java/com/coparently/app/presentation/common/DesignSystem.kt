@@ -26,8 +26,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.coparently.app.presentation.theme.LayoutConstants
 import java.util.Locale
 
 /**
@@ -252,7 +254,24 @@ fun PillChip(
                     Modifier
                 }
             )
-            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+            // A chip that does something is a control, and a control has to be reachable and
+            // announced as one. The padding below puts a pill at roughly 28dp tall — well
+            // under the 48dp minimum — and nine call sites are interactive, including the
+            // "Review" action on Home's handover card. `Role.Button` is what makes TalkBack
+            // say "button" instead of reading the label as ordinary text.
+            //
+            // Only the interactive branch grows: a decorative chip (a status pill, a category
+            // marker) is not a target and padding it to 48dp would wreck the chip strips it
+            // sits in.
+            .then(
+                if (onClick != null) {
+                    Modifier
+                        .clickable(role = Role.Button, onClick = onClick)
+                        .defaultMinSize(minHeight = LayoutConstants.MIN_TOUCH_TARGET)
+                } else {
+                    Modifier
+                }
+            )
             .padding(PaddingValues(horizontal = 12.dp, vertical = 6.dp)),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically

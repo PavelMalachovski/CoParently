@@ -6,7 +6,6 @@ import com.google.api.client.auth.oauth2.BearerToken
 import com.google.api.client.auth.oauth2.Credential
 import com.google.api.client.http.HttpRequest
 import com.google.api.client.http.HttpRequestInitializer
-import kotlinx.coroutines.runBlocking
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -25,16 +24,16 @@ class CredentialProviderImpl @Inject constructor(
         private const val TAG = "CredentialProvider"
     }
 
-    override fun getCredential(): Credential? {
+    override suspend fun getCredential(): Credential? {
         if (!credentialManagerService.isSignedIn()) {
             Log.d(TAG, "User is not signed in")
             return null
         }
 
-        // Try to get a valid access token (will refresh if needed)
-        val (accessToken, error) = runBlocking {
-            credentialManagerService.getAccessToken()
-        }
+        // Obtains a valid access token, refreshing over the network when it has expired.
+        // This used to be wrapped in `runBlocking`, which made that refresh block whatever
+        // thread asked — and the caller asked from the main one. See [CredentialProvider].
+        val (accessToken, error) = credentialManagerService.getAccessToken()
 
         if (accessToken == null) {
             Log.e(TAG, "Failed to get access token: $error")
