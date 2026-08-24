@@ -9,6 +9,7 @@ import com.coparently.app.domain.model.MessageType
 import com.coparently.app.domain.model.PairingState
 import com.coparently.app.domain.model.PartnerSummary
 import com.coparently.app.domain.repository.EventRepository
+import com.coparently.app.data.local.preferences.EncryptedPreferences
 import com.coparently.app.domain.repository.MessageRepository
 import com.coparently.app.domain.repository.PairingRepository
 import com.coparently.app.domain.repository.UserRepository
@@ -398,7 +399,16 @@ class ChatViewModelTest {
             every { observePairingState() } returns pairingState
         }
         coEvery { userRepository.getUserById(PARTNER) } returns null
-        return ChatViewModel(messageRepository, userRepository, eventRepository, pairingRepository)
+        val preferences = mockk<EncryptedPreferences>(relaxed = true) {
+            every { getChatDraft(any()) } returns ""
+        }
+        return ChatViewModel(
+            messageRepository,
+            userRepository,
+            eventRepository,
+            pairingRepository,
+            preferences
+        )
     }
 
     private fun partner() = PartnerSummary(

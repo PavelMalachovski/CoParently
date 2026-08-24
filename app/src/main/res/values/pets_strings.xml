@@ -60,4 +60,5 @@
     <string name="pet_photos_close">Close</string>
     <string name="pet_photos_upload_failed">Could not upload the photo. Please try again.</string>
     <string name="pet_photos_delete_failed">Could not remove the photo. It is still attached.</string>
+    <string name="pet_save_failed">Could not save the pet. Please try again.</string>
 </resources>

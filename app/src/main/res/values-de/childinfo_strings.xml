@@ -103,4 +103,5 @@
     <string name="childinfo_grade_placeholder">z. B. 3. Klasse</string>
     <string name="childinfo_teacher_name_optional_label">Name der Lehrkraft (optional)</string>
     <string name="childinfo_teacher_email_optional_label">E-Mail der Lehrkraft (optional)</string>
+    <string name="childinfo_save_failed">Die Angaben zum Kind konnten nicht gespeichert werden. Bitte versuche es erneut.</string>
 </resources>

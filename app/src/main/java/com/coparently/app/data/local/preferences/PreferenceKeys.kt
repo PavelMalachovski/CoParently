@@ -26,6 +26,19 @@ object PreferenceKeys {
     const val LIST_SEPARATOR = "|"
 
     /**
+     * Prefix for an unsent chat message, keyed by conversation id.
+     *
+     * Per conversation rather than one global slot: the composer text belongs to the thread it
+     * was typed into, and a single key would carry a half-written message from one co-parent
+     * into another thread. Cleared once the message is actually sent.
+     *
+     * Persisted rather than held in the ViewModel because the Chat tab's back-stack entry — and
+     * with it the ViewModel — is cleared when the user switches tabs. That is exactly the case
+     * the draft has to survive.
+     */
+    const val CHAT_DRAFT_PREFIX = "chat_draft_"
+
+    /**
      * Prefix for the per-user key that records the parent slot (`"mom"`/`"dad"`) this device's
      * own records are currently stamped with — the actual key is this prefix plus the Firebase
      * UID.

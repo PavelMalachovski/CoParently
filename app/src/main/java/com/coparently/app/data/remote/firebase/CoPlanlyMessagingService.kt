@@ -11,16 +11,17 @@ import androidx.annotation.StringRes
 import androidx.core.app.NotificationCompat
 import com.coparently.app.R
 import com.coparently.app.data.crashlytics.CrashlyticsManager
+import com.coparently.app.data.sync.SyncWorker
 import com.coparently.app.domain.chat.ChatUri
 import com.coparently.app.domain.pairing.PairingUri
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
 /**
  * Firebase Cloud Messaging service for handling push notifications.
@@ -78,6 +79,16 @@ class CoPlanlyMessagingService : FirebaseMessagingService() {
 
         val data = remoteMessage.data
         val type = data[PushPayload.TYPE]
+
+        // Pull whatever the push is about *before* deciding whether it is renderable. A push
+        // announced a change the device could not yet see: events, child records and pets are
+        // downloaded only by the fifteen-minute worker, so tapping the notification opened an
+        // app that still knew nothing about the thing it had just announced — and accepting a
+        // proposed change failed outright, because the event was not in Room. Running the sync
+        // even for a type this build has no wording for is deliberate: an unrecognised push is
+        // still evidence that something changed on the server.
+        SyncWorker.syncNow(applicationContext)
+
         val text = compose(type, data) ?: return
 
         // Only meaningful for TYPE_CHAT_MESSAGE (see notifyOfChatMessage in

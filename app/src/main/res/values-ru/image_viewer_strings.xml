@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Общий полноэкранный просмотр изображений (чеки, фото событий, медицинские фото и фото питомцев). -->
+<resources>
+    <string name="image_viewer_close">Закрыть</string>
+    <string name="image_viewer_open">Открыть на весь экран</string>
+</resources>

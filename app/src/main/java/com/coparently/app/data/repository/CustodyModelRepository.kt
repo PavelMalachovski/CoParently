@@ -19,7 +19,14 @@ import com.coparently.app.domain.custody.SharedCustody
 import com.coparently.app.domain.custody.SharedCustodyRead
 import com.coparently.app.domain.model.CustodyModel
 import com.coparently.app.domain.model.CustodyModelType
+import com.coparently.app.domain.model.MidweekContact
 import com.coparently.app.domain.repository.UserRepository
+import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
+import java.util.UUID
+import javax.inject.Inject
+import javax.inject.Singleton
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
@@ -39,12 +46,6 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.retryWhen
 import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.flow.transform
-import java.time.LocalDate
-import java.time.LocalDateTime
-import java.time.format.DateTimeFormatter
-import java.util.UUID
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * Repository for managing custody model configurations.
@@ -441,15 +442,18 @@ class CustodyModelRepository(
      *
      * @param startDate The anchor date, expected to be the Monday the fortnight opens on
      * @param momIsResident True when slot 1 is the parent the child lives with
+     * @param midweek The midweek contact day, or null for alternate weekends only
      */
     suspend fun createEveryOtherWeekend(
         startDate: LocalDate,
-        momIsResident: Boolean = true
+        momIsResident: Boolean = true,
+        midweek: MidweekContact? = null
     ): PatternSubmission {
         val model = CustodyModel.everyOtherWeekend(
             id = UUID.randomUUID().toString(),
             startDate = startDate,
-            momIsResident = momIsResident
+            momIsResident = momIsResident,
+            midweek = midweek
         )
         return submitPattern(model)
     }

@@ -64,4 +64,18 @@
     <string name="custody_preview_every_other_weekend">Všední i ostatní dny: %1$s. Každou druhou So–Ne: %2$s.</string>
     <string name="custody_who_is_resident">U koho dítě žije?</string>
     <string name="custody_is_resident">Žije u: %1$s</string>
+    <string name="custody_midweek_title">Kontakt uprostřed týdne</string>
+    <string name="custody_midweek_enable">Přidat den uprostřed týdne</string>
+    <string name="custody_midweek_overnight_warning">Tento rozvrh přiděluje celé dny, takže den uprostřed týdne zahrnuje i noc. Pokud vaše rozhodnutí mluví jen o odpoledni, sestavte čtrnáctidenní cyklus ve Vlastním rozvrhu.</string>
+    <string name="custody_midweek_every_week">Každý týden</string>
+    <string name="custody_midweek_off_week_only">Jen v týdnu bez víkendu</string>
+    <string name="custody_preview_every_other_weekend_midweek">Každý den: %1$s. Každou druhou so–ne a každou %3$s: %2$s.</string>
+    <string name="custody_preview_every_other_weekend_midweek_off_week">Každý den: %1$s. Každou druhou so–ne a navíc %3$s v týdnu mezi tím: %2$s.</string>
+    <plurals name="custody_diff_days_move">
+        <item quantity="one">V nadcházejících týdnech by se přesunul %1$d den.</item>
+        <item quantity="few">V nadcházejících týdnech by se přesunuly %1$d dny.</item>
+        <item quantity="many">V nadcházejících týdnech by se přesunulo %1$d dne.</item>
+        <item quantity="other">V nadcházejících týdnech by se přesunulo %1$d dní.</item>
+    </plurals>
+    <string name="custody_diff_none">V kalendáři by se nic nezměnilo.</string>
 </resources>

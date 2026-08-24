@@ -76,4 +76,5 @@
     <string name="chat_template_holiday_plan_content">Давай согласуем план на [каникулы]. Я предлагаю [предложение]. Что думаешь?</string>
     <string name="chat_template_schedule_change_title">Изменение расписания</string>
     <string name="chat_template_schedule_change_content">Мне нужно изменить расписание на [дата]. Можем поменяться? Я возьму [другая дата].</string>
+    <string name="chat_failed_to_send_retry">Не отправлено — нажмите, чтобы повторить</string>
 </resources>

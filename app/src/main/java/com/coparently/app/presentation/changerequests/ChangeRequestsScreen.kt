@@ -53,6 +53,7 @@ import com.coparently.app.domain.model.ChangeRequestStatus
 import com.coparently.app.domain.model.Event
 import com.coparently.app.presentation.common.ParentNames
 import com.coparently.app.presentation.common.rememberParentNames
+import com.coparently.app.presentation.custody.custodyDiffDescription
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 
@@ -97,6 +98,7 @@ fun ChangeRequestsScreen(
 
     val daySwaps by viewModel.daySwaps.collectAsState()
     val pendingProposal by viewModel.pendingProposal.collectAsState()
+    val pendingProposalDiff by viewModel.pendingProposalDiff.collectAsState()
     val parents by viewModel.parents.collectAsState()
     val parentNames = rememberParentNames(parents)
     // Header plus one card per swap, or nothing at all. `indexInInbox` needs the count because
@@ -200,6 +202,7 @@ fun ChangeRequestsScreen(
                     item {
                         CustodyProposalCard(
                             proposal = proposal,
+                            diff = pendingProposalDiff,
                             parentNames = parentNames,
                             onAccept = { viewModel.acceptProposal() },
                             onDecline = { viewModel.declineProposal() }
@@ -408,6 +411,7 @@ private fun DaySwapCard(
 @Composable
 private fun CustodyProposalCard(
     proposal: com.coparently.app.domain.custody.CustodyProposal,
+    diff: com.coparently.app.domain.custody.CustodyPatternDiff?,
     parentNames: ParentNames,
     onAccept: () -> Unit,
     onDecline: () -> Unit
@@ -429,6 +433,14 @@ private fun CustodyProposalCard(
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+            // What it would actually change. Answering a schedule without being told which days
+            // move is the complaint this card and the Home dialog both existed to produce.
+            custodyDiffDescription(diff, parentNames)?.let { description ->
+                Text(
+                    text = description,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = onAccept) {
                     Text(stringResource(R.string.custody_proposal_accept))

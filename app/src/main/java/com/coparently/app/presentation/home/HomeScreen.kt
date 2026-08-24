@@ -27,8 +27,8 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ChildCare
 import androidx.compose.material.icons.filled.Contacts
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Pets
 import androidx.compose.material.icons.filled.Payments
+import androidx.compose.material.icons.filled.Pets
 import androidx.compose.material.icons.filled.PriorityHigh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SwapHoriz
@@ -80,6 +80,7 @@ import com.coparently.app.presentation.common.SectionRow
 import com.coparently.app.presentation.common.rememberParentNames
 import com.coparently.app.presentation.common.rememberToday
 import com.coparently.app.presentation.components.SkeletonBox
+import com.coparently.app.presentation.custody.custodyDiffDescription
 import com.coparently.app.presentation.theme.ParentColors
 import java.text.NumberFormat
 import java.time.LocalDate
@@ -142,6 +143,7 @@ fun HomeScreen(
     val today by rememberToday()
     val parentNames = rememberParentNames(viewModel.parents.collectAsState().value)
     val pendingProposal by changeRequestViewModel.pendingProposal.collectAsState()
+    val pendingProposalDiff by changeRequestViewModel.pendingProposalDiff.collectAsState()
 
     Scaffold(
         topBar = {
@@ -199,6 +201,7 @@ fun HomeScreen(
                     state = state,
                     parentNames = parentNames,
                     pendingProposal = pendingProposal,
+                    pendingProposalDiff = pendingProposalDiff,
                     onAcceptSwap = changeRequestViewModel::acceptSwap,
                     onDeclineSwap = changeRequestViewModel::declineSwap,
                     onAcceptProposal = changeRequestViewModel::acceptProposal,
@@ -225,6 +228,7 @@ private fun AwaitingDialogs(
     state: HomeUiState.Dashboard,
     parentNames: ParentNames,
     pendingProposal: com.coparently.app.domain.custody.CustodyProposal?,
+    pendingProposalDiff: com.coparently.app.domain.custody.CustodyPatternDiff?,
     onAcceptSwap: (LocalDate) -> Unit,
     onDeclineSwap: (LocalDate) -> Unit,
     onAcceptProposal: () -> Unit,
@@ -244,12 +248,15 @@ private fun AwaitingDialogs(
                 onDismissRequest = { dismissed = dismissed + key },
                 title = { Text(stringResource(R.string.custody_proposal_inbox_title)) },
                 text = {
-                    Text(
-                        stringResource(
-                            R.string.custody_proposal_inbox_body,
-                            parentNames.labelForUid(pendingProposal.proposedBy)
-                        )
+                    // Who proposed it, and — the part that was missing — what it would actually
+                    // do. The agreed pattern and the proposed one sit on the same document, so
+                    // the diff costs no extra read; the dialog simply never asked for it.
+                    val diff = custodyDiffDescription(pendingProposalDiff, parentNames)
+                    val who = stringResource(
+                        R.string.custody_proposal_inbox_body,
+                        parentNames.labelForUid(pendingProposal.proposedBy)
                     )
+                    Text(if (diff == null) who else "$who\n\n$diff")
                 },
                 confirmButton = {
                     TextButton(onClick = {

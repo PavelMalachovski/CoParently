@@ -9,6 +9,7 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -74,6 +75,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -99,15 +101,13 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.coparently.app.R
 import com.coparently.app.domain.model.Event
+import com.coparently.app.presentation.common.FullScreenImageDialog
 import com.coparently.app.presentation.common.rememberParentNames
 import com.coparently.app.presentation.components.TimePickerDialog
 import com.coparently.app.presentation.theme.CoPlanlyColors
 import com.coparently.app.presentation.theme.dimensions
 import com.coparently.app.utils.ValidationResult
 import com.coparently.app.utils.ValidationUtils
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -115,6 +115,9 @@ import java.time.LocalTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.UUID
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * Reminder lead-time options offered in the event form, in minutes before the
@@ -1683,15 +1686,24 @@ private fun EventPhotoSection(
                     Text(stringResource(R.string.event_form_attach_photo))
                 }
             } else {
+                var viewingPhoto by rememberSaveable { mutableStateOf(false) }
+                if (viewingPhoto) {
+                    FullScreenImageDialog(
+                        model = displayImage,
+                        contentDescription = stringResource(R.string.event_form_photo),
+                        onDismiss = { viewingPhoto = false }
+                    )
+                }
                 Box(modifier = Modifier.fillMaxWidth()) {
                     AsyncImage(
                         model = displayImage,
-                        contentDescription = stringResource(R.string.event_form_photo),
+                        contentDescription = stringResource(R.string.image_viewer_open),
                         contentScale = ContentScale.Crop,
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(180.dp)
                             .clip(MaterialTheme.shapes.medium)
+                            .clickable { viewingPhoto = true }
                     )
                     FilledTonalIconButton(
                         onClick = onRemovePhoto,

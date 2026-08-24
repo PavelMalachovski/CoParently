@@ -44,11 +44,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.coparently.app.R
+import com.coparently.app.data.sync.SyncWorker
 import com.coparently.app.domain.custody.CustodyResolver
 import com.coparently.app.domain.custody.DaySwapInbox
 import com.coparently.app.domain.holidays.CzechHolidays
@@ -64,11 +66,11 @@ import com.coparently.app.presentation.common.rememberToday
 import com.coparently.app.presentation.event.EventUiState
 import com.coparently.app.presentation.event.EventViewModel
 import com.coparently.app.presentation.theme.dimensions
-import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.YearMonth
 import java.util.Locale
+import kotlinx.coroutines.launch
 
 /**
  * Months loaded either side of the query anchor in MONTH mode.
@@ -257,6 +259,7 @@ fun CalendarScreen(
         yearRange = IntRange(now.year - 5, now.year + 5)
     )
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
 
     // Pull-to-Refresh state
     var isRefreshing by remember { mutableStateOf(false) }
@@ -544,6 +547,12 @@ fun CalendarScreen(
                     // straight from the Room flow, which pushes every write on its own. The old
                     // loadCustodySchedules() call left a permanent extra collector behind on
                     // each pull.
+                    //
+                    // The remote pull is the other half, and it was missing: this gesture only
+                    // ever re-read Room, so the one thing a parent reaches for when the calendar
+                    // looks stale did nothing about the co-parent's changes. The only remote
+                    // lever was the Refresh icon in Settings → Sync.
+                    SyncWorker.syncNow(context)
                     eventViewModel.refresh()
                     kotlinx.coroutines.delay(500)
                     isRefreshing = false

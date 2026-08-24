@@ -219,6 +219,12 @@ class PairingRepositoryImpl @Inject constructor(
             }
             if (partnerId != null) ensureConversationWith(partnerId)
         } catch (e: CancellationException) {
+            // Reset before rethrowing, for the same reason the generic branch below does. This
+            // flow is collected under `WhileSubscribed`, so leaving the app mid-`await()`
+            // cancels it — and a marker left set here means the conversation document is never
+            // created for the rest of the process, which the `messages` create rule turns into
+            // "every send from this device is denied".
+            appliedPairing.set(null)
             throw e
         } catch (
             @Suppress("TooGenericExceptionCaught") e: Exception

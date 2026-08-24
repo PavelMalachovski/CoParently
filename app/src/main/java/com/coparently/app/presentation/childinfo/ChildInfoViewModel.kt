@@ -1,5 +1,6 @@
 package com.coparently.app.presentation.childinfo
 
+import android.util.Log
 import androidx.annotation.StringRes
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -18,8 +19,11 @@ import com.coparently.app.domain.repository.MedicalPhotoStorage
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.time.Instant
@@ -94,6 +98,21 @@ class ChildInfoViewModel @Inject constructor(
      */
     private val _currentChildInfo = MutableStateFlow<ChildInfo?>(null)
     val currentChildInfo: StateFlow<ChildInfo?> = _currentChildInfo.asStateFlow()
+
+    /**
+     * Emitted once per completed save, so the editor can leave or report.
+     *
+     * The editor used to decide this itself from a `saveCompleted`/`isSaving` pair that nothing
+     * ever cleared, so the guard `saveCompleted && !isSaving` never became true: the form froze,
+     * disabled behind a spinner, while the write had in fact already landed in Room. Same defect,
+     * same shape, as the pet editor's — see [com.coparently.app.presentation.pets.PetSaveOutcome].
+     *
+     * `extraBufferCapacity = 1` so an emission is never dropped between recompositions, and a
+     * `SharedFlow` rather than a `StateFlow` so a re-entering editor is not immediately navigated
+     * back out by a replayed outcome.
+     */
+    private val _saveOutcome = MutableSharedFlow<ChildSaveOutcome>(extraBufferCapacity = 1)
+    val saveOutcome: SharedFlow<ChildSaveOutcome> = _saveOutcome.asSharedFlow()
 
     /** The live [loadChildInfoById] collector, so opening another child replaces it. */
     private var childObservation: Job? = null
@@ -275,35 +294,51 @@ class ChildInfoViewModel @Inject constructor(
      */
     fun upsertChildInfo(childInfo: ChildInfo, isNewChild: Boolean) {
         viewModelScope.launch {
-            try {
-                val currentUser = firebaseAuthService.getCurrentUser()
-                    ?: throw IllegalStateException("User not authenticated")
+            val saved = persist(childInfo, isNewChild)
+            _saveOutcome.emit(if (saved) ChildSaveOutcome.SAVED else ChildSaveOutcome.FAILED)
+        }
+    }
 
-                val finalChildInfo = childInfo.copy(
-                    createdByFirebaseUid = childInfo.createdByFirebaseUid ?: currentUser.uid,
-                    lastModifiedBy = currentUser.uid,
-                    syncedToFirestore = false
-                )
+    /**
+     * Writes the record, reporting whether it landed.
+     *
+     * @return true when Room holds the child. A failed Firestore upload does not make this
+     *   false: `ChildInfoRepositoryImpl` writes Room first and leaves the row in the unsynced
+     *   outbox for the next sync.
+     */
+    private suspend fun persist(childInfo: ChildInfo, isNewChild: Boolean): Boolean {
+        return try {
+            val currentUser = firebaseAuthService.getCurrentUser()
+                ?: throw IllegalStateException("User not authenticated")
 
-                childInfoRepository.upsertChildInfo(finalChildInfo)
+            val finalChildInfo = childInfo.copy(
+                createdByFirebaseUid = childInfo.createdByFirebaseUid ?: currentUser.uid,
+                lastModifiedBy = currentUser.uid,
+                syncedToFirestore = false
+            )
 
-                // Log analytics event
-                if (isNewChild) {
-                    analyticsManager.logChildInfoAdded()
-                } else {
-                    analyticsManager.logChildInfoUpdated()
-                }
-            } catch (e: Exception) {
-                crashlyticsManager.recordExceptionWithContext(
-                    e,
-                    // The child's *id*, never their name: a Crashlytics custom key is uploaded
-                    // to Firebase and, being set on the session rather than the report, rides
-                    // along on every later report from this install. A minor's name is not a
-                    // diagnostic — the id points at the same row and identifies nobody.
-                    mapOf("action" to "upsert_child_info", "child_id" to childInfo.id)
-                )
-                _uiState.value = ChildInfoUiState.Error(e.message ?: "Failed to save child info")
+            childInfoRepository.upsertChildInfo(finalChildInfo)
+
+            // Log analytics event
+            if (isNewChild) {
+                analyticsManager.logChildInfoAdded()
+            } else {
+                analyticsManager.logChildInfoUpdated()
             }
+            true
+        } catch (e: CancellationException) {
+            throw e
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+            crashlyticsManager.recordExceptionWithContext(
+                e,
+                // The child's *id*, never their name: a Crashlytics custom key is uploaded
+                // to Firebase and, being set on the session rather than the report, rides
+                // along on every later report from this install. A minor's name is not a
+                // diagnostic — the id points at the same row and identifies nobody.
+                mapOf("action" to "upsert_child_info", "child_id" to childInfo.id)
+            )
+            Log.e(TAG, "Saving child ${childInfo.id} failed", e)
+            false
         }
     }
 
@@ -341,7 +376,8 @@ class ChildInfoViewModel @Inject constructor(
                 url !in removedPhotoUrls || !deletePhoto(url)
             }
             val added = newPhotoUris.mapNotNull { uri -> uploadPhoto(childInfo.id, uri) }
-            upsertChildInfo(childInfo.copy(medicalPhotos = kept + added), isNewChild)
+            val saved = persist(childInfo.copy(medicalPhotos = kept + added), isNewChild)
+            _saveOutcome.emit(if (saved) ChildSaveOutcome.SAVED else ChildSaveOutcome.FAILED)
         }
     }
 
@@ -364,6 +400,7 @@ class ChildInfoViewModel @Inject constructor(
             e,
             mapOf("action" to "delete_medical_photo")
         )
+        Log.e(TAG, "Deleting a medical photo failed", e)
         _photoError.value = MedicalPhotoError.DELETE_FAILED
         false
     }
@@ -393,6 +430,9 @@ class ChildInfoViewModel @Inject constructor(
             e,
             mapOf("action" to "upload_medical_photo", "child_id" to childInfoId)
         )
+        // Crashlytics writes nothing to logcat, so without this line an upload failure on a
+        // device in front of you is undiagnosable. `Log.e` survives the R8 strip.
+        Log.e(TAG, "Uploading a medical photo to medical_photos/$childInfoId failed", e)
         _photoError.value = MedicalPhotoError.UPLOAD_FAILED
         null
     }
@@ -428,6 +468,21 @@ class ChildInfoViewModel @Inject constructor(
             }
         }
     }
+
+    private companion object {
+        const val TAG = "ChildInfoViewModel"
+    }
+}
+
+/**
+ * How a save of a child record ended, for the editor to act on.
+ */
+enum class ChildSaveOutcome {
+    /** The record is in Room. Photographs may still have failed; `photoError` reports that. */
+    SAVED,
+
+    /** Nothing was written. The editor keeps its contents so the user can try again. */
+    FAILED
 }
 
 /**

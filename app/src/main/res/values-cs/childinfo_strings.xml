@@ -103,4 +103,5 @@
     <string name="childinfo_grade_placeholder">např. 3. třída</string>
     <string name="childinfo_teacher_name_optional_label">Jméno učitele (nepovinné)</string>
     <string name="childinfo_teacher_email_optional_label">E-mail učitele (nepovinné)</string>
+    <string name="childinfo_save_failed">Údaje o dítěti se nepodařilo uložit. Zkuste to prosím znovu.</string>
 </resources>

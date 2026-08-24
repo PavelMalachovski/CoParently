@@ -1,10 +1,13 @@
 package com.coparently.app.data.repository
 
+import android.util.Log
 import com.coparently.app.data.local.dao.EventDao
 import com.coparently.app.data.local.dao.UserDao
 import com.coparently.app.data.local.entity.EventEntity
 import com.coparently.app.data.remote.firebase.FirebaseAuthService
 import com.coparently.app.data.remote.firebase.FirestoreEventDataSource
+import com.coparently.app.data.sync.EventDocument
+import com.coparently.app.data.sync.Tombstone
 import com.coparently.app.domain.activity.ActivityAnnouncement
 import com.coparently.app.domain.activity.ActivityAnnouncer
 import com.coparently.app.domain.activity.ActivityEntityType
@@ -15,13 +18,14 @@ import com.coparently.app.domain.events.EventAcceptanceTransition
 import com.coparently.app.domain.model.Event
 import com.coparently.app.domain.repository.EventRepository
 import com.google.gson.Gson
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.map
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 
 /**
  * Implementation of EventRepository.
@@ -92,6 +96,33 @@ class EventRepositoryImpl @Inject constructor(
         // paths need to tell "deleted here" apart from "never existed". A caller asking on a
         // user's behalf wants neither: to them the event is gone.
         return eventDao.getEventById(id)?.takeIf { it.deletedAtMillis == null }?.toDomain()
+    }
+
+    override suspend fun fetchRemoteEvent(id: String): Event? {
+        val data = try {
+            firestoreEventDataSource.getEventById(id)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+            Log.w(TAG, "Fetching event $id from Firestore failed", e)
+            return null
+        } ?: return null
+
+        // A tombstone is answered from the raw document, before parsing, exactly as the sync
+        // path does: the co-parent deleted this event, so materialising it here would put a
+        // cancelled event back on the calendar.
+        if (Tombstone.isDeleted(data)) return null
+
+        val entity = runCatching { EventDocument.toEntity(data) }.getOrElse { cause ->
+            Log.w(TAG, "Event $id could not be read from its document", cause)
+            return null
+        }
+
+        // Never over a pending local deletion — that is this device's own delete, still queued.
+        if (eventDao.getEventById(id)?.deletedAtMillis != null) return null
+
+        eventDao.insertEvent(entity)
+        return entity.toDomain()
     }
 
     override fun getEventsByParent(parentOwner: String): Flow<List<Event>> {
@@ -445,5 +476,9 @@ class EventRepositoryImpl @Inject constructor(
             isImportant = isImportant,
             friendParticipates = friendParticipates
         )
+    }
+
+    private companion object {
+        const val TAG = "EventRepository"
     }
 }

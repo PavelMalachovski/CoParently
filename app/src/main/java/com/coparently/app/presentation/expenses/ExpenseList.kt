@@ -38,11 +38,10 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
 import com.coparently.app.R
 import com.coparently.app.domain.model.Expense
+import com.coparently.app.presentation.common.FullScreenImageDialog
 import com.coparently.app.presentation.common.ParentNames
 import com.coparently.app.presentation.theme.ParentColors
 import java.time.format.DateTimeFormatter
@@ -117,8 +116,12 @@ fun ExpenseList(
     }
 
     viewedReceiptUrl?.let { url ->
-        ReceiptViewerDialog(
-            receiptUrl = url,
+        // A receipt is a document, not a snapshot: it is read, not glanced at. The shared
+        // viewer pinches, pans and double-taps, and — unlike the fit-to-width dialog it
+        // replaces — does not close on the first exploratory tap.
+        FullScreenImageDialog(
+            model = url,
+            contentDescription = stringResource(R.string.expenses_receipt_photo),
             onDismiss = { viewedReceiptUrl = null }
         )
     }
@@ -316,27 +319,3 @@ private fun SwipeToDeleteRow(
     }
 }
 
-/**
- * Full-width receipt photo viewer; tap anywhere on the image or outside to close.
- */
-@Composable
-private fun ReceiptViewerDialog(
-    receiptUrl: String,
-    onDismiss: () -> Unit
-) {
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
-    ) {
-        AsyncImage(
-            model = receiptUrl,
-            contentDescription = stringResource(R.string.expenses_receipt_photo),
-            contentScale = ContentScale.Fit,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp)
-                .clip(MaterialTheme.shapes.medium)
-                .clickable(onClick = onDismiss)
-        )
-    }
-}

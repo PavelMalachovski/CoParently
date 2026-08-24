@@ -103,4 +103,5 @@
     <string name="childinfo_grade_placeholder">напр., 3-й класс</string>
     <string name="childinfo_teacher_name_optional_label">Имя учителя (необязательно)</string>
     <string name="childinfo_teacher_email_optional_label">Эл. почта учителя (необязательно)</string>
+    <string name="childinfo_save_failed">Не удалось сохранить данные ребёнка. Попробуйте ещё раз.</string>
 </resources>

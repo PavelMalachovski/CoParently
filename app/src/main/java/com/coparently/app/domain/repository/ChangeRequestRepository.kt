@@ -36,4 +36,11 @@ interface ChangeRequestRepository {
      * Never completes on its own — launch it in a scope tied to the UI.
      */
     suspend fun syncWithFirestore()
+
+    /**
+     * Re-uploads every change request this device wrote locally but never got onto the server.
+     *
+     * One pass, no loop. Safe to call at any time and cheap when nothing is queued.
+     */
+    suspend fun flushOutbox()
 }

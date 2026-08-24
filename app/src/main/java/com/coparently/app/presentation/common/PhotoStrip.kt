@@ -214,13 +214,15 @@ private fun FullScreenPhoto(
                 .fillMaxSize()
                 .background(Color.Black)
         ) {
-            AsyncImage(
+            // Zoomable: a prescription or a vaccination card is read, not glanced at, and the
+            // fit-to-screen render this replaced made small print unreadable on a phone.
+            ZoomableImage(
                 model = photo,
                 // The strip's thumbnail already described this one; repeating it here would
                 // have a screen reader announce the same photograph twice on the way in.
                 contentDescription = null,
-                contentScale = ContentScale.Fit,
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier.fillMaxSize(),
+                onTap = onClose
             )
             IconButton(
                 onClick = onClose,

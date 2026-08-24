@@ -59,6 +59,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -77,6 +78,7 @@ import com.coparently.app.domain.model.Expense
 import com.coparently.app.domain.model.ExpenseCategory
 import com.coparently.app.domain.money.SupportedCurrency
 import com.coparently.app.domain.receipts.ReceiptScan
+import com.coparently.app.presentation.common.FullScreenImageDialog
 import com.coparently.app.presentation.theme.CoPlanlyShapes
 import java.io.File
 import java.time.Instant
@@ -795,15 +797,20 @@ private fun ReceiptPicker(
             }
         }
     } else {
+        // Tapping a row opens this editor, so this 180dp crop is the receipt most parents
+        // actually reach — and a crop of a portrait receipt hides most of it. It is now the
+        // entry point to the full-screen zoomable viewer rather than an inert decoration.
+        var viewingFullScreen by rememberSaveable { mutableStateOf(false) }
         Box(modifier = Modifier.fillMaxWidth()) {
             AsyncImage(
                 model = receiptUri,
-                contentDescription = stringResource(R.string.expenses_receipt_photo),
+                contentDescription = stringResource(R.string.image_viewer_open),
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(180.dp)
                     .clip(CoPlanlyShapes.medium)
+                    .clickable { viewingFullScreen = true }
             )
             FilledTonalIconButton(
                 onClick = onRemovePhoto,
@@ -814,6 +821,13 @@ private fun ReceiptPicker(
             ) {
                 Icon(Icons.Default.Close, contentDescription = stringResource(R.string.expense_remove_receipt))
             }
+        }
+        if (viewingFullScreen) {
+            FullScreenImageDialog(
+                model = receiptUri,
+                contentDescription = stringResource(R.string.expenses_receipt_photo),
+                onDismiss = { viewingFullScreen = false }
+            )
         }
     }
 }

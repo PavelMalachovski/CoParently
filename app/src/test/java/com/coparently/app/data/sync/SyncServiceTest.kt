@@ -131,6 +131,8 @@ class SyncServiceTest {
             parentSlotMigrator,
             encryptedPreferences,
             petRepository,
+            mockk(relaxed = true),
+            mockk(relaxed = true),
             accountSwitchGuard
         )
     }

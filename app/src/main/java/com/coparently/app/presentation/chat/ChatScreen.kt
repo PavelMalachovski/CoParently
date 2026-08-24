@@ -102,9 +102,14 @@ fun ChatScreen(
     var showTemplates by remember { mutableStateOf(false) }
     var showEventPicker by remember { mutableStateOf(false) }
 
-    // Seeded by the incoming draft (Expenses settle-up) and by message templates. rememberSaveable
-    // so a rotation does not throw away a message the user is halfway through writing.
-    var composerText by rememberSaveable(draft) { mutableStateOf(draft) }
+    // Seeded by the incoming draft (Expenses settle-up), by message templates, and — when
+    // neither of those supplied anything — by whatever the user last typed into this thread and
+    // did not send. That last source is persisted by the ViewModel rather than held here:
+    // switching tabs clears the Chat back-stack entry, so composable state alone did not
+    // survive it and a half-written message vanished.
+    var composerText by rememberSaveable(conversationId, draft) {
+        mutableStateOf(draft.ifEmpty { viewModel.draftFor(conversationId) })
+    }
     val composerFocus = remember { FocusRequester() }
 
     // Bumped only when something *seeds* the composer, so the refocus below fires on that and on
@@ -171,6 +176,7 @@ fun ChatScreen(
                 },
                 onEventLinkClick = onOpenChangeRequest,
                 onOpenInbox = onOpenInbox,
+                onRetryFailed = { viewModel.resendFailedMessages() },
                 modifier = Modifier.weight(1f)
             )
 
@@ -197,7 +203,10 @@ fun ChatScreen(
 
             MessageInput(
                 value = composerText,
-                onValueChange = { composerText = it },
+                onValueChange = {
+                    composerText = it
+                    viewModel.onDraftChanged(conversationId, it)
+                },
                 onSendMessage = { content ->
                     viewModel.sendMessage(content)
                     composerText = ""
@@ -218,6 +227,7 @@ fun ChatScreen(
                 // identical placeholders-and-all messages into a real thread during the August
                 // 2026 baseline run, because the send was invisible and read as a missed tap.
                 composerText = context.getString(template.contentRes)
+                viewModel.onDraftChanged(conversationId, composerText)
                 composerSeeds++
                 showTemplates = false
             },

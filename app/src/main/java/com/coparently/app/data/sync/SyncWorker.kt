@@ -6,15 +6,17 @@ import androidx.hilt.work.HiltWorker
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.coparently.app.data.crashlytics.CrashlyticsManager
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
-import kotlinx.coroutines.CancellationException
 import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.CancellationException
 
 /**
  * WorkManager worker for periodic background synchronization.
@@ -58,6 +60,7 @@ class SyncWorker @AssistedInject constructor(
     companion object {
         private const val TAG = "SyncWorker"
         private const val WORK_NAME = "periodic_data_sync"
+        private const val ONE_SHOT_WORK_NAME = "immediate_data_sync"
         private const val SYNC_INTERVAL_MINUTES = 15L
 
         /**
@@ -84,6 +87,34 @@ class SyncWorker @AssistedInject constructor(
                     ExistingPeriodicWorkPolicy.UPDATE,
                     workRequest
                 )
+        }
+
+        /**
+         * Runs one sync as soon as there is a network, without waiting for the periodic tick.
+         *
+         * The periodic worker is scheduled with [ExistingPeriodicWorkPolicy.UPDATE], which
+         * preserves the existing period — so launching the app did not reset the fifteen-minute
+         * clock, and nothing else ran a sync at all: not cold start, not foreground, not sign-in,
+         * not a push. A co-parent's newly created event could therefore sit undownloaded for a
+         * quarter of an hour or, under Doze, considerably longer, which is what made accepting
+         * their proposed change fail with "the event for this request no longer exists".
+         *
+         * `ExistingWorkPolicy.KEEP` so several triggers landing together — a push arriving as the
+         * user opens the app — coalesce into one run rather than queueing four.
+         *
+         * @param context Any context; WorkManager is resolved from the application one.
+         */
+        fun syncNow(context: Context) {
+            val request = OneTimeWorkRequestBuilder<SyncWorker>()
+                .setConstraints(
+                    Constraints.Builder()
+                        .setRequiredNetworkType(NetworkType.CONNECTED)
+                        .build()
+                )
+                .build()
+
+            WorkManager.getInstance(context)
+                .enqueueUniqueWork(ONE_SHOT_WORK_NAME, ExistingWorkPolicy.KEEP, request)
         }
 
         /**

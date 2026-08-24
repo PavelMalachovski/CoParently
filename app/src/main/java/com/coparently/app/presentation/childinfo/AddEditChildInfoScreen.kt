@@ -60,8 +60,29 @@ fun AddEditChildInfoScreen(
     var removedPhotos by remember { mutableStateOf<List<String>>(emptyList()) }
     var isSaving by remember { mutableStateOf(false) }
     var showDatePicker by remember { mutableStateOf(false) }
-    var saveCompleted by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
+
+    // The ViewModel says when the write landed. This used to be a `saveCompleted && !isSaving`
+    // guard over two local flags, and nothing ever cleared `isSaving`, so it never fired: the
+    // form stayed disabled behind a spinner while the record had already been written to Room.
+    val saveFailed = stringResource(R.string.childinfo_save_failed)
+    LaunchedEffect(Unit) {
+        viewModel.saveOutcome.collect { outcome ->
+            when (outcome) {
+                ChildSaveOutcome.SAVED -> {
+                    // Cleared before leaving: a second Save would otherwise re-upload the same
+                    // content URIs, orphaning objects in the bucket and doubling the strip.
+                    pickedPhotos = emptyList()
+                    removedPhotos = emptyList()
+                    onNavigateBack()
+                }
+                ChildSaveOutcome.FAILED -> {
+                    isSaving = false
+                    snackbarHostState.showSnackbar(saveFailed)
+                }
+            }
+        }
+    }
 
     // Load existing child info if editing
     LaunchedEffect(childInfoId) {
@@ -452,7 +473,6 @@ fun AddEditChildInfoScreen(
                             newPhotoUris = pickedPhotos,
                             removedPhotoUrls = removedPhotos
                         )
-                        saveCompleted = true
                     }
                 },
                 modifier = Modifier.fillMaxWidth(),
@@ -475,12 +495,6 @@ fun AddEditChildInfoScreen(
                 )
             }
 
-            // Navigate back after save completes
-            LaunchedEffect(saveCompleted, isSaving) {
-                if (saveCompleted && !isSaving) {
-                    onNavigateBack()
-                }
-            }
 
             // Bottom spacing
             Spacer(modifier = Modifier.height(16.dp))

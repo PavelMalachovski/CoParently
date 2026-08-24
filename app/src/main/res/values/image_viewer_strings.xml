@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The shared full-screen image viewer (receipts, event photos, medical and pet photographs). -->
+<resources>
+    <string name="image_viewer_close">Close</string>
+    <string name="image_viewer_open">Open full screen</string>
+</resources>

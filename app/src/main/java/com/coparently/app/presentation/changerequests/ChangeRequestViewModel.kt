@@ -3,6 +3,7 @@ package com.coparently.app.presentation.changerequests
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.coparently.app.data.repository.CustodyModelRepository
+import com.coparently.app.domain.custody.CustodyPatternDiff
 import com.coparently.app.domain.custody.CustodyProposal
 import com.coparently.app.domain.custody.DayOverride
 import com.coparently.app.domain.custody.DayOverrideTransition
@@ -19,20 +20,20 @@ import com.coparently.app.domain.usecase.EventUseCases
 import com.coparently.app.presentation.common.Parents
 import com.coparently.app.presentation.common.ParentsSource
 import dagger.hilt.android.lifecycle.HiltViewModel
+import java.time.LocalDate
+import java.time.LocalDateTime
+import javax.inject.Inject
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import java.time.LocalDate
-import java.time.LocalDateTime
-import javax.inject.Inject
 
 /**
  * ViewModel for the inbox: event change requests, one-off day swaps, and the actions on both.
@@ -167,7 +168,7 @@ class ChangeRequestViewModel @Inject constructor(
     fun accept(requestId: String) {
         viewModelScope.launch {
             val request = changeRequestRepository.getChangeRequestById(requestId) ?: return@launch
-            val event = eventRepository.getEventById(request.eventId)
+            val event = resolveEvent(request.eventId)
             if (event == null) {
                 _errorMessage.value = "The event for this request no longer exists"
                 return@launch
@@ -191,6 +192,19 @@ class ChangeRequestViewModel @Inject constructor(
             )
         }
     }
+
+    /**
+     * The event a request is about, fetched from the server when this device has not synced it.
+     *
+     * `change_requests` is mirrored in realtime and `events` is not, so a proposal routinely
+     * arrives before the event it refers to. Accepting then failed with "the event for this
+     * request no longer exists" — the message the reporter read as "I have not synced with her"
+     * — until the next fifteen-minute worker tick happened to run.
+     *
+     * @param eventId The event the request names.
+     */
+    private suspend fun resolveEvent(eventId: String) =
+        eventRepository.getEventById(eventId) ?: eventRepository.fetchRemoteEvent(eventId)
 
     /** Declines an incoming request; the event stays unchanged. */
     fun decline(requestId: String) {
@@ -266,6 +280,33 @@ class ChangeRequestViewModel @Inject constructor(
         initialValue = null
     )
 
+    /**
+     * What the pending proposal would actually change, or null when there is nothing to answer.
+     *
+     * A second flow rather than a wider [pendingProposal] type: three screens read that one and
+     * only two of them want the diff. Both come off the same `observeShared()` document, which
+     * carries the agreed pattern and the proposed one side by side — the diff needs no history
+     * and no extra read.
+     *
+     * Anchored on today, so the sentence describes the fortnight the parent is looking at.
+     */
+    val pendingProposalDiff: StateFlow<CustodyPatternDiff?> = combine(
+        custodyModelRepository.observeShared(),
+        _currentUserId
+    ) { shared, uid ->
+        val proposal = shared?.proposal?.takeIf { uid.isNotEmpty() && it.proposedBy != uid }
+            ?: return@combine null
+        CustodyPatternDiff.of(
+            agreed = shared.model,
+            proposed = proposal.model,
+            from = LocalDate.now()
+        )
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = null
+    )
+
     /** Accepts the co-parent's pending custody proposal; it becomes the agreed pattern. */
     fun acceptProposal() {
         viewModelScope.launch {
@@ -306,7 +347,14 @@ class ChangeRequestViewModel @Inject constructor(
      */
     private fun decideEvent(eventId: String, accept: Boolean) {
         viewModelScope.launch {
-            val fresh = eventRepository.getEventById(eventId) ?: return@launch
+            // A bare `?: return@launch` here made the button do nothing at all when the event
+            // had not been synced yet — silent, which is worse than the error message the sibling
+            // path at least printed.
+            val fresh = resolveEvent(eventId)
+            if (fresh == null) {
+                _errorMessage.value = "The event for this request no longer exists"
+                return@launch
+            }
             val uid = _currentUserId.value.takeIf { it.isNotEmpty() }
                 ?: userRepository.getCurrentUserId()
                 ?: return@launch

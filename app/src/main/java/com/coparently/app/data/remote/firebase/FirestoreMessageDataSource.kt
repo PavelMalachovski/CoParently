@@ -107,14 +107,22 @@ class FirestoreMessageDataSource @Inject constructor(
      * @param messageData The message document.
      * @param lastMessageAtMillis The message's timestamp as epoch millis, for ordering.
      */
-    suspend fun sendMessage(
-        messageId: String,
-        messageData: Map<String, Any>,
-        lastMessageAtMillis: Long
-    ) {
+    suspend fun sendMessage(messageId: String, messageData: Map<String, Any>) {
         messagesCollection.document(messageId).set(messageData).await()
+    }
 
-        val conversationId = messageData["conversationId"] as String
+    /**
+     * Advances a conversation's ordering timestamp.
+     *
+     * Separate from [sendMessage] on purpose. The two used to be one awaited pair, so a
+     * successful message write followed by a failed `lastMessageAt` bump threw, and the caller
+     * marked a message the co-parent had already received as failed to send. The message is the
+     * payload; this is metadata, and it must not be able to condemn the payload.
+     *
+     * @param conversationId The thread to bump.
+     * @param lastMessageAtMillis The newest message's timestamp as epoch millis.
+     */
+    suspend fun bumpLastMessageAt(conversationId: String, lastMessageAtMillis: Long) {
         conversationsCollection.document(conversationId)
             .update("lastMessageAt", lastMessageAtMillis)
             .await()

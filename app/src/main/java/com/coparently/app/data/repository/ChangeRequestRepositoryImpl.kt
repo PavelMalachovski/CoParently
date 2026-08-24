@@ -1,5 +1,6 @@
 package com.coparently.app.data.repository
 
+import android.util.Log
 import com.coparently.app.data.local.dao.ChangeRequestDao
 import com.coparently.app.data.local.entity.ChangeRequestEntity
 import com.coparently.app.data.remote.firebase.FcmService
@@ -9,6 +10,7 @@ import com.coparently.app.data.remote.firebase.PushPayload
 import com.coparently.app.domain.model.ChangeRequest
 import com.coparently.app.domain.model.ChangeRequestStatus
 import com.coparently.app.domain.repository.ChangeRequestRepository
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
@@ -49,14 +51,8 @@ class ChangeRequestRepositoryImpl @Inject constructor(
 
     override suspend fun createChangeRequest(request: ChangeRequest) {
         changeRequestDao.insertChangeRequest(request.toEntity())
-
-        if (firebaseAuthService.getCurrentUser() != null) {
-            firestoreDataSource.setChangeRequest(request.id, request.toFirestoreMap())
-            changeRequestDao.insertChangeRequest(
-                request.copy(syncedToFirestore = true).toEntity()
-            )
-            notifyCounterparty(request, targetUserId = request.requestedTo, action = "created")
-        }
+        if (firebaseAuthService.getCurrentUser() == null) return
+        publish(request, targetUserId = request.requestedTo, action = "created")
     }
 
     override suspend fun updateStatus(requestId: String, status: ChangeRequestStatus) {
@@ -64,18 +60,56 @@ class ChangeRequestRepositoryImpl @Inject constructor(
         val updated = request.copy(status = status, respondedAt = LocalDateTime.now())
         changeRequestDao.insertChangeRequest(updated.toEntity())
 
-        if (firebaseAuthService.getCurrentUser() != null) {
-            firestoreDataSource.setChangeRequest(updated.id, updated.toFirestoreMap())
-            changeRequestDao.insertChangeRequest(
-                updated.copy(syncedToFirestore = true).toEntity()
-            )
-            // Cancellation notifies the addressee; accept/decline notify the requester.
-            val target = if (status == ChangeRequestStatus.CANCELLED) {
-                updated.requestedTo
+        if (firebaseAuthService.getCurrentUser() == null) return
+        // Cancellation notifies the addressee; accept/decline notify the requester.
+        val target = if (status == ChangeRequestStatus.CANCELLED) {
+            updated.requestedTo
+        } else {
+            updated.requestedBy
+        }
+        publish(updated, targetUserId = target, action = status.name.lowercase())
+    }
+
+    /**
+     * Uploads one request and announces it, leaving it queued rather than throwing on failure.
+     *
+     * Both callers run inside a bare `viewModelScope.launch`, so an uncaught `PERMISSION_DENIED`
+     * here did not merely fail the sync — it took the process down. The same guard
+     * `ExpenseRepositoryImpl` and `BudgetRepositoryImpl` already carry, for the same reason.
+     *
+     * A failure leaves `syncedToFirestore = false`, which is what [flushOutbox] selects on.
+     */
+    private suspend fun publish(request: ChangeRequest, targetUserId: String, action: String) {
+        try {
+            firestoreDataSource.setChangeRequest(request.id, request.toFirestoreMap())
+        } catch (e: CancellationException) {
+            throw e
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+            Log.w(TAG, "Change request ${request.id} stays queued", e)
+            return
+        }
+        changeRequestDao.insertChangeRequest(request.copy(syncedToFirestore = true).toEntity())
+        notifyCounterparty(request, targetUserId = targetUserId, action = action)
+    }
+
+    override suspend fun flushOutbox() {
+        val userId = firebaseAuthService.getCurrentUser()?.uid ?: return
+        for (entity in changeRequestDao.getUnsyncedChangeRequests()) {
+            val request = entity.toDomain()
+            // Only this device's own writes. A request mirrored down from the co-parent that
+            // failed to parse its synced flag is not ours to re-publish.
+            if (request.requestedBy != userId && request.requestedTo != userId) continue
+            val action = if (request.status == ChangeRequestStatus.PENDING) {
+                "created"
             } else {
-                updated.requestedBy
+                request.status.name.lowercase()
             }
-            notifyCounterparty(updated, targetUserId = target, action = status.name.lowercase())
+            val target = when {
+                request.status == ChangeRequestStatus.PENDING -> request.requestedTo
+                request.status == ChangeRequestStatus.CANCELLED -> request.requestedTo
+                else -> request.requestedBy
+            }
+            publish(request, targetUserId = target, action = action)
         }
     }
 
@@ -85,7 +119,7 @@ class ChangeRequestRepositoryImpl @Inject constructor(
             // Offline-first: a Firestore failure (missing index, denied read, no network)
             // must not crash the app — Room stays the source of truth. Swallow and log.
             .catch { e ->
-                android.util.Log.w("ChangeRequestRepo", "Change request sync failed", e)
+                Log.w(TAG, "Change request sync failed", e)
             }
             .collect { documents ->
                 documents.forEach { data ->
@@ -191,4 +225,8 @@ class ChangeRequestRepositoryImpl @Inject constructor(
         respondedAt = respondedAt,
         syncedToFirestore = syncedToFirestore
     )
+
+    private companion object {
+        const val TAG = "ChangeRequestRepo"
+    }
 }

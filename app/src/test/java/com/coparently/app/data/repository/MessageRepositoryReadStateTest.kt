@@ -290,8 +290,9 @@ class MessageRepositoryReadStateTest {
 
             repository.sendMessage(message())
 
+            coVerify(exactly = 1) { firestoreMessageDataSource.sendMessage(MESSAGE_ID, any()) }
             coVerify(exactly = 1) {
-                firestoreMessageDataSource.sendMessage(MESSAGE_ID, any(), capture(sentAt))
+                firestoreMessageDataSource.bumpLastMessageAt(CONVERSATION, capture(sentAt))
             }
             assertEquals(SENT_AT_MILLIS, sentAt.captured)
 
@@ -304,9 +305,9 @@ class MessageRepositoryReadStateTest {
         }
 
     @Test
-    fun `a failed send leaves the row ERROR`() = runTest {
+    fun `a failed send leaves the row ERROR and queued for the outbox`() = runTest {
         coEvery { messageDao.getConversationById(CONVERSATION) } returns conversationRow()
-        coEvery { firestoreMessageDataSource.sendMessage(any(), any(), any()) } throws
+        coEvery { firestoreMessageDataSource.sendMessage(any(), any()) } throws
             IllegalStateException("offline")
         val messages = mutableListOf<MessageEntity>()
 
@@ -315,6 +316,66 @@ class MessageRepositoryReadStateTest {
         assertNotNull("the caller still learns the send failed", thrown)
         coVerify { messageDao.insertMessage(capture(messages)) }
         assertEquals(MessageSendStatus.ERROR.name, messages.last().status)
+        // The row stays unsynced, which is what `flushOutbox` selects on. Before the outbox
+        // existed, ERROR was terminal and the message was never delivered at all.
+        assertFalse("a failed send stays queued", messages.last().syncedToFirestore)
+    }
+
+    @Test
+    fun `a refused send re-publishes the conversation and tries once more`() = runTest {
+        coEvery { messageDao.getConversationById(CONVERSATION) } returns conversationRow()
+        var attempts = 0
+        coEvery { firestoreMessageDataSource.sendMessage(any(), any()) } answers {
+            attempts++
+            if (attempts == 1) throw IllegalStateException("PERMISSION_DENIED") else Unit
+        }
+        val messages = mutableListOf<MessageEntity>()
+
+        repository.sendMessage(message())
+
+        coVerify(exactly = 1) { firestoreMessageDataSource.setConversation(CONVERSATION, any()) }
+        coVerify { messageDao.insertMessage(capture(messages)) }
+        assertEquals(MessageSendStatus.SENT.name, messages.last().status)
+    }
+
+    @Test
+    fun `a failed lastMessageAt bump does not condemn a delivered message`() = runTest {
+        coEvery { messageDao.getConversationById(CONVERSATION) } returns conversationRow()
+        coEvery { firestoreMessageDataSource.bumpLastMessageAt(any(), any()) } throws
+            IllegalStateException("offline")
+        val messages = mutableListOf<MessageEntity>()
+
+        repository.sendMessage(message())
+
+        coVerify { messageDao.insertMessage(capture(messages)) }
+        assertEquals(MessageSendStatus.SENT.name, messages.last().status)
+        assertTrue(messages.last().syncedToFirestore)
+    }
+
+    @Test
+    fun `the outbox replays an unsent message and settles it`() = runTest {
+        coEvery { messageDao.getConversationById(CONVERSATION) } returns conversationRow()
+        coEvery { messageDao.getUnsyncedConversations() } returns emptyList()
+        coEvery { messageDao.getUnsyncedMessages() } returns listOf(unsentRow())
+        val messages = mutableListOf<MessageEntity>()
+
+        repository.flushOutbox()
+
+        coVerify(exactly = 1) { firestoreMessageDataSource.sendMessage(MESSAGE_ID, any()) }
+        coVerify { messageDao.insertMessage(capture(messages)) }
+        assertEquals(MessageSendStatus.SENT.name, messages.last().status)
+        assertTrue(messages.last().syncedToFirestore)
+    }
+
+    @Test
+    fun `the outbox leaves the co-parent's own messages alone`() = runTest {
+        coEvery { messageDao.getConversationById(CONVERSATION) } returns conversationRow()
+        coEvery { messageDao.getUnsyncedConversations() } returns emptyList()
+        coEvery { messageDao.getUnsyncedMessages() } returns listOf(unsentRow(senderId = UID_B))
+
+        repository.flushOutbox()
+
+        coVerify(exactly = 0) { firestoreMessageDataSource.sendMessage(any(), any()) }
     }
 
     @Test
@@ -448,6 +509,19 @@ class MessageRepositoryReadStateTest {
         sentAtMillis = SENT_AT_MILLIS,
         messageType = MessageType.TEXT,
         status = MessageSendStatus.SENDING
+    )
+
+    /** A row the outbox should pick up: written locally, never acknowledged by the server. */
+    private fun unsentRow(senderId: String = UID_A) = MessageEntity(
+        id = MESSAGE_ID,
+        conversationId = CONVERSATION,
+        senderId = senderId,
+        senderName = "Anna",
+        content = "See you at 5",
+        sentAtMillis = SENT_AT_MILLIS,
+        messageType = MessageType.TEXT.name,
+        syncedToFirestore = false,
+        status = MessageSendStatus.ERROR.name
     )
 
     private companion object {

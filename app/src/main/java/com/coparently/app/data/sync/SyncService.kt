@@ -14,19 +14,21 @@ import com.coparently.app.data.remote.firebase.FirestoreUserDataSource
 import com.coparently.app.data.repository.LocalDateJsonAdapter
 import com.coparently.app.data.repository.ParentSlotMigrator
 import com.coparently.app.data.session.AccountSwitchGuard
-import com.coparently.app.domain.repository.PetRepository
 import com.coparently.app.domain.guests.GuestGrantPolicy
+import com.coparently.app.domain.repository.ChangeRequestRepository
+import com.coparently.app.domain.repository.MessageRepository
+import com.coparently.app.domain.repository.PetRepository
 import com.google.gson.GsonBuilder
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 /**
  * Service for managing synchronization between local database and Firestore.
@@ -51,6 +53,8 @@ class SyncService @Inject constructor(
     private val parentSlotMigrator: ParentSlotMigrator,
     private val encryptedPreferences: EncryptedPreferences,
     private val petRepository: PetRepository,
+    private val messageRepository: MessageRepository,
+    private val changeRequestRepository: ChangeRequestRepository,
     private val accountSwitchGuard: AccountSwitchGuard
 ) {
     // `LocalDate::class.java` needs the same adapter `ChildInfoRepositoryImpl` and
@@ -95,10 +99,18 @@ class SyncService @Inject constructor(
 
             // Step 4: Sync pets. The repository handles upload, download and audience repair
             // itself (mirroring child info), so there is nothing to duplicate here.
-            _syncStatus.value = SyncStatus.Syncing(85, 100)
+            _syncStatus.value = SyncStatus.Syncing(80, 100)
             petRepository.syncWithFirestore()
 
-            // Step 5: Complete
+            // Step 5: Drain the outboxes that a live listener cannot drain for you. Chat and
+            // change requests are mirrored *down* in realtime, but a write of either that was
+            // refused or interrupted had nothing retrying it — a chat message stayed ERROR for
+            // good, and a change request created offline never left the sender's phone.
+            _syncStatus.value = SyncStatus.Syncing(90, 100)
+            messageRepository.flushOutbox()
+            changeRequestRepository.flushOutbox()
+
+            // Step 6: Complete
             _syncStatus.value = SyncStatus.Success(LocalDateTime.now())
             Result.success(Unit)
         } catch (e: Exception) {
@@ -643,47 +655,11 @@ class SyncService @Inject constructor(
 
     /**
      * Converts Firestore event data to EventEntity.
+     *
+     * Delegates to [EventDocument], which is the single reader of the document shape now that
+     * the change-request inbox fetches events too.
      */
-    @Suppress("UNCHECKED_CAST")
-    private fun Map<String, Any?>.toEventEntity(): com.coparently.app.data.local.entity.EventEntity {
-        return com.coparently.app.data.local.entity.EventEntity(
-            id = this["id"] as String,
-            title = this["title"] as String,
-            description = this["description"] as? String,
-            startDateTime = LocalDateTime.parse(this["startDateTime"] as String, formatter),
-            endDateTime = (this["endDateTime"] as? String)?.let { LocalDateTime.parse(it, formatter) },
-            eventType = this["eventType"] as String,
-            parentOwner = this["parentOwner"] as String,
-            isRecurring = this["isRecurring"] as? Boolean ?: false,
-            recurrencePattern = (this["recurrencePattern"] as? String)?.ifBlank { null },
-            recurrenceEndDate = (this["recurrenceEndDate"] as? String)?.ifBlank { null }
-                ?.let { java.time.LocalDate.parse(it) },
-            pickupConfirmedBy = (this["pickupConfirmedBy"] as? String)?.ifBlank { null },
-            pickupConfirmedAt = (this["pickupConfirmedAt"] as? String)?.ifBlank { null }
-                ?.let { LocalDateTime.parse(it, formatter) },
-            createdAt = LocalDateTime.parse(this["createdAt"] as String, formatter),
-            updatedAt = LocalDateTime.parse(this["updatedAt"] as String, formatter),
-            syncedToFirestore = true,
-            createdByFirebaseUid = this["createdByFirebaseUid"] as? String,
-            sharedWithJson = gson.toJson(this["sharedWith"] ?: emptyList<String>()),
-            lastModifiedBy = this["lastModifiedBy"] as? String,
-            permissions = this["permissions"] as? String ?: "read_write",
-            imageUrl = (this["imageUrl"] as? String)?.ifBlank { null },
-            // Absent reads as NOT_REQUIRED: every document written before this field existed was
-            // created without an acceptance step, and defaulting the other way would hide it.
-            acceptance = (this["acceptance"] as? String)?.ifBlank { null } ?: "NOT_REQUIRED",
-            acceptedBy = (this["acceptedBy"] as? String)?.ifBlank { null },
-            acceptedAt = (this["acceptedAt"] as? String)?.ifBlank { null }
-                ?.let { LocalDateTime.parse(it, formatter) },
-            // Absent reads as false: a document written before this field existed carries no
-            // such expectation, and inventing one would put an exclamation mark on somebody
-            // else's ordinary event.
-            isImportant = this["isImportant"] as? Boolean ?: false,
-            friendParticipates = (this["friendParticipates"] as? String)?.takeIf { it.isNotEmpty() },
-            // Firestore returns numbers as Long; null when the document predates the field.
-            reminderMinutes = (this["reminderMinutes"] as? Number)?.toInt()
-        )
-    }
+    private fun Map<String, Any?>.toEventEntity() = EventDocument.toEntity(this)
 
     /**
      * The guest grants stored on [entity], decoded through the one reader.

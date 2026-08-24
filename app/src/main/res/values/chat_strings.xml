@@ -76,4 +76,5 @@
     <string name="chat_template_holiday_plan_content">Let\'s agree on the plan for [holiday]. My suggestion is [proposal]. What do you think?</string>
     <string name="chat_template_schedule_change_title">Schedule change</string>
     <string name="chat_template_schedule_change_content">I need to change the schedule for [date]. Could we swap? I would take [alternative date].</string>
+    <string name="chat_failed_to_send_retry">Not sent — tap to retry</string>
 </resources>

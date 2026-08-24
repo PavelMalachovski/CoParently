@@ -60,4 +60,5 @@
     <string name="pet_photos_close">Schließen</string>
     <string name="pet_photos_upload_failed">Foto konnte nicht hochgeladen werden. Bitte versuche es erneut.</string>
     <string name="pet_photos_delete_failed">Foto konnte nicht entfernt werden. Es ist weiterhin angehängt.</string>
+    <string name="pet_save_failed">Das Haustier konnte nicht gespeichert werden. Bitte versuche es erneut.</string>
 </resources>

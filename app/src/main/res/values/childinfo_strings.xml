@@ -103,4 +103,5 @@
     <string name="childinfo_grade_placeholder">e.g., 3rd Grade</string>
     <string name="childinfo_teacher_name_optional_label">Teacher Name (optional)</string>
     <string name="childinfo_teacher_email_optional_label">Teacher Email (optional)</string>
+    <string name="childinfo_save_failed">Could not save the child's details. Please try again.</string>
 </resources>

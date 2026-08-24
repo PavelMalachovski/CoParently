@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Sdílená celoobrazovková prohlížečka obrázků (účtenky, fotky událostí, lékařské a mazlíčkovské fotografie). -->
+<resources>
+    <string name="image_viewer_close">Zavřít</string>
+    <string name="image_viewer_open">Otevřít na celou obrazovku</string>
+</resources>

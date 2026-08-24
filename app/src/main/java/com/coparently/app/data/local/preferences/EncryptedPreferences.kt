@@ -268,6 +268,31 @@ class EncryptedPreferences @Inject constructor(
     }
 
     /**
+     * Stores the unsent composer text for one conversation.
+     *
+     * An empty [text] removes the entry rather than storing a blank, so a thread the user
+     * cleared does not keep a row forever.
+     *
+     * @param conversationId The thread the text was typed into.
+     * @param text What is in the composer.
+     */
+    fun putChatDraft(conversationId: String, text: String) {
+        val key = PreferenceKeys.CHAT_DRAFT_PREFIX + conversationId
+        encryptedPreferences.edit().apply {
+            if (text.isEmpty()) remove(key) else putString(key, text)
+        }.apply()
+    }
+
+    /**
+     * The unsent composer text for one conversation, or an empty string when there is none.
+     *
+     * @param conversationId The thread to read the draft of.
+     */
+    fun getChatDraft(conversationId: String): String =
+        encryptedPreferences.getString(PreferenceKeys.CHAT_DRAFT_PREFIX + conversationId, null)
+            .orEmpty()
+
+    /**
      * Stores the app-wide default currency.
      *
      * @param code ISO 4217 currency code, e.g. "CZK"

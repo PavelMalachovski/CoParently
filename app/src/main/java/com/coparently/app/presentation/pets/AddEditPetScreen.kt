@@ -101,7 +101,6 @@ fun AddEditPetScreen(
     var showDatePicker by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var isSaving by remember { mutableStateOf(false) }
-    var saveCompleted by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
 
     LaunchedEffect(petId) {
@@ -149,9 +148,26 @@ fun AddEditPetScreen(
         }
     }
 
-    LaunchedEffect(saveCompleted, isSaving) {
-        if (saveCompleted && !isSaving) {
-            onNavigateBack()
+    // The ViewModel says when the write landed. This used to be a `saveCompleted && !isSaving`
+    // guard over two local flags, and nothing ever cleared `isSaving` — so it never fired, the
+    // form stayed disabled behind a spinner forever, and the only way to see the (already
+    // saved) change was to back out and re-enter. That is the reported "saving takes ages".
+    val saveFailed = stringResource(R.string.pet_save_failed)
+    LaunchedEffect(Unit) {
+        viewModel.saveOutcome.collect { outcome ->
+            when (outcome) {
+                PetSaveOutcome.SAVED -> {
+                    // Cleared before leaving: a second Save would otherwise re-upload the same
+                    // content URIs, orphaning objects in the bucket and doubling the strip.
+                    pickedPhotos = emptyList()
+                    removedPhotos = emptyList()
+                    onNavigateBack()
+                }
+                PetSaveOutcome.FAILED -> {
+                    isSaving = false
+                    snackbarHostState.showSnackbar(saveFailed)
+                }
+            }
         }
     }
 
@@ -180,7 +196,7 @@ fun AddEditPetScreen(
                 if (pet != null) {
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                     viewModel.deletePet(pet)
-                    saveCompleted = true
+                    onNavigateBack()
                 }
             }
         )
@@ -357,7 +373,6 @@ fun AddEditPetScreen(
                             newPhotoUris = pickedPhotos,
                             removedPhotoUrls = removedPhotos
                         )
-                        saveCompleted = true
                     }
                 },
                 modifier = Modifier.fillMaxWidth(),
