@@ -16,9 +16,12 @@ object PreferenceKeys {
 
     /**
      * ISO date-time of the last shared-custody change the user dismissed the "schedule changed"
-     * banner for. Keyed on `SharedCustody.lastModifiedAt` rather than held in ViewModel state, so
+     * banner for, as decimal epoch millis. Keyed on `SharedCustody.lastModifiedAtMillis` rather
+     * than held in ViewModel state, so
      * a change the user already acknowledged does not reappear just because they killed the app,
-     * while the next change — a different `lastModifiedAt` — is announced again.
+     * while the next change — a different instant — is announced again. A value written before
+     * schema 29 is an ISO date-time and does not parse, which reads as "nothing dismissed": the
+     * current change is announced once more and then re-dismissed in the new form.
      */
     const val DISMISSED_CUSTODY_CHANGE_AT = "calendar_dismissed_custody_change_at"
 

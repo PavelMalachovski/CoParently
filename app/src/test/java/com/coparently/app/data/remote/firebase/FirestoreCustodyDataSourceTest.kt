@@ -3,6 +3,7 @@ package com.coparently.app.data.remote.firebase
 import com.coparently.app.domain.custody.CustodyDecision
 import com.coparently.app.domain.custody.CustodyDecisionOutcome
 import com.coparently.app.domain.custody.CustodyProposal
+import com.coparently.app.domain.custody.CustodyTimestamp
 import com.coparently.app.domain.custody.SharedCustody
 import com.coparently.app.domain.model.CustodyModel
 import com.coparently.app.domain.model.CustodyModelType
@@ -248,6 +249,34 @@ class FirestoreCustodyDataSourceTest {
         assertNull(dataSource.getCustody(DOCUMENT_ID)?.lastDecision)
     }
 
+    @Test
+    fun `the document still carries an ISO string, and it is UTC`() = runTest {
+        // Both halves are the contract. The **type** must not change: a co-parent on an older
+        // build parses this field and keys their "the schedule changed under you" banner on it,
+        // and a build that read a blank there would compare it equal to the last dismissal and
+        // stop announcing anything at all. The **zone** must be UTC: it used to be the writer's
+        // own wall clock, which is why two parents in different zones did not order their
+        // writes by real time — SEC-4.
+        val written = writeAndCapture(
+            custody().copy(lastModifiedAtMillis = CustodyTimestamp.fromWire("2026-08-04T18:30:00"))
+        )
+
+        assertEquals("2026-08-04T18:30", written["lastModifiedAt"])
+    }
+
+    @Test
+    fun `a legacy document without the field reads as undated rather than as now`() = runTest {
+        every { documentRef.get() } returns Tasks.forResult(
+            snapshotOf(document().minus("lastModifiedAt"))
+        )
+
+        val read = dataSource.getCustody(DOCUMENT_ID)
+
+        // Undated loses every comparison. Defaulting to now would make an undated document win
+        // and be re-pushed over one that is actually dated.
+        assertEquals(CustodyTimestamp.UNDATED, read!!.lastModifiedAtMillis)
+    }
+
     // ---- fixtures -----------------------------------------------------------
 
     /** Runs [FirestoreCustodyDataSource.setCustody] and returns the document it wrote. */
@@ -272,7 +301,7 @@ class FirestoreCustodyDataSourceTest {
             startDate = LocalDate.of(2026, 8, 3)
         ),
         lastModifiedBy = LATER_UID,
-        lastModifiedAt = "2026-08-04T18:30:00",
+        lastModifiedAtMillis = CustodyTimestamp.fromWire("2026-08-04T18:30:00"),
         createdAt = "2026-07-01T09:00:00"
     )
 

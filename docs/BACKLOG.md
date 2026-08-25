@@ -232,15 +232,36 @@ Thirty-three strings in five locales. Remaining gap: the chat preview still rela
 composes — its title *is* the sender and its body *is* the message — but only the Cloud Function
 that saw the message can produce that type, and the rule refuses it from a client.
 
-### SEC-4 · P2 · S · `CustodyModelEntity.lastModifiedAt` is a naive local date-time
+### SEC-4 · **DONE** · The custody schedule was ordered by a naive local date-time
 
-Two phones 2–3 time zones apart can have the **wrong side win and overwrite** the shared
-custody schedule. `CLAUDE.md` documents the hazard and why it was accepted; the fix is epoch
-millis plus a Room migration, a legacy-ISO read path for co-parents on older builds, and a
-migration test — the same move `Message.sentAtMillis` already made.
+Two phones 2–3 time zones apart could have the **wrong side win and overwrite** the shared
+custody schedule: `isNewer` compared two naive `LocalDateTime`s, and the side it judged newer
+was not merely kept but re-pushed over the other. `CustodyModelEntity.lastModifiedAtMillis` is
+epoch millis (schema 29) and the comparison is a `>`.
 
-Promoted from "someday" the moment anything is exported for legal use: see **MON-4**, which
-depends on whose clock orders writes.
+The interesting half was the wire form, and `domain/custody/CustodyTimestamp.kt` exists to
+record it, because the two obvious designs are both wrong:
+
+* **Changing the field's type** would leave a co-parent on an older build reading a blank — and
+  a blank compares equal to their last dismissal, so every future change would go silently
+  un-announced. In a product whose premise is an adversarial counterparty that is the worst
+  available failure.
+* **Adding a numeric field beside it** puts a new key in `affectedKeys()`, and `firestore.rules`
+  gates a proposal or swap write with `hasOnly([...])` — the first such write from an upgraded
+  build would be denied outright. Widening those lists is not the way out either: `lastModifiedAt`
+  is absent from them precisely so a swap cannot re-date the document and win every later
+  comparison.
+
+So the field keeps its name *and* its ISO-string type, and only the zone it expresses changed, to
+UTC. Between two upgraded builds the ordering is exact; against a value written by an older build
+it is wrong by that device's offset, which is irreducible — the offset was never stored — and no
+worse than before.
+
+Not covered by an instrumented migration test, for the reason CQ-1 gives: `app/schemas/` stops at
+v14, so `MigrationTestHelper` cannot build a v28 database. The conversion itself reuses
+`wallClockToEpochMillis`, which `MIGRATION_12_13` already proves row by row.
+
+Relevant to **MON-4**, which depends on whose clock orders writes.
 
 ### SEC-5 · P3 · S · `androidx.security:security-crypto` is on an alpha
 

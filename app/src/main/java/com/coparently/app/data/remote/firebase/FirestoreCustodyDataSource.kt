@@ -3,6 +3,7 @@ package com.coparently.app.data.remote.firebase
 import com.coparently.app.domain.custody.CustodyDecision
 import com.coparently.app.domain.custody.CustodyDecisionOutcome
 import com.coparently.app.domain.custody.CustodyProposal
+import com.coparently.app.domain.custody.CustodyTimestamp
 import com.coparently.app.domain.custody.CustodyWriteKind
 import com.coparently.app.domain.custody.DayOverride
 import com.coparently.app.domain.custody.DayOverrideStatus
@@ -121,7 +122,11 @@ class FirestoreCustodyDataSource @Inject constructor(
             put("startDate", model.startDate.format(DateTimeFormatter.ISO_LOCAL_DATE))
             put("repeatYearly", repeatYearly)
             put("createdAt", createdAt)
-            put("lastModifiedAt", lastModifiedAt)
+            // Still an ISO string under the same key, and deliberately so — the type and the
+            // name are what a co-parent on an older build reads, and what `firestore.rules`
+            // counts in a proposal or swap write's affected keys. Only the *zone* changed: it
+            // is UTC now, so two phones order their writes by real time. See CustodyTimestamp.
+            put("lastModifiedAt", CustodyTimestamp.toWire(lastModifiedAtMillis))
             // Omitted rather than written as an explicit null: `set()` replaces the whole
             // document, so leaving the key out is what actually clears a withdrawn or answered
             // proposal, and a stored null would read back as a field that exists but says
@@ -211,7 +216,7 @@ class FirestoreCustodyDataSource @Inject constructor(
                 isActive = true
             ),
             lastModifiedBy = (this["lastModifiedBy"] as? String).orEmpty(),
-            lastModifiedAt = (this["lastModifiedAt"] as? String).orEmpty(),
+            lastModifiedAtMillis = CustodyTimestamp.fromWire(this["lastModifiedAt"] as? String),
             createdAt = (this["createdAt"] as? String).orEmpty(),
             repeatYearly = this["repeatYearly"] as? Boolean ?: true,
             proposal = (this["proposal"] as? Map<*, *>)?.toProposal(documentId),

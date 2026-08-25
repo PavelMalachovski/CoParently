@@ -600,6 +600,51 @@ object DatabaseMigrations {
     }
 
     /**
+     * v28 -> v29: the shared custody schedule is dated by an instant, not a wall clock.
+     *
+     * `custody_models.lastModifiedAt` was a naive `LocalDateTime` — no zone, no offset — and it
+     * is not merely displayed: `CustodyModelRepository.isNewer` compares it and **re-pushes the
+     * side it judges newer over the other**. Two parents two or three zones apart therefore did
+     * not order their writes by real time, and the wrong schedule could win and overwrite. SEC-4.
+     *
+     * Additive, and the conversion reuses [wallClockToEpochMillis] — the same helper
+     * [MIGRATION_12_13] used for `messages.timestamp`, and read in **this device's** zone for
+     * the same reason: every stored value was written here by
+     * `DateTimeFormatter.ISO_LOCAL_DATE_TIME` on this device, so this device's zone is the only
+     * one that can be right about it. An unreadable value lands on the epoch and loses every
+     * later comparison, which is the safe direction — a row that cannot be dated must never be
+     * re-pushed over one that can.
+     *
+     * The old column is not dropped. Doing that means a rebuild, and while [MIGRATION_12_13] is
+     * one, it is provable only because `app/schemas/12.json` exists for `MigrationTestHelper`;
+     * `app/schemas/` stops at v14 (CQ-1), so a v28 rebuild could not be tested at all.
+     */
+    val MIGRATION_28_29 = object : Migration(28, 29) {
+        override fun migrate(database: SupportSQLiteDatabase) {
+            database.execSQL(
+                "ALTER TABLE custody_models ADD COLUMN lastModifiedAtMillis INTEGER NOT NULL DEFAULT 0"
+            )
+
+            // Read every wall clock out first, then write the instants back — the shape
+            // MIGRATION_12_13 uses, and for the same reason: nothing here needs to depend on
+            // iterating a cursor while writing to the table it came from.
+            val instants = mutableListOf<Pair<String, Long>>()
+            database.query("SELECT id, lastModifiedAt FROM custody_models").use { cursor ->
+                while (cursor.moveToNext()) {
+                    val id = cursor.getString(0) ?: continue
+                    instants += id to wallClockToEpochMillis(cursor.getString(1))
+                }
+            }
+            instants.forEach { (id, millis) ->
+                database.execSQL(
+                    "UPDATE custody_models SET lastModifiedAtMillis = ? WHERE id = ?",
+                    arrayOf<Any>(millis, id)
+                )
+            }
+        }
+    }
+
+    /**
      * List of all migrations in order.
      */
     val ALL_MIGRATIONS = arrayOf(
@@ -625,6 +670,7 @@ object DatabaseMigrations {
         MIGRATION_24_25,
         MIGRATION_25_26,
         MIGRATION_26_27,
-        MIGRATION_27_28
+        MIGRATION_27_28,
+        MIGRATION_28_29
     )
 }

@@ -34,7 +34,7 @@ data class CustodyConflictPrompt(
  * It is held **by value**, captured at the moment pairing was accepted, and that is the point.
  * Re-deriving the two patterns on the conflict screen would race the shared-custody mirror: the
  * moment the pairing lands, `CustodyModelRepository` starts folding the co-parent's document into
- * Room and, if this device's pre-pairing pattern carries the newer `lastModifiedAt`, re-pushes
+ * Room and, if this device's pre-pairing pattern carries the newer instant, re-pushes
  * the local one over it. Either half of "mine vs. theirs" could therefore have changed under the
  * screen before the user has read it. A snapshot cannot: whichever pattern the user picks is
  * written last, and last write wins.

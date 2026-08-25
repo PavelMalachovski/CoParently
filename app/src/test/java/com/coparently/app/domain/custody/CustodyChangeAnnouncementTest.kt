@@ -25,7 +25,7 @@ class CustodyChangeAnnouncementTest {
             shared = shared,
             myUid = MY_UID,
             parentsLoaded = true,
-            dismissedLastModifiedAt = null
+            dismissedLastModifiedAtMillis = null
         )
 
         assertEquals(shared, result)
@@ -39,35 +39,38 @@ class CustodyChangeAnnouncementTest {
             shared = shared,
             myUid = MY_UID,
             parentsLoaded = true,
-            dismissedLastModifiedAt = null
+            dismissedLastModifiedAtMillis = null
         )
 
         assertNull(result)
     }
 
     @Test
-    fun `a dismissed lastModifiedAt stays dismissed`() {
-        val shared = custodyOf(lastModifiedBy = CO_PARENT_UID, lastModifiedAt = MODIFIED_AT)
+    fun `a dismissed instant stays dismissed`() {
+        val shared = custodyOf(lastModifiedBy = CO_PARENT_UID, lastModifiedAtMillis = MODIFIED_AT)
 
         val result = CustodyChangeAnnouncement.toAnnounce(
             shared = shared,
             myUid = MY_UID,
             parentsLoaded = true,
-            dismissedLastModifiedAt = MODIFIED_AT
+            dismissedLastModifiedAtMillis = MODIFIED_AT
         )
 
         assertNull(result)
     }
 
     @Test
-    fun `the next change with a different lastModifiedAt is announced again`() {
-        val shared = custodyOf(lastModifiedBy = CO_PARENT_UID, lastModifiedAt = "2026-08-06T10:00:00")
+    fun `the next change with a different instant is announced again`() {
+        val shared = custodyOf(
+            lastModifiedBy = CO_PARENT_UID,
+            lastModifiedAtMillis = CustodyTimestamp.fromWire("2026-08-06T10:00:00")
+        )
 
         val result = CustodyChangeAnnouncement.toAnnounce(
             shared = shared,
             myUid = MY_UID,
             parentsLoaded = true,
-            dismissedLastModifiedAt = "2026-08-05T09:00:00"
+            dismissedLastModifiedAtMillis = CustodyTimestamp.fromWire("2026-08-05T09:00:00")
         )
 
         assertEquals(shared, result)
@@ -85,7 +88,7 @@ class CustodyChangeAnnouncementTest {
             shared = shared,
             myUid = MY_UID,
             parentsLoaded = true,
-            dismissedLastModifiedAt = null
+            dismissedLastModifiedAtMillis = null
         )
 
         assertEquals(shared, result)
@@ -97,7 +100,7 @@ class CustodyChangeAnnouncementTest {
             shared = null,
             myUid = MY_UID,
             parentsLoaded = true,
-            dismissedLastModifiedAt = null
+            dismissedLastModifiedAtMillis = null
         )
 
         assertNull(result)
@@ -114,7 +117,7 @@ class CustodyChangeAnnouncementTest {
             shared = shared,
             myUid = null,
             parentsLoaded = true,
-            dismissedLastModifiedAt = null
+            dismissedLastModifiedAtMillis = null
         )
 
         assertEquals(shared, result)
@@ -133,7 +136,7 @@ class CustodyChangeAnnouncementTest {
             shared = shared,
             myUid = null,
             parentsLoaded = false,
-            dismissedLastModifiedAt = null
+            dismissedLastModifiedAtMillis = null
         )
 
         assertNull(result)
@@ -149,7 +152,7 @@ class CustodyChangeAnnouncementTest {
             shared = shared,
             myUid = MY_UID,
             parentsLoaded = true,
-            dismissedLastModifiedAt = null
+            dismissedLastModifiedAtMillis = null
         )
 
         assertEquals(shared, result)
@@ -167,7 +170,7 @@ class CustodyChangeAnnouncementTest {
             shared = shared,
             myUid = MY_UID,
             parentsLoaded = true,
-            dismissedLastModifiedAt = null
+            dismissedLastModifiedAtMillis = null
         )
 
         assertNull(result)
@@ -182,7 +185,7 @@ class CustodyChangeAnnouncementTest {
             shared = shared,
             myUid = MY_UID,
             parentsLoaded = true,
-            dismissedLastModifiedAt = null
+            dismissedLastModifiedAtMillis = null
         )
 
         assertEquals(shared, result)
@@ -190,7 +193,7 @@ class CustodyChangeAnnouncementTest {
 
     private fun custodyOf(
         lastModifiedBy: String,
-        lastModifiedAt: String = MODIFIED_AT,
+        lastModifiedAtMillis: Long = MODIFIED_AT,
         kind: CustodyWriteKind = CustodyWriteKind.PATTERN
     ) = SharedCustody(
         model = CustodyModel(
@@ -201,7 +204,7 @@ class CustodyChangeAnnouncementTest {
             startDate = LocalDate.of(2026, 1, 1)
         ),
         lastModifiedBy = lastModifiedBy,
-        lastModifiedAt = lastModifiedAt,
+        lastModifiedAtMillis = lastModifiedAtMillis,
         createdAt = "2026-01-01T00:00:00",
         lastModifiedKind = kind
     )
@@ -209,6 +212,7 @@ class CustodyChangeAnnouncementTest {
     private companion object {
         const val MY_UID = "my-uid"
         const val CO_PARENT_UID = "co-parent-uid"
-        const val MODIFIED_AT = "2026-08-05T12:00:00"
+        /** Built through the projection so the fixture still reads as a date. */
+        val MODIFIED_AT = CustodyTimestamp.fromWire("2026-08-05T12:00:00")
     }
 }
