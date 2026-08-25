@@ -5,6 +5,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.animateScrollBy
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitLongPressOrCancellation
+import androidx.compose.foundation.gestures.drag
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -37,15 +41,21 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -115,6 +125,10 @@ private const val HOLIDAY_TINT_ALPHA = 0.10f
  * @param onDayLongClick Offers that day to the co-parent. Null when there is nobody to offer it
  *   to — an unpaired account gets no long-press at all, because a swap that applies itself is
  *   just an edit and the custody editor already does that.
+ * @param onSwapDragTo Extends an open selection to the day under a finger that long-pressed and
+ *   kept moving. Additive to [onDayLongClick]'s tap-to-extend rather than a replacement: the
+ *   drag is the gesture people reach for, the tap is the one that survives a pager stealing the
+ *   drag, and it is the only one a screen reader can perform at all.
  */
 // Callbacks are this screen-level composable's API surface; the body carries the pager's
 // anchor/settle wiring beside the grid itself.
@@ -133,9 +147,17 @@ fun MonthView(
     pendingSwapDates: Set<LocalDate> = emptySet(),
     swappedDates: Set<LocalDate> = emptySet(),
     onDayLongClick: ((LocalDate) -> Unit)? = null,
+    onSwapDragTo: ((LocalDate) -> Unit)? = null,
     swapSelection: Set<LocalDate> = emptySet()
 ) {
     val firstDayOfWeek = remember { DayOfWeek.MONDAY }
+
+    // Where each in-month cell sits, in root coordinates. A drag is delivered to the cell the
+    // finger went down on and keeps being delivered there, so the cell under the finger *now*
+    // can only be found by hit-testing. Deliberately a plain map rather than a snapshot map:
+    // it is written from layout for all 42 cells and read only inside a gesture, so making it
+    // observable would recompose the whole grid on every measure for nobody's benefit.
+    val dayBounds = remember { mutableMapOf<LocalDate, Rect>() }
 
     // The pager's loaded month range is anchored to a stable month and only
     // re-anchors on a far jump (Today button / date picker). Keeping it fixed while
@@ -255,6 +277,8 @@ fun MonthView(
                         isSwapped = day.date in swappedDates,
                         previousSwapped = day.date.minusDays(1) in swappedDates,
                         onDayLongClick = onDayLongClick,
+                        onSwapDragTo = onSwapDragTo,
+                        dayBounds = dayBounds,
                         isInSwapSelection = day.date in swapSelection,
                         // In selection mode a tap extends the run instead of opening Day view.
                         // Outside it, tap keeps doing what the August design decided it does.
@@ -349,6 +373,8 @@ private fun DayCell(
     isSwapped: Boolean = false,
     previousSwapped: Boolean = false,
     onDayLongClick: ((LocalDate) -> Unit)? = null,
+    onSwapDragTo: ((LocalDate) -> Unit)? = null,
+    dayBounds: MutableMap<LocalDate, Rect> = mutableMapOf(),
     isInSwapSelection: Boolean = false,
     selectingSwap: Boolean = false
 ) {
@@ -502,9 +528,66 @@ private fun DayCell(
             .fillMaxWidth()
             .height(cellHeight)
             .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
+            // Only in-month cells register. That is what stops a drag extending a run into a day
+            // shown for context, which the long-press already refuses for the same reason.
+            .onGloballyPositioned { coordinates ->
+                if (isCurrentMonth) {
+                    dayBounds[date] = coordinates.boundsInRoot()
+                }
+            }
+            // The whole long-press-and-drag gesture, deliberately owned here rather than split
+            // between this modifier and `combinedClickable` below.
+            //
+            // A second detector alongside `onLongClick` does NOT work, and it is worth saying why:
+            // `combinedClickable` with a long-press handler runs `detectTapGestures`, whose
+            // long-press branch consumes every event until the finger lifts. A drag detector
+            // beside it therefore receives nothing at all — the gesture looks dead while both
+            // modifiers are behaving exactly as documented. So the long press lives here, and
+            // `onLongClick` is gone from the clickable below.
+            //
+            // Consuming after the press is load-bearing too: without it the release still reads
+            // as a tap, and a tap while a selection is open extends it — over the one day just
+            // picked, which `toggledForSwap` turns straight back off. The selection would open
+            // and vanish in the same gesture.
+            .pointerInput(date, isCurrentMonth, onDayLongClick, onSwapDragTo) {
+                val offer = onDayLongClick
+                if (offer != null && isCurrentMonth) {
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        val press = awaitLongPressOrCancellation(down.id)
+                            ?: return@awaitEachGesture
+                        offer(date)
+                        press.consume()
+                        drag(press.id) { change ->
+                            change.consume()
+                            // The drag keeps arriving at the cell the finger went down on, so
+                            // the position is local to *that* cell: lift it into root space
+                            // before asking which cell the finger is over now.
+                            val origin = dayBounds[date]?.topLeft
+                            if (origin != null && onSwapDragTo != null) {
+                                val point = origin + change.position
+                                dayBounds.entries
+                                    .firstOrNull { (_, bounds) -> bounds.contains(point) }
+                                    ?.key
+                                    ?.let(onSwapDragTo)
+                            }
+                        }
+                    }
+                }
+            }
             .semantics {
                 contentDescription = semanticDescription
                 role = Role.Button
+                // The long press moved into a raw pointer gesture above, which a screen reader
+                // cannot perform. This keeps offering the day reachable by an explicit action.
+                if (onDayLongClick != null && isCurrentMonth) {
+                    customActions = listOf(
+                        CustomAccessibilityAction(swapClickLabel) {
+                            onDayLongClick(date)
+                            true
+                        }
+                    )
+                }
             }
             .padding(dims.paddingSmall / 8)
             .background(
@@ -575,11 +658,7 @@ private fun DayCell(
                         onDayClick(date)
                     }
                 },
-                onClickLabel = if (selectingSwap) swapClickLabel else clickLabel,
-                onLongClick = onDayLongClick
-                    ?.takeIf { isCurrentMonth }
-                    ?.let { offer -> { offer(date) } },
-                onLongClickLabel = swapClickLabel
+                onClickLabel = if (selectingSwap) swapClickLabel else clickLabel
             )
             .padding(dims.paddingSmall / 2),
         contentAlignment = Alignment.TopCenter

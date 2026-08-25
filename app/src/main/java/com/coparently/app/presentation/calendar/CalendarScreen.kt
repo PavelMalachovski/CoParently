@@ -54,6 +54,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.coparently.app.R
@@ -311,6 +312,10 @@ fun CalendarScreen(
     // Plain `remember`, like `previewEventId` above: a half-made selection is transient, and
     // restoring one over a grid the user has since paged away from would be worse than losing it.
     var swapSelection by remember { mutableStateOf(emptySet<LocalDate>()) }
+    // The day a drag started on. A drag must redraw the run from where the finger went down to
+    // where it is now, including *shrinking* it when the finger comes back — which the set alone
+    // cannot say, since `toggledForSwap` reads the run's own ends and would only ever grow.
+    var swapAnchor by remember { mutableStateOf<LocalDate?>(null) }
     var swapSheetOpen by remember { mutableStateOf(false) }
 
     // Unified custody lookup: an accepted one-off swap, then the active CustodyModel (Custody
@@ -712,7 +717,10 @@ fun CalendarScreen(
                     DaySwapSelectionBar(
                         dayCount = swapSelection.size,
                         onContinue = { swapSheetOpen = true },
-                        onCancel = { swapSelection = emptySet() },
+                        onCancel = {
+                            swapSelection = emptySet()
+                            swapAnchor = null
+                        },
                         modifier = Modifier.padding(
                             horizontal = dims.paddingMedium,
                             vertical = dims.paddingSmall / 2
@@ -789,7 +797,18 @@ fun CalendarScreen(
                                     // have to apologise.
                                     onDayLongClick = parents.coParent?.let {
                                         { date: LocalDate ->
+                                            swapAnchor = date
                                             swapSelection = swapSelection.toggledForSwap(date)
+                                        }
+                                    },
+                                    // A finger that long-pressed and kept moving redraws the run
+                                    // from the anchor, so coming back shortens it again.
+                                    onSwapDragTo = parents.coParent?.let {
+                                        { date: LocalDate ->
+                                            val anchor = swapAnchor
+                                            if (anchor != null && swapSelection.isNotEmpty()) {
+                                                swapSelection = runForSwap(anchor, date)
+                                            }
                                         }
                                     },
                                     swapSelection = swapSelection,
@@ -920,10 +939,12 @@ fun CalendarScreen(
                 }
                 swapSheetOpen = false
                 swapSelection = emptySet()
+                swapAnchor = null
             },
             onDismiss = {
                 swapSheetOpen = false
                 swapSelection = emptySet()
+                swapAnchor = null
             }
         )
     }
@@ -990,6 +1011,32 @@ private const val MAX_SWAP_SELECTION_DAYS = 14
  * document writes on one tap. Over the cap the run is trimmed from the end nearest the tap, so
  * the day the parent just touched is always in it.
  */
+/**
+ * The consecutive run a drag has traced, from the day it started on to the day under the finger.
+ *
+ * Distinct from [toggledForSwap], which reads the *existing* run's ends and therefore only ever
+ * grows: a finger that overshoots and comes back has to shorten the run, and only the anchor
+ * says which end is fixed. Capped the same way and for the same reason, keeping the anchor's end
+ * so the day the gesture started on never disappears from under the finger.
+ *
+ * @param anchor The day the long press started on.
+ * @param date The day the finger is over now.
+ * @return Every day from one to the other, inclusive, at most [MAX_SWAP_SELECTION_DAYS] long.
+ */
+private fun runForSwap(anchor: LocalDate, date: LocalDate): Set<LocalDate> {
+    val from = minOf(anchor, date)
+    val to = maxOf(anchor, date)
+    val length = ChronoUnit.DAYS.between(from, to).toInt() + 1
+    if (length <= MAX_SWAP_SELECTION_DAYS) {
+        return generateSequence(from) { it.plusDays(1) }.takeWhile { !it.isAfter(to) }.toSet()
+    }
+    return if (anchor == to) {
+        generateSequence(to) { it.minusDays(1) }.take(MAX_SWAP_SELECTION_DAYS).toSet()
+    } else {
+        generateSequence(from) { it.plusDays(1) }.take(MAX_SWAP_SELECTION_DAYS).toSet()
+    }
+}
+
 private fun Set<LocalDate>.toggledForSwap(date: LocalDate): Set<LocalDate> {
     if (isEmpty()) return setOf(date)
     if (size == 1 && contains(date)) return emptySet()
@@ -1037,31 +1084,53 @@ private fun DaySwapSelectionBar(
         shape = MaterialTheme.shapes.medium,
         color = MaterialTheme.colorScheme.surfaceContainerHigh
     ) {
-        Row(
+        // The text and the two buttons are stacked, not sharing one row. They shared one until
+        // a device test showed what that costs: the buttons take their label's width, the
+        // weighted text column takes what is left, and "Отменить выбор" plus "Предложить обмен"
+        // leave nothing on a phone — the count wrapped to one letter per line and the bar grew
+        // into a tall ladder of characters with the buttons overlapping across it. English fits
+        // and hid it. Every text here is now single-line and clipped rather than wrapped, so a
+        // longer translation shortens the sentence instead of growing the bar.
+        Column(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            verticalArrangement = Arrangement.spacedBy(2.dp)
         ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = LocalContext.current.resources.getQuantityString(
-                        R.plurals.day_swap_day_count,
-                        dayCount,
-                        dayCount
-                    ),
-                    style = MaterialTheme.typography.titleSmall
-                )
-                Text(
-                    text = stringResource(R.string.day_swap_select_hint),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            TextButton(onClick = onCancel) {
-                Text(stringResource(R.string.day_swap_selection_cancel))
-            }
-            Button(onClick = onContinue) {
-                Text(stringResource(R.string.day_swap_offer))
+            Text(
+                text = LocalContext.current.resources.getQuantityString(
+                    R.plurals.day_swap_day_count,
+                    dayCount,
+                    dayCount
+                ),
+                style = MaterialTheme.typography.titleSmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = stringResource(R.string.day_swap_select_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                TextButton(onClick = onCancel) {
+                    Text(
+                        text = stringResource(R.string.day_swap_selection_cancel),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                Button(onClick = onContinue) {
+                    Text(
+                        text = stringResource(R.string.day_swap_offer),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
             }
         }
     }
