@@ -109,7 +109,8 @@ class CalendarViewModelCustodyChangeTest {
             custodyModelRepository = custodyModelRepository,
             encryptedPreferences = encryptedPreferences,
             friendRepository = noCalendarFriends(),
-            parentsSource = parentsSource
+            parentsSource = parentsSource,
+            userRepository = noSignedInUser()
         )
         backgroundScope.launch { viewModel.custodyChangeAnnouncement.collect {} }
         return viewModel
@@ -135,7 +136,8 @@ class CalendarViewModelCustodyChangeTest {
             custodyModelRepository = custodyModelRepository,
             encryptedPreferences = encryptedPreferences,
             friendRepository = noCalendarFriends(),
-            parentsSource = parentsSource
+            parentsSource = parentsSource,
+            userRepository = noSignedInUser()
         )
         backgroundScope.launch { viewModel.custodyChangeAnnouncement.collect {} }
         return viewModel
