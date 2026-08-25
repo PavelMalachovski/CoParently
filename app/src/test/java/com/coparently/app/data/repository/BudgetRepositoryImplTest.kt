@@ -172,6 +172,7 @@ class BudgetRepositoryImplTest {
     fun `addBudget stamps createdByFirebaseUid on the synced document`() = runTest {
         val firebaseUser = mockk<FirebaseUser> { every { uid } returns "uidA" }
         every { firebaseAuthService.getCurrentUser() } returns firebaseUser
+        coEvery { userDao.getUserById("uidA") } returns userEntity(id = "uidA", partnerId = "uidB")
         val dataSlot = io.mockk.slot<Map<String, Any>>()
         coEvery { firestoreBudgetDataSource.setBudget(any(), capture(dataSlot)) } returns Unit
 
@@ -185,6 +186,29 @@ class BudgetRepositoryImplTest {
 
         coVerify(exactly = 1) { firestoreBudgetDataSource.setBudget("b1", any()) }
         org.junit.Assert.assertEquals("uidA", dataSlot.captured["createdByFirebaseUid"])
+        // And the relationship it belongs to, derived from the live pairing at create time.
+        org.junit.Assert.assertEquals("uidA__uidB", dataSlot.captured["familyId"])
+    }
+
+    @Test
+    fun `a budget created while unpaired names no family`() = runTest {
+        // Null, not an invented id for a pair of one — and `""` on the wire, because a Firestore
+        // map value cannot be null. The backfill names it once there is somebody to name.
+        val firebaseUser = mockk<FirebaseUser> { every { uid } returns "uidA" }
+        every { firebaseAuthService.getCurrentUser() } returns firebaseUser
+        coEvery { userDao.getUserById("uidA") } returns userEntity(id = "uidA", partnerId = null)
+        val dataSlot = io.mockk.slot<Map<String, Any>>()
+        coEvery { firestoreBudgetDataSource.setBudget(any(), capture(dataSlot)) } returns Unit
+
+        repository.addBudget(
+            com.coparently.app.domain.model.Budget(
+                id = "b1",
+                category = com.coparently.app.domain.model.ExpenseCategory.OTHER,
+                monthlyLimit = 100.0
+            )
+        )
+
+        org.junit.Assert.assertEquals("", dataSlot.captured["familyId"])
     }
 
     @Test
