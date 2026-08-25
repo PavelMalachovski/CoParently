@@ -166,7 +166,7 @@ cd firestore-tests && npm test              # firestore.rules against the local 
   deliberate and both tracked in `docs/BACKLOG.md` (**CQ-12**, **CQ-1**): **detekt reports but does not gate**
   (`continue-on-error`) until its baseline is regenerated locally, and there is **no
   instrumented migration job**, because `app/schemas/` stops at v14 while the database is at
-  v25. Still run the build locally before pushing — CI is a backstop, not a substitute.
+  v30. Still run the build locally before pushing — CI is a backstop, not a substitute.
   After switching branches, prefer `clean` — stale Hilt/kapt stubs from another branch cause
   errors like "Could not find class file for '…Application'".
 - **A docs/functions/rules-only pull request skips the Android jobs.** The `changes` job
@@ -280,7 +280,7 @@ cd firestore-tests && npm test              # firestore.rules against the local 
 
 ```
 domain/    — models, repository interfaces, use cases, holidays, ReminderScheduler
-data/      — Room (v25 + migrations), Firestore/Google clients, repository impls, sync
+data/      — Room (v30 + migrations), Firestore/Google clients, repository impls, sync
 presentation/ — Compose screens per feature + ViewModels + theme
 di/        — Hilt modules (Database, Firebase, Google, UseCase, Notification, …)
 ```
@@ -347,7 +347,7 @@ Data flow: UI → ViewModel → UseCase → Repository → Room (source of truth
     the conversation as `{uid: epochMillis}` maps — one write per event — and the ticks and
     unread badge are derived from them by `ChatReadState`, never stored per message.
     Message times are stored the same way: `Message.sentAtMillis`, epoch millis (Room
-    schema v13, since superseded — the database is at v25), not a naive `LocalDateTime`, so two
+    schema v13, since superseded — the database is at v30), not a naive `LocalDateTime`, so two
     parents in different time zones agree
     on what a mark means and on when a message was sent. The Firestore field keeps its name
     (`timestamp`) and the read path still accepts a legacy ISO string, so a co-parent on an
@@ -417,6 +417,26 @@ Data flow: UI → ViewModel → UseCase → Repository → Room (source of truth
     `FamilyKindSource.observeMine()` and not `observe()`: the union of both parents' answers is
     what the app *shows*, while the dialog *writes* this parent's row alone, so seeding it with
     the union made every checkbox a lie.
+18. **`familyId` names a relationship; nothing reads it yet, and that is deliberate.** Every
+    shared record — event, expense, budget, child, pet, change request — carries the
+    `FamilyKey.of(myUid, partnerUid)` id of the co-parenting relationship it belongs to (Room
+    schema 30). It is stamped **at create, never on the sync path**, for the reason
+    `createdByFirebaseUid` is: a private event never syncs and an offline device leaves
+    `syncedToFirestore` false indefinitely, so a field written only when a record uploads stays
+    null on exactly the rows that most need it. It is **never re-derived** — a re-pairing must
+    not move a child, an expense or a settled month into a different household — and **null is a
+    value**, meaning "mine alone", which is what every record written before its owner paired
+    honestly is. `FamilyIdBackfill` turns those nulls into a family once there is one to name,
+    locally, once per co-parent; it deliberately does **not** clear `syncedToFirestore`, because
+    re-queuing all six tables would put the co-parent's own downloaded rows into this device's
+    outbox where the create rule rejects them forever.
+    The field is not in `firestore.rules` and no query filters on it. That is the sequencing, not
+    an omission: a read path keyed on `familyId` has to pin the field against a non-creator writer
+    the way `sharedWith` is pinned, and pinning it while the two phones are still catching up
+    denies the app's own writes — a device whose backfill has not run writes `familyId ?: ""` over
+    a stamped document. See `docs/DESIGN-multi-family.md` M-2 for why the relaxed version of that
+    pin is not a pin at all. The switch is M-4, where `familyId` **replaces** `sharedWith` rather
+    than joining it, after a server-side pass has stamped the documents themselves.
 
 ## Known issues / do not "fix" silently
 

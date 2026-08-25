@@ -106,14 +106,37 @@ caller — Firestore validates a query's structure, so that query can only retur
 would pass, while an unfiltered one is rejected. That is how a client asks "which families am I
 in" without being told the answer by a field it could have forged.
 
-### M-2 · Stamp `familyId` on the six collections, and switch the rules
+### M-2 · Stamp `familyId` on the six collections
 
 A Room column on each, nullable — **null means "mine alone", the state every record is in before
-its owner pairs**. Pairing backfills, the same re-stamp `SyncService.backfillAudienceForPartner`
-already performs for `sharedWith`.
+its owner pairs**. Stamped at create, never re-derived; `FamilyIdBackfill` names the family on
+rows written before there was one to name, from the sync pass, once per co-parent.
 
-The heaviest stage, and the one where the rules suite earns its keep: it runs offline against the
-emulator and is the only part of this project that can be proved rather than compiled.
+**The rules do not switch here, and this heading used to say they did.** Working through it, the
+order in the first draft was wrong in a way worth writing down, because the obvious fix is worse
+than the problem.
+
+A read path keyed on `familyId` needs the field pinned against a writer who is not its creator —
+exactly what `sharedWith` and `permissions` are pinned against in the `events` update rule, and
+for the same reason: a co-parent with `read_write` could otherwise re-point a record at a family
+containing a stranger. But pinning it *now*, while both phones are still catching up, denies the
+app's own writes. A device whose backfill has not run yet holds `familyId = null` on a row whose
+remote document is already stamped, and every upload map writes `familyId ?: ""` — so the pin
+turns an ordinary edit into `PERMISSION_DENIED`. Relaxing the pin to allow a blank-out makes it
+defeatable in two writes, which is not a pin at all.
+
+There is no version of that guard that is both safe and non-breaking during the skew window, and
+nothing needs it yet: **no client reads `familyId`, remotely or locally.** So M-2 ships the field
+and nothing else. This stage does not touch `firestore.rules` at all — the six collections
+validate with `keys().hasAll(...)`, presence-based, so an added key is accepted by the rules
+already live, and there is nothing to deploy.
+
+The switch belongs in M-4, where it is a *replacement* rather than a second path: `sharedWith`
+goes, `familyId` takes over, and the pinning question is the single one the rules answer today
+instead of two questions layered on each other. Its prerequisites are that every write path
+stamps (M-2), and that the documents themselves are backfilled — one admin pass over a pair,
+server-side, because a client cannot re-queue a co-parent's own documents: they land in its
+outbox and the create rule (`createdByFirebaseUid == auth.uid`) rejects them forever.
 
 ### M-3 · The slot and the family kind move onto the family
 
@@ -132,6 +155,13 @@ what is happening in the family they are not looking at. Tapping one switches co
 Push gains `familyId` so a notification can deep-link into the right family: four places, per
 CLAUDE.md item 15.
 
+This is also where the read side moves onto `familyId`, for the reason M-2 gives above. Three
+pieces, in order: a Cloud Function backfills `familyId` onto the documents of every existing
+pair; `firestore.rules` replaces the `sharedWith` / `isPartnerOf` read gates with family
+membership, pinning `familyId` the way `sharedWith` is pinned today; and the client queries
+become `whereEqualTo("familyId", …)`. Until the first of those has run, a rule keyed on
+`familyId` denies every document written before the field existed.
+
 ### M-5 · Cleanup
 
 Delete `partnerId`, `User.role`, `Event.sharedWith`, `isPartnerOf`.
@@ -141,7 +171,8 @@ Delete `partnerId`, `User.role`, `Event.sharedWith`, `isPartnerOf`.
 **Google Calendar.** One Google account, several families. Which family do imported events land
 in? The honest answer is a per-calendar mapping, but that is a screen of its own; the cheap answer
 is "the selected family at import time", which is a footgun the first time somebody imports while
-looking at the wrong family.
+looking at the wrong family. `CalendarSyncRepository` stamps the importing parent's only family
+today and says so at the call site; that line is where the answer goes.
 
 **Calendar friends.** `calendar_friends/{friendUid}` is central today and is checked against an
 event's creator. It has to become per family, or a grandmother admitted by one household would
