@@ -84,15 +84,27 @@ whole class of defect rather than working around it:
 
 ### M-1 · `families/{id}` as a first-class document
 
-`families/{id}` where the id is the canonical pair key already in use. Fields: `members` (exactly
-two uids, sorted), `slots` (`uid` → `"mom"`/`"dad"`), `kind` (the `FamilyKind` set), `createdAt`.
+`families/{id}` where the id is the canonical pair key already in use, carrying `members` — the
+two uids, sorted — and `createdAt`. `slots` and `kind` arrive in M-3, when something reads them;
+a field nothing reads is the pattern this project keeps having to delete.
 
-`users/{uid}.families` carries the list, so the rule primitive becomes
-`isMemberOfFamily(familyId)` — one `get()` of the **caller's own** document, where `isPartnerOf`
-read someone else's. The same cost, and it stops being a question about one other person.
+**The membership lives in the family document, and no client may write it.** The first draft of
+this plan put a `families` array on `users/{uid}` instead, so the rule could read the caller's own
+profile. That is an escalation: a user may write their own profile, so anyone could add a
+stranger's family id to their own list and read that household's calendar. **A grant must never be
+stored where its beneficiary can write it.** The document is written by
+`acceptPairingInvitation` and deleted by `unpairCoParent`, both through the admin SDK, which
+bypasses rules; the rule reads `families/{id}.members`.
 
-Pairing creates the document; `partnerId` keeps being written until M-5 so nothing breaks
-mid-migration.
+Deleting it on unpair is not tidiness either — it *is* the revocation. The sweep narrows
+documents, but a membership left behind would let the ex-partner back into all of them.
+
+Pairing still writes `partnerId` until M-5, so nothing breaks mid-migration.
+
+Reads are open to the two members, and so is a list filtered on `members array-contains` the
+caller — Firestore validates a query's structure, so that query can only return documents that
+would pass, while an unfiltered one is rejected. That is how a client asks "which families am I
+in" without being told the answer by a field it could have forged.
 
 ### M-2 · Stamp `familyId` on the six collections, and switch the rules
 

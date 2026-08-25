@@ -53,10 +53,15 @@ function fakeDb(seed) {
       const result = await fn({
         get: (ref) => ref.get(),
         update: (ref, update) => staged.push({ref, update}),
+        // `set` replaces where `update` merges, which is the difference that matters for the
+        // family document: it is written whole, once, at pairing.
+        set: (ref, value) => staged.push({ref, value}),
       });
-      staged.forEach(({ref, update}) => {
+      staged.forEach(({ref, update, value}) => {
         docs[ref.collection] = docs[ref.collection] || {};
-        docs[ref.collection][ref.id] = Object.assign({}, docs[ref.collection][ref.id], update);
+        docs[ref.collection][ref.id] = value !== undefined ?
+          value :
+          Object.assign({}, docs[ref.collection][ref.id], update);
       });
       return result;
     },
@@ -137,5 +142,50 @@ describe('acceptPairingInvitation', () => {
     assert.deepStrictEqual(result, {partnerId: 'alice', role: 'dad'});
     assert.strictEqual(db._docs.users.alice.role, 'mom');
     assert.strictEqual(db._docs.users.bob.role, 'dad');
+  });
+
+  it('records the relationship as a family document naming both adults', async () => {
+    // `families/{id}.members` is what the security rules read to decide who may see the
+    // records a pair shares. It is written here, as admin, and by no client ever — the
+    // membership is the grant, so a client create path would let anyone name themselves a
+    // member of any pair.
+    const db = fakeDb({
+      invitations: {
+        inv1: {id: 'inv1', status: 'pending', fromUserId: 'alice', toEmail: 'bob@example.com'},
+      },
+      users: {
+        alice: {id: 'alice', name: 'Alice', role: 'mom'},
+        bob: {id: 'bob', name: 'Bob'},
+      },
+    });
+
+    await myFunctions.acceptPairingInvitationImpl(
+        db, 'bob', 'bob@example.com', {code: null, invitationId: 'inv1'});
+
+    // The same derived id the custody model and the conversation already use, so the three
+    // subsystems that were pair-keyed all along need no migration.
+    const family = db._docs.families['alice__bob'];
+    assert.ok(family, 'pairing must record the family');
+    assert.deepStrictEqual(family.members, ['alice', 'bob']);
+  });
+
+  it('sorts the two members, so the id and the array agree', async () => {
+    // The id is the sorted join; an unsorted array would still resolve to the same id and pass
+    // every membership check, which is how a mismatch could sit there unnoticed until
+    // something compared the two.
+    const db = fakeDb({
+      invitations: {
+        inv1: {id: 'inv1', status: 'pending', fromUserId: 'zoe', toEmail: 'adam@example.com'},
+      },
+      users: {
+        zoe: {id: 'zoe', name: 'Zoe', role: 'mom'},
+        adam: {id: 'adam', name: 'Adam'},
+      },
+    });
+
+    await myFunctions.acceptPairingInvitationImpl(
+        db, 'adam', 'adam@example.com', {code: null, invitationId: 'inv1'});
+
+    assert.deepStrictEqual(db._docs.families['adam__zoe'].members, ['adam', 'zoe']);
   });
 });

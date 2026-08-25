@@ -772,6 +772,28 @@ service cloud.firestore {
     // `partnerId` clears. `delete` intentionally stays on stored `participants` alone: a
     // document must remain deletable by either named participant even once the pairing behind
     // it is gone, or a stale/orphaned document becomes permanent by a different route.
+    // ---- Families ---------------------------------------------------------
+    // One co-parenting relationship: the two adults, and the id every record they share is
+    // named with. The id is `FamilyKey.of(uidA, uidB)` — the same string `custody_models`,
+    // `family_settings` and `conversations` are already keyed by, which is why those three need
+    // no migration at all.
+    //
+    // **No client write, ever.** The document is the membership, and the membership is the
+    // grant: `acceptPairingInvitation` and `unpairCoParent` write it as admin, bypassing rules.
+    // Leaving a create path open to clients would let anyone name themselves a member of any
+    // pair — the same escalation the `users`-array design would have shipped.
+    //
+    // Reads are open to the two members. A list is allowed on the same terms, so a client can
+    // ask "which families am I in" with one indexed query rather than being told the answer by
+    // a field it could have forged: Firestore validates a query's *structure*, so a query
+    // filtered on `members array-contains` the caller's own uid is guaranteed to return only
+    // documents that would pass, while an unfiltered one is rejected outright.
+    match /families/{familyId} {
+      allow get: if isAuthenticated() && request.auth.uid in resource.data.members;
+      allow list: if isAuthenticated() && request.auth.uid in resource.data.members;
+      allow create, update, delete: if false;
+    }
+
     match /custody_models/{modelId} {
       // Two cases, and the missing-document one is not a nicety.
       //

@@ -421,6 +421,21 @@ describe('unpairCoParentImpl', () => {
           'the shared custody document should be gone');
     });
 
+    it('deletes the family, because the family is the access', async () => {
+      // Not tidiness. `families/{id}.members` is what the security rules read to decide who
+      // may see the records a pair shares, so a family left behind is an ex-partner still
+      // reading this household — the revocation sweep narrows documents, but a live
+      // membership would let them all back in.
+      const seed = seedWithCustodyModel();
+      seed.families = {[CUSTODY_KEY]: {members: ['alice', 'bob'], createdAt: 1}};
+      const db = fakeDb(seed);
+
+      await unpairCoParentImpl(db, 'alice');
+
+      assert.ok(!('alice__bob' in (db._docs.families || {})),
+          'the family should be gone');
+    });
+
     it('leaves the co-parent local copies alone when unpairing', async () => {
       // The custody_models document is the one *shared* Firestore document a pair has;
       // each parent's own Room copy never leaves the device and this call has no way to

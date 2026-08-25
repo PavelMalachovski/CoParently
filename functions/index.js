@@ -642,6 +642,21 @@ async function acceptPairingInvitationImpl(db, acceptingUserId, acceptingEmail, 
           {reason: 'already-paired'});
     }
     slots = assignSlots(inviterSnap.data().role);
+
+    // The relationship itself, as a document. Its id is `FamilyKey.of` — the same string
+    // `custody_models`, `family_settings` and `conversations` are already keyed by — and its
+    // `members` array is what `firestore.rules` will read to answer "may this person see this
+    // record" once a person can co-parent with more than one other person.
+    //
+    // Written here, as admin, and by no client ever: the membership *is* the grant, so a
+    // create path open to clients would let anyone name themselves a member of any pair. The
+    // same reasoning rules out keeping the list on `users/{uid}`, which its owner may write.
+    tx.set(db.collection('families').doc(
+        custodyModelKey(invite.fromUserId, acceptingUserId)), {
+      members: [invite.fromUserId, acceptingUserId].sort(),
+      createdAt: pairedAt,
+    });
+
     tx.update(inviterRef, {
       partnerId: acceptingUserId, pairedAt, role: slots.inviterRole,
     });
@@ -1534,6 +1549,12 @@ async function unpairCoParentImpl(db, callerUid) {
     // reason: left behind, it would silently reattach if these two ever re-paired, and a
     // split neither of them remembers agreeing would start pricing their expenses again.
     tx.delete(db.collection('family_settings').doc(custodyModelKey(callerUid, partnerId)));
+
+    // And the relationship itself. This one is not tidiness: `families/{id}.members` is what
+    // grants access to everything the pair shares, so leaving it behind leaves the ex-partner
+    // reading this household after the unpair — the sweep below narrows documents, but a live
+    // membership would let them all back in.
+    tx.delete(db.collection('families').doc(custodyModelKey(callerUid, partnerId)));
 
     // Re-verify the link is still mutually intact before clearing it. If the
     // partner has already unpaired or re-paired with someone else, the link
