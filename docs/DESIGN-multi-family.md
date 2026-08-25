@@ -202,9 +202,85 @@ It moves once M-2's backfill has shipped and run, which is M-4.
 
 ### M-4 · The switcher, and pairing with more than one partner
 
-A persisted per-device choice of family; a chip in the top bar of the four top-level screens,
-shown at two or more. Pairing can be started again while already paired. `unpairCoParent` removes
-**one** family rather than "the" pairing.
+The first stage a user can see, and the one that has to make the promise true: **a co-parent in
+one family must have nothing at all to do with a co-parent in another.**
+
+#### What actually leaks, checked rather than assumed
+
+Grepping every read rule against what a second partner would change, the answer is narrower than
+the plan assumed, and the narrower answer is the safer one.
+
+**Already isolated, because they are keyed by the *pair* and not by "a partner":** a profile read
+(`users/{uid}`), `change_requests` (both uids are on the document), `conversations`/`messages`,
+`custody_models`, `family_settings`. Bob passes none of those for Alice's family with Carol.
+
+**`sharedWith` does not have to go.** It is computed by the writer as `[me, creator, partner]`,
+and it leaks only if `partnerId` becomes a list and *both* partners land in it. Compute it from
+the record's **`familyId` members** instead and it is per-family by construction — Alice's event
+in the family she shares with Carol carries `[alice, carol]`, and Bob is not in it. `events`,
+`child_info` and `pets` therefore need **no rules change at all**, only a corrected audience.
+
+**`expenses` and `budgets` are the real leak**, and the only one. They carry no per-document
+audience: the rule is `isPartnerOf(createdByFirebaseUid)`, which asks "am I a co-parent of the
+author" and never "is this record mine to see". Bob is a co-parent of Alice, so Bob reads *every*
+expense Alice ever recorded, in every family. These two move onto family membership.
+
+That is the whole rules diff. Keeping `sharedWith` also removes the rollout hazard that made M-2
+defer this: nothing has to pin `familyId` against a co-parent's write on the three collections
+that have an audience, so an older build that knows nothing about the field cannot blank it and
+make a record unreadable.
+
+#### `partnerId` becomes `partnerIds`
+
+A single field cannot hold two co-parents. It becomes an array, and `isPartnerOf` tests
+membership. Safe precisely because of the audit above: every rule that still uses it is asking a
+pairwise question that both co-parents may legitimately answer yes to — Alice's name and photo
+are readable by both of her co-parents, and she may address a change request to either. The one
+place where "a co-parent of the author" was standing in for "in the same family" is expenses and
+budgets, which is what moves.
+
+The rule reads both shapes for one release (`partnerIds`, falling back to `partnerId`), so a
+co-parent on an older build stays readable. `partnerId` keeps being written as the first entry
+until M-5.
+
+#### The parent colour stops being derived from the slot
+
+Owner decision, Aug 2026. Today pink and blue come from the slot, which pairing assigns — so with
+two families the same person could be pink in one and blue in the other, and the colour would
+change under them as they switched. The fix is to stop deriving it: **the colour is a property of
+the person, chosen by them.**
+
+Each parent picks their own from a palette, in the onboarding wizard and in Settings. Nothing
+stores a gender: a man picking blue and a woman picking pink gets the outcome that was asked for,
+two men simply pick differently, and there is no special case in the code and no new personal
+data to declare in the privacy policy. `User.colorCode` already exists for this and is finally
+used for what it is named.
+
+The slot is untouched and keeps every job it has: `parentOwner`, custody, `momDayIndices`, the
+Firestore schema. What changes is only that the *colour* no longer reads it. Two parents who pick
+the same colour are the one case the code must handle, and the second picker is the one nudged —
+the app does not silently reassign a colour somebody already has.
+
+#### Google Calendar imports become private
+
+Owner decision, Aug 2026, and it dissolves the open question below rather than answering it. An
+imported event is marked `isPrivate`, so it never leaves the device and never reaches a co-parent
+at all. "Which family does an import belong to" then has no answer to get wrong, and the personal
+appointments a parent syncs from their own calendar stop being published to their co-parent —
+which is what a personal calendar is.
+
+This is a behaviour change: imports sync today. It wants a line in the release notes and a word
+on the import screen.
+
+#### The rest
+
+A persisted per-device choice of family. **The second family is created in Settings** — a pairing
+flow reachable while already paired — and by default there is one, so nothing about a
+single-family account changes. The switcher is a chip in the top bar of the four top-level screens, shown at two
+or more, following the same "appears at two, not at one" rule as the child filter.
+
+`unpairCoParent` removes **one** family rather than "the" pairing, and drops that uid from
+`partnerIds` rather than clearing a field.
 
 Badges — unread chat, pending change requests — count **across all families**, or a parent misses
 what is happening in the family they are not looking at. Tapping one switches context.
@@ -212,16 +288,26 @@ what is happening in the family they are not looking at. Tapping one switches co
 Push gains `familyId` so a notification can deep-link into the right family: four places, per
 CLAUDE.md item 15.
 
-This is also where the read side moves onto `familyId`, for the reason M-2 gives above. Three
-pieces, in order: a Cloud Function backfills `familyId` onto the documents of every existing
-pair; `firestore.rules` replaces the `sharedWith` / `isPartnerOf` read gates with family
-membership, pinning `familyId` the way `sharedWith` is pinned today; and the client queries
-become `whereEqualTo("familyId", …)`. Until the first of those has run, a rule keyed on
-`familyId` denies every document written before the field existed.
+#### Order of operations, and the ops steps it depends on
 
-And M-3's two deferred reads land here with it: the switcher's own "which family am I looking
-at" source is what `ParentsSource` and `FamilyKindSource` resolve slots and `caresFor` through,
-and `ParentSlotMigrator` gains its `familyId` scope once M-2's backfill has run.
+`backfillRecordFamilyIds` stamps `familyId` on the documents of the six collections for every
+account that has exactly **one** family — a person with two is skipped rather than guessed at,
+which today is nobody, because pairing still refuses a second. It is required before the client
+query switch, not merely desirable: `whereEqualTo("familyId", …)` over documents that carry none
+returns nothing, and a co-parent's expense history would read as empty.
+
+1. `firebase deploy --only functions`
+2. invoke `backfillFamilyDocuments` (M-3) — every live pair gets `members`, `slots`, `caresFor`
+3. invoke `backfillRecordFamilyIds` — every record gets its `familyId`
+4. `firebase deploy --only firestore:rules,firestore:indexes`
+
+Steps 2 and 3 are idempotent and report what they did; step 4 is what actually turns the
+isolation on. Running 4 before 3 leaves a co-parent's expenses unreadable until 3 completes — not
+lost, since Room is the source of truth, but visibly missing on the other phone.
+
+And M-3's two deferred reads land here: the switcher's "which family am I looking at" source is
+what `ParentsSource` and `FamilyKindSource` resolve slots and `caresFor` through, and
+`ParentSlotMigrator` gains its `familyId` scope now that the backfill has run.
 
 ### M-5 · Cleanup
 
