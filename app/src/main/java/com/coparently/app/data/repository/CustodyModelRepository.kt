@@ -84,7 +84,7 @@ class PartialSwapRun(
     val written: Int,
     val total: Int,
     cause: Throwable
-) : IllegalStateException("Only $written of $total days could be offered", cause)
+) : IllegalStateException("Only $written of $total days went through", cause)
 
 @Singleton
 @Suppress("TooManyFunctions")

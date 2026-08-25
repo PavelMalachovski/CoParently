@@ -77,7 +77,9 @@ class FamilySettingsRepositoryTest {
         // The three things `firestore.rules` gates the create on, and none of them is implied by
         // the ratio: the id must be the canonical pair id or the document can be squatted, the
         // participants must be sorted or `update`'s order-sensitive equality denies every later
-        // write, and `lastModifiedBy` must be the caller.
+        // write, and `lastModifiedBy` must be the caller. The two uids are deliberately named so
+        // that sorting reorders them — with `me` < `partner` the sorted assertion would pass for
+        // an implementation that never sorted at all.
         assertEquals(CustodyKey.of(ME, PARTNER), documentId.captured)
         assertEquals(listOf(ME, PARTNER).sorted(), written.captured.participants)
         assertEquals(ME, written.captured.lastModifiedBy)
@@ -101,6 +103,25 @@ class FamilySettingsRepositoryTest {
         coVerify { dataSource.setSettings(any(), capture(written)) }
         assertEquals(SplitRatio(THIRTY_IN_BASIS_POINTS), written.captured.ratio)
     }
+
+    @Test
+    fun `a figure that already belongs to a pair is never republished to the next one`() =
+        runTest {
+            // The cache is one device-wide integer with no pair key, and nothing clears it on
+            // unpair. Every *paired* write clears the capture slot, so its absence marks a figure
+            // that is already some pair's agreement of record — republishing it would hand the
+            // next co-parent a split neither of them made, and would revive on the client the
+            // very document `unpairCoParent` deletes on the server to prevent exactly that.
+            coEvery { dataSource.getSettings(any()) } returns null
+
+            repository(
+                cachedBasisPoints = SEVENTY_IN_BASIS_POINTS,
+                partnerId = PARTNER,
+                capturedSlot = null
+            ).publishCachedRatioIfMissing()
+
+            coVerify(exactly = 0) { dataSource.setSettings(any(), any()) }
+        }
 
     @Test
     fun `an agreement the pair already has is never overwritten`() = runTest {
@@ -140,8 +161,8 @@ class FamilySettingsRepositoryTest {
     }
 
     private companion object {
-        const val ME = "uid-me"
-        const val PARTNER = "uid-partner"
+        const val ME = "uid-zoe"
+        const val PARTNER = "uid-alex"
         const val SEVENTY_IN_BASIS_POINTS = 7_000
         const val THIRTY_IN_BASIS_POINTS = 3_000
     }

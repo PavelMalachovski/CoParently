@@ -158,12 +158,20 @@ class SettingsViewModel @Inject constructor(
             // `.value` — invariant 17. `first()` is one emission of a flow that already has a
             // subscriber on this screen, so it costs no listener.
             val theirs = familyKindSource.observeTheirs().first()
+            // Both branches judge what the screen actually *draws* — the union — rather than
+            // this parent's row alone. Judging by the row got both answers wrong: `dropped` is
+            // empty for every account that never answered, which is the population that upgrades
+            // into this question, so the one save that really did hide a section said nothing;
+            // and `theirs - kinds` is non-empty whenever the co-parent holds a kind this parent
+            // does not, so an unchanged save told them they had removed one.
+            val hidden = FamilyKind.effective(fresh.caresFor, theirs) -
+                FamilyKind.effective(kinds, theirs)
             when {
-                // The co-parent's answer wins the union, so the section is still there. That is
-                // the more useful thing to say, and it is why this comes first.
-                (theirs - kinds).isNotEmpty() ->
+                // Given up here and still drawn because the co-parent keeps it. Conditioned on a
+                // real removal, so it can never claim one that did not happen.
+                (dropped intersect theirs).isNotEmpty() ->
                     _caresForOutcome.trySend(CaresForOutcome.KEPT_BY_CO_PARENT)
-                dropped.isNotEmpty() -> _caresForOutcome.trySend(CaresForOutcome.RECORDS_KEPT)
+                hidden.isNotEmpty() -> _caresForOutcome.trySend(CaresForOutcome.RECORDS_KEPT)
                 else -> Unit
             }
         }

@@ -201,16 +201,23 @@ class FamilySettingsRepository @Inject constructor(
      * The cached share expressed as **slot 1's**, whatever slot it was captured under.
      *
      * Flips it when pairing moved this device to the other slot: what the parent set was their
-     * own share, and the stored form is slot 1's. Returns null — publishing nothing — when either
-     * slot is unknown, because a coin-toss here writes the wrong number into the one document
-     * that prices every future expense, and silence merely leaves the pair on an even split they
-     * can still change.
+     * own share, and the stored form is slot 1's. Returns null — publishing nothing — when the
+     * current slot is unknown, because a coin toss here writes the wrong number into the one
+     * document that prices every future expense; and when there is **no capture slot at all**,
+     * which marks a figure that already belongs to a pair rather than one chosen before there
+     * was one. Silence merely leaves a pair on an even split they can still change.
      */
     private suspend fun reanchored(cached: SplitRatio): SplitRatio? {
         val capturedSlot = preferences.getSplitRatioSlot()
-            // Nothing recorded: the value predates the capture slot, or was written by a paired
-            // path that had already anchored it. Take it as slot 1's, which is what it was.
-            ?: return cached
+            // No capture slot means this figure is already some pair's agreement of record —
+            // every paired write clears it, see [cacheAgreedRatio] — so it belongs to that pair
+            // and to no other. The cache is one device-wide integer with no pair key, and
+            // nothing clears it on unpair: the client only invokes the callable, and
+            // `AccountSwitchGuard` wipes Room and deliberately not the preferences. Publishing
+            // it here would hand the *next* co-parent a split neither of them made, reviving on
+            // the client the very document `unpairCoParent` deletes on the server for that
+            // reason — "left behind, it would silently reattach if these two ever re-paired".
+            ?: return null
         val currentSlot = signedInSlot() ?: return null
         return if (capturedSlot == currentSlot) {
             cached
