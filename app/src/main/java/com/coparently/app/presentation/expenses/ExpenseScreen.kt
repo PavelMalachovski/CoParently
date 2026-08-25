@@ -408,6 +408,10 @@ fun ExpenseScreen(
                                         expense.createdByFirebaseUid == null ||
                                             expense.createdByFirebaseUid == currentUserId
                                     },
+                                    // The same clearance the analytics branch takes, for the same
+                                    // reason: without it the last expense comes to rest under the
+                                    // Add button and the list will not scroll any further.
+                                    bottomClearance = FAB_CLEARANCE,
                                     modifier = Modifier.weight(1f)
                                 )
                             }
