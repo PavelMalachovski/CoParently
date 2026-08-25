@@ -144,7 +144,7 @@ class CustodyProposalTransitionTest {
 
     @Test
     fun `deciding when nothing is pending is a failure, not a no-op`() {
-        assertTrue(CustodyProposalTransition.accept(current, MOM, NOW).isFailure)
+        assertTrue(CustodyProposalTransition.accept(current, MOM, NOW, NOW_MILLIS).isFailure)
         assertTrue(CustodyProposalTransition.decline(current, MOM, NOW, null).isFailure)
         assertTrue(CustodyProposalTransition.withdraw(current, MOM).isFailure)
     }
@@ -164,5 +164,6 @@ class CustodyProposalTransitionTest {
          */
         val AGREED_AT_MILLIS = CustodyTimestamp.fromWire("2026-08-03T10:00:00")
         val LATER_MILLIS = CustodyTimestamp.fromWire(LATER)
+        val NOW_MILLIS = CustodyTimestamp.fromWire(NOW)
     }
 }
