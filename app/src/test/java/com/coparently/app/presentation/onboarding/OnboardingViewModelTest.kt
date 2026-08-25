@@ -184,6 +184,9 @@ class OnboardingViewModelTest {
             // is about.
             coEvery { userRepository.getCurrentUser() } returns storedUser.copy(partnerId = null)
 
+            // Intro, then Family, then Profile: the name is entered on the step that asks for
+            // it, and the two Nexts before it are the two steps that now precede it.
+            viewModel.next()
             viewModel.next()
             viewModel.updateName("Olya")
             viewModel.next()
@@ -291,6 +294,7 @@ class OnboardingViewModelTest {
             coEvery { userRepository.getCurrentUser() } answers { stored }
             coEvery { userRepository.updateUser(any()) } answers { stored = firstArg() }
 
+            viewModel.next()
             viewModel.next()
             viewModel.updateName("Olya")
             viewModel.next()

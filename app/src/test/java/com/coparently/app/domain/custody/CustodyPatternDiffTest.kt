@@ -36,8 +36,10 @@ class CustodyPatternDiffTest {
         assertTrue(diff.comparable)
         assertFalse(diff.identical)
         assertEquals(14, diff.movedDayCount)
-        assertEquals(-7, diff.netDaysBySlot["mom"])
-        assertEquals(7, diff.netDaysBySlot["dad"])
+        // Nets to zero, and the map says so by omission: over one whole fortnight each parent
+        // loses their seven days and gains the other's seven. "14 days move" is the true
+        // headline; "mom loses 7" would be a sentence about half a cycle.
+        assertTrue(diff.netDaysBySlot.isEmpty())
     }
 
     @Test

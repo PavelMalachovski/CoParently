@@ -442,12 +442,6 @@ class OnboardingViewModel @Inject constructor(
     }
 
     /**
-     * Copies the five fields this wizard owns onto the parent's current row.
-     *
-     * `partnerId`, `fcmToken`, `role` and `colorCode` come from the fresh read, never from
-     * [state] — see this class's doc, and `ProfileViewModel.save`, which learned it the hard way.
-     */
-    /**
      * Writes what the family co-parents onto the parent's own record.
      *
      * Its own write rather than folding it into [saveProfile], because the family step comes
@@ -489,6 +483,12 @@ class OnboardingViewModel @Inject constructor(
         petRepository.upsertPet(pet)
     }
 
+    /**
+     * Copies the five fields this wizard owns onto the parent's current row.
+     *
+     * `partnerId`, `fcmToken`, `role` and `colorCode` come from the fresh read, never from
+     * [state] — see this class's doc, and `ProfileViewModel.save`, which learned it the hard way.
+     */
     private suspend fun saveProfile(state: OnboardingUiState) {
         val fresh = userRepository.getCurrentUser() ?: return
         userRepository.updateUser(
