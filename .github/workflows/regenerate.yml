@@ -1,0 +1,99 @@
+# Regenerates the two build artefacts that need an Android SDK, and commits them back.
+#
+# **Why this exists.** Most of this repository's work is done by sessions running without an
+# Android SDK — Gradle cannot be invoked there at all — so two files that only a Gradle build can
+# produce had no way of being updated: detekt's baseline (CQ-12) and Room's exported schema
+# (CQ-1). Both were stuck, and each one being stuck cost something real: detekt ran as a report
+# rather than a gate, and every migration since v14 shipped with no fixture to test it against.
+#
+# **This is deliberately manual.** Regenerating a detekt baseline accepts whatever violations
+# exist at that moment, so a job that did it automatically would silently absolve every new one —
+# the exact opposite of what a gate is for. It runs when somebody asks for it, and the asking is
+# visible in the history.
+#
+# Two ways to ask, because the first one only works from the default branch:
+#
+#   * `workflow_dispatch` — the ordinary route, once this file is on `main`.
+#   * touching `.github/regenerate-request` — GitHub only lists a `workflow_dispatch` workflow
+#     that already exists on the default branch, so on a feature branch that has not merged yet
+#     this is the only way to run it. Commit any change to that file and the job runs on your
+#     branch.
+#
+# The job's own commit touches `app/schemas/` and `app/config/detekt/baseline.xml`, neither of
+# which is on the trigger path, so it cannot loop.
+name: Regenerate
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/regenerate-request'
+      - '.github/workflows/regenerate.yml'
+
+# The whole point: the job writes files back to the branch it ran on.
+permissions:
+  contents: write
+
+concurrency:
+  group: regenerate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  regenerate:
+    name: Regenerate baseline and schema
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The branch, not the detached merge commit: this job commits, and a detached HEAD
+          # has nowhere to push to.
+          ref: ${{ github.ref_name }}
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: temurin
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      # `detektBaseline` overwrites the file with everything detekt currently finds. That is
+      # what makes it useful — it accepts the debt that exists so new violations stand out —
+      # and what makes it dangerous to run unattended.
+      - name: Regenerate the detekt baseline
+        run: ./gradlew detektBaseline
+
+      # Room writes `app/schemas/<version>.json` during kapt, from the `room.schemaLocation`
+      # argument in app/build.gradle.kts. This exports the *current* version only; the versions
+      # between 14 and now were never committed and cannot be recovered from a build of today's
+      # code — see CQ-1 in docs/ROADMAP.md for the decision to accept that gap rather than
+      # rebuild each historical commit.
+      - name: Export the current Room schema
+        run: ./gradlew kaptDebugKotlin
+
+      - name: Commit whatever changed
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/config/detekt/baseline.xml app/schemas
+          if git diff --cached --quiet; then
+            echo "Nothing changed — the baseline and the schema are already current."
+            exit 0
+          fi
+          git commit -m "chore(ci): regenerate the detekt baseline and export the Room schema
+
+          Produced by .github/workflows/regenerate.yml, which exists because the sessions that
+          write most of this repository have no Android SDK and cannot run Gradle at all."
+          git push origin HEAD:${{ github.ref_name }}
+
+      - name: Upload the reports either way
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: regenerate-reports
+          path: app/build/reports/
+          if-no-files-found: ignore
+          retention-days: 14
