@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- MON-13: the country whose public holidays the calendar draws. -->
+    <string name="country_label">Země</string>
+    <string name="country_settings_summary">Určuje, které státní svátky kalendář zobrazuje</string>
+
+    <string name="country_cz">Česko</string>
+    <string name="country_sk">Slovensko</string>
+    <string name="country_de">Německo</string>
+    <string name="country_at">Rakousko</string>
+    <string name="country_ua">Ukrajina</string>
+    <string name="country_ru">Rusko</string>
+    <string name="country_other">Jiná</string>
+
+    <string name="country_holidays_supported">V kalendáři se zobrazují státní svátky a školní prázdniny.</string>
+    <string name="country_holidays_unavailable">Svátky pro zemi %1$s zatím v aplikaci nejsou, proto se nezobrazují.</string>
+</resources>

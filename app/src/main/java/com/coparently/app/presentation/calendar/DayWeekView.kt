@@ -412,8 +412,10 @@ private fun DayWeekPage(
                                 )
                                 // Holiday name shown in single-day view where there is room
                                 if (holiday != null && daysCount == 1) {
-                                    val holidayName = if (Locale.getDefault().language == "cs") {
-                                        holiday.nameCs
+                                    val holidayName = if (
+                                        Locale.getDefault().language == holiday.localLanguage
+                                    ) {
+                                        holiday.nameLocal
                                     } else {
                                         holiday.nameEn
                                     }

@@ -16,15 +16,20 @@ import com.coparently.app.domain.custody.DayOverrideTransition
 import com.coparently.app.domain.custody.SharedCustody
 import com.coparently.app.domain.friends.CalendarFriendGrant
 import com.coparently.app.domain.model.CustodyModel
+import com.coparently.app.domain.holidays.HolidayCountry
 import com.coparently.app.domain.repository.FriendRepository
+import com.coparently.app.domain.repository.UserRepository
 import com.coparently.app.presentation.common.Parents
 import com.coparently.app.presentation.common.ParentsSource
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -77,8 +82,34 @@ class CalendarViewModel @Inject constructor(
     private val custodyModelRepository: CustodyModelRepository,
     private val encryptedPreferences: EncryptedPreferences,
     friendRepository: FriendRepository,
-    parentsSource: ParentsSource
+    parentsSource: ParentsSource,
+    userRepository: UserRepository
 ) : ViewModel() {
+
+    /**
+     * Whose public holidays the grid draws (MON-13).
+     *
+     * Read from the signed-in parent's own profile rather than from the family: two separated
+     * parents can live in two countries, and which public holidays apply is a fact about where
+     * *you* are. Until this existed the answer was `CzechHolidays`, hardcoded at the call site,
+     * for every user in all five of the app's languages.
+     *
+     * Starts at [HolidayCountry.Default] rather than at null so the grid never has to render a
+     * "country unknown" state — the default is Czechia, which is exactly what every account had
+     * before it could choose.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val holidayCountry: StateFlow<HolidayCountry> =
+        userRepository.observeCurrentUserId()
+            .flatMapLatest { uid ->
+                if (uid == null) flowOf(null) else userRepository.observeUserById(uid)
+            }
+            .map { HolidayCountry.fromCode(it?.countryCode) }
+            .stateIn(
+                viewModelScope,
+                SharingStarted.WhileSubscribed(HANDOVER_STOP_TIMEOUT_MS),
+                HolidayCountry.Default
+            )
 
     /**
      * The family's calendar friends, live ones only (item 16).

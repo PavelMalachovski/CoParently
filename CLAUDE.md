@@ -171,7 +171,7 @@ cd firestore-tests && npm test              # firestore.rules against the local 
   deliberate and both tracked in `docs/ROADMAP.md` (**CQ-12**, **CQ-1**): **detekt reports but does not gate**
   (`continue-on-error`) until its baseline is regenerated locally, and there is **no
   instrumented migration job**, because `app/schemas/` stops at v14 while the database is at
-  v32. Still run the build locally before pushing — CI is a backstop, not a substitute.
+  v33. Still run the build locally before pushing — CI is a backstop, not a substitute.
   After switching branches, prefer `clean` — stale Hilt/kapt stubs from another branch cause
   errors like "Could not find class file for '…Application'".
 - **A docs/functions/rules-only pull request skips the Android jobs.** The `changes` job
@@ -295,7 +295,7 @@ cd firestore-tests && npm test              # firestore.rules against the local 
 
 ```
 domain/    — models, repository interfaces, use cases, holidays, ReminderScheduler
-data/      — Room (v32 + migrations), Firestore/Google clients, repository impls, sync
+data/      — Room (v33 + migrations), Firestore/Google clients, repository impls, sync
 presentation/ — Compose screens per feature + ViewModels + theme
 di/        — Hilt modules (Database, Firebase, Google, UseCase, Notification, …)
 ```
@@ -320,9 +320,19 @@ Data flow: UI → ViewModel → UseCase → Repository → Room (source of truth
 6. **Calendar query ranges** come from `queryRangeFor()` in `CalendarScreen.kt` —
    extend that function instead of inlining new range math.
 7. **View modes** are `MONTH, WEEK, DAY` (roadmap order). There is no 3-day view anymore.
-8. **Czech holidays** come from `domain/holidays/CzechHolidays` (pure, computed; Easter
-   via computus). School vacations are the nationwide MŠMT ones; the district-dependent
-   spring break is intentionally not included.
+8. **Holidays come from the parent's country** (MON-13). `domain/holidays/HolidayCountry` maps a
+   stored `users.countryCode` (schema 33, `NOT NULL DEFAULT 'CZ'`, so every pre-existing account
+   is Czechia) to a `HolidayProvider`; the calendar reads that, never a provider directly. Three
+   rules. **A country with no table draws no holidays** — five of the six do not have one, and
+   the picker says so on the row, because drawing Czech holidays for a German family is the bug
+   this replaced and drawing nothing silently would be design item 8's forbidden affordance.
+   **The country is a property of the person, not the family**: two separated parents can live in
+   two countries. The cost is that the school-vacation strips follow the viewer too, which is
+   recorded rather than hidden. And **`Holiday.nameLocal` carries `localLanguage`** — the UI shows
+   the local name when the device language matches and English otherwise, which is what
+   `MonthView` already did, hardcoded to `"cs"`. `CzechHolidays` itself is unchanged: pure,
+   computed, Easter via computus (now shared as `gregorianEasterSunday`), the nationwide MŠMT
+   vacations, and the district-dependent spring break still intentionally excluded.
 9. **Reminders** are scheduled through the `ReminderScheduler` domain interface
    (WorkManager impl `EventReminderScheduler`), hooked into the event use cases —
    schedule on create/update, cancel on delete.
@@ -362,7 +372,7 @@ Data flow: UI → ViewModel → UseCase → Repository → Room (source of truth
     the conversation as `{uid: epochMillis}` maps — one write per event — and the ticks and
     unread badge are derived from them by `ChatReadState`, never stored per message.
     Message times are stored the same way: `Message.sentAtMillis`, epoch millis (Room
-    schema v13, since superseded — the database is at v32), not a naive `LocalDateTime`, so two
+    schema v13, since superseded — the database is at v33), not a naive `LocalDateTime`, so two
     parents in different time zones agree
     on what a mark means and on when a message was sent. The Firestore field keeps its name
     (`timestamp`) and the read path still accepts a legacy ISO string, so a co-parent on an

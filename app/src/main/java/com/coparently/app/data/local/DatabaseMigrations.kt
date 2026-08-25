@@ -715,6 +715,27 @@ object DatabaseMigrations {
     }
 
     /**
+     * v32 -> v33: a parent's country, so the calendar stops showing everybody Czech holidays.
+     *
+     * MON-13. MVP 1 asked for "holidays and vacations by country" and shipped one country, with
+     * no field anywhere to say otherwise — `CalendarScreen` called `CzechHolidays` directly.
+     *
+     * **`DEFAULT 'CZ'` is the whole migration**, and it is the answer to "what about the people
+     * already using it": every existing row becomes Czechia, which is what they were already
+     * being shown, so nobody's calendar changes on upgrade. `NOT NULL` because there is no such
+     * thing as a user with no country to draw a calendar for — an unrecognised code falls back
+     * to the default at the read (`HolidayCountry.fromCode`), and the column never carries the
+     * ambiguity.
+     */
+    val MIGRATION_32_33 = object : Migration(32, 33) {
+        override fun migrate(database: SupportSQLiteDatabase) {
+            database.execSQL(
+                "ALTER TABLE users ADD COLUMN countryCode TEXT NOT NULL DEFAULT 'CZ'"
+            )
+        }
+    }
+
+    /**
      * List of all migrations in order.
      */
     val ALL_MIGRATIONS = arrayOf(
@@ -744,6 +765,7 @@ object DatabaseMigrations {
         MIGRATION_28_29,
         MIGRATION_29_30,
         MIGRATION_30_31,
-        MIGRATION_31_32
+        MIGRATION_31_32,
+        MIGRATION_32_33
     )
 }

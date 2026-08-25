@@ -463,7 +463,7 @@ private fun DayCell(
         }
         holiday?.let {
             append(", ")
-            append(if (Locale.getDefault().language == "cs") it.nameCs else it.nameEn)
+            append(if (Locale.getDefault().language == it.localLanguage) it.nameLocal else it.nameEn)
         }
         custodyLabel?.let {
             append(", ")

@@ -71,6 +71,13 @@ data class UserEntity(
      * Names rather than a localized label, and null rather than `""` for "none": a blank and a
      * null must not be two spellings of the same value in a column a whole-row comparison reads.
      */
-    val caresForKinds: String? = null
+    val caresForKinds: String? = null,
+    /**
+     * ISO 3166-1 alpha-2 country, deciding which holiday calendar the grid draws.
+     *
+     * `NOT NULL DEFAULT 'CZ'` in SQLite, which is what stamps every pre-existing row as Czechia
+     * — see [com.coparently.app.domain.model.User.countryCode].
+     */
+    val countryCode: String = "CZ"
 )
 

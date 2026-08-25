@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- MON-13: the country whose public holidays the calendar draws. -->
+    <string name="country_label">Country</string>
+    <string name="country_settings_summary">Decides which public holidays the calendar shows</string>
+
+    <string name="country_cz">Czechia</string>
+    <string name="country_sk">Slovakia</string>
+    <string name="country_de">Germany</string>
+    <string name="country_at">Austria</string>
+    <string name="country_ua">Ukraine</string>
+    <string name="country_ru">Russia</string>
+    <string name="country_other">Other</string>
+
+    <string name="country_holidays_supported">Public holidays and school vacations are shown on the calendar.</string>
+    <string name="country_holidays_unavailable">Public holidays for %1$s are not in the app yet, so none are shown.</string>
+</resources>

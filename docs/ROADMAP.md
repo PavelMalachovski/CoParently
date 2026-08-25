@@ -86,7 +86,7 @@ invocation is yours.
 | **MON-8** | Bakaláři / EduPage school import — the parsing, once you supply a real export | P2 | L |
 | **MON-11** | Payments (MVP 3) — the entitlement model, after MON-1 decides the price | P2 | L |
 | **MON-12** | Intelligent suggestions (MVP 3) — behind SEC-1's proxy, never with a key in the client | P3 | M |
-| **MON-13** | Holidays and school vacations exist for Czechia only, in an app that ships in five locales | P2 | M |
+| **MON-13** | Five of the six countries in the picker still have no holiday table (the country setting itself is done) | P2 | M |
 | **FAM-4** | Custody per child | P2 | L |
 | **REL-4 (drafting)** | Fill the placeholders in the legal drafts, write the web account-deletion page | P0 | S |
 | **REL-5** | An analytics consent gate for the EU | P0 | M |
@@ -95,7 +95,7 @@ invocation is yours.
 
 | Id | What | Why it needs a job |
 | --- | --- | --- |
-| **CQ-1** | Restore the Room schemas (v15 → v32) and test the migrations | Exporting a schema is a Gradle task, so CI can do it and upload `app/schemas/` as an artifact; **running** a migration test needs an Android emulator, and no workflow starts one. Both jobs are writable here; neither exists. |
+| **CQ-1** | Restore the Room schemas (v15 → v33) and test the migrations | Exporting a schema is a Gradle task, so CI can do it and upload `app/schemas/` as an artifact; **running** a migration test needs an Android emulator, and no workflow starts one. Both jobs are writable here; neither exists. |
 | **CQ-12** | Regenerate the detekt baseline, then let detekt gate again | `./gradlew detektBaseline` needs the Android SDK. A one-shot `workflow_dispatch` job that runs it and uploads the XML is enough — commit the artifact, delete `continue-on-error`. |
 
 ### 👁 Cloud writes it, only a device or a console can say whether it is right
@@ -163,7 +163,7 @@ shipped, and a plan that describes work already done is worse than no plan.
 | Reoccurrence | Clear | S | High | **Done.** `RecurrenceExpander`; CQ-4 removed the two-year cliff |
 | Confirm pickup | Other side sees it is picked up | S | High | **Done.** `pickupConfirmedBy` / `pickupConfirmedAt` |
 | Notifications | 30 min or 1 h before pickup | M | High | **Done.** `ReminderScheduler` + WorkManager; the permission is asked contextually, never on cold start |
-| Holidays and vacations by country | Clear | S | High | **Done for Czechia only.** `CzechHolidays` is computed and correct; there is no country setting at all, so a German- or Ukrainian-locale user gets Czech holidays → **MON-13** |
+| Holidays and vacations by country | Clear | S | High | **Partly.** The country is now asked for and stored (MON-13), and `CzechHolidays` is computed and correct — but it is still the only table, so picking any other country draws no holidays rather than the wrong ones |
 | Add events only you can see | Related to switching views | S | High | **Done.** `isPrivate`, filtered out of every sync path |
 | Sat/Sun a different colour | Clear | S | High | **Done.** `DayCellFills` draws the weekend as a base layer under custody, never instead of it |
 
@@ -410,23 +410,23 @@ Decide: pin and document, or move off it.
 
 ## 5. [CQ] Code quality, correctness and platform
 
-### CQ-1 · P0 · M · Restore the Room schemas (v15 → v32)
+### CQ-1 · P0 · M · Restore the Room schemas (v15 → v33)
 
 **Where:** ⚙️ cloud, once two CI jobs exist. Exporting schemas is a Gradle task CI can run and
 upload as an artifact; running a migration test needs an Android emulator, which no workflow starts
 today.
 
-`CoPlanlyDatabase` is at `version = 32`; `app/schemas/` stops at `14.json`. The files were never
+`CoPlanlyDatabase` is at `version = 33`; `app/schemas/` stops at `14.json`. The files were never
 committed, so they cannot be recovered from git — they must be regenerated. Every migration test
 above v14 fails with *"Cannot find the schema file in the assets folder"*, which means **migrations
-15→32 have never run against real SQLite**. `DatabaseModule` deliberately does not fall back to
+15→33 have never run against real SQLite**. `DatabaseModule` deliberately does not fall back to
 destructive migration above v4: a broken migration is a **crash on launch** for a user with real
 data, not a wipe.
 
 This is the item that gates several others. **FAM-2**'s dead `childId` columns cannot be dropped
 without it (a column drop is a table rebuild, and `MIGRATION_12_13` is only provable because
 `12.json` exists), **SEC-4**'s timestamp conversion has no instrumented test for the same reason,
-**CQ-19** has just added one more that nobody can prove, and **SEC-2** will add another.
+**CQ-19** and **MON-13** have just added two more that nobody can prove, and **SEC-2** will add another.
 
 - [ ] Regenerate per version (`./gradlew kaptDebugKotlin` at each version-bump commit), or accept
       the gap, export 31 only, and document the untested migrations.
@@ -915,23 +915,39 @@ verdict is discoverable material in a custody dispute, which makes it a liabilit
 than a feature. Anything resembling emotion inference deserves a legal read under the EU AI Act
 before launch.
 
-### MON-13 · P2 · M · Holidays and school vacations exist for Czechia only
+### MON-13 · **PARTLY DONE** · P2 · M · Holidays exist for Czechia only
 
-**Where:** ☁️ cloud.
+**Where:** ☁️ the setting and the registry are done; ⚙️/💻 the remaining tables need a source this
+environment cannot reach.
 
-`domain/holidays/CzechHolidays` is pure, computed and correct (Easter via computus, the nationwide
-MŠMT vacations, the district-dependent spring break deliberately excluded). There is **no country
-setting anywhere in the app** — no field, no picker, no per-family value — so a German, Russian or
-Ukrainian user gets Czech public holidays on their calendar with no way to say otherwise. MVP 1
-asked for "holidays and vacations by country" and got one country.
+MVP 1 asked for "holidays and vacations by country" and shipped one country. There was **no country
+setting anywhere in the app** — no field, no picker, not even a constant — so `CalendarScreen`
+called `CzechHolidays` directly and a German, Russian or Ukrainian family got Czech public holidays
+on their grid, in an app that ships in five languages.
 
-Czech-first is the right launch strategy, so this is not a blocker. But the app ships in five
-locales, and a holiday grid that is wrong for four of them is a visible untruth on the surface the
-product is opened to read. There is no interface to slot a second country into, either:
-`CalendarScreen` calls `CzechHolidays.holidaysInRange` directly at the calendar's single holiday
-call site, and the stored preference is literally named "show Czech holidays". So the shape is a
-`HolidayProvider` that does not exist yet, one implementation per country, plus a **family-level**
-setting — not a per-device one, since both parents must see the same calendar.
+**Done: the country is now a stored, chosen fact.** `User.countryCode` (Room schema 33,
+`NOT NULL DEFAULT 'CZ'`, so every existing account becomes Czechia and nobody's calendar changes),
+a picker on the wizard's profile step beside the parent colour, a Settings row, and
+`HolidayProvider` + `HolidayCountry` where the hardcoded call used to be. A country is stored
+rather than "which holidays to show" because other features will want it — currency defaults,
+which legal text applies, whether a school import is even available (MON-8).
+
+**Deliberately per parent, not per family.** Two separated parents can live in two countries, and a
+public holiday is a fact about where *you* are. This reverses what an earlier draft of this
+document said, and the reversal has a cost worth stating: the school-vacation strips, which are
+genuinely about the child's school, follow the viewer too. A per-family school calendar is the
+honest fix and is part of what is left.
+
+**Left: five of the six tables.** `HolidayCountry` lists Slovakia, Germany, Austria, Ukraine and
+Russia with no provider, and the picker says so on the row — a country with no table draws **no**
+holidays, which is honest, rather than another country's, which was the bug. They are unimplemented
+for a stated reason: a holiday table is a set of user-visible facts and a wrong date is worse than
+no date. This environment's egress policy blocks every reference site, so they cannot be verified
+here, and one search while writing this already turned up a change memory would have got wrong —
+Slovakia's 2024–2026 consolidation packages moved several days off the non-working list while
+leaving their formal names in place. Each country wants a check against a source before its table
+lands. Germany's and Austria's school calendars are set per state and may never be computable at
+all, which is the same reason Czechia's district-dependent spring break is excluded.
 
 ---
 

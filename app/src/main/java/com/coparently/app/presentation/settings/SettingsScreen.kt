@@ -40,6 +40,7 @@ import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PersonOutline
 import androidx.compose.material.icons.filled.Pets
+import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.AlertDialog
@@ -84,6 +85,7 @@ import com.coparently.app.R
 import com.coparently.app.data.repository.RatioSubmission
 import com.coparently.app.data.sync.SyncStatus
 import com.coparently.app.domain.expenses.SplitRatio
+import com.coparently.app.domain.holidays.HolidayCountry
 import com.coparently.app.domain.model.FamilyKind
 import com.coparently.app.domain.money.SupportedCurrency
 import com.coparently.app.presentation.common.ConfirmationDialog
@@ -91,6 +93,7 @@ import com.coparently.app.presentation.common.GroupLabel
 import com.coparently.app.presentation.common.ParentNames
 import com.coparently.app.presentation.common.SectionGroup
 import com.coparently.app.presentation.common.SectionRow
+import com.coparently.app.presentation.common.labelRes
 import com.coparently.app.presentation.common.SignedInAsRow
 import com.coparently.app.presentation.common.rememberParentNames
 import com.coparently.app.data.family.FamilyOption
@@ -174,6 +177,7 @@ fun SettingsScreen(
     val splitParentNames = rememberParentNames(parents)
     var showFamilyKindPicker by rememberSaveable { mutableStateOf(false) }
     var showColorPicker by rememberSaveable { mutableStateOf(false) }
+    var showCountryPicker by rememberSaveable { mutableStateOf(false) }
     var showFamilySwitcher by rememberSaveable { mutableStateOf(false) }
     val families by settingsViewModel.families.collectAsState()
     val selectedFamilyId by settingsViewModel.selectedFamilyId.collectAsState()
@@ -215,6 +219,16 @@ fun SettingsScreen(
             onDismiss = { showFamilySwitcher = false }
         )
     }
+    if (showCountryPicker) {
+        CountryDialog(
+            selected = country,
+            onConfirm = { chosen ->
+                settingsViewModel.setCountry(chosen)
+                showCountryPicker = false
+            },
+            onDismiss = { showCountryPicker = false }
+        )
+    }
     if (showColorPicker) {
         ParentColorDialog(
             selected = ParentColorChoice.fromStored(parents.me?.colorCode),
@@ -226,6 +240,7 @@ fun SettingsScreen(
             onDismiss = { showColorPicker = false }
         )
     }
+    val country by settingsViewModel.country.collectAsState()
     val darkTheme by settingsViewModel.darkThemeFlow.collectAsState()
     val account by settingsViewModel.account.collectAsState()
     val defaultCurrency by settingsViewModel.defaultCurrency.collectAsState()
@@ -414,6 +429,20 @@ fun SettingsScreen(
                                             ).fill
                                     )
                             )
+                        }
+                    )
+                    Divider()
+                    // Beside the colour rather than under App preferences: both are answers about
+                    // this parent — how they are marked and where they are — while the language
+                    // and the theme are answers about this device.
+                    SectionRow(
+                        icon = Icons.Default.Public,
+                        title = stringResource(R.string.country_label),
+                        supporting = stringResource(R.string.country_settings_summary),
+                        value = stringResource(country.labelRes()),
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            showCountryPicker = true
                         }
                     )
                     Divider()
@@ -1239,6 +1268,74 @@ private fun ParentColorDialog(
                     )
                 }
             ) {
+                Text(stringResource(R.string.settings_family_kind_save))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.settings_family_kind_cancel))
+            }
+        }
+    )
+}
+
+/**
+ * Picks the country whose public holidays the calendar draws (MON-13).
+ *
+ * A dialog rather than the wizard's chip row, because that is the anatomy every other Settings
+ * choice here uses — colour, language, theme, currency — and a row of seven chips inside a
+ * settings list would be the second interaction model in one group.
+ *
+ * It carries the same honesty the picker does: the note under the list says whether the chosen
+ * country's holidays are actually in the app.
+ */
+@Composable
+private fun CountryDialog(
+    selected: HolidayCountry,
+    onConfirm: (HolidayCountry) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var chosen by rememberSaveable(selected) { mutableStateOf(selected.name) }
+    val country = HolidayCountry.entries.first { it.name == chosen }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.country_label)) },
+        text = {
+            Column {
+                HolidayCountry.entries.forEach { entry ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { chosen = entry.name }
+                            .padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = chosen == entry.name,
+                            onClick = { chosen = entry.name }
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(stringResource(entry.labelRes()))
+                    }
+                }
+                Text(
+                    text = if (country.hasHolidays) {
+                        stringResource(R.string.country_holidays_supported)
+                    } else {
+                        stringResource(
+                            R.string.country_holidays_unavailable,
+                            stringResource(country.labelRes())
+                        )
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 8.dp)
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(country) }) {
                 Text(stringResource(R.string.settings_family_kind_save))
             }
         },
