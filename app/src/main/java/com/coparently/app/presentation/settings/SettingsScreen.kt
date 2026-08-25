@@ -133,13 +133,6 @@ private val syncTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 // behind it was wired, and every one of those checks is a separate branch.
 @Suppress("LongParameterList", "LongMethod", "CyclomaticComplexMethod")
 @OptIn(ExperimentalMaterial3Api::class)
-/**
- * The two slot identifiers, never shown as words — [ParentNames] turns each into that person's
- * name. See CLAUDE.md: `"mom"`/`"dad"` are schema identifiers and the app never prints them.
- */
-private const val SLOT_MOM = "mom"
-private const val SLOT_DAD = "dad"
-
 @Composable
 fun SettingsScreen(
     onNavigateUp: (() -> Unit)? = null,
@@ -1137,6 +1130,13 @@ private fun SplitRatioDialog(
 }
 
 /** A whole share, as a percent. */
+/**
+ * The two slot identifiers, never shown as words — [ParentNames] turns each into that person's
+ * name. See CLAUDE.md: `"mom"`/`"dad"` are schema identifiers and the app never prints them.
+ */
+private const val SLOT_MOM = "mom"
+private const val SLOT_DAD = "dad"
+
 private const val SPLIT_WHOLE_PERCENT = 100
 
 /**
