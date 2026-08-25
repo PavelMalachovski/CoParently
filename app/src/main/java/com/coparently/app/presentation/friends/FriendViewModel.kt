@@ -214,7 +214,12 @@ class FriendViewModel @Inject constructor(
                     phones = phones.map { it.trim() }.filter { it.isNotEmpty() },
                     bloodGroup = bloodGroup?.trim()?.takeIf { it.isNotEmpty() },
                     photoUrl = photoUrl,
-                    familyParents = grant?.familyParents ?: myProfile.value?.familyParents.orEmpty()
+                    // The **stored** gate first, then the grant. `friend_profiles`' update rule
+                    // requires `familyParents` to equal what the document already holds, so
+                    // preferring a live grant that has since changed gets the write refused; the
+                    // grant is for the create, where there is no stored profile to match.
+                    familyParents = myProfile.value?.familyParents?.takeIf { it.isNotEmpty() }
+                        ?: grant?.familyParents.orEmpty()
                 )
             ).onFailure { e -> _saveError.value = errorRes(e) }
         }

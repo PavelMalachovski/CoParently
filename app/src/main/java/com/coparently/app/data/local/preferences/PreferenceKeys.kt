@@ -49,6 +49,16 @@ object PreferenceKeys {
     const val SPLIT_RATIO_BASIS_POINTS = "expenses_split_ratio_basis_points"
 
     /**
+     * The slot [SPLIT_RATIO_BASIS_POINTS] was captured under.
+     *
+     * The stored share is **slot 1's**, which is the schema; what a parent sets before pairing is
+     * *their own*. An unpaired account defaults to slot 1, and pairing can move it to slot 2 —
+     * so without knowing which slot the number was written under, publishing it to the pair can
+     * hand the co-parent the share this parent meant to take.
+     */
+    const val SPLIT_RATIO_SLOT = "expenses_split_ratio_slot"
+
+    /**
      * Prefix for the per-user key that records the parent slot (`"mom"`/`"dad"`) this device's
      * own records are currently stamped with — the actual key is this prefix plus the Firebase
      * UID.

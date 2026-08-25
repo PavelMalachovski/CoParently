@@ -402,9 +402,12 @@ private fun PetStep(state: OnboardingUiState, viewModel: OnboardingViewModel) {
 private fun SplitStep(state: OnboardingUiState, viewModel: OnboardingViewModel) {
     StepHeading(title = R.string.onboarding_split_title, body = R.string.onboarding_split_body)
 
+    // Named, because two bare numbers do not say which half is yours — and the answer is not
+    // guessable: the stored share is slot 1's, and pairing decides which slot this device gets.
+    // "You / Co-parent" is the only honest wording here, there being no co-parent to name yet.
     Text(
         text = stringResource(
-            R.string.settings_split_ratio_value,
+            R.string.onboarding_split_value,
             state.splitMomPercent,
             SPLIT_WHOLE_PERCENT - state.splitMomPercent
         ),

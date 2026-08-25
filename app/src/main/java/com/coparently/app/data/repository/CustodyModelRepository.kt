@@ -810,8 +810,12 @@ class CustodyModelRepository(
         date: String,
         transform: (Map<String, DayOverride>) -> Result<Map<String, DayOverride>>
     ): Result<SwapWrite> {
-        val existing = firestoreCustodyDataSource.getCustody(pair.documentId)
-            ?: return Result.failure(IllegalStateException("The pair has no shared schedule yet"))
+        // Guarded like the write below it. An unguarded read threw straight out of the caller's
+        // `viewModelScope.launch` — neither ViewModel's `.onFailure` can catch a throw — and an
+        // uncaught exception there terminates the process rather than showing a refusal.
+        val existing = guarded("swap read", pair.documentId) {
+            firestoreCustodyDataSource.getCustody(pair.documentId)
+        } ?: return Result.failure(IllegalStateException("The pair has no shared schedule yet"))
 
         val next = transform(existing.dayOverrides).getOrElse { return Result.failure(it) }
         if (next == existing.dayOverrides) {

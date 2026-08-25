@@ -314,6 +314,28 @@ class EncryptedPreferences @Inject constructor(
             .takeIf { it >= 0 }
 
     /**
+     * Records which slot the cached share belongs to, so it can be re-anchored later.
+     *
+     * @param slot `"mom"` or `"dad"`, or null to forget — which is what a paired write does,
+     *   because from then on the pair's document is the record and the cache merely mirrors it.
+     */
+    fun putSplitRatioSlot(slot: String?) {
+        encryptedPreferences.edit()
+            .apply {
+                if (slot == null) {
+                    remove(PreferenceKeys.SPLIT_RATIO_SLOT)
+                } else {
+                    putString(PreferenceKeys.SPLIT_RATIO_SLOT, slot)
+                }
+            }
+            .apply()
+    }
+
+    /** The slot the cached share was captured under, or null when it was never recorded. */
+    fun getSplitRatioSlot(): String? =
+        encryptedPreferences.getString(PreferenceKeys.SPLIT_RATIO_SLOT, null)
+
+    /**
      * Stores the app-wide default currency.
      *
      * @param code ISO 4217 currency code, e.g. "CZK"

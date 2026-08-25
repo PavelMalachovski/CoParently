@@ -15,6 +15,8 @@ import com.coparently.app.domain.money.SupportedCurrency
 import com.coparently.app.domain.repository.PreferencesRepository
 import com.coparently.app.domain.repository.UserRepository
 import com.coparently.app.presentation.common.FamilyKindSource
+import com.coparently.app.presentation.common.Parents
+import com.coparently.app.presentation.common.ParentsSource
 import com.coparently.app.presentation.common.UiError
 import com.coparently.app.presentation.common.UiState
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -45,6 +47,7 @@ class SettingsViewModel @Inject constructor(
     private val analyticsManager: AnalyticsManager,
     signedInAccountSource: SignedInAccountSource,
     private val familyKindSource: FamilyKindSource,
+    parentsSource: ParentsSource,
     private val familySettingsRepository: FamilySettingsRepository
 ) : ViewModel() {
 
@@ -72,6 +75,16 @@ class SettingsViewModel @Inject constructor(
             SharingStarted.WhileSubscribed(ACCOUNT_STOP_TIMEOUT_MS),
             FamilyKind.ALL
         )
+
+    /**
+     * Signed-in parent and paired co-parent, for naming the two halves of the split.
+     *
+     * Two bare numbers cannot say which half is yours, and the answer is not guessable: the
+     * stored share is slot 1's and pairing decides which slot this device holds. A parent
+     * dragging that slider without names can propose the opposite of what they meant.
+     */
+    val parents: StateFlow<Parents> = parentsSource.observe()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(ACCOUNT_STOP_TIMEOUT_MS), Parents())
 
     /**
      * This parent's **own** answer, which is what the Settings dialog edits.

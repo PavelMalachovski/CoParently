@@ -130,10 +130,14 @@ class FriendRepositoryImpl @Inject constructor(
 
     override suspend fun myGrant(): CalendarFriendGrant? {
         val myUid = authService.getCurrentUser()?.uid ?: return null
-        val data = runCatching {
+        val data = try {
             firestore.collection(CALENDAR_FRIENDS).document(myUid).get().await().data
-        }.getOrElse { cause ->
-            Log.w(TAG, "Could not read this account's calendar-friend grant", cause)
+        } catch (e: CancellationException) {
+            // Never swallowed: `runFriend` in this same file rethrows it for the same reason —
+            // a cancelled coroutine that reports itself as a failed read is a lie about why.
+            throw e
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+            Log.w(TAG, "Could not read this account's calendar-friend grant", e)
             return null
         }
         return FriendMappers.grantFrom(myUid, data)

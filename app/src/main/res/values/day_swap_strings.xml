@@ -11,7 +11,7 @@
     <string name="day_swap_needs_coparent">Link a co-parent first — a swap is something the two of you agree.</string>
     <string name="day_swap_error_refused">That swap could not be offered</string>
     <string name="day_swap_error_not_ready">Still working out who your co-parent is — try again in a moment</string>
-    <string name="day_swap_error_partial">Only %1$d of %2$d days were offered — your co-parent already has those; offer the rest again</string>
+    <string name="day_swap_error_partial">Offered %1$d of %2$d days — those are already waiting on your co-parent; offer the rest again</string>
     <string name="day_swap_inbox_section">Day swaps</string>
     <string name="day_swap_inbox_offered_by_you">You offered this day to %1$s</string>
     <string name="day_swap_inbox_offered_to_you">%1$s is offering you this day</string>

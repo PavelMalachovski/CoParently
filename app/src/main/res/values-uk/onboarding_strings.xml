@@ -33,4 +33,5 @@
     <string name="onboarding_pet_body">Лише ім\'я та вид. Щеплення, нотатки про годування та ветеринар — потім, на сторінці улюбленця.</string>
     <string name="onboarding_split_title">Як ділитимете витрати?</string>
     <string name="onboarding_split_body">Навпіл, якщо не домовитеся інакше. Щойно другого з батьків буде під\'єднано, зміну підтверджуватиме він — а вже внесені витрати збережуть свій поділ.</string>
+    <string name="onboarding_split_value">Ви %1$d / Другий з батьків %2$d</string>
 </resources>

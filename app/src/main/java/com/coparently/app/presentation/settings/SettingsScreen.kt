@@ -87,9 +87,11 @@ import com.coparently.app.domain.model.FamilyKind
 import com.coparently.app.domain.money.SupportedCurrency
 import com.coparently.app.presentation.common.ConfirmationDialog
 import com.coparently.app.presentation.common.GroupLabel
+import com.coparently.app.presentation.common.ParentNames
 import com.coparently.app.presentation.common.SectionGroup
 import com.coparently.app.presentation.common.SectionRow
 import com.coparently.app.presentation.common.SignedInAsRow
+import com.coparently.app.presentation.common.rememberParentNames
 import com.coparently.app.presentation.sync.GoogleCalendarSyncState
 import com.coparently.app.presentation.sync.SyncViewModel
 import kotlinx.coroutines.launch
@@ -131,6 +133,13 @@ private val syncTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 // behind it was wired, and every one of those checks is a separate branch.
 @Suppress("LongParameterList", "LongMethod", "CyclomaticComplexMethod")
 @OptIn(ExperimentalMaterial3Api::class)
+/**
+ * The two slot identifiers, never shown as words — [ParentNames] turns each into that person's
+ * name. See CLAUDE.md: `"mom"`/`"dad"` are schema identifiers and the app never prints them.
+ */
+private const val SLOT_MOM = "mom"
+private const val SLOT_DAD = "dad"
+
 @Composable
 fun SettingsScreen(
     onNavigateUp: (() -> Unit)? = null,
@@ -164,12 +173,15 @@ fun SettingsScreen(
     // co-parent ticked look like this parent's own.
     val myCaresFor by settingsViewModel.myCaresFor.collectAsState()
     val agreedRatio by settingsViewModel.agreedRatio.collectAsState()
+    // The split is two numbers about money; without names they do not say whose is whose.
+    val splitParentNames = rememberParentNames(settingsViewModel.parents.collectAsState().value)
     var showFamilyKindPicker by rememberSaveable { mutableStateOf(false) }
     var showSplitPicker by rememberSaveable { mutableStateOf(false) }
 
     if (showSplitPicker) {
         SplitRatioDialog(
             current = agreedRatio,
+            parentNames = splitParentNames,
             onConfirm = { ratio ->
                 settingsViewModel.submitRatio(ratio)
                 showSplitPicker = false
@@ -336,8 +348,10 @@ fun SettingsScreen(
                         icon = Icons.Default.Balance,
                         title = stringResource(R.string.settings_split_ratio_title),
                         supporting = stringResource(
-                            R.string.settings_split_ratio_value,
+                            R.string.settings_split_ratio_value_named,
+                            splitParentNames.labelFor(SLOT_MOM),
                             agreedRatio.momPercent,
+                            splitParentNames.labelFor(SLOT_DAD),
                             agreedRatio.dadPercent
                         ),
                         onClick = {
@@ -1075,6 +1089,7 @@ private fun FamilyKindDialog(
 @Composable
 private fun SplitRatioDialog(
     current: SplitRatio,
+    parentNames: ParentNames,
     onConfirm: (SplitRatio) -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -1087,8 +1102,10 @@ private fun SplitRatioDialog(
             Column {
                 Text(
                     text = stringResource(
-                        R.string.settings_split_ratio_value,
+                        R.string.settings_split_ratio_value_named,
+                        parentNames.labelFor(SLOT_MOM),
                         momPercent,
+                        parentNames.labelFor(SLOT_DAD),
                         SPLIT_WHOLE_PERCENT - momPercent
                     ),
                     style = MaterialTheme.typography.titleMedium

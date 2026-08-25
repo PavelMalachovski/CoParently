@@ -6,6 +6,7 @@ import com.coparently.app.data.remote.firebase.FcmService
 import com.coparently.app.data.remote.firebase.FirestoreFamilySettingsDataSource
 import com.coparently.app.data.remote.firebase.PushPayload
 import com.coparently.app.domain.custody.CustodyKey
+import com.coparently.app.domain.expenses.FULL_SHARE_BASIS_POINTS
 import com.coparently.app.domain.expenses.FamilySettings
 import com.coparently.app.domain.expenses.SplitRatio
 import com.coparently.app.domain.expenses.SplitRatioTransition
@@ -90,9 +91,31 @@ class FamilySettingsRepository @Inject constructor(
     fun agreedRatioOrDefault(): SplitRatio =
         SplitRatio.fromStored(preferences.getSplitRatioBasisPoints()) ?: SplitRatio.EVEN
 
-    /** Records the agreed ratio locally, so the save path can read it without a round trip. */
+    /**
+     * Records the agreed ratio locally, so the save path can read it without a round trip.
+     *
+     * Clears any capture slot: this is a figure the pair's document already carries — or is about
+     * to — and from then on the document is the record. Only [rememberUnpairedRatio] stores a
+     * value that still needs anchoring.
+     */
     fun cacheAgreedRatio(ratio: SplitRatio) {
         preferences.putSplitRatioBasisPoints(ratio.momShareBasisPoints)
+        preferences.putSplitRatioSlot(null)
+    }
+
+    /**
+     * Records a ratio chosen while there is nobody to agree it with, **and the slot it means**.
+     *
+     * The stored share is slot 1's — that is the schema, and `Expense.splitBasisPoints` and
+     * `firestore.rules` both speak it — while what a parent sets is *their own* share. Those
+     * coincide only while this device holds slot 1, which an unpaired account does by default
+     * (`UserRepositoryImpl.DEFAULT_ROLE`) and which pairing can change: `assignSlots` hands out
+     * the two slots, nobody chooses one. Without the capture slot, a parent who set "I pay 70",
+     * then paired into slot 2, would have published a document giving *the co-parent* 70.
+     */
+    private suspend fun rememberUnpairedRatio(ratio: SplitRatio) {
+        preferences.putSplitRatioBasisPoints(ratio.momShareBasisPoints)
+        preferences.putSplitRatioSlot(signedInSlot())
     }
 
     /**
@@ -105,8 +128,9 @@ class FamilySettingsRepository @Inject constructor(
         if (pair == null) {
             // Nobody to agree with, and no document to write it to. Cached so the expense screen
             // prices by it immediately; [publishCachedRatioIfMissing] is what carries it across
-            // to the pair, and it runs on the next sync after pairing.
-            cacheAgreedRatio(ratio)
+            // to the pair, and it runs on the next sync after pairing. The slot goes with it —
+            // see [rememberUnpairedRatio] for why a bare number is not enough.
+            rememberUnpairedRatio(ratio)
             return Result.success(RatioSubmission.APPLIED)
         }
 
@@ -156,16 +180,49 @@ class FamilySettingsRepository @Inject constructor(
         val pair = currentPair() ?: return
         if (read(pair.documentId) != null) return
 
+        val anchored = reanchored(cached) ?: return
         Log.i(TAG, "Publishing the ratio agreed before pairing to ${pair.documentId}")
         write(
             pair,
             FamilySettings(
-                ratio = cached,
+                ratio = anchored,
                 participants = pair.participants,
                 lastModifiedBy = pair.myUid,
                 lastModifiedAtMillis = System.currentTimeMillis()
             )
-        )
+        ).onSuccess {
+            // The document is the record now; the cache goes back to merely mirroring it, and the
+            // capture slot has done its one job.
+            cacheAgreedRatio(anchored)
+        }
+    }
+
+    /**
+     * The cached share expressed as **slot 1's**, whatever slot it was captured under.
+     *
+     * Flips it when pairing moved this device to the other slot: what the parent set was their
+     * own share, and the stored form is slot 1's. Returns null — publishing nothing — when either
+     * slot is unknown, because a coin-toss here writes the wrong number into the one document
+     * that prices every future expense, and silence merely leaves the pair on an even split they
+     * can still change.
+     */
+    private suspend fun reanchored(cached: SplitRatio): SplitRatio? {
+        val capturedSlot = preferences.getSplitRatioSlot()
+            // Nothing recorded: the value predates the capture slot, or was written by a paired
+            // path that had already anchored it. Take it as slot 1's, which is what it was.
+            ?: return cached
+        val currentSlot = signedInSlot() ?: return null
+        return if (capturedSlot == currentSlot) {
+            cached
+        } else {
+            SplitRatio(FULL_SHARE_BASIS_POINTS - cached.momShareBasisPoints)
+        }
+    }
+
+    /** This device's slot, or null when it has no local profile row yet. */
+    private suspend fun signedInSlot(): String? {
+        val uid = userRepository.getCurrentUserId() ?: return null
+        return userRepository.getUserById(uid)?.role?.takeIf { it.isNotBlank() }
     }
 
     /** Agrees to the co-parent's proposal; the proposed ratio becomes the agreed one. */
