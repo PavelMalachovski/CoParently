@@ -95,17 +95,17 @@ class FirestoreMessageDataSource @Inject constructor(
     }
 
     /**
-     * Writes a message and advances its conversation's ordering timestamp.
+     * Writes one message document, and nothing else.
      *
-     * Only `lastMessageAt` is written back onto the conversation. The previous version
-     * copied the whole message map into a `lastMessage` field, which doubled every write,
-     * duplicated content the `messages` collection already holds, and gave the security
-     * rules a second place to police the same data. The domain object still exposes
-     * `lastMessage`; it is derived locally from the newest message in the thread.
+     * Nothing about the conversation is touched here — [bumpLastMessageAt] does that, and the
+     * split is deliberate; see its KDoc. Nor is the message copied into a `lastMessage` field
+     * on the conversation, as an older version did: that doubled every write, duplicated what
+     * the `messages` collection already holds, and gave the security rules a second place to
+     * police the same data. The domain object still exposes `lastMessage`; it is derived
+     * locally from the newest message in the thread.
      *
      * @param messageId Document id of the message.
      * @param messageData The message document.
-     * @param lastMessageAtMillis The message's timestamp as epoch millis, for ordering.
      */
     suspend fun sendMessage(messageId: String, messageData: Map<String, Any>) {
         messagesCollection.document(messageId).set(messageData).await()

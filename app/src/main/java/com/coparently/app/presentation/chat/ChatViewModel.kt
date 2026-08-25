@@ -490,7 +490,7 @@ class ChatViewModel @Inject constructor(
         }
     }
 
-    /** Drops the draft for [conversationId] — the message went out, so there is nothing unsent. */
+    /** Drops the draft for [conversationId] — the composer is empty, so there is nothing unsent. */
     private fun clearDraft(conversationId: String) {
         drafts.remove(conversationId)
         if (pendingDraft == conversationId) pendingDraft = null
@@ -539,6 +539,16 @@ class ChatViewModel @Inject constructor(
             return
         }
 
+        // Cleared here, not on the send's success. The screen empties the composer the instant
+        // this returns, so anything still in `drafts` is text the user can no longer see — and
+        // two paths never reach the success line: a refused write, which `sendMessage` rethrows
+        // after marking the row ERROR, and a tab switch, which clears this back-stack-scoped
+        // ViewModel mid-flight while `onThreadClosed` has already flushed the draft to storage.
+        // Either way the next open would re-seed the composer with a message that is already in
+        // the thread and queued for retry, inviting the parent to send it twice. The SENDING row
+        // is the record of what was sent; `flushOutbox` is what retries it.
+        clearDraft(conversationId)
+
         launchGuarded("send message") {
             val user = userRepository.getCurrentUser()
             val senderName = user?.name ?: "Unknown"
@@ -555,7 +565,6 @@ class ChatViewModel @Inject constructor(
                 status = MessageSendStatus.SENDING
             )
             messageRepository.sendMessage(message)
-            clearDraft(conversationId)
         }
     }
 

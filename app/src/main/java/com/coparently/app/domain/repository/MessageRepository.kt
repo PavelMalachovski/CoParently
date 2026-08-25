@@ -80,12 +80,6 @@ interface MessageRepository {
     suspend fun sendMessage(message: Message)
 
     /**
-     * Records that [myUid] has read [conversationId] up to now.
-     *
-     * @param conversationId The deterministic conversation id.
-     * @param myUid This device's signed-in uid.
-     */
-    /**
      * Re-sends every conversation and message this device wrote locally but never got onto the
      * server.
      *
@@ -94,6 +88,12 @@ interface MessageRepository {
      */
     suspend fun flushOutbox()
 
+    /**
+     * Records that [myUid] has read [conversationId] up to now.
+     *
+     * @param conversationId The deterministic conversation id.
+     * @param myUid This device's signed-in uid.
+     */
     suspend fun markRead(conversationId: String, myUid: String)
 
     /**

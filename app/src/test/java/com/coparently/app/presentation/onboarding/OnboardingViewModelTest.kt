@@ -12,7 +12,6 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
-import io.mockk.slot
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.flowOf
@@ -192,10 +191,13 @@ class OnboardingViewModelTest {
             viewModel.next()
             advanceUntilIdle()
 
-            val saved = slot<User>()
+            // A list, not a `slot`: the Family step writes first and MockK refuses a slot
+            // capture across more than one matched call rather than silently keeping the last.
+            val saved = mutableListOf<User>()
             coVerify { userRepository.updateUser(capture(saved)) }
-            assertEquals("Olya", saved.captured.name)
-            assertNull(saved.captured.partnerId, "a held snapshot would have put the pairing back")
+            val profileWrite = saved.last()
+            assertEquals("Olya", profileWrite.name)
+            assertNull(profileWrite.partnerId, "a held snapshot would have put the pairing back")
         }
 
     @Test

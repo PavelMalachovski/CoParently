@@ -391,7 +391,49 @@ class ChatViewModelTest {
         }
     }
 
-    private fun createViewModel(): ChatViewModel {
+    // ---- the draft belongs to the composer, not to the send's outcome ----
+
+    @Test
+    fun `a refused send still clears the draft, so the message is not offered twice`() = runTest {
+        // The send fails the way a denied Firestore write fails: `sendMessage` marks the row
+        // ERROR and rethrows. Under a draft cleared on the success path, the text stayed in the
+        // store and the next open re-seeded the composer with a message already in the thread.
+        coEvery { messageRepository.sendMessage(any()) } throws IllegalStateException("denied")
+        val preferences = draftStore()
+        val viewModel = createViewModel(preferences)
+        advanceUntilIdle()
+
+        viewModel.onThreadOpened(CONVERSATION)
+        viewModel.onDraftChanged(CONVERSATION, DRAFT)
+        viewModel.sendMessage(DRAFT)
+        advanceUntilIdle()
+
+        assertEquals("", viewModel.draftFor(CONVERSATION))
+        verify { preferences.putChatDraft(CONVERSATION, "") }
+    }
+
+    @Test
+    fun `leaving the tab straight after a send does not persist what was just sent`() = runTest {
+        // No `advanceUntilIdle` between the send and the disposal: the send coroutine has not
+        // run yet, which is exactly the window a tab switch lands in — it clears the Chat
+        // back-stack entry and this ViewModel while `onThreadClosed` flushes synchronously.
+        val preferences = draftStore()
+        val viewModel = createViewModel(preferences)
+        advanceUntilIdle()
+
+        viewModel.onThreadOpened(CONVERSATION)
+        viewModel.onDraftChanged(CONVERSATION, DRAFT)
+        viewModel.sendMessage(DRAFT)
+        viewModel.onThreadClosed()
+        advanceUntilIdle()
+
+        verify(exactly = 0) { preferences.putChatDraft(CONVERSATION, DRAFT) }
+        assertEquals("", viewModel.draftFor(CONVERSATION))
+    }
+
+    private fun createViewModel(
+        preferences: EncryptedPreferences = draftStore()
+    ): ChatViewModel {
         val eventRepository = mockk<EventRepository> {
             every { getEventsByDateRange(any(), any()) } returns flowOf(emptyList())
         }
@@ -399,9 +441,6 @@ class ChatViewModelTest {
             every { observePairingState() } returns pairingState
         }
         coEvery { userRepository.getUserById(PARTNER) } returns null
-        val preferences = mockk<EncryptedPreferences>(relaxed = true) {
-            every { getChatDraft(any()) } returns ""
-        }
         return ChatViewModel(
             messageRepository,
             userRepository,
@@ -409,6 +448,11 @@ class ChatViewModelTest {
             pairingRepository,
             preferences
         )
+    }
+
+    /** An empty draft store, which is what a device that has never typed one holds. */
+    private fun draftStore() = mockk<EncryptedPreferences>(relaxed = true) {
+        every { getChatDraft(any()) } returns ""
     }
 
     private fun partner() = PartnerSummary(
@@ -442,6 +486,9 @@ class ChatViewModelTest {
         /** What `ConversationKey.of(UID, PARTNER)` derives; kept literal so the test pins it. */
         const val CONVERSATION = "user-a__user-b"
         const val OTHER_CONVERSATION = "conversation-2"
+
+        /** Unsent text in the composer. */
+        const val DRAFT = "are you free on Friday?"
 
         /** The conversation's creation time, which is still a local date-time. */
         val TIMESTAMP: LocalDateTime = LocalDateTime.of(2026, 8, 1, 12, 0)
