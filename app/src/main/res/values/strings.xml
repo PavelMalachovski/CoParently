@@ -169,7 +169,7 @@
         - Web Client ID (for Credential Manager API - stored here in strings.xml)
     -->
     <!-- OAuth web client ID is public (embedded in every client); safe to track.
-         The confidential client secret is NOT here — it is injected via BuildConfig
-         (GOOGLE_CLIENT_SECRET gradle property / env var). -->
+         The confidential client secret is not in the app at all any more (SEC-1 §2): it lives
+         in the Cloud Functions environment, and the token exchange happens there. -->
     <string name="default_web_client_id" translatable="false">492948924829-m22iudtoaj437i518qm2p4do8t35vv1g.apps.googleusercontent.com</string>
 </resources>

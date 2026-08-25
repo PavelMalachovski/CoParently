@@ -3,49 +3,40 @@ package com.coparently.app.domain.holidays
 import java.time.LocalDate
 
 /**
- * A public holiday or school vacation day shown in the calendar.
+ * Czech public holidays and nationwide school vacations.
  *
- * @property date The concrete date
- * @property nameEn English display name
- * @property nameCs Czech display name
- * @property isSchoolVacation True for school vacation days, false for public holidays
+ * Public holidays are computed for any year (Easter via [gregorianEasterSunday]). School
+ * vacations follow the official MŠMT calendar; the nationwide periods (autumn, Christmas,
+ * Easter, summer) are covered while the district-dependent spring break is intentionally
+ * omitted — it is set per district and the app has no way to know which one a family is in.
+ *
+ * Since MON-13 this is *a* provider rather than *the* holiday calendar: it implements
+ * [HolidayProvider] and is reached through [HolidayCountry], so a family outside Czechia is no
+ * longer shown Czech holidays.
  */
-data class Holiday(
-    val date: LocalDate,
-    val nameEn: String,
-    val nameCs: String,
-    val isSchoolVacation: Boolean = false
-)
+object CzechHolidays : HolidayProvider {
 
-/**
- * Provider of Czech public holidays and nationwide school vacations.
- *
- * Public holidays are computed for any year (Easter via the anonymous
- * Gregorian computus). School vacations follow the official MŠMT calendar;
- * nationwide periods (autumn, Christmas, Easter, summer) are covered while
- * the district-dependent spring break is intentionally omitted.
- */
-object CzechHolidays {
+    override val localLanguage: String = "cs"
 
     /**
      * Returns all public holidays for the given year.
      */
-    fun publicHolidays(year: Int): List<Holiday> {
-        val easterSunday = easterSunday(year)
+    override fun publicHolidays(year: Int): List<Holiday> {
+        val easterSunday = gregorianEasterSunday(year)
         return listOf(
-            Holiday(LocalDate.of(year, 1, 1), "New Year's Day", "Nový rok"),
-            Holiday(easterSunday.minusDays(2), "Good Friday", "Velký pátek"),
-            Holiday(easterSunday.plusDays(1), "Easter Monday", "Velikonoční pondělí"),
-            Holiday(LocalDate.of(year, 5, 1), "Labour Day", "Svátek práce"),
-            Holiday(LocalDate.of(year, 5, 8), "Victory Day", "Den vítězství"),
-            Holiday(LocalDate.of(year, 7, 5), "Saints Cyril and Methodius Day", "Den slovanských věrozvěstů Cyrila a Metoděje"),
-            Holiday(LocalDate.of(year, 7, 6), "Jan Hus Day", "Den upálení mistra Jana Husa"),
-            Holiday(LocalDate.of(year, 9, 28), "Czech Statehood Day", "Den české státnosti"),
-            Holiday(LocalDate.of(year, 10, 28), "Independent Czechoslovak State Day", "Den vzniku samostatného československého státu"),
-            Holiday(LocalDate.of(year, 11, 17), "Freedom and Democracy Day", "Den boje za svobodu a demokracii"),
-            Holiday(LocalDate.of(year, 12, 24), "Christmas Eve", "Štědrý den"),
-            Holiday(LocalDate.of(year, 12, 25), "Christmas Day", "1. svátek vánoční"),
-            Holiday(LocalDate.of(year, 12, 26), "St. Stephen's Day", "2. svátek vánoční")
+            cs(LocalDate.of(year, 1, 1), "New Year's Day", "Nový rok"),
+            cs(easterSunday.minusDays(2), "Good Friday", "Velký pátek"),
+            cs(easterSunday.plusDays(1), "Easter Monday", "Velikonoční pondělí"),
+            cs(LocalDate.of(year, 5, 1), "Labour Day", "Svátek práce"),
+            cs(LocalDate.of(year, 5, 8), "Victory Day", "Den vítězství"),
+            cs(LocalDate.of(year, 7, 5), "Saints Cyril and Methodius Day", "Den slovanských věrozvěstů Cyrila a Metoděje"),
+            cs(LocalDate.of(year, 7, 6), "Jan Hus Day", "Den upálení mistra Jana Husa"),
+            cs(LocalDate.of(year, 9, 28), "Czech Statehood Day", "Den české státnosti"),
+            cs(LocalDate.of(year, 10, 28), "Independent Czechoslovak State Day", "Den vzniku samostatného československého státu"),
+            cs(LocalDate.of(year, 11, 17), "Freedom and Democracy Day", "Den boje za svobodu a demokracii"),
+            cs(LocalDate.of(year, 12, 24), "Christmas Eve", "Štědrý den"),
+            cs(LocalDate.of(year, 12, 25), "Christmas Day", "1. svátek vánoční"),
+            cs(LocalDate.of(year, 12, 26), "St. Stephen's Day", "2. svátek vánoční")
         )
     }
 
@@ -53,8 +44,10 @@ object CzechHolidays {
      * Returns nationwide school vacation periods that overlap the given year.
      * Each period is a pair of (start date inclusive, end date inclusive) with names.
      */
-    fun schoolVacations(year: Int): List<Pair<ClosedRange<LocalDate>, Pair<String, String>>> {
-        val easterSunday = easterSunday(year)
+    override fun schoolVacations(
+        year: Int
+    ): List<Pair<ClosedRange<LocalDate>, Pair<String, String>>> {
+        val easterSunday = gregorianEasterSunday(year)
         // Easter school vacation: the Thursday before Good Friday
         val easterVacationStart = easterSunday.minusDays(3)
 
@@ -76,51 +69,7 @@ object CzechHolidays {
         )
     }
 
-    /**
-     * Returns the holiday (public holiday first, then school vacation) for a date,
-     * or null when the date is a regular day.
-     */
-    fun holidayFor(date: LocalDate): Holiday? {
-        publicHolidays(date.year).firstOrNull { it.date == date }?.let { return it }
-
-        schoolVacations(date.year).firstOrNull { (range, _) -> date in range }?.let { (_, names) ->
-            return Holiday(date, names.first, names.second, isSchoolVacation = true)
-        }
-        return null
-    }
-
-    /**
-     * Returns all holidays (public + school vacations, day by day) within a range.
-     * Keyed by date for quick lookup in calendar views.
-     */
-    fun holidaysInRange(start: LocalDate, end: LocalDate): Map<LocalDate, Holiday> {
-        val result = mutableMapOf<LocalDate, Holiday>()
-        var date = start
-        while (!date.isAfter(end)) {
-            holidayFor(date)?.let { result[date] = it }
-            date = date.plusDays(1)
-        }
-        return result
-    }
-
-    /**
-     * Anonymous Gregorian computus — Easter Sunday for the given year.
-     */
-    private fun easterSunday(year: Int): LocalDate {
-        val a = year % 19
-        val b = year / 100
-        val c = year % 100
-        val d = b / 4
-        val e = b % 4
-        val f = (b + 8) / 25
-        val g = (b - f + 1) / 3
-        val h = (19 * a + b - d - g + 15) % 30
-        val i = c / 4
-        val k = c % 4
-        val l = (32 + 2 * e + 2 * i - h - k) % 7
-        val m = (a + 11 * h + 22 * l) / 451
-        val month = (h + l - 7 * m + 114) / 31
-        val day = ((h + l - 7 * m + 114) % 31) + 1
-        return LocalDate.of(year, month, day)
-    }
+    /** A Czech public holiday, named in both languages the UI can pick between. */
+    private fun cs(date: LocalDate, nameEn: String, nameCs: String) =
+        Holiday(date, nameEn, nameCs, localLanguage = "cs")
 }

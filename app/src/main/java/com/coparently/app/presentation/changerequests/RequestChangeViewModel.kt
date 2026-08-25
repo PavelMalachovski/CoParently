@@ -31,7 +31,16 @@ sealed interface RequestChangeUiState {
 
     /** Request is being written/synced; keeps the event so the form stays visible. */
     data class Sending(val event: Event) : RequestChangeUiState
-    data object Sent : RequestChangeUiState
+
+    /**
+     * The request is **recorded**, which is not the same as delivered (CQ-20).
+     *
+     * It used to be called `Sent`. `ChangeRequestRepositoryImpl.publish` catches every failure
+     * and returns, leaving `syncedToFirestore = false` for the outbox to retry, so this state is
+     * reached whether or not the write reached Firestore. The screen pops on it either way — the
+     * honest report of what happened is the queued chip on the request's card, not this name.
+     */
+    data object Saved : RequestChangeUiState
     data class Error(val message: String) : RequestChangeUiState
 }
 
@@ -127,7 +136,7 @@ class RequestChangeViewModel @Inject constructor(
                     ),
                     senderName = user.name
                 )
-                _uiState.value = RequestChangeUiState.Sent
+                _uiState.value = RequestChangeUiState.Saved
             } catch (
                 // Firestore/network failures surface as a form error, not a crash
                 @Suppress("TooGenericExceptionCaught") e: Exception

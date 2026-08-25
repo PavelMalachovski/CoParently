@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.coparently.app.data.repository.FamilySettingsRepository
 import com.coparently.app.domain.expenses.SplitRatio
 import com.coparently.app.domain.expenses.WHOLE_PERCENT
+import com.coparently.app.domain.holidays.HolidayCountry
 import com.coparently.app.domain.model.ChildInfo
 import com.coparently.app.domain.model.EmergencyContact
 import com.coparently.app.domain.model.FamilyKind
@@ -140,6 +141,15 @@ data class OnboardingUiState(
      * [OnboardingViewModel.saveProfile] leaves the stored value alone.
      */
     val parentColor: ParentColorChoice? = null,
+    /**
+     * The country whose public holidays the calendar draws (MON-13).
+     *
+     * Not nullable, unlike [parentColor]: there is no "unanswered" state to preserve here,
+     * because the profile column is `NOT NULL DEFAULT 'CZ'` and every account already has an
+     * answer. The step opens on whatever the profile holds, which for anybody upgrading is
+     * Czechia — exactly what they were being shown before they could choose.
+     */
+    val country: HolidayCountry = HolidayCountry.Default,
     val allergies: List<String> = emptyList(),
     val medicalProfile: MedicalProfile = MedicalProfile(),
     val children: List<ChildDraft> = emptyList(),
@@ -298,6 +308,10 @@ class OnboardingViewModel @Inject constructor(
                     state.copy(
                         name = state.name.orStored(user?.name),
                         dateOfBirth = state.dateOfBirth ?: user?.dateOfBirth,
+                        // The stored value unless the parent has already touched the chips on
+                        // this run, the same rule `caresFor` follows below.
+                        country = state.country.takeIf { it != HolidayCountry.Default }
+                            ?: HolidayCountry.fromCode(user?.countryCode),
                         phone = state.phone.orStored(user?.phone),
                         allergies = state.allergies.orStored(user?.allergies),
                         medicalProfile = state.medicalProfile.orStored(user?.medicalProfile),
@@ -340,6 +354,9 @@ class OnboardingViewModel @Inject constructor(
     /** Records the colour picked on the profile step. */
     fun updateParentColor(choice: ParentColorChoice) =
         _uiState.update { it.copy(parentColor = choice) }
+
+    /** Records the country picked on the profile step. */
+    fun updateCountry(country: HolidayCountry) = _uiState.update { it.copy(country = country) }
 
     /** Updates the parent's allergies. */
     fun updateAllergies(allergies: List<String>) = _uiState.update { it.copy(allergies = allergies) }
@@ -629,7 +646,8 @@ class OnboardingViewModel @Inject constructor(
                 medicalProfile = state.medicalProfile,
                 // Only when they actually chose. An untouched swatch strip must not overwrite a
                 // colour the parent set in Settings on a previous run through this wizard.
-                colorCode = state.parentColor?.storedCode ?: fresh.colorCode
+                colorCode = state.parentColor?.storedCode ?: fresh.colorCode,
+                countryCode = state.country.code
             )
         )
     }

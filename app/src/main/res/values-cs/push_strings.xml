@@ -58,4 +58,6 @@
     <string name="push_split_ratio_accepted_body">Druhý rodič souhlasil s novým rozdělením. Platí pro výdaje od této chvíle.</string>
     <string name="push_split_ratio_declined_title">Rozdělení výdajů odmítnuto</string>
     <string name="push_split_ratio_declined_body">Druhý rodič nové rozdělení odmítl. Nic se nezměnilo.</string>
+    <string name="push_split_ratio_agreed_title">Rozdělení výdajů dohodnuto</string>
+    <string name="push_split_ratio_agreed_body">Poměr, kterým se výdaje dělí, byl nastaven ještě před spárováním. Otevřete Nastavení.</string>
 </resources>

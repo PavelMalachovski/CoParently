@@ -11,16 +11,21 @@ Firebase (Auth/Firestore/FCM) for sync between the two parents, Google Calendar 
 no navigation graph, with the API key shipping in every APK. If AI returns it goes behind the
 Cloud Function proxy (SEC-1), never with a key in the client. See `docs/AUDIT-2026-08.md` §6.
 
-**The authoritative roadmap is `docs/CoPlanly/MVP_phases.md`** (not `.cursor/roadmap.md`,
-which is the historical original plan). MVP 1 is complete, and **MVP 2 appears to be complete
-too** — receipts with on-device OCR, change requests, the Home dashboard, structured change
-requests from chat and event images are all shipped; this line said "MVP 2 is next" for longer
-than it was true. Re-baseline against `MVP_phases.md` before planning MVP 3.
+**The plan of record is `docs/ROADMAP.md`** — one document, merged on 2026-08-25 from
+`docs/BACKLOG.md` and `docs/CoPlanly/MVP_phases.md`, both now deleted (`.cursor/roadmap.md` is the
+historical original plan). MVP 1 **and** MVP 2 are complete: §2 re-baselines all three phases
+against the code rather than against memory, which is what this line failed to do for months while
+it said "MVP 2 is next". Two things to read before planning anything: **§1**, which says for every
+open item whether a cloud session, a CI job, or a machine with an Android SDK and a phone can do
+it, and **§10**, the dependency order.
 
 **The latest full audit lives in `docs/AUDIT-2026-08.md`** (`AUDIT-2026-07.md` is the previous
-one). Read §5 before planning anything: the app has no privacy policy, no in-app account
-deletion and no signing config, so it cannot be published yet, and the `applicationId`
-(`com.coparently.app`, against a product called CoPlanly) becomes permanent at first upload.
+one); `docs/ROADMAP.md` §3 is the live version of its §5. The app still cannot be published: no
+hosted privacy policy, no signing config, no Play listing. Two claims that paragraph used to make
+are **no longer true** and were corrected here rather than left to mislead — in-app account
+deletion ships (server-side teardown plus a local wipe, PR #68), and the `applicationId` is now
+`app.coplanly`, decided while it still could be. What is still permanent at first upload is that
+id, so REL-1's console half has to be finished before anything is uploaded.
 
 ## Design refresh (August 2026) — implemented, keep consistent
 
@@ -163,10 +168,22 @@ cd firestore-tests && npm test              # firestore.rules against the local 
   R8 runs) — plus Cloud Functions and the Firestore rules suite against the emulator. They
   run **in parallel**; the Android three were one sequential job until the August 2026 CI
   pass, which is why a run took 13:22 for about 7 minutes of critical path. Two caveats, both
-  deliberate and both tracked in `docs/BACKLOG.md` (**CQ-12**, **CQ-1**): **detekt reports but does not gate**
-  (`continue-on-error`) until its baseline is regenerated locally, and there is **no
-  instrumented migration job**, because `app/schemas/` stops at v14 while the database is at
-  v30. Still run the build locally before pushing — CI is a backstop, not a substitute.
+  deliberate. **detekt gates again** as of CQ-12 — do not add `continue-on-error` back to turn a
+  red build green; fix the finding, or regenerate the baseline through the Regenerate workflow so
+  that accepting debt is a visible commit. There is still **no instrumented migration job**
+  (**CQ-1**), and it buys nothing until v34: `app/schemas/` now holds 14 and 33 with the versions
+  between them irrecoverable, so there is no earlier version to migrate *from*.
+  `DatabaseSchemaExportTest` is what stops the gap growing — it fails the build if the database
+  version outruns the newest exported schema.
+
+  **A seventh workflow exists and is not part of CI**: `.github/workflows/regenerate.yml` runs
+  `detektBaseline` and exports the Room schema, then commits both back to the branch it ran on.
+  It exists because those are the two artefacts only a machine with an Android SDK can produce,
+  and it is **manual on purpose** — regenerating a baseline accepts every violation that exists
+  at that moment. Trigger it with `workflow_dispatch` from `main`, or, on a branch that has not
+  merged, by touching `.github/regenerate-request`.
+
+  Still run the build locally before pushing — CI is a backstop, not a substitute.
   After switching branches, prefer `clean` — stale Hilt/kapt stubs from another branch cause
   errors like "Could not find class file for '…Application'".
 - **A docs/functions/rules-only pull request skips the Android jobs.** The `changes` job
@@ -208,8 +225,18 @@ cd firestore-tests && npm test              # firestore.rules against the local 
   **central** grant, `calendar_friends/{friendUid}` — never by being fanned out into every
   event's `sharedWith`, so admitting or revoking one is a single write and no event document is
   rewritten. The `events` read rule consults it in a **last** disjunct (a parent's own read
-  short-circuits before the `get()`), with expiry compared against `request.time`; the friend
-  reads by `whereIn("createdByFirebaseUid", [a, b])`, the shape `expenses`/`budgets` use.
+  short-circuits before the `get()`), with expiry compared against `request.time`.
+  **The grant names one family, not one person** (M-6, Aug 2026): it carries the `familyId` it
+  was issued for, and `isCalendarFriendOf` requires the event's own `familyId` to match *and* its
+  creator to be one of that family's two parents. Keying on the creator alone is what leaked —
+  a grandmother admitted by Alice-and-Bob matched every event **Alice** created, including the
+  ones in Alice's family with Carol. Two consequences for anything built on top: a friend's list
+  query must filter `whereEqualTo("familyId", …)` — the old
+  `whereIn("createdByFirebaseUid", [a, b])` shape is now rejected outright, pinned by a test that
+  says so — and a grant or an event with no `familyId` admits nothing until
+  `backfillRecordFamilyIds` has run. Do **not** soften that with a fallback to `familyParents`
+  alone: it restores exactly the check M-6 removed, which is how the same leak survived once
+  already in `expenses`.
   `acceptCalendarFriendInvitation` is a **third** callable beside pairing and guest and
   `acceptPairingInvitation` refuses its `kind` outright — redeeming a friend code there would
   run `assignSlots` and hand a friend a permanent parent slot. `Event.friendParticipates`
@@ -280,7 +307,7 @@ cd firestore-tests && npm test              # firestore.rules against the local 
 
 ```
 domain/    — models, repository interfaces, use cases, holidays, ReminderScheduler
-data/      — Room (v30 + migrations), Firestore/Google clients, repository impls, sync
+data/      — Room (v33 + migrations), Firestore/Google clients, repository impls, sync
 presentation/ — Compose screens per feature + ViewModels + theme
 di/        — Hilt modules (Database, Firebase, Google, UseCase, Notification, …)
 ```
@@ -305,9 +332,19 @@ Data flow: UI → ViewModel → UseCase → Repository → Room (source of truth
 6. **Calendar query ranges** come from `queryRangeFor()` in `CalendarScreen.kt` —
    extend that function instead of inlining new range math.
 7. **View modes** are `MONTH, WEEK, DAY` (roadmap order). There is no 3-day view anymore.
-8. **Czech holidays** come from `domain/holidays/CzechHolidays` (pure, computed; Easter
-   via computus). School vacations are the nationwide MŠMT ones; the district-dependent
-   spring break is intentionally not included.
+8. **Holidays come from the parent's country** (MON-13). `domain/holidays/HolidayCountry` maps a
+   stored `users.countryCode` (schema 33, `NOT NULL DEFAULT 'CZ'`, so every pre-existing account
+   is Czechia) to a `HolidayProvider`; the calendar reads that, never a provider directly. Three
+   rules. **A country with no table draws no holidays** — five of the six do not have one, and
+   the picker says so on the row, because drawing Czech holidays for a German family is the bug
+   this replaced and drawing nothing silently would be design item 8's forbidden affordance.
+   **The country is a property of the person, not the family**: two separated parents can live in
+   two countries. The cost is that the school-vacation strips follow the viewer too, which is
+   recorded rather than hidden. And **`Holiday.nameLocal` carries `localLanguage`** — the UI shows
+   the local name when the device language matches and English otherwise, which is what
+   `MonthView` already did, hardcoded to `"cs"`. `CzechHolidays` itself is unchanged: pure,
+   computed, Easter via computus (now shared as `gregorianEasterSunday`), the nationwide MŠMT
+   vacations, and the district-dependent spring break still intentionally excluded.
 9. **Reminders** are scheduled through the `ReminderScheduler` domain interface
    (WorkManager impl `EventReminderScheduler`), hooked into the event use cases —
    schedule on create/update, cancel on delete.
@@ -347,7 +384,7 @@ Data flow: UI → ViewModel → UseCase → Repository → Room (source of truth
     the conversation as `{uid: epochMillis}` maps — one write per event — and the ticks and
     unread badge are derived from them by `ChatReadState`, never stored per message.
     Message times are stored the same way: `Message.sentAtMillis`, epoch millis (Room
-    schema v13, since superseded — the database is at v30), not a naive `LocalDateTime`, so two
+    schema v13, since superseded — the database is at v33), not a naive `LocalDateTime`, so two
     parents in different time zones agree
     on what a mark means and on when a message was sent. The Firestore field keeps its name
     (`timestamp`) and the read path still accepts a legacy ISO string, so a co-parent on an
@@ -465,20 +502,19 @@ never real — a reader following them would have re-fixed working code, or acce
 that does not exist. When an item here turns out to be stale, correct it in the same commit as
 whatever you were doing; a stale "known issue" costs more than a missing one.
 
-- **Deleting a child or a pet removes the Firestore document outright, which item 14 forbids.**
-  `ChildInfoRepositoryImpl.deleteChildInfo` and `PetRepositoryImpl.deletePet` both call the data
-  source's `.delete()` and both discard the `Result`. Two consequences, and they are the ones the
-  tombstone rule exists to prevent: the co-parent's phone never learns of the deletion — nothing
-  reconciles by absence, correctly — so the record stays on their device forever; and a refused or
-  offline remote delete leaves the local row gone and the document alive, so the next download
-  re-inserts it. Pre-existing and systemic across both record types, not something the multi-child
-  work introduced — the August 2026 branch only made the child half *reachable*, by putting a
-  Delete action on the editor where before there was none. The fix is the treatment
-  `data/sync/Tombstone.kt` already defines for events and expenses: `update()` with
-  `deletedAtMillis`/`deletedBy`, hide tombstoned rows from the read queries, hard-delete locally
-  only once the remote write lands. It wants a Room column and a migration on both tables, which
-  is why it is recorded here rather than folded into a bug-fix branch. Do not "fix" it by removing
-  the Delete action — parity with pets is what was asked for.
+- ~~**Deleting a child or a pet removes the Firestore document outright.**~~ **Fixed (CQ-19,
+  schema 32.)** Both now take the treatment `data/sync/Tombstone.kt` defines for events and
+  expenses, and the four rules item 14 states apply unchanged. Two things specific to these two
+  tables are worth knowing before touching them. **`SyncService` syncs `child_info` as well as
+  the repository does**, so the outbox split had to be made in both places — sending a pending
+  tombstone through `upsertChildInfo`, which is a `set()`, would rewrite the document from a row
+  that exists only to record its own deletion and resurrect the child on both phones. And
+  **`getChildInfoById`/`getPetById` deliberately still return a tombstoned row**, mirroring
+  `EventDao.getEventById`: the sync path needs "there is a row this device has deleted" and
+  "there is no such row" to be different answers, so the filtering for a *user's* question
+  happens at the repository boundary. The hard-delete methods on both Firestore data sources
+  were removed rather than left beside the tombstone writers, since neither had a caller left —
+  unlike `FirestoreEventDataSource.deleteEvent`, which keeps one (an event turned private).
 
 - **A change request says "Sent" whether or not it left the phone.**
   `ChangeRequestRepositoryImpl.publish` catches everything and returns, leaving
@@ -552,7 +588,7 @@ whatever you were doing; a stale "known issue" costs more than a missing one.
   That covers the case seen in production: on the first launch after install both listeners were
   denied ~0.5 s before `ensureConversation` created the conversation document, and the whole
   session then ran on local data while looking entirely healthy. **What is still open (CQ-8 in
-  `docs/BACKLOG.md`):** an outage longer than the backoff still ends in that degraded state, and
+  `docs/ROADMAP.md`):** an outage longer than the backoff still ends in that degraded state, and
   still lasts until the process restarts. `catch` *completes* the mirror flow, so
   `merge(mirror, local)` runs on Room alone afterwards, and `SharingStarted.WhileSubscribed`
   cannot restart it — `rememberChatUnreadCount()` in `NavGraph` holds an Activity-scoped

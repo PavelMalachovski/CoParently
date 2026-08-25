@@ -194,6 +194,15 @@ class FamilySettingsRepository @Inject constructor(
             // The document is the record now; the cache goes back to merely mirroring it, and the
             // capture slot has done its one job.
             cacheAgreedRatio(anchored)
+            // **And the co-parent is told (UX-18).** This write makes one parent's wizard answer
+            // the pair's agreement of record, priced onto every expense from this moment; until
+            // it was announced the other parent learned of it only by opening Settings.
+            //
+            // Its own type, not `SPLIT_RATIO_PROPOSED`: there is nothing here to confirm or
+            // decline, and routing it through the proposal path — the tempting fix — would leave
+            // an unanswered proposal splitting the pair evenly, which is the exact bug this
+            // method was written to end.
+            notifyPartner(pair, PushPayload.SPLIT_RATIO_AGREED)
         }
     }
 
@@ -237,6 +246,33 @@ class FamilySettingsRepository @Inject constructor(
 
     /** Turns the co-parent's proposal down; the agreed ratio does not move. */
     suspend fun declineProposal(): Result<Unit> = decide(accept = false)
+
+    /**
+     * Takes this parent's own pending proposal back (UX-17).
+     *
+     * `SplitRatioTransition.withdraw` has existed and been unit-tested since the feature landed;
+     * nothing called it, so a parent who proposed 70/30 by mistake could only wait for the
+     * co-parent to answer it. The custody schedule has had the whole shape — transition,
+     * repository method and a Withdraw button — all along, and this is the split ratio catching
+     * up with its sibling.
+     *
+     * **No push.** The other three answers announce a decision the co-parent has to know about;
+     * a withdrawal decides nothing, and their banner is derived from the document, so it goes on
+     * their next read. Adding a type for it would cost the four places SEC-3 requires to agree,
+     * for a notification that says something stopped existing.
+     *
+     * The transition refuses a withdrawal by anyone but the proposer, so a stale tap on the
+     * co-parent's device fails rather than silently cancelling an answer they were owed.
+     */
+    suspend fun withdrawProposal(): Result<Unit> {
+        val pair = currentPair()
+            ?: return Result.failure(IllegalStateException("No co-parent to agree a split with"))
+        val existing = read(pair.documentId)
+            ?: return Result.failure(IllegalStateException("There is no proposal to withdraw"))
+        val next = SplitRatioTransition.withdraw(existing, pair.myUid)
+            .getOrElse { return Result.failure(it) }
+        return write(pair, next)
+    }
 
     private suspend fun decide(accept: Boolean): Result<Unit> {
         val pair = currentPair()

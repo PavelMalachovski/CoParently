@@ -239,6 +239,36 @@ Cloud Functions для Firebase использует модель оплаты p
 
 Формат cron: `минута час день_месяца месяц день_недели`
 
+## Google OAuth (SEC-1 §2)
+
+The token exchange for Google Calendar happens **here**, not in the app. Google's web OAuth
+client — the client type the Calendar scope is granted through — requires a client secret to
+redeem an authorization code and to refresh an access token, and that secret used to be compiled
+into every APK. An APK is not a secret.
+
+Two environment variables in `functions/.env`, and **the app's Calendar sign-in stops working
+until they are set and the functions deployed**:
+
+```
+GOOGLE_OAUTH_CLIENT_ID=<the web client id, the same value as default_web_client_id>
+GOOGLE_OAUTH_CLIENT_SECRET=<its secret, from Google Cloud console → Credentials>
+```
+
+With either missing the callables answer `failed-precondition` / `oauth-not-configured` rather
+than failing obscurely — the same posture `sendEmailInvitation` takes for its mail provider.
+
+Two things worth knowing before touching this:
+
+- **`google_oauth/{uid}` stores a SHA-256 of the refresh token, never the token.** It exists so
+  the refresh callable is not an oracle: without it, moving the secret out of the APK would leave
+  a function that would happily refresh *any* stolen refresh token for *any* signed-in caller,
+  which is exactly the capability the secret's removal takes away. `firestore.rules` denies every
+  client both reads and writes; only the callables, which run as Admin, touch it.
+- **Anyone whose Calendar was connected before this shipped re-consents once.** Their refresh
+  token predates the fingerprint, and an unknown token is refused rather than trusted on first
+  use — trusting it would let whoever presents a stolen token first bind it to themselves. The
+  app already prompts to reconnect when a refresh fails, so this surfaces as that prompt.
+
 ## Admin operations
 
 ### The multi-family migration (run these in order)

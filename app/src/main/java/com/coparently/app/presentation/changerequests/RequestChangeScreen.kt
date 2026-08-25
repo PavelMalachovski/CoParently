@@ -73,7 +73,7 @@ fun RequestChangeScreen(
     }
 
     LaunchedEffect(uiState) {
-        if (uiState is RequestChangeUiState.Sent) onBack()
+        if (uiState is RequestChangeUiState.Saved) onBack()
     }
 
     Scaffold(
@@ -135,7 +135,7 @@ fun RequestChangeScreen(
                 )
             }
 
-            is RequestChangeUiState.Sent -> Unit // navigating away
+            is RequestChangeUiState.Saved -> Unit // navigating away
         }
     }
 }

@@ -1,0 +1,11 @@
+# Touch this file to run .github/workflows/regenerate.yml on this branch.
+#
+# `workflow_dispatch` only appears for a workflow that already exists on the default branch, so
+# until that file merges this is the only way to run it. Change anything here — a date, a line —
+# and push; the job regenerates the detekt baseline and exports the current Room schema, then
+# commits them back to the branch it ran on.
+#
+# It is not automatic on purpose: regenerating a detekt baseline accepts every violation that
+# exists at that moment, so a job doing it unattended would absolve each new one silently.
+
+requested: 2026-08-25 — CQ-12 (first baseline since CI landed) and CQ-1 (export schema 33)

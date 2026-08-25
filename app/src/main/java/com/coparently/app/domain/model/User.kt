@@ -60,6 +60,22 @@ data class User(
      * read as "show everything" by [FamilyKind.effective], so an upgrade never hides a section
      * somebody was already using.
      */
-    val caresFor: Set<FamilyKind> = emptySet()
+    val caresFor: Set<FamilyKind> = emptySet(),
+    /**
+     * The country this parent lives in, as ISO 3166-1 alpha-2 (MON-13).
+     *
+     * Decides which public holidays and school vacations the calendar draws — see
+     * [com.coparently.app.domain.holidays.HolidayCountry], which is the only thing that reads
+     * it today. `"CZ"` for every account that predates the field, stamped by the v32→v33
+     * migration rather than left null: the app is Czech-first, its one holiday table is the
+     * Czech one, and a default makes an existing user's calendar identical to what they had.
+     *
+     * **A property of the person, not of the family.** Two separated parents can live in two
+     * countries, and which public holidays apply is a fact about where *you* are. The cost is
+     * that the school-vacation strips, which are genuinely about the child's school, follow the
+     * viewer as well — the honest fix is a per-family school calendar, recorded under MON-13
+     * rather than guessed at here.
+     */
+    val countryCode: String = "CZ"
 )
 

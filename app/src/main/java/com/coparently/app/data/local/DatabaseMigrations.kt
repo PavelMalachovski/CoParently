@@ -694,6 +694,48 @@ object DatabaseMigrations {
     }
 
     /**
+     * v31 -> v32: a deleted child or pet becomes a tombstone instead of vanishing (CQ-19).
+     *
+     * The same column `events` and `expenses` gained in v25, for the same reason and with the
+     * same meaning: a **pending-tombstone outbox**. Deleting a child or a pet used to remove the
+     * Firestore document outright and discard the `Result`, which is what
+     * `data/sync/Tombstone.kt` exists to forbid — the co-parent's phone never learned of the
+     * deletion (nothing reconciles by absence, correctly), so the record stayed on their device
+     * forever, and a refused or offline delete left the local row gone and the document alive,
+     * so the next download put it back.
+     *
+     * Nullable with no conversion: every existing row is alive, which is what null says.
+     */
+    val MIGRATION_31_32 = object : Migration(31, 32) {
+        override fun migrate(database: SupportSQLiteDatabase) {
+            listOf("child_info", "pets").forEach { table ->
+                database.execSQL("ALTER TABLE $table ADD COLUMN deletedAtMillis INTEGER")
+            }
+        }
+    }
+
+    /**
+     * v32 -> v33: a parent's country, so the calendar stops showing everybody Czech holidays.
+     *
+     * MON-13. MVP 1 asked for "holidays and vacations by country" and shipped one country, with
+     * no field anywhere to say otherwise — `CalendarScreen` called `CzechHolidays` directly.
+     *
+     * **`DEFAULT 'CZ'` is the whole migration**, and it is the answer to "what about the people
+     * already using it": every existing row becomes Czechia, which is what they were already
+     * being shown, so nobody's calendar changes on upgrade. `NOT NULL` because there is no such
+     * thing as a user with no country to draw a calendar for — an unrecognised code falls back
+     * to the default at the read (`HolidayCountry.fromCode`), and the column never carries the
+     * ambiguity.
+     */
+    val MIGRATION_32_33 = object : Migration(32, 33) {
+        override fun migrate(database: SupportSQLiteDatabase) {
+            database.execSQL(
+                "ALTER TABLE users ADD COLUMN countryCode TEXT NOT NULL DEFAULT 'CZ'"
+            )
+        }
+    }
+
+    /**
      * List of all migrations in order.
      */
     val ALL_MIGRATIONS = arrayOf(
@@ -722,6 +764,8 @@ object DatabaseMigrations {
         MIGRATION_27_28,
         MIGRATION_28_29,
         MIGRATION_29_30,
-        MIGRATION_30_31
+        MIGRATION_30_31,
+        MIGRATION_31_32,
+        MIGRATION_32_33
     )
 }

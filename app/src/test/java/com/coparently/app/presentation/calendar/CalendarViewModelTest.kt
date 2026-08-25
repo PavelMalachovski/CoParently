@@ -63,7 +63,8 @@ class CalendarViewModelTest {
             custodyModelRepository = custodyModelRepository,
             encryptedPreferences = encryptedPreferences,
             friendRepository = noCalendarFriends(),
-            parentsSource = testParentsSource()
+            parentsSource = testParentsSource(),
+            userRepository = noSignedInUser()
         )
     }
 

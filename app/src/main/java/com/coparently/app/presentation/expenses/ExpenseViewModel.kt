@@ -153,6 +153,20 @@ class ExpenseViewModel @Inject constructor(
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), null)
 
     /**
+     * This parent's **own** pending proposal, which they are waiting on an answer to (UX-17).
+     *
+     * The mirror of [pendingRatioProposal], and the state its doc has always promised — "the
+     * proposer sees theirs as a waiting state instead" — without it existing. A parent who
+     * proposed 70/30 by mistake had no sign anything was pending and no way to take it back.
+     */
+    val myPendingRatioProposal: StateFlow<SplitRatioProposal?> = combine(
+        familySettingsRepository.observeSettings(),
+        _currentUserId
+    ) { settings, uid ->
+        settings?.proposal?.takeIf { uid.isNotEmpty() && it.proposedBy == uid }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), null)
+
+    /**
      * Raised when answering the co-parent's proposal was refused.
      *
      * A one-shot signal rather than state: the screen turns it into a snackbar, and a value that
@@ -191,6 +205,23 @@ class ExpenseViewModel @Inject constructor(
                 // banner sitting there as if the tap had done nothing. A silent refusal is the
                 // exact outcome this whole family of features exists to remove.
                 Log.w(TAG, "The split proposal could not be answered", e)
+                _ratioAnswerFailed.trySend(Unit)
+            }
+        }
+    }
+
+    /**
+     * Takes this parent's own proposal back.
+     *
+     * Shares [ratioAnswerFailed] with [decideRatioProposal] rather than adding a second signal:
+     * both are "the thing you just tapped did not happen", the screen renders one snackbar, and
+     * a refusal that left the banner sitting there is the silent outcome this whole family of
+     * features exists to remove.
+     */
+    fun withdrawRatioProposal() {
+        viewModelScope.launch {
+            familySettingsRepository.withdrawProposal().onFailure { e ->
+                Log.w(TAG, "The split proposal could not be withdrawn", e)
                 _ratioAnswerFailed.trySend(Unit)
             }
         }

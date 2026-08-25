@@ -9,6 +9,7 @@ import com.coparently.app.data.repository.RatioSubmission
 import com.coparently.app.data.session.AccountDeletionService
 import com.coparently.app.data.session.SignedInAccountSource
 import com.coparently.app.domain.expenses.SplitRatio
+import com.coparently.app.domain.holidays.HolidayCountry
 import com.coparently.app.domain.model.AccountSummary
 import com.coparently.app.domain.model.FamilyKind
 import com.coparently.app.presentation.theme.ParentColorChoice
@@ -24,6 +25,7 @@ import com.coparently.app.presentation.common.UiError
 import com.coparently.app.presentation.common.UiState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -32,6 +34,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.io.IOException
@@ -65,6 +69,25 @@ class SettingsViewModel @Inject constructor(
      */
     val account: StateFlow<AccountSummary?> = signedInAccountSource.observe()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(ACCOUNT_STOP_TIMEOUT_MS), null)
+
+    /**
+     * The country whose public holidays this parent's calendar draws (MON-13).
+     *
+     * This parent's own answer, not the family's union — unlike [caresFor], which decides which
+     * *sections the app offers* and so must agree between two phones. Two separated parents can
+     * live in two countries, and a public holiday is a fact about where you are.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val country: StateFlow<HolidayCountry> = userRepository.observeCurrentUserId()
+        .flatMapLatest { uid ->
+            if (uid == null) flowOf(null) else userRepository.observeUserById(uid)
+        }
+        .map { HolidayCountry.fromCode(it?.countryCode) }
+        .stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(ACCOUNT_STOP_TIMEOUT_MS),
+            HolidayCountry.Default
+        )
 
     /**
      * Whether this family's app offers child records, pet records, or both.
@@ -198,6 +221,21 @@ class SettingsViewModel @Inject constructor(
             val fresh = userRepository.getCurrentUser() ?: return@launch
             if (fresh.colorCode == choice.storedCode) return@launch
             userRepository.updateUser(fresh.copy(colorCode = choice.storedCode))
+        }
+    }
+
+    /**
+     * Records the country picked in Settings.
+     *
+     * Reads the row fresh rather than from [country], for the reason CLAUDE.md item 17 states:
+     * a `WhileSubscribed` flow's `.value` is the initial value in any instance where nothing has
+     * collected it, and a save path that trusted it would write the default over a real answer.
+     */
+    fun setCountry(chosen: HolidayCountry) {
+        viewModelScope.launch {
+            val fresh = userRepository.getCurrentUser() ?: return@launch
+            if (fresh.countryCode == chosen.code) return@launch
+            userRepository.updateUser(fresh.copy(countryCode = chosen.code))
         }
     }
 

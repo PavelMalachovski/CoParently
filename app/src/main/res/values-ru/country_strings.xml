@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- MON-13: the country whose public holidays the calendar draws. -->
+    <string name="country_label">Страна</string>
+    <string name="country_settings_summary">Определяет, какие праздники показывает календарь</string>
+
+    <string name="country_cz">Чехия</string>
+    <string name="country_sk">Словакия</string>
+    <string name="country_de">Германия</string>
+    <string name="country_at">Австрия</string>
+    <string name="country_ua">Украина</string>
+    <string name="country_ru">Россия</string>
+    <string name="country_other">Другая</string>
+
+    <string name="country_holidays_supported">В календаре показываются государственные праздники и школьные каникулы.</string>
+    <string name="country_holidays_unavailable">Праздников для страны «%1$s» в приложении пока нет, поэтому они не показываются.</string>
+</resources>

@@ -61,7 +61,6 @@ import com.coparently.app.data.sync.SyncWorker
 import com.coparently.app.domain.custody.CustodyResolver
 import com.coparently.app.domain.custody.DaySwapInbox
 import com.coparently.app.domain.family.FamilyMemberRef
-import com.coparently.app.domain.holidays.CzechHolidays
 import com.coparently.app.domain.holidays.Holiday
 import com.coparently.app.domain.model.Event
 import com.coparently.app.presentation.calendar.components.CalendarHeader
@@ -242,6 +241,7 @@ fun CalendarScreen(
     val hiddenEventTypes by calendarViewModel.hiddenEventTypes.collectAsState()
     val customEventTypes by calendarViewModel.customEventTypes.collectAsState()
     val showHolidays by calendarViewModel.showHolidays.collectAsState()
+    val holidayCountry by calendarViewModel.holidayCountry.collectAsState()
     val custodyChangeAnnouncement by calendarViewModel.custodyChangeAnnouncement.collectAsState()
     val pendingProposal by calendarViewModel.pendingProposal.collectAsState()
     val calendarFriends by calendarViewModel.calendarFriends.collectAsState()
@@ -388,13 +388,19 @@ fun CalendarScreen(
     // same buckets by construction.
     val eventsByDay = remember(filteredEvents) { eventsByDay(filteredEvents) }
 
-    // Czech public holidays and school vacations for the visible range
-    val holidays: Map<LocalDate, Holiday> = remember(viewMode, queryAnchorDate, showHolidays) {
-        if (!showHolidays) {
+    // Public holidays and school vacations for the visible range, in **this parent's** country
+    // (MON-13). This used to call `CzechHolidays` outright, which is how a family in Germany or
+    // Ukraine got Czech holidays. A country the app has no table for draws none — see
+    // `HolidayCountry`, and the picker says so rather than leaving it a mystery.
+    val holidays: Map<LocalDate, Holiday> = remember(
+        viewMode, queryAnchorDate, showHolidays, holidayCountry
+    ) {
+        val provider = holidayCountry.provider
+        if (!showHolidays || provider == null) {
             emptyMap()
         } else {
             val (start, end) = queryRangeFor(viewMode, queryAnchorDate)
-            CzechHolidays.holidaysInRange(start.toLocalDate(), end.toLocalDate())
+            provider.holidaysInRange(start.toLocalDate(), end.toLocalDate())
         }
     }
 

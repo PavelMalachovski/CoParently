@@ -6,6 +6,7 @@ import com.coparently.app.data.remote.firebase.FirestoreFamilySettingsDataSource
 import com.coparently.app.domain.custody.CustodyKey
 import com.coparently.app.domain.expenses.FamilySettings
 import com.coparently.app.domain.expenses.SplitRatio
+import com.coparently.app.domain.expenses.SplitRatioProposal
 import com.coparently.app.domain.model.User
 import com.coparently.app.domain.repository.UserRepository
 import io.mockk.coEvery
@@ -17,6 +18,8 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
 import org.junit.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 /**
  * How a split agreed before there was anybody to agree with reaches the pair.
@@ -158,6 +161,153 @@ class FamilySettingsRepositoryTest {
         repository(cachedBasisPoints = null, partnerId = PARTNER).publishCachedRatioIfMissing()
 
         coVerify(exactly = 0) { dataSource.setSettings(any(), any()) }
+    }
+
+    // ---- UX-18: the first agreement is announced -----------------------------------------
+
+    @Test
+    fun `a ratio agreed before pairing is announced to the co-parent`() = runTest {
+        // It becomes the pair's agreement of record the moment it is written, priced onto every
+        // expense from then on. Until this, the co-parent learned of it only by opening Settings.
+        val fcmService = mockk<FcmService>(relaxed = true)
+        coEvery { dataSource.getSettings(any()) } returns null
+        coEvery { dataSource.setSettings(any(), any()) } returns Unit
+
+        repositoryWith(fcmService, cachedBasisPoints = SEVENTY_IN_BASIS_POINTS)
+            .publishCachedRatioIfMissing()
+
+        val queued = slot<Map<String, String>>()
+        coVerify { fcmService.queueNotificationForUser(PARTNER, capture(queued)) }
+        assertEquals("split_ratio_agreed", queued.captured["type"])
+    }
+
+    @Test
+    fun `the announcement carries a type and no figure`() = runTest {
+        // SEC-3's shape, and `PushPayload` states the reason for this family of types: a push
+        // saying "the split is now 70/30" puts a number a reader may act on onto a lock screen,
+        // written by the other side and unverifiable until the app is opened.
+        val fcmService = mockk<FcmService>(relaxed = true)
+        coEvery { dataSource.getSettings(any()) } returns null
+        coEvery { dataSource.setSettings(any(), any()) } returns Unit
+
+        repositoryWith(fcmService, cachedBasisPoints = SEVENTY_IN_BASIS_POINTS)
+            .publishCachedRatioIfMissing()
+
+        val queued = slot<Map<String, String>>()
+        coVerify { fcmService.queueNotificationForUser(PARTNER, capture(queued)) }
+        assertEquals(setOf("type"), queued.captured.keys)
+    }
+
+    @Test
+    fun `nothing is announced when nothing is published`() = runTest {
+        // The pair already has an agreement, so this pass writes nothing — and a push about a
+        // write that did not happen is worse than silence.
+        val fcmService = mockk<FcmService>(relaxed = true)
+        coEvery { dataSource.getSettings(any()) } returns FamilySettings(
+            ratio = SplitRatio.EVEN,
+            participants = listOf(ME, PARTNER),
+            lastModifiedBy = PARTNER,
+            lastModifiedAtMillis = 1L
+        )
+
+        repositoryWith(fcmService, cachedBasisPoints = SEVENTY_IN_BASIS_POINTS)
+            .publishCachedRatioIfMissing()
+
+        coVerify(exactly = 0) { fcmService.queueNotificationForUser(any(), any()) }
+    }
+
+    // ---- UX-17: taking a proposal back ---------------------------------------------------
+
+    @Test
+    fun `the proposer may withdraw their own pending proposal`() = runTest {
+        // `SplitRatioTransition.withdraw` was written and unit-tested when the feature landed,
+        // and then called by nothing: a parent who proposed 70/30 by mistake could only wait for
+        // the co-parent to answer it.
+        coEvery { dataSource.getSettings(any()) } returns settingsWithProposalBy(ME)
+        val written = slot<FamilySettings>()
+        coEvery { dataSource.setSettings(any(), capture(written)) } returns Unit
+
+        val result = repository(cachedBasisPoints = null, partnerId = PARTNER).withdrawProposal()
+
+        assertTrue(result.isSuccess)
+        assertNull(written.captured.proposal, "the proposal is gone")
+        assertEquals(
+            SplitRatio.EVEN.momShareBasisPoints,
+            written.captured.ratio.momShareBasisPoints,
+            "withdrawing decides nothing, so the agreed ratio does not move"
+        )
+    }
+
+    @Test
+    fun `a parent may not withdraw the co-parent's proposal`() = runTest {
+        // Enforced by the transition, not by the screen: the co-parent's device could otherwise
+        // cancel an answer they were owed, which is a decision disguised as a tidy-up.
+        coEvery { dataSource.getSettings(any()) } returns settingsWithProposalBy(PARTNER)
+
+        val result = repository(cachedBasisPoints = null, partnerId = PARTNER).withdrawProposal()
+
+        assertTrue(result.isFailure)
+        coVerify(exactly = 0) { dataSource.setSettings(any(), any()) }
+    }
+
+    @Test
+    fun `withdrawing announces nothing`() = runTest {
+        // The other three answers announce a decision; a withdrawal decides nothing, and the
+        // co-parent's banner is derived from the document. A push type for it would cost the
+        // four places SEC-3 requires to agree, to say that something stopped existing.
+        val fcmService = mockk<FcmService>(relaxed = true)
+        coEvery { dataSource.getSettings(any()) } returns settingsWithProposalBy(ME)
+        coEvery { dataSource.setSettings(any(), any()) } returns Unit
+
+        repositoryWith(fcmService).withdrawProposal()
+
+        coVerify(exactly = 0) { fcmService.queueNotificationForUser(any(), any()) }
+    }
+
+    @Test
+    fun `there is nothing to withdraw when no proposal is pending`() = runTest {
+        coEvery { dataSource.getSettings(any()) } returns null
+
+        val result = repository(cachedBasisPoints = null, partnerId = PARTNER).withdrawProposal()
+
+        assertTrue(result.isFailure)
+        coVerify(exactly = 0) { dataSource.setSettings(any(), any()) }
+    }
+
+    /** The pair's settings with a proposal standing in [proposedBy]'s name. */
+    private fun settingsWithProposalBy(proposedBy: String) = FamilySettings(
+        ratio = SplitRatio.EVEN,
+        participants = listOf(ME, PARTNER),
+        lastModifiedBy = proposedBy,
+        lastModifiedAtMillis = 1L,
+        proposal = SplitRatioProposal(
+            ratio = SplitRatio.ofMomPercent(70),
+            proposedBy = proposedBy,
+            proposedAtMillis = 1L
+        )
+    )
+
+    /** A repository whose only interesting collaborator is [fcmService]. */
+    private fun repositoryWith(
+        fcmService: FcmService,
+        cachedBasisPoints: Int? = null
+    ): FamilySettingsRepository {
+        every { preferences.getSplitRatioBasisPoints() } returns cachedBasisPoints
+        every { preferences.putSplitRatioBasisPoints(any()) } returns Unit
+        every { preferences.putSplitRatioSlot(any()) } returns Unit
+        every { preferences.getSplitRatioSlot() } returns "mom"
+        val userRepository = mockk<UserRepository> {
+            coEvery { getCurrentUserId() } returns ME
+            coEvery { getUserById(ME) } returns User(
+                id = ME,
+                email = "olya@example.test",
+                name = "Olya",
+                role = "mom",
+                colorCode = "#FF4081",
+                partnerId = PARTNER
+            )
+        }
+        return FamilySettingsRepository(dataSource, userRepository, preferences, fcmService)
     }
 
     private companion object {

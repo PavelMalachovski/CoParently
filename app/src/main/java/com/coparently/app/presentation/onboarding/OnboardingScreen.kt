@@ -67,6 +67,7 @@ import com.coparently.app.presentation.childinfo.components.AllergyEditor
 import com.coparently.app.presentation.childinfo.components.DatePickerDialog
 import com.coparently.app.presentation.childinfo.components.EmergencyContactEditor
 import com.coparently.app.presentation.common.ConfirmationDialog
+import com.coparently.app.presentation.common.CountryPicker
 import com.coparently.app.presentation.common.MedicalProfileEditor
 import com.coparently.app.presentation.common.SectionGroup
 import com.coparently.app.presentation.common.SectionRow
@@ -278,6 +279,16 @@ private fun ProfileStep(state: OnboardingUiState, viewModel: OnboardingViewModel
     ParentColorSwatches(
         selected = state.parentColor,
         onSelect = viewModel::updateParentColor
+    )
+
+    // Also "who you are", and for the same reason as the colour above: a whole wizard step for
+    // one row of chips is a step most people tap straight through. It is here rather than in
+    // Settings alone because the calendar draws holidays from the very first launch, and until
+    // MON-13 it drew Czech ones for everybody.
+    SectionHeading(title = R.string.country_label)
+    CountryPicker(
+        selected = state.country,
+        onSelect = viewModel::updateCountry
     )
 
     DateOfBirthField(

@@ -134,11 +134,28 @@ describe('sweepDeletedDocuments', () => {
     ]);
   });
 
+  it('sweeps the child and pet tombstones CQ-19 added', async () => {
+    const db = fakeDb({
+      child_info: [tombstonedDaysAgo('c-old', 500)],
+      pets: [tombstonedDaysAgo('p-old', 500)],
+    });
+
+    const removed = await index.sweepDeletedDocumentsImpl(db, NOW);
+
+    assert.strictEqual(removed, 2);
+    assert.deepStrictEqual(db._deleted, [
+      {id: 'c-old', collection: 'child_info'},
+      {id: 'p-old', collection: 'pets'},
+    ]);
+  });
+
   it('leaves collections that are not tombstoned alone', async () => {
-    // `child_info`, `pets`, `budgets` and the rest delete by other means or not at all. A sweep
-    // that widened to every collection would be a scheduled job that removes documents no
-    // client ever marked.
-    const db = fakeDb({child_info: [tombstonedDaysAgo('c-old', 500)]});
+    // `budgets` and `change_requests` delete by other means or not at all. A sweep that widened
+    // to every collection would be a scheduled job that removes documents no client ever marked.
+    // The two halves have to be added together: a collection listed with no client writing
+    // tombstones sweeps nothing, and a client writing them into an unlisted collection keeps
+    // them for ever.
+    const db = fakeDb({budgets: [tombstonedDaysAgo('b-old', 500)]});
 
     const removed = await index.sweepDeletedDocumentsImpl(db, NOW);
 

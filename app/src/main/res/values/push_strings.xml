@@ -64,4 +64,6 @@
     <string name="push_split_ratio_accepted_body">Your co-parent agreed to the new split. It applies to expenses from now on.</string>
     <string name="push_split_ratio_declined_title">Expense split turned down</string>
     <string name="push_split_ratio_declined_body">Your co-parent turned down the new split. Nothing has changed.</string>
+    <string name="push_split_ratio_agreed_title">Expense split agreed</string>
+    <string name="push_split_ratio_agreed_body">The split you and your co-parent will share by was set before you paired. Open Settings to see it.</string>
 </resources>

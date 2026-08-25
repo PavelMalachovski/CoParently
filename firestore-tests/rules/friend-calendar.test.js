@@ -19,6 +19,16 @@ const DAD = 'uid-dad';
 const FRIEND = 'uid-friend';
 const STRANGER = 'uid-stranger';
 
+// Mom's *second* co-parent. A person may co-parent with more than one other adult (M-4), and the
+// two families that person belongs to must have nothing in common — which is what M-6 finally
+// makes true of a calendar friend.
+const OTHER_PARENT = 'uid-other-parent';
+
+// `FamilyKey.of` — the two uids sorted and joined. Written out rather than computed so a test
+// that fails says which family it meant.
+const FAMILY = 'uid-dad__uid-mom';
+const OTHER_FAMILY = 'uid-mom__uid-other-parent';
+
 const FAR_FUTURE = 4102444800000; // 2100-01-01
 const PAST = 1000; // 1970
 
@@ -31,7 +41,7 @@ function profile(overrides) {
 
 function grant(overrides) {
   return Object.assign({
-    familyParents: [MOM, DAD], grantedBy: MOM,
+    familyParents: [MOM, DAD], familyId: FAMILY, grantedBy: MOM,
     grantedAtMillis: 1, expiresAtMillis: FAR_FUTURE,
   }, overrides);
 }
@@ -40,6 +50,7 @@ function event(overrides) {
   return Object.assign({
     createdByFirebaseUid: MOM, title: 'School pickup', eventType: 'CUSTODY',
     parentOwner: 'mom', startDateTime: '2026-09-01T15:00:00', sharedWith: [MOM, DAD],
+    familyId: FAMILY,
   }, overrides);
 }
 
@@ -176,10 +187,60 @@ describe('events read for a calendar friend', () => {
         env.authenticatedContext(FRIEND).firestore().doc(EVENT).update({title: 'hijacked'}));
   });
 
-  it('serves the by-creator query the friend client runs', async () => {
+  // ---- M-6: the grant is scoped to one family, not to a person ---------------------------
+  //
+  // Mom co-parents with Dad *and* with OTHER_PARENT. The grandmother was admitted by Mom and Dad.
+  // Before M-6 the rule asked only "did this event's creator appear among my two parents", and
+  // Mom is one of them — so the grandmother read Mom's events in the other household too.
+
+  it('refuses a friend an event from the inviter\'s other family', async () => {
+    await seed(env, {
+      [EVENT]: event({familyId: OTHER_FAMILY, sharedWith: [MOM, OTHER_PARENT]}),
+      [GRANT]: grant({}),
+    });
+    await assertFails(env.authenticatedContext(FRIEND).firestore().doc(EVENT).get());
+  });
+
+  it('refuses a friend an event that has no familyId yet', async () => {
+    // Everything written before M-2, until `backfillRecordFamilyIds` has run. Deliberately a
+    // denial rather than a fallback: a fallback to "a co-parent of the author" is what re-opened
+    // this same leak in `expenses`, because Firestore validates a query by its structure.
+    await seed(env, {[EVENT]: event({familyId: ''}), [GRANT]: grant({})});
+    await assertFails(env.authenticatedContext(FRIEND).firestore().doc(EVENT).get());
+  });
+
+  it('refuses a grant written before M-6, which carries no familyId', async () => {
+    await seed(env, {[EVENT]: event({}), [GRANT]: grant({familyId: ''})});
+    await assertFails(env.authenticatedContext(FRIEND).firestore().doc(EVENT).get());
+  });
+
+  it('refuses an outsider who stamps this family\'s id onto their own event', async () => {
+    // Why `ownerUid in familyParents` stays alongside the familyId check: an event's `familyId`
+    // is client-written and the create rule does not pin it, so without the second check any
+    // account could inject an event into a family's friend view.
+    await seed(env, {
+      [EVENT]: event({createdByFirebaseUid: STRANGER, familyId: FAMILY}),
+      [GRANT]: grant({}),
+    });
+    await assertFails(env.authenticatedContext(FRIEND).firestore().doc(EVENT).get());
+  });
+
+  it('rejects the by-creator query the friend client used to be told to run', async () => {
+    // The shape CLAUDE.md item 16 documented. It is not merely wider than it should be — with
+    // the rule keyed on the record's own family it is now structurally undecidable, so Firestore
+    // refuses it outright rather than serving a subset. Same lesson as the expenses leak: the
+    // client query and the rule have to be keyed on the same field.
+    await seed(env, {[EVENT]: event({}), [GRANT]: grant({})});
+    await assertFails(
+        env.authenticatedContext(FRIEND).firestore().collection('events')
+            .where('createdByFirebaseUid', 'in', [MOM, DAD]).get());
+  });
+
+  it('serves the family-scoped query a friend client must run instead', async () => {
     await seed(env, {[EVENT]: event({}), [GRANT]: grant({})});
     await assertSucceeds(
         env.authenticatedContext(FRIEND).firestore().collection('events')
+            .where('familyId', '==', FAMILY)
             .where('createdByFirebaseUid', 'in', [MOM, DAD]).get());
   });
 });

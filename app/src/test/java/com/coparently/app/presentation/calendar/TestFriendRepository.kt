@@ -1,6 +1,7 @@
 package com.coparently.app.presentation.calendar
 
 import com.coparently.app.domain.repository.FriendRepository
+import com.coparently.app.domain.repository.UserRepository
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.flow.flowOf
@@ -15,4 +16,16 @@ import kotlinx.coroutines.flow.flowOf
  */
 fun noCalendarFriends(): FriendRepository = mockk {
     every { observeFamilyFriends() } returns flowOf(emptyList())
+}
+
+/**
+ * A [UserRepository] with nobody signed in, which is all `CalendarViewModel.holidayCountry` needs.
+ *
+ * The calendar reads which country's public holidays to draw from the signed-in parent's profile
+ * (MON-13). None of these tests is about holidays, but the constructor builds that flow either
+ * way — and a strict mock is the point: a relaxed one would hand `stateIn` a mock `Flow` to
+ * collect, and a collaborator that grew a second call would go unnoticed.
+ */
+fun noSignedInUser(): UserRepository = mockk {
+    every { observeCurrentUserId() } returns flowOf(null)
 }

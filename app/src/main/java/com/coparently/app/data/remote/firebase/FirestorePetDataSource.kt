@@ -1,6 +1,8 @@
 package com.coparently.app.data.remote.firebase
 
+import com.coparently.app.data.sync.Tombstone
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.FirebaseFirestoreException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.tasks.await
@@ -86,18 +88,36 @@ class FirestorePetDataSource @Inject constructor(
     }
 
     /**
-     * Deletes a pet by ID.
+     * Marks a pet deleted, leaving the document in place so the co-parent can be told (CQ-19).
      *
-     * @param id The pet ID
+     * `update` rather than `set`: the `pets` read rule is keyed on `sharedWith`, which
+     * lives on the existing document, so a tombstone that replaced it would be one the co-parent
+     * is not allowed to read — a deletion delivered to nobody, which is the defect this exists
+     * to fix.
+     *
+     * A missing document is [Result.success], not a failure. `update` raises `NOT_FOUND` when
+     * the document never landed, and in that case the deletion has nothing to reach: there is no
+     * remote copy for a co-parent to be holding. Reporting failure would keep the local
+     * tombstone queued forever, retrying a write that cannot succeed.
+     *
+     * @param id The record's id.
+     * @param deletedAtMillis When it was deleted, epoch millis.
+     * @param deletedBy Firebase UID of whoever deleted it.
      */
-    suspend fun deletePet(id: String): Result<Unit> {
+    suspend fun tombstonePet(id: String, deletedAtMillis: Long, deletedBy: String): Result<Unit> {
         return try {
             firestore.collection(petsCollection)
                 .document(id)
-                .delete()
+                .update(Tombstone.fields(deletedAtMillis, deletedBy))
                 .await()
             Result.success(Unit)
-        } catch (e: Exception) {
+        } catch (e: FirebaseFirestoreException) {
+            if (e.code == FirebaseFirestoreException.Code.NOT_FOUND) {
+                Result.success(Unit)
+            } else {
+                Result.failure(e)
+            }
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             Result.failure(e)
         }
     }

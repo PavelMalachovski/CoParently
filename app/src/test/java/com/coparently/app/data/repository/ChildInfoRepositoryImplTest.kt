@@ -109,6 +109,50 @@ class ChildInfoRepositoryImplTest {
         assertEquals(listOf(ALICE), uploaded.captured["sharedWith"])
     }
 
+    @Test
+    fun `deleting a child tombstones the document instead of removing it`() = runTest {
+        // CQ-19. A removed document is not a fact that can be delivered: nothing reconciles by
+        // absence, so the co-parent's phone kept the child for ever.
+        coEvery {
+            firestoreChildInfoDataSource.tombstoneChildInfo(any(), any(), any())
+        } returns Result.success(Unit)
+
+        repository.deleteChildInfo(childInfo(createdByFirebaseUid = ALICE))
+
+        coVerify { childInfoDao.markDeleted(CHILD_ID, any()) }
+        coVerify { firestoreChildInfoDataSource.tombstoneChildInfo(CHILD_ID, any(), ALICE) }
+        // Delivered, so the outbox entry has done its job.
+        coVerify { childInfoDao.deleteChildInfoById(CHILD_ID) }
+    }
+
+    @Test
+    fun `a refused tombstone leaves the row queued rather than gone`() = runTest {
+        // The other half of the old defect: the local row was removed before the remote write
+        // was known to have landed, so a refused or offline delete left the document alive and
+        // the next download put the child straight back.
+        coEvery {
+            firestoreChildInfoDataSource.tombstoneChildInfo(any(), any(), any())
+        } returns Result.failure(IOException("offline"))
+
+        repository.deleteChildInfo(childInfo(createdByFirebaseUid = ALICE))
+
+        coVerify { childInfoDao.markDeleted(CHILD_ID, any()) }
+        coVerify(exactly = 0) { childInfoDao.deleteChildInfoById(CHILD_ID) }
+    }
+
+    @Test
+    fun `deleting while signed out queues the deletion for the next sync`() = runTest {
+        every { firebaseAuthService.getCurrentUser() } returns null
+
+        repository.deleteChildInfo(childInfo(createdByFirebaseUid = ALICE))
+
+        coVerify { childInfoDao.markDeleted(CHILD_ID, any()) }
+        coVerify(exactly = 0) {
+            firestoreChildInfoDataSource.tombstoneChildInfo(any(), any(), any())
+        }
+        coVerify(exactly = 0) { childInfoDao.deleteChildInfoById(any()) }
+    }
+
     private fun childInfo(createdByFirebaseUid: String?) = ChildInfo(
         id = CHILD_ID,
         childName = "Ema",

@@ -9,6 +9,7 @@ import androidx.credentials.GetCredentialResponse
 import androidx.credentials.exceptions.GetCredentialException
 import com.coparently.app.R
 import com.coparently.app.data.local.preferences.EncryptedPreferences
+import com.coparently.app.data.remote.firebase.GoogleOAuthFunctions
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount
 import com.google.android.gms.auth.api.signin.GoogleSignInClient
@@ -19,15 +20,11 @@ import com.google.android.gms.tasks.Task
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.android.libraries.identity.googleid.GoogleIdTokenParsingException
-import com.google.api.client.googleapis.auth.oauth2.GoogleAuthorizationCodeTokenRequest
 import com.google.api.client.googleapis.auth.oauth2.GoogleTokenResponse
-import com.google.api.client.http.javanet.NetHttpTransport
-import com.google.api.client.json.gson.GsonFactory
 import com.google.api.services.calendar.CalendarScopes
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.tasks.await
-import kotlinx.coroutines.withContext
 import java.io.IOException
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -41,7 +38,8 @@ import javax.inject.Singleton
 @Singleton
 class CredentialManagerService @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val encryptedPreferences: EncryptedPreferences
+    private val encryptedPreferences: EncryptedPreferences,
+    private val googleOAuthFunctions: GoogleOAuthFunctions
 ) {
     private val credentialManager: CredentialManager? = try {
         CredentialManager.create(context)
@@ -82,8 +80,15 @@ class CredentialManagerService @Inject constructor(
 
     companion object {
         private const val TAG = "CredentialManager"
-        private val JSON_FACTORY = GsonFactory.getDefaultInstance()
-        private val HTTP_TRANSPORT = NetHttpTransport()
+
+        /**
+         * What an access token is assumed to live for when Google says nothing.
+         *
+         * One hour, which is what Google issues in practice. A wrong guess here costs at worst
+         * one refused API call and a refresh, so a default is safer than treating a missing
+         * value as "already expired" and refreshing on every single call.
+         */
+        private const val DEFAULT_TOKEN_LIFETIME_SECONDS = 3600L
     }
 
     /**
@@ -165,37 +170,31 @@ class CredentialManagerService @Inject constructor(
      * @param email Email пользователя для идентификации
      */
     private suspend fun exchangeAuthCodeForTokens(authCode: String, email: String) {
-        try {
-            val tokenResponse = withContext(Dispatchers.IO) {
-                GoogleAuthorizationCodeTokenRequest(
-                    HTTP_TRANSPORT,
-                    JSON_FACTORY,
-                    getWebClientId(),
-                    getClientSecret(), // client secret required for web OAuth clients
-                    authCode,
-                    "" // redirect URI not needed for mobile apps
-                ).execute()
-            }
-
-            val accessToken = tokenResponse.accessToken
-            val refreshToken = tokenResponse.refreshToken
-            val expiresInSeconds = tokenResponse.expiresInSeconds
-
-            if (accessToken != null) {
-                encryptedPreferences.putAccessToken(accessToken)
-                encryptedPreferences.putRefreshToken(refreshToken ?: "")
-                encryptedPreferences.putTokenExpiry(System.currentTimeMillis() + (expiresInSeconds ?: 3600) * 1000)
-                encryptedPreferences.putUserEmail(email)
-
-                Log.d(TAG, "Tokens obtained and stored successfully")
-            } else {
-                Log.e(TAG, "No access token received")
-            }
-        } catch (e: IOException) {
+        // Through the Cloud Function, not directly (SEC-1 §2). The web OAuth client needs a
+        // client secret for this grant, and that secret used to be compiled into the APK —
+        // where it was available to anybody who installed the app.
+        val tokens = googleOAuthFunctions.exchangeAuthCode(authCode).getOrElse { e ->
             Log.e(TAG, "Error exchanging auth code for tokens: ${e.message}", e)
             throw e
         }
+
+        encryptedPreferences.putAccessToken(tokens.accessToken)
+        // Only when one came back. Google omits the refresh token when the account has already
+        // granted consent, and blanking the stored one there would cost the parent a re-consent
+        // for nothing.
+        if (tokens.refreshToken.isNotEmpty()) {
+            encryptedPreferences.putRefreshToken(tokens.refreshToken)
+        }
+        encryptedPreferences.putTokenExpiry(expiryFrom(tokens.expiresInSeconds))
+        encryptedPreferences.putUserEmail(email)
+
+        Log.d(TAG, "Tokens obtained and stored successfully")
     }
+
+    /** When a token that lives [expiresInSeconds] from now runs out, as epoch millis. */
+    private fun expiryFrom(expiresInSeconds: Long): Long =
+        System.currentTimeMillis() +
+            (expiresInSeconds.takeIf { it > 0L } ?: DEFAULT_TOKEN_LIFETIME_SECONDS) * 1000
 
     /**
      * Получает access token, проверяя срок действия и обновляя при необходимости.
@@ -240,29 +239,21 @@ class CredentialManagerService @Inject constructor(
             val refreshToken = encryptedPreferences.getRefreshToken()
                 ?: return Pair(null, "No refresh token available")
 
-            val tokenResponse = withContext(Dispatchers.IO) {
-                com.google.api.client.googleapis.auth.oauth2.GoogleRefreshTokenRequest(
-                    HTTP_TRANSPORT,
-                    JSON_FACTORY,
-                    refreshToken,
-                    getWebClientId(),
-                    getClientSecret() // client secret required for web OAuth clients
-                ).execute()
-            }
+            // Through the Cloud Function, which holds the client secret this grant needs.
+            // It refuses a refresh token it did not issue to this account, so a failure here
+            // can mean "connect Google Calendar again" rather than only "no network" — which
+            // is true of every account connected before SEC-1 §2 shipped.
+            val tokens = googleOAuthFunctions.refreshAccessToken(refreshToken)
+                .getOrElse { e ->
+                    Log.e(TAG, "Error refreshing token: ${e.message}", e)
+                    return Pair(null, "Error refreshing token: ${e.message}")
+                }
 
-            val newAccessToken = tokenResponse.accessToken
-            val expiresInSeconds = tokenResponse.expiresInSeconds
+            encryptedPreferences.putAccessToken(tokens.accessToken)
+            encryptedPreferences.putTokenExpiry(expiryFrom(tokens.expiresInSeconds))
 
-            if (newAccessToken != null) {
-                encryptedPreferences.putAccessToken(newAccessToken)
-                encryptedPreferences.putTokenExpiry(System.currentTimeMillis() + (expiresInSeconds ?: 3600) * 1000)
-
-                Log.d(TAG, "Access token refreshed successfully")
-                Pair(newAccessToken, null)
-            } else {
-                Log.e(TAG, "No access token in refresh response")
-                Pair(null, "Failed to refresh token")
-            }
+            Log.d(TAG, "Access token refreshed successfully")
+            Pair(tokens.accessToken, null)
         } catch (e: IOException) {
             Log.e(TAG, "Error refreshing token: ${e.message}", e)
             Pair(null, "Network error refreshing token: ${e.message}")
@@ -323,23 +314,5 @@ class CredentialManagerService @Inject constructor(
         }
     }
 
-    /**
-     * Reads the Google OAuth client secret from BuildConfig.
-     * The value is injected at build time from the GOOGLE_CLIENT_SECRET gradle property
-     * or environment variable (see app/build.gradle.kts). It is intentionally not a string
-     * resource so it never ends up committed or shipped in a tracked file.
-     */
-    private fun getClientSecret(): String {
-        val clientSecret = com.coparently.app.BuildConfig.GOOGLE_CLIENT_SECRET
-        if (clientSecret.isBlank()) {
-            Log.e(TAG, "Client Secret not configured")
-            throw IllegalStateException(
-                "Google OAuth client secret not configured. Set GOOGLE_CLIENT_SECRET in " +
-                    "~/.gradle/gradle.properties (or as an environment variable) with the client " +
-                    "secret from Google Cloud Console."
-            )
-        }
-        return clientSecret
-    }
 }
 

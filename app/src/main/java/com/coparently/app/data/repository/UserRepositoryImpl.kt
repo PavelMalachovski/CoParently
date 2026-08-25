@@ -8,6 +8,7 @@ import com.coparently.app.data.remote.firebase.FirestoreFamilyDataSource
 import com.coparently.app.data.remote.firebase.FirestoreUserDataSource
 import com.coparently.app.data.session.ProfileIdentity
 import com.coparently.app.domain.family.FamilyKey
+import com.coparently.app.domain.holidays.HolidayCountry
 import com.coparently.app.domain.model.FamilyKind
 import com.coparently.app.domain.model.MedicalProfile
 import com.coparently.app.domain.model.User
@@ -376,7 +377,12 @@ class UserRepositoryImpl @Inject constructor(
             // never fire. The protection it was reaching for is already there — the `copy`
             // branch does not touch `caresForKinds` at all, so a co-parent's build that never
             // writes the field cannot clear the answer this device holds.
-            caresForKinds = remote?.string("caresFor")
+            caresForKinds = remote?.string("caresFor"),
+            // Same reasoning as `caresForKinds` above, plus one of its own: the fallback is the
+            // *column* default rather than a literal, so "what an account with no answer gets"
+            // is stated in exactly one place — the v32→v33 migration.
+            countryCode = remote?.string("countryCode")?.takeIf { it.isNotBlank() }
+                ?: HolidayCountry.Default.code
         )
         if (updated != local) userDao.insertUser(updated)
     }
@@ -440,7 +446,11 @@ class UserRepositoryImpl @Inject constructor(
                     "onboardingCompletedAt" to (user.onboardingCompletedAt ?: ""),
                     // A string of constant names, not a list: the co-parent reads it to decide
                     // whether to show child records, and the two halves must agree on one shape.
-                    "caresFor" to (FamilyKind.toStored(user.caresFor) ?: "")
+                    "caresFor" to (FamilyKind.toStored(user.caresFor) ?: ""),
+                    // Written so a reinstall or a second device restores the country rather than
+                    // silently reverting to Czechia. Nothing else reads it: which holidays a
+                    // parent sees is their own business, not their co-parent's.
+                    "countryCode" to user.countryCode
                 )
                 firestoreUserDataSource.updateUser(firebaseUser.uid, userData).getOrThrow()
                 mirrorCaresForToFamily(firebaseUser.uid, user)
@@ -561,7 +571,8 @@ class UserRepositoryImpl @Inject constructor(
                 gson.fromJson(medicalProfileJson, MedicalProfile::class.java) ?: MedicalProfile()
                 ).withSanitizedVaccinationNames(),
             onboardingCompletedAt = onboardingCompletedAt,
-            caresFor = FamilyKind.fromStored(caresForKinds)
+            caresFor = FamilyKind.fromStored(caresForKinds),
+            countryCode = countryCode
         )
     }
 
@@ -586,7 +597,8 @@ class UserRepositoryImpl @Inject constructor(
             allergiesJson = gson.toJson(allergies),
             medicalProfileJson = gson.toJson(medicalProfile),
             onboardingCompletedAt = onboardingCompletedAt,
-            caresForKinds = FamilyKind.toStored(caresFor)
+            caresForKinds = FamilyKind.toStored(caresFor),
+            countryCode = countryCode
         )
     }
 
@@ -615,6 +627,8 @@ class UserRepositoryImpl @Inject constructor(
             name = this["name"] as? String ?: "",
             role = this["role"] as? String ?: "mom",
             colorCode = this["colorCode"] as? String ?: "#FF4081",
+            countryCode = (this["countryCode"] as? String)?.takeIf { it.isNotBlank() }
+                ?: HolidayCountry.Default.code,
             profilePhotoUrl = this["profilePhotoUrl"] as? String,
             googleCalendarSyncEnabled = this["googleCalendarSyncEnabled"] as? Boolean ?: false,
             googleCalendarId = this["googleCalendarId"] as? String,

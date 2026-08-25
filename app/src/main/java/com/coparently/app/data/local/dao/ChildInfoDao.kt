@@ -22,11 +22,19 @@ interface ChildInfoDao {
      *
      * @return Flow of list of all child information
      */
-    @Query("SELECT * FROM child_info ORDER BY childName ASC")
+    @Query("SELECT * FROM child_info WHERE deletedAtMillis IS NULL ORDER BY childName ASC")
     fun getAllChildInfo(): Flow<List<ChildInfoEntity>>
 
     /**
-     * Gets child information by ID.
+     * Gets child information by ID, **including a pending tombstone**.
+     *
+     * The one read deliberately not filtered on `deletedAtMillis`, mirroring
+     * [EventDao.getEventById]: its callers are the sync and delete paths, and for them "there is
+     * no such row" and "there is a row this device has deleted" are opposite answers. The
+     * downstream half must recognise a local tombstone rather than treat the id as unknown and
+     * insert the remote document over it, which would resurrect the record the parent just
+     * deleted. A caller answering a *user's* question filters at the repository boundary —
+     * see `ChildInfoRepositoryImpl.getChildInfoById`.
      *
      * @param id The child info ID
      * @return The child information or null if not found
@@ -40,7 +48,7 @@ interface ChildInfoDao {
      * @param id The child info ID
      * @return Flow that emits the child information
      */
-    @Query("SELECT * FROM child_info WHERE id = :id")
+    @Query("SELECT * FROM child_info WHERE id = :id AND deletedAtMillis IS NULL")
     fun observeChildInfoById(id: String): Flow<ChildInfoEntity?>
 
     /**
@@ -93,10 +101,32 @@ interface ChildInfoDao {
     /**
      * Gets all child information that needs to be synced to Firestore.
      *
-     * @return List of child information that has not been synced
+     * **Deliberately not filtered on `deletedAtMillis`.** This is the outbox, and a pending
+     * tombstone is the half of it that used to have no path at all (CQ-19): the caller splits
+     * the two apart and writes each deletion as a tombstone before uploading the live rows.
+     * Excluding them here is the one change that would silently restore the original defect.
+     *
+     * @return List of child information that has not been synced, deletions included
      */
     @Query("SELECT * FROM child_info WHERE syncedToFirestore = 0")
     suspend fun getUnsyncedChildInfo(): List<ChildInfoEntity>
+
+    /**
+     * Marks a child record deleted, leaving the row in place as an outbox entry.
+     *
+     * `deletedAtMillis IS NULL` in the WHERE clause makes a second delete a no-op rather than
+     * re-dating the first one, which would push the sweep's ninety-day deadline out every time
+     * a retry ran.
+     *
+     * @param id The record's id.
+     * @param deletedAtMillis When it was deleted, epoch millis.
+     * @return How many rows were marked — zero if it was already a tombstone.
+     */
+    @Query(
+        "UPDATE child_info SET deletedAtMillis = :deletedAtMillis, syncedToFirestore = 0 " +
+            "WHERE id = :id AND deletedAtMillis IS NULL"
+    )
+    suspend fun markDeleted(id: String, deletedAtMillis: Long): Int
 
     /**
      * Marks child information as synced to Firestore.
@@ -117,7 +147,10 @@ interface ChildInfoDao {
      * @param myUid Firebase UID of the signed-in user.
      * @return How many rows were re-queued.
      */
-    @Query("UPDATE child_info SET syncedToFirestore = 0 WHERE createdByFirebaseUid = :myUid")
+    @Query(
+        "UPDATE child_info SET syncedToFirestore = 0 " +
+            "WHERE createdByFirebaseUid = :myUid AND deletedAtMillis IS NULL"
+    )
     suspend fun markOwnChildInfoUnsynced(myUid: String): Int
 
     /**
