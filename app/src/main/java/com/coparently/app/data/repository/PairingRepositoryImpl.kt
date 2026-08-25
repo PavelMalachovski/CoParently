@@ -183,12 +183,12 @@ class PairingRepositoryImpl @Inject constructor(
      *
      * Everything outside the pairing screen reads pairing from Room, not from Firestore:
      * `ChatViewModel` decides between "open chat" and "go pair" from it, `ExpenseRepositoryImpl`
-     * and `BudgetRepositoryImpl` build their `creatorUids` filter from it, `SyncService` sizes
-     * the event audience with it, and `HomeViewModel` renders its CTA from it. Before this
-     * hook the only writer was `UserRepositoryImpl.pullOnce()` behind a 15-minute
+     * and `BudgetRepositoryImpl` derive the `familyId` they query on from it, `SyncService`
+     * sizes the event audience with it, and `HomeViewModel` renders its CTA from it. Before
+     * this hook the only writer was `UserRepositoryImpl.pullOnce()` behind a 15-minute
      * `SyncWorker`, so both phones showed "Paired with X" while chat, expenses, budgets and
      * events stayed unpaired for up to a quarter of an hour — and after an unpair, the
-     * ex-partner's UID stayed in `creatorUids` just as long.
+     * ex-partner's records stayed in view just as long.
      *
      * It hangs off the *observed* state rather than off [redeem]/[acceptIncoming] so it fires
      * on both devices: the inviter's phone never calls anything, it learns about the pairing

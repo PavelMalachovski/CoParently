@@ -29,6 +29,7 @@ function seedPairAndExpense(env) {
     'expenses/expense-1': {
       id: 'expense-1', title: 'School trip', amount: 42.5, currency: 'CZK',
       category: 'EDUCATION', createdByFirebaseUid: ALICE, paidBy: ALICE,
+      familyId: [ALICE, BOB].sort().join('__'),
       splitBetween: [], date: '2026-08-01', createdAt: '2026-08-01T10:00:00',
     },
   });

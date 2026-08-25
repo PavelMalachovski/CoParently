@@ -226,11 +226,14 @@ class ExpenseRepositoryImpl @Inject constructor(
     override suspend fun observeRemote() {
         val firebaseUser = firebaseAuthService.getCurrentUser() ?: return
         val partnerId = userDao.getUserById(firebaseUser.uid)?.partnerId
-        val creatorUids = listOfNotNull(firebaseUser.uid, partnerId)
+        // The family, not the two authors. An unpaired account gets null and the data source
+        // closes without querying, which is right: there is nothing shared to download, and an
+        // unfiltered read would be denied.
+        val familyId = FamilyKey.orNull(firebaseUser.uid, partnerId)
 
         retryPendingDeletions(firebaseUser.uid)
 
-        firestoreExpenseDataSource.getAllExpenses(creatorUids)
+        firestoreExpenseDataSource.getAllExpenses(familyId)
             .catch { e -> android.util.Log.w("ExpenseRepo", "Expense sync failed", e) }
             .collect { expenses ->
                 expenses.forEach { data ->

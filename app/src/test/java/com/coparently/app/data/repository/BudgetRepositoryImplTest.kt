@@ -136,27 +136,32 @@ class BudgetRepositoryImplTest {
     )
 
     @Test
-    fun `observeRemote queries both parents' UIDs when paired`() = runTest {
+    fun `observeRemote queries the family, not the two authors`() = runTest {
+        // The shape is the isolation. A filter on the author returns every family that author
+        // is in, and while any branch of the read rule mentioned `isPartnerOf`, Firestore
+        // served that query — see `firestore-tests/rules/family-isolation.test.js`.
         val firebaseUser = mockk<FirebaseUser> { every { uid } returns "uidA" }
         every { firebaseAuthService.getCurrentUser() } returns firebaseUser
         coEvery { userDao.getUserById("uidA") } returns userEntity(id = "uidA", partnerId = "uidB")
-        every { firestoreBudgetDataSource.getAllBudgets(listOf("uidA", "uidB")) } returns emptyFlow()
+        every { firestoreBudgetDataSource.getAllBudgets("uidA__uidB") } returns emptyFlow()
 
         repository.observeRemote()
 
-        coVerify(exactly = 1) { firestoreBudgetDataSource.getAllBudgets(listOf("uidA", "uidB")) }
+        coVerify(exactly = 1) { firestoreBudgetDataSource.getAllBudgets("uidA__uidB") }
     }
 
     @Test
-    fun `observeRemote queries only the current user's UID when unpaired`() = runTest {
+    fun `observeRemote asks for no family when unpaired`() = runTest {
+        // Null rather than a query for this user alone: an unpaired account has nothing shared
+        // to download, and the data source closes without issuing a read that would be denied.
         val firebaseUser = mockk<FirebaseUser> { every { uid } returns "uidA" }
         every { firebaseAuthService.getCurrentUser() } returns firebaseUser
         coEvery { userDao.getUserById("uidA") } returns userEntity(id = "uidA", partnerId = null)
-        every { firestoreBudgetDataSource.getAllBudgets(listOf("uidA")) } returns emptyFlow()
+        every { firestoreBudgetDataSource.getAllBudgets(null) } returns emptyFlow()
 
         repository.observeRemote()
 
-        coVerify(exactly = 1) { firestoreBudgetDataSource.getAllBudgets(listOf("uidA")) }
+        coVerify(exactly = 1) { firestoreBudgetDataSource.getAllBudgets(null) }
     }
 
     @Test

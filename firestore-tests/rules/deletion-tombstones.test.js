@@ -23,6 +23,9 @@ const ALICE = 'alice-uid';
 const BOB = 'bob-uid';
 const CAROL = 'carol-uid';
 
+/** Alice and Bob's family. `expenses` is gated on it now — see family-isolation.test.js. */
+const FAMILY = [ALICE, BOB].sort().join('__');
+
 const DELETED_AT = 1787000000000;
 
 /** @return {!Object} A tombstone write, exactly as `Tombstone.fields()` builds it. */
@@ -53,6 +56,7 @@ function eventDoc(overrides) {
     createdAt: '2026-08-01T10:00:00',
     updatedAt: '2026-08-01T10:00:00',
     createdByFirebaseUid: ALICE,
+    familyId: FAMILY,
     sharedWith: [ALICE, BOB],
     lastModifiedBy: ALICE,
     permissions: 'read_write',
@@ -77,6 +81,7 @@ function expenseDoc(overrides) {
     currency: 'CZK',
     category: 'EDUCATION',
     createdByFirebaseUid: ALICE,
+    familyId: FAMILY,
     paidBy: ALICE,
     splitBetween: [],
     date: '2026-08-01',
@@ -194,7 +199,7 @@ describe('CQ-3: tombstones', () => {
       await seed(env, {'expenses/expense-1': expenseDoc(tombstone(ALICE))});
       const db = env.authenticatedContext(BOB).firestore();
       await assertSucceeds(
-          db.collection('expenses').where('createdByFirebaseUid', 'in', [ALICE, BOB]).get());
+          db.collection('expenses').where('familyId', '==', FAMILY).get());
     });
   });
 });

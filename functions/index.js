@@ -2122,6 +2122,157 @@ async function backfillFamilyDocumentsImpl(db) {
 exports.backfillFamilyDocumentsImpl = backfillFamilyDocumentsImpl;
 
 /**
+ * The six collections a co-parenting pair shares, and the field on each that names its author.
+ *
+ * A change request is the odd one: it names both adults directly, so its "author" field is
+ * `requestedBy` rather than the `createdByFirebaseUid` the other five carry.
+ */
+const FAMILY_SCOPED_COLLECTIONS = [
+  {name: 'events', authorField: 'createdByFirebaseUid'},
+  {name: 'expenses', authorField: 'createdByFirebaseUid'},
+  {name: 'budgets', authorField: 'createdByFirebaseUid'},
+  {name: 'child_info', authorField: 'createdByFirebaseUid'},
+  {name: 'pets', authorField: 'createdByFirebaseUid'},
+  {name: 'change_requests', authorField: 'requestedBy'},
+];
+
+exports.FAMILY_SCOPED_COLLECTIONS = FAMILY_SCOPED_COLLECTIONS;
+
+/** Firestore's hard cap on operations in one batched write. */
+const FAMILY_ID_BATCH_LIMIT = 450;
+
+/**
+ * Body of the `backfillRecordFamilyIds` callable — stamps `familyId` on the documents of every
+ * live pair that predate the field.
+ *
+ * **This must finish before the family-scoped rules are deployed, not after.** `expenses` and
+ * `budgets` are read by membership of the record's own family, with no fallback to "a co-parent
+ * of the author" — deliberately, because such a fallback re-opens the leak it was meant to
+ * soften: Firestore validates a query by its structure, so while any branch mentioned
+ * `isPartnerOf(createdByFirebaseUid)`, the old `whereIn` query satisfied the rule and served a
+ * second family's documents. A document with no `familyId` is therefore readable only by its
+ * author, and a co-parent's whole expense history reads as empty until this has run.
+ *
+ * The client stamps every record it writes from now on (`FamilyIdBackfill` does the same for
+ * Room), so this is a one-time pass over history, not an ongoing repair.
+ *
+ * **A person with more than one family is skipped, not guessed at.** Today that is nobody —
+ * pairing still refuses a second — but the moment it is somebody, "which of their families does
+ * this record belong to" has no answer here, and stamping the wrong one would hand a record to a
+ * co-parent it was never about. `partnerId` is read live and both sides must name each other,
+ * so an interrupted unpair cannot revive a relationship either.
+ *
+ * Documents that already carry a `familyId` are left alone, so a second run is a no-op and a run
+ * interrupted halfway resumes cleanly.
+ *
+ * @param {FirebaseFirestore.Firestore} db Firestore instance.
+ * @return {Promise<{users: number, stamped: number, skipped: number, failed: number,
+ *   perCollection: !Object<string, number>, skippedReasons: {notMutual: number,
+ *   missingAccount: number, unpaired: number}}>} What the migration did.
+ */
+async function backfillRecordFamilyIdsImpl(db) {
+  const summary = {
+    users: 0,
+    stamped: 0,
+    skipped: 0,
+    failed: 0,
+    perCollection: {},
+    skippedReasons: {notMutual: 0, missingAccount: 0, unpaired: 0},
+  };
+  FAMILY_SCOPED_COLLECTIONS.forEach(({name}) => {
+    summary.perCollection[name] = 0;
+  });
+
+  const users = await db.collection('users').get();
+
+  for (const doc of users.docs) {
+    const uid = doc.id;
+    const partnerId = (doc.data() || {}).partnerId;
+
+    if (typeof partnerId !== 'string' || !partnerId || partnerId === uid) {
+      summary.skipped++;
+      summary.skippedReasons.unpaired++;
+      continue;
+    }
+
+    try {
+      const partnerSnap = await db.collection('users').doc(partnerId).get();
+      if (!partnerSnap.exists) {
+        summary.skipped++;
+        summary.skippedReasons.missingAccount++;
+        continue;
+      }
+      if ((partnerSnap.data() || {}).partnerId !== uid) {
+        summary.skipped++;
+        summary.skippedReasons.notMutual++;
+        continue;
+      }
+
+      const familyId = custodyModelKey(uid, partnerId);
+      summary.users++;
+
+      for (const {name, authorField} of FAMILY_SCOPED_COLLECTIONS) {
+        const owned = await db.collection(name).where(authorField, '==', uid).get();
+
+        // Filtered here rather than in the query: "the field is absent" is not something a
+        // Firestore `where` can ask, and a document written by a newer client already carries
+        // the value this would otherwise overwrite.
+        const needing = owned.docs.filter((d) => {
+          const stored = (d.data() || {}).familyId;
+          return typeof stored !== 'string' || stored === '';
+        });
+
+        let batch = db.batch();
+        let pending = 0;
+        for (const d of needing) {
+          batch.update(d.ref, {familyId});
+          pending++;
+          summary.perCollection[name]++;
+          summary.stamped++;
+          if (pending === FAMILY_ID_BATCH_LIMIT) {
+            await batch.commit();
+            batch = db.batch();
+            pending = 0;
+          }
+        }
+        if (pending > 0) {
+          await batch.commit();
+        }
+      }
+    } catch (err) {
+      console.error(`backfillRecordFamilyIds failed for ${uid}`, err);
+      summary.failed++;
+    }
+  }
+
+  return summary;
+}
+
+exports.backfillRecordFamilyIdsImpl = backfillRecordFamilyIdsImpl;
+
+/**
+ * Stamps `familyId` on the records of every live pair that predate the field.
+ *
+ * Operator-only on the same allow-list as the other backfills, and 540 seconds for the same
+ * reason: a one-time pass over a historical, bounded set. Run it **after**
+ * `backfillFamilyDocuments` and **before** deploying the family-scoped rules — see
+ * docs/DESIGN-multi-family.md, M-4, for the ordered steps and what each one costs if skipped.
+ *
+ * @return {Promise<{users: number, stamped: number, skipped: number, failed: number,
+ *   perCollection: !Object<string, number>, skippedReasons: {notMutual: number,
+ *   missingAccount: number, unpaired: number}}>} See [backfillRecordFamilyIdsImpl].
+ */
+exports.backfillRecordFamilyIds = functions.runWith({timeoutSeconds: 540}).https.onCall(
+    async (data, context) => {
+      if (!isBackfillOperator(context)) {
+        throw new functions.https.HttpsError(
+            'permission-denied', 'Operator access only', {reason: 'not-operator'});
+      }
+      return backfillRecordFamilyIdsImpl(admin.firestore());
+    },
+);
+
+/**
  * Creates the `families/{id}` document for pairs that formed before pairing wrote one.
  *
  * Operator-only on the same allow-list as [backfillParentSlots] and for the same reason, only

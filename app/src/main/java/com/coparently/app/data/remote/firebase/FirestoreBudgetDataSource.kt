@@ -18,25 +18,22 @@ class FirestoreBudgetDataSource @Inject constructor(
     private val budgetsCollection = firestore.collection("budgets")
 
     /**
-     * Gets budgets created by any of [creatorUids] (the current user, plus the paired
-     * co-parent when paired) as a Flow.
+     * Gets the budgets of one co-parenting relationship as a Flow.
      *
-     * An unfiltered collection query is rejected outright by `firestore.rules`: Firestore
-     * validates a *query* by checking whether its structure guarantees every possible
-     * result satisfies the security rule, not by inspecting the actual documents returned.
-     * Since the `budgets` read rule is keyed on `createdByFirebaseUid`, the query must
-     * filter on that same field for Firestore to accept it — mirroring
-     * [FirestoreExpenseDataSource.getAllExpenses].
+     * Filtered on `familyId` for the reason [FirestoreExpenseDataSource.getAllExpenses] spells
+     * out at length: the read rule is keyed on membership of the record's own family, Firestore
+     * validates a query by its structure, and the old filter on the author merged two families
+     * into one list.
      *
-     * @param creatorUids Firebase UIDs whose budgets to include (1 when unpaired, 2 when paired)
+     * @param familyId `FamilyKey.of(myUid, partnerUid)`; empty or null closes the flow.
      */
-    fun getAllBudgets(creatorUids: List<String>): Flow<List<Map<String, Any>>> = callbackFlow {
-        if (creatorUids.isEmpty()) {
+    fun getAllBudgets(familyId: String?): Flow<List<Map<String, Any>>> = callbackFlow {
+        if (familyId.isNullOrEmpty()) {
             close()
             return@callbackFlow
         }
         val subscription = budgetsCollection
-            .whereIn("createdByFirebaseUid", creatorUids)
+            .whereEqualTo("familyId", familyId)
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
                     close(error)

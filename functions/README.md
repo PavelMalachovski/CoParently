@@ -241,6 +241,49 @@ Cloud Functions для Firebase использует модель оплаты p
 
 ## Admin operations
 
+### The multi-family migration (run these in order)
+
+Three callables and one deploy turn on family-scoped isolation — the property that a co-parent in
+one family can reach nothing belonging to a co-parent in another. **The order matters and the
+failure mode of getting it wrong is visible to users**, so run them one at a time and read each
+summary before starting the next. All three are gated on the same `BACKFILL_ADMIN_UIDS`
+allow-list described under `backfillParentSlots` below.
+
+```bash
+firebase deploy --only functions          # 1. ship the callables
+# 2. every live pair gets families/{id} with members, slots and caresFor
+# 3. every existing record gets its familyId
+firebase deploy --only firestore:rules    # 4. turn the isolation on
+```
+
+Steps 2 and 3 are invoked as callables (from the app, a script, or the Firebase console's
+functions shell), not from the CLI:
+
+| step | callable | what it writes |
+| --- | --- | --- |
+| 2 | `backfillFamilyDocuments` | `families/{id}`: `members`, `slots`, `caresFor` |
+| 3 | `backfillRecordFamilyIds` | `familyId` on events, expenses, budgets, child\_info, pets, change\_requests |
+
+Both are idempotent — a second run reports everything as skipped — and both report per-reason
+counts rather than a bare "ok", so a pair they declined to touch is visible rather than silent.
+
+**Run `backfillParentSlots` before step 2** if any pair still shares a slot. Step 2 records the
+slots the two profiles hold and counts how many pairs came out indistinct (`sameSlot`); it does
+not decide who is parent 1, because that needs the invitation. Running them the other way round
+loses nothing — `backfillParentSlots` updates an existing family's `slots` as it separates a
+pair — but you then have to know it already went.
+
+**Do not deploy the rules (step 4) before step 3 finishes.** `expenses` and `budgets` are read by
+membership of the record's own family, with no fallback to "a co-parent of the author". That
+fallback was tried and removed: Firestore validates a query by its *structure*, so while any
+branch of the rule mentioned `isPartnerOf(createdByFirebaseUid)`, the client's old
+`whereIn('createdByFirebaseUid', […])` query satisfied it and Firestore served a second family's
+documents — the leak survived a rule that looked closed. Proved against the emulator in
+`firestore-tests/rules/family-isolation.test.js`. The consequence is that a record with no
+`familyId` is readable only by its author, so deploying step 4 early leaves each co-parent's
+expense and budget history looking empty on the other phone until step 3 completes. Nothing is
+lost — Room is the source of truth on each device — but it is alarming to watch.
+
 ### backfillParentSlots
 
 `backfillParentSlots` is an operator-only `onCall` callable (in `index.js`) that re-slots

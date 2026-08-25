@@ -989,3 +989,132 @@ describe('backfillParentSlots keeps the family in step', () => {
     assert.strictEqual(db._docs.families, undefined);
   });
 });
+
+describe('backfillRecordFamilyIdsImpl', () => {
+  let backfillRecordFamilyIdsImpl;
+
+  before(() => {
+    backfillRecordFamilyIdsImpl = require('../index').backfillRecordFamilyIdsImpl;
+  });
+
+  /**
+   * A live, mutually-linked pair plus one document in each shared collection.
+   *
+   * @param {!Object} overrides Collections to replace wholesale on the default fixture.
+   * @return {!Object} The fake Firestore.
+   */
+  function pairedDb(overrides) {
+    return fakeDb(Object.assign({
+      users: {
+        alice: {id: 'alice', partnerId: 'bob'},
+        bob: {id: 'bob', partnerId: 'alice'},
+      },
+      events: {ev1: {id: 'ev1', createdByFirebaseUid: 'alice'}},
+      expenses: {ex1: {id: 'ex1', createdByFirebaseUid: 'alice'}},
+      budgets: {bu1: {id: 'bu1', createdByFirebaseUid: 'alice'}},
+      child_info: {ch1: {id: 'ch1', createdByFirebaseUid: 'alice'}},
+      pets: {pe1: {id: 'pe1', createdByFirebaseUid: 'alice'}},
+      change_requests: {cr1: {id: 'cr1', requestedBy: 'alice'}},
+    }, overrides));
+  }
+
+  it('stamps every shared collection, reading the author field each one actually uses', async () => {
+    // A change request names both adults directly, so its author field is `requestedBy` and
+    // not the `createdByFirebaseUid` the other five carry. Getting that wrong would leave
+    // change requests unstamped and silently unreadable once the rules key on the family.
+    const db = pairedDb({});
+
+    const summary = await backfillRecordFamilyIdsImpl(db);
+
+    assert.strictEqual(summary.stamped, 6);
+    assert.strictEqual(db._docs.events.ev1.familyId, 'alice__bob');
+    assert.strictEqual(db._docs.expenses.ex1.familyId, 'alice__bob');
+    assert.strictEqual(db._docs.budgets.bu1.familyId, 'alice__bob');
+    assert.strictEqual(db._docs.child_info.ch1.familyId, 'alice__bob');
+    assert.strictEqual(db._docs.pets.pe1.familyId, 'alice__bob');
+    assert.strictEqual(db._docs.change_requests.cr1.familyId, 'alice__bob');
+  });
+
+  it('leaves a document that already names a family alone', async () => {
+    // A second run must be a no-op, and a record a newer client already stamped must not be
+    // overwritten — the family a record belongs to is never re-derived.
+    const db = pairedDb({
+      expenses: {ex1: {id: 'ex1', createdByFirebaseUid: 'alice', familyId: 'someone__else'}},
+    });
+
+    const summary = await backfillRecordFamilyIdsImpl(db);
+
+    assert.strictEqual(db._docs.expenses.ex1.familyId, 'someone__else');
+    assert.strictEqual(summary.perCollection.expenses, 0);
+  });
+
+  it('treats an empty familyId as unstamped', async () => {
+    // `""` is what a null becomes on the wire, so it is the shape an unpaired-at-the-time
+    // record actually carries — not an answer, and this is the pass that gives it one.
+    const db = pairedDb({
+      expenses: {ex1: {id: 'ex1', createdByFirebaseUid: 'alice', familyId: ''}},
+    });
+
+    await backfillRecordFamilyIdsImpl(db);
+
+    assert.strictEqual(db._docs.expenses.ex1.familyId, 'alice__bob');
+  });
+
+  it('refuses a one-sided pairing rather than reviving it', async () => {
+    const db = pairedDb({
+      users: {
+        alice: {id: 'alice', partnerId: 'bob'},
+        bob: {id: 'bob', partnerId: ''},
+      },
+    });
+
+    const summary = await backfillRecordFamilyIdsImpl(db);
+
+    assert.strictEqual(summary.skippedReasons.notMutual, 1);
+    assert.strictEqual(summary.stamped, 0);
+    assert.strictEqual(db._docs.expenses.ex1.familyId, undefined);
+  });
+
+  it('skips an unpaired account without counting it as a failure', async () => {
+    const db = fakeDb({
+      users: {solo: {id: 'solo'}},
+      expenses: {ex1: {id: 'ex1', createdByFirebaseUid: 'solo'}},
+    });
+
+    const summary = await backfillRecordFamilyIdsImpl(db);
+
+    assert.strictEqual(summary.skippedReasons.unpaired, 1);
+    assert.strictEqual(summary.failed, 0);
+    assert.strictEqual(db._docs.expenses.ex1.familyId, undefined);
+  });
+
+  it('never stamps a record belonging to somebody outside the pair', async () => {
+    const db = pairedDb({
+      expenses: {
+        ex1: {id: 'ex1', createdByFirebaseUid: 'alice'},
+        ex2: {id: 'ex2', createdByFirebaseUid: 'stranger'},
+      },
+    });
+
+    await backfillRecordFamilyIdsImpl(db);
+
+    assert.strictEqual(db._docs.expenses.ex1.familyId, 'alice__bob');
+    assert.strictEqual(db._docs.expenses.ex2.familyId, undefined);
+  });
+
+  it('counts a per-user failure without abandoning the rest of the run', async () => {
+    const db = pairedDb({
+      users: {
+        alice: {id: 'alice', partnerId: 'bob'},
+        bob: {id: 'bob', partnerId: 'alice'},
+        broken: {id: 'broken', partnerId: {not: 'a string'}},
+      },
+    });
+
+    const summary = await backfillRecordFamilyIdsImpl(db);
+
+    // The malformed row is not a string, so it is read as unpaired rather than crashing.
+    assert.strictEqual(summary.stamped, 6);
+    assert.strictEqual(summary.failed, 0);
+  });
+});

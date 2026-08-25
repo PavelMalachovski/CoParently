@@ -41,6 +41,30 @@ service cloud.firestore {
                .data.get('partnerId', '') == request.auth.uid;
     }
 
+    // True when [familyId] names a co-parenting relationship the caller is one of the two
+    // adults in.
+    //
+    // **No document read.** The id is `FamilyKey.of(uidA, uidB)` — the two uids sorted and
+    // joined — so membership is the id itself, the same reasoning `custody_models`' `allow get`
+    // already applies to `modelId`. That keeps this cheap enough to sit on a per-document read
+    // rule, and it works for a pair whose `families/{id}` has not been written yet.
+    //
+    // It grants nothing a caller did not already have. A record's `familyId` is written by
+    // whoever writes the record, and the create rules require `createdByFirebaseUid` to be the
+    // caller — so a person can only put their own uid into a family id on a document that is
+    // already theirs. Naming a family they are not in makes the record readable by those two
+    // and not by them, which is sharing, not escalation.
+    //
+    // The empty string is "no family", which is what an unpaired parent's records carry and
+    // what every document written before the field existed reads as. It matches nobody: an
+    // empty id splits to a single empty part, and no uid is blank.
+    function isFamilyMember(familyId) {
+      return isAuthenticated() &&
+             familyId is string &&
+             familyId.size() > 0 &&
+             request.auth.uid in familyId.split('__');
+    }
+
     // Validate string field length (inclusive bounds).
     function isValidLength(str, minLen, maxLen) {
       return str is string && str.size() >= minLen && str.size() <= maxLen;
@@ -474,17 +498,34 @@ service cloud.firestore {
     }
 
     // ---- Expenses (receipt sync) --------------------------------------
-    // Only the two paired parents involved may read/write. The document schema
-    // (ExpenseRepositoryImpl.addExpense) has no `sharedWith` field — expenses carry
-    // `splitBetween` for cost-splitting math, not visibility — so partner access is
-    // gated the same way as `users`: via the paired `partnerId` relationship, not a
-    // per-document list. An earlier version of this rule referenced `sharedWith` here,
-    // which never exists on an expense document, so the partner branch could never be
-    // true and the co-parent's expenses were unreadable even by document id.
+    // The one collection where "a co-parent of the author" was standing in for "in the same
+    // family", and the only real leak a second co-parent opens (docs/DESIGN-multi-family.md,
+    // M-4). An expense carries no per-document audience — `splitBetween` is cost-splitting
+    // math, not visibility — so the rule asked `isPartnerOf(createdByFirebaseUid)`, which is
+    // true for *every* co-parent of the author. A person with two co-parents therefore showed
+    // each of them everything they had ever spent, in both families.
+    //
+    // The audience is now the record's own family. `sharedWith`-style per-document lists were
+    // considered and rejected here: an expense would need one written on it, and the field
+    // would then have to be pinned against every writer, where `familyId` needs no pinning
+    // because it is only ever written by the creator (update below is creator-only).
+    //
+    // **There is deliberately no `isPartnerOf` fallback for an unstamped document, and the
+    // reason is sharper than tidiness: a fallback re-opens the leak it was added to soften.**
+    // Firestore validates a *query* by its structure, not by running the rule over the results
+    // (CLAUDE.md item 12). While the rule still mentioned `isPartnerOf(createdByFirebaseUid)`
+    // on any branch, the old client query — `whereIn('createdByFirebaseUid', [me, partner])` —
+    // structurally satisfied it, so Firestore accepted the whole query and handed back both
+    // families' expenses. Proved against the emulator: with the branch, that query returned a
+    // second family's document; without it, the query is rejected outright.
+    //
+    // The cost is that a document carrying no `familyId` is readable only by its author. That
+    // is why `backfillRecordFamilyIds` must finish **before** these rules are deployed, not
+    // after — see the ordered steps in docs/DESIGN-multi-family.md, M-4.
     match /expenses/{expenseId} {
       allow read: if isAuthenticated() && (
         resource.data.createdByFirebaseUid == request.auth.uid ||
-        isPartnerOf(resource.data.createdByFirebaseUid)
+        isFamilyMember(resource.data.get('familyId', ''))
       );
 
       allow create: if isAuthenticated() &&
@@ -510,9 +551,12 @@ service cloud.firestore {
     // way as `expenses`: the client now stamps `createdByFirebaseUid` on write and
     // filters its read query on it; the rule gates on that field plus `isPartnerOf`.
     match /budgets/{budgetId} {
+      // Same move as `expenses` above, and read its comment for why: a budget carries no
+      // audience either, so `isPartnerOf(author)` showed both of a person's co-parents every
+      // budget they had ever set.
       allow read: if isAuthenticated() && (
         resource.data.createdByFirebaseUid == request.auth.uid ||
-        isPartnerOf(resource.data.createdByFirebaseUid)
+        isFamilyMember(resource.data.get('familyId', ''))
       );
 
       allow create: if isAuthenticated() &&
@@ -520,10 +564,15 @@ service cloud.firestore {
                       request.resource.data.keys().hasAll(
                         ['category', 'monthlyLimit', 'createdByFirebaseUid']);
 
+      // Either parent of the budget's own family may edit it — budgets are a shared plan,
+      // unlike an expense, which is one parent's record of what they paid. Scoped to the
+      // family for the same reason the read is: `isPartnerOf(author)` would let a co-parent
+      // from another family rewrite this one's limits.
       allow update: if isAuthenticated() && (
         resource.data.createdByFirebaseUid == request.auth.uid ||
-        isPartnerOf(resource.data.createdByFirebaseUid)
-      ) && request.resource.data.createdByFirebaseUid == resource.data.createdByFirebaseUid;
+        isFamilyMember(resource.data.get('familyId', ''))
+      ) && request.resource.data.createdByFirebaseUid == resource.data.createdByFirebaseUid &&
+        request.resource.data.get('familyId', '') == resource.data.get('familyId', '');
 
       allow delete: if isAuthenticated() &&
                       resource.data.createdByFirebaseUid == request.auth.uid;
