@@ -45,8 +45,15 @@ value class SplitRatio(val momShareBasisPoints: Int) {
     /** Slot 1's share as a fraction, for multiplying an amount. */
     val momShare: Double get() = momShareBasisPoints.toDouble() / FULL_SHARE_BASIS_POINTS
 
-    /** Slot 2's share as a fraction. */
-    val dadShare: Double get() = 1.0 - momShare
+    /**
+     * Slot 2's share as a fraction.
+     *
+     * Divided out of the stored basis points rather than written `1.0 - momShare`, which is not
+     * the same number: a 70/30 split came back as `0.30000000000000004` and every expense priced
+     * by it carried that tail. Basis points are the storage unit precisely so the arithmetic is
+     * exact; taking the complement in `Double` throws that away at the last step.
+     */
+    val dadShare: Double get() = dadShareBasisPoints.toDouble() / FULL_SHARE_BASIS_POINTS
 
     /** Slot 1's share as a whole percent, for the picker and the label. */
     val momPercent: Int get() = momShareBasisPoints / BASIS_POINTS_PER_PERCENT
