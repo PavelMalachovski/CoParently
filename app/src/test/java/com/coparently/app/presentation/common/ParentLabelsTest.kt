@@ -11,7 +11,11 @@ class ParentLabelsTest {
     private val me = NamedParent(
         uid = "u1",
         slot = "mom",
-        name = "Olya"
+        name = "Olya",
+        // The signed-in parent's own colour rides along in the projection now that each parent
+        // picks one; the co-parent's fixture leaves it null, which is what a profile that
+        // predates the choice carries.
+        colorCode = "#FF4081"
     )
     private val coParent = NamedParent(
         uid = "u2",

@@ -9,6 +9,7 @@ import com.coparently.app.domain.expenses.WHOLE_PERCENT
 import com.coparently.app.domain.model.ChildInfo
 import com.coparently.app.domain.model.EmergencyContact
 import com.coparently.app.domain.model.FamilyKind
+import com.coparently.app.presentation.theme.ParentColorChoice
 import com.coparently.app.domain.model.MedicalProfile
 import com.coparently.app.domain.model.Pet
 import com.coparently.app.domain.model.PetSpecies
@@ -131,6 +132,14 @@ data class OnboardingUiState(
     val name: String = "",
     val dateOfBirth: LocalDate? = null,
     val phone: String = "",
+    /**
+     * The colour this parent wants to be drawn in, or null until they touch the swatches.
+     *
+     * Null rather than a pre-selected default so the wizard does not claim an answer nobody
+     * gave: an untouched profile keeps whatever colour its slot has always drawn in, and
+     * [OnboardingViewModel.saveProfile] leaves the stored value alone.
+     */
+    val parentColor: ParentColorChoice? = null,
     val allergies: List<String> = emptyList(),
     val medicalProfile: MedicalProfile = MedicalProfile(),
     val children: List<ChildDraft> = emptyList(),
@@ -327,6 +336,10 @@ class OnboardingViewModel @Inject constructor(
 
     /** Updates the parent's phone number, free text as typed. */
     fun updatePhone(phone: String) = _uiState.update { it.copy(phone = phone) }
+
+    /** Records the colour picked on the profile step. */
+    fun updateParentColor(choice: ParentColorChoice) =
+        _uiState.update { it.copy(parentColor = choice) }
 
     /** Updates the parent's allergies. */
     fun updateAllergies(allergies: List<String>) = _uiState.update { it.copy(allergies = allergies) }
@@ -613,7 +626,10 @@ class OnboardingViewModel @Inject constructor(
                 dateOfBirth = state.dateOfBirth,
                 phone = state.phone.ifBlank { null },
                 allergies = state.allergies,
-                medicalProfile = state.medicalProfile
+                medicalProfile = state.medicalProfile,
+                // Only when they actually chose. An untouched swatch strip must not overwrite a
+                // colour the parent set in Settings on a previous run through this wizard.
+                colorCode = state.parentColor?.storedCode ?: fresh.colorCode
             )
         )
     }

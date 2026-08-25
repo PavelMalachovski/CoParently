@@ -61,7 +61,10 @@ class ParentsSourceTest {
 
         source.observe().test {
             val parents = awaitItem()
-            assertEquals(NamedParent("u1", "mom", "Olya"), parents.me)
+            // `colorCode` rides along now that a parent picks their own colour: the signed-in
+            // parent's comes off their Room row, the co-parent's off their profile document —
+            // null here, because that fixture predates anyone choosing.
+            assertEquals(NamedParent("u1", "mom", "Olya", colorCode = "#FF4081"), parents.me)
             assertEquals(NamedParent("u2", "dad", "Pavel"), parents.coParent)
             assertEquals(true, parents.isPaired)
             cancelAndIgnoreRemainingEvents()
