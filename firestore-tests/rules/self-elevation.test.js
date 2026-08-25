@@ -188,3 +188,44 @@ describe('a shared partner may edit an event but not its audience', () => {
         env.authenticatedContext(MOM).firestore().doc(PATH).update({sharedWith: [MOM]}));
   });
 });
+
+/**
+ * `google_oauth/{uid}` — the refresh-token fingerprints (SEC-1 §2).
+ *
+ * Moving the OAuth client secret out of the APK closes one hole and would open another if the
+ * refresh callable refreshed whatever it was handed: it would become an oracle turning any
+ * stolen refresh token into an access token. The fingerprint is what stops that, so the
+ * document has to be unreadable as well as unwritable — a client that could read it could test
+ * candidate tokens offline, and one that could write it could claim somebody else's.
+ */
+describe('google_oauth fingerprints are closed to every client', () => {
+  let env;
+
+  before(async () => { env = await testEnv(PROJECT, CURRENT_RULES); });
+  beforeEach(async () => { await env.clearFirestore(); });
+
+  const PATH = `google_oauth/${MOM}`;
+  const FINGERPRINT = {refreshTokenHash: 'a'.repeat(64), updatedAtMillis: 1};
+
+  it('refuses the account its own fingerprint', async () => {
+    await seed(env, {[PATH]: FINGERPRINT});
+    await assertFails(env.authenticatedContext(MOM).firestore().doc(PATH).get());
+  });
+
+  it('refuses the account writing its own', async () => {
+    await assertFails(
+        env.authenticatedContext(MOM).firestore().doc(PATH).set(FINGERPRINT));
+  });
+
+  it('refuses somebody else claiming it', async () => {
+    await seed(env, {[PATH]: FINGERPRINT});
+    await assertFails(
+        env.authenticatedContext(DAD).firestore().doc(PATH)
+            .set({refreshTokenHash: 'b'.repeat(64)}));
+  });
+
+  it('refuses deleting it, which would re-open trust-on-first-use', async () => {
+    await seed(env, {[PATH]: FINGERPRINT});
+    await assertFails(env.authenticatedContext(MOM).firestore().doc(PATH).delete());
+  });
+});

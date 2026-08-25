@@ -319,6 +319,22 @@ service cloud.firestore {
       allow delete: if isOwner(userId);
     }
 
+    // ---- Google OAuth fingerprints ---------------------------------------
+    // `google_oauth/{uid}` holds a SHA-256 of the refresh token that account was issued
+    // (SEC-1 §2). **No client may touch it, in either direction.**
+    //
+    // The read side matters as much as the write side, and less obviously. The document exists
+    // so that moving the OAuth client secret out of the APK does not leave the refresh callable
+    // as an oracle that would refresh any stolen token for anybody — it answers "is this the
+    // token this account was issued". A client that could read the fingerprint could test
+    // candidate tokens offline; one that could write it could claim somebody else's.
+    //
+    // `exchangeGoogleAuthCode` and `refreshGoogleAccessToken` run on Admin credentials and
+    // bypass these rules, which is what makes a flat denial workable rather than merely strict.
+    match /google_oauth/{userId} {
+      allow read, write: if false;
+    }
+
     // ---- Friend profiles ------------------------------------------------
     // A trusted third person (guardian, friend, grandparent — item 16) authors their own
     // profile; the two parents read it but never write it, so nobody puts words in a
@@ -806,7 +822,8 @@ service cloud.firestore {
         'custody_proposal_proposed', 'custody_proposal_accepted', 'custody_proposal_declined',
         'day_swap_offered', 'day_swap_accepted', 'day_swap_declined',
         'day_swap_group_offered', 'day_swap_group_accepted', 'day_swap_group_declined',
-        'split_ratio_proposed', 'split_ratio_accepted', 'split_ratio_declined'
+        'split_ratio_proposed', 'split_ratio_accepted', 'split_ratio_declined',
+        'split_ratio_agreed'
       ];
     }
 

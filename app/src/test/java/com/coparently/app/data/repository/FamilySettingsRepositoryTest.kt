@@ -163,6 +163,59 @@ class FamilySettingsRepositoryTest {
         coVerify(exactly = 0) { dataSource.setSettings(any(), any()) }
     }
 
+    // ---- UX-18: the first agreement is announced -----------------------------------------
+
+    @Test
+    fun `a ratio agreed before pairing is announced to the co-parent`() = runTest {
+        // It becomes the pair's agreement of record the moment it is written, priced onto every
+        // expense from then on. Until this, the co-parent learned of it only by opening Settings.
+        val fcmService = mockk<FcmService>(relaxed = true)
+        coEvery { dataSource.getSettings(any()) } returns null
+        coEvery { dataSource.setSettings(any(), any()) } returns Unit
+
+        repositoryWith(fcmService, cachedBasisPoints = SEVENTY_IN_BASIS_POINTS)
+            .publishCachedRatioIfMissing()
+
+        val queued = slot<Map<String, String>>()
+        coVerify { fcmService.queueNotificationForUser(PARTNER, capture(queued)) }
+        assertEquals("split_ratio_agreed", queued.captured["type"])
+    }
+
+    @Test
+    fun `the announcement carries a type and no figure`() = runTest {
+        // SEC-3's shape, and `PushPayload` states the reason for this family of types: a push
+        // saying "the split is now 70/30" puts a number a reader may act on onto a lock screen,
+        // written by the other side and unverifiable until the app is opened.
+        val fcmService = mockk<FcmService>(relaxed = true)
+        coEvery { dataSource.getSettings(any()) } returns null
+        coEvery { dataSource.setSettings(any(), any()) } returns Unit
+
+        repositoryWith(fcmService, cachedBasisPoints = SEVENTY_IN_BASIS_POINTS)
+            .publishCachedRatioIfMissing()
+
+        val queued = slot<Map<String, String>>()
+        coVerify { fcmService.queueNotificationForUser(PARTNER, capture(queued)) }
+        assertEquals(setOf("type"), queued.captured.keys)
+    }
+
+    @Test
+    fun `nothing is announced when nothing is published`() = runTest {
+        // The pair already has an agreement, so this pass writes nothing — and a push about a
+        // write that did not happen is worse than silence.
+        val fcmService = mockk<FcmService>(relaxed = true)
+        coEvery { dataSource.getSettings(any()) } returns FamilySettings(
+            ratio = SplitRatio.EVEN,
+            participants = listOf(ME, PARTNER),
+            lastModifiedBy = PARTNER,
+            lastModifiedAtMillis = 1L
+        )
+
+        repositoryWith(fcmService, cachedBasisPoints = SEVENTY_IN_BASIS_POINTS)
+            .publishCachedRatioIfMissing()
+
+        coVerify(exactly = 0) { fcmService.queueNotificationForUser(any(), any()) }
+    }
+
     // ---- UX-17: taking a proposal back ---------------------------------------------------
 
     @Test
@@ -235,8 +288,11 @@ class FamilySettingsRepositoryTest {
     )
 
     /** A repository whose only interesting collaborator is [fcmService]. */
-    private fun repositoryWith(fcmService: FcmService): FamilySettingsRepository {
-        every { preferences.getSplitRatioBasisPoints() } returns null
+    private fun repositoryWith(
+        fcmService: FcmService,
+        cachedBasisPoints: Int? = null
+    ): FamilySettingsRepository {
+        every { preferences.getSplitRatioBasisPoints() } returns cachedBasisPoints
         every { preferences.putSplitRatioBasisPoints(any()) } returns Unit
         every { preferences.putSplitRatioSlot(any()) } returns Unit
         every { preferences.getSplitRatioSlot() } returns "mom"

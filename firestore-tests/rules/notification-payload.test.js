@@ -169,6 +169,11 @@ describe('SEC-3: notification payloads', () => {
         'custody_proposal_proposed', 'custody_proposal_accepted',
         'custody_proposal_declined',
         'day_swap_offered', 'day_swap_accepted', 'day_swap_declined',
+        'day_swap_group_offered', 'day_swap_group_accepted', 'day_swap_group_declined',
+        'split_ratio_proposed', 'split_ratio_accepted', 'split_ratio_declined',
+        // UX-18. The pair's first agreement, carried over from before they paired — its own
+        // type because it is not a proposal and there is nothing to confirm or decline.
+        'split_ratio_agreed',
       ];
       for (const type of types) {
         await assertSucceeds(

@@ -61,7 +61,6 @@ invocation is yours.
 | --- | --- | --- | --- |
 | **M-5** | Multi-family cleanup: delete `partnerId`, `User.role`, `Event.sharedWith`, `isPartnerOf` — **after** the ops steps in REL-3 | P2 | M |
 | **M-8** | M-4's leftovers: badges that count across families, `familyId` on pushes, a switcher chip in the top bar | P2 | M |
-| **SEC-1 §2** | OAuth token exchange moves to a Cloud Function — the client secret stops shipping in the APK | P0 | M |
 | **SEC-2** | Room is not encrypted at rest | P1 | M |
 | **CQ-5** | Sync downloads the entire event collection every 15 minutes | P1 | M |
 | **CQ-6 + CQ-8** | The chat's Room query is unbounded, and a failed listener gives up for the life of the process. One piece of work, not two | P2 | M |
@@ -75,7 +74,6 @@ invocation is yours.
 | **UX-14** | Four different brand purples | P3 | S |
 | **UX-15** | `ParentColors` is adopted at roughly a quarter | P3 | S |
 | **UX-16** | Drag an event to reschedule it (MVP 3) | P3 | S |
-| **UX-18** | A ratio agreed before pairing becomes the pair's agreement silently | P2 | S |
 | **MON-2** | Verify the market facts — most of them are public pages | P0 | S |
 | **MON-3** | Export to PDF/CSV — the first paid feature (needs MON-4 first) | P1 | M |
 | **MON-4** | Decide what a court-facing record guarantees | P1 | M |
@@ -134,9 +132,7 @@ In this order, and each is genuinely finishable in the cloud:
    grows.
 2. **MON-4 → MON-3** — settle what the record guarantees, then build the export. In that order: an
    export of a record nobody can vouch for is worth nothing to a lawyer.
-3. **UX-18** — the last of the honesty gaps: a split ratio agreed before pairing becomes the
-   pair's agreement of record without telling the other parent. (**CQ-20** and **UX-17**, which
-   were the other two, are done.)
+3. *(The three honesty gaps — **CQ-20**, **UX-17**, **UX-18** — are done.)*
 
 *(**M-6** and **CQ-19**, which headed this list, are done.)*
 
@@ -279,6 +275,9 @@ is lost, since Room is the source of truth, but it is alarming to watch.
 
 - [ ] Set `functions/.env`: `SENDGRID_API_KEY`, `INVITE_FROM_EMAIL`, `INVITE_FROM_NAME`. Until they
       are set, invitations record `emailDelivery: 'not_configured'` and are not sent.
+- [ ] Set `GOOGLE_OAUTH_CLIENT_ID` and `GOOGLE_OAUTH_CLIENT_SECRET` in the same file (SEC-1 §2).
+      **Google Calendar sign-in does not work until these are set and the functions deployed** —
+      the client secret is no longer in the APK, so the app has no other way to redeem a code.
 - [ ] Verify the sending domain (SPF/DKIM), or invitations land in spam — which looks identical to
       not being sent.
 - [ ] **Decide the Firestore region.** An EU region makes the whole GDPR story simpler and cannot
@@ -380,9 +379,23 @@ original.
      project has already shipped one broken delete rule by testing a rule some other way. **Settle
      how it will be verified before writing it** — a staging bucket against a real project is the
      likely answer.
-2. **OAuth token exchange** — the Google client secret ships in every APK, with no PKCE. Carried
-   over unfixed from the July 2026 audit. This is what the proxy was really for, and it is ordinary
-   cloud work: a callable, its mocha tests, and the Android side compiled by CI.
+2. ~~**OAuth token exchange** — the Google client secret ships in every APK.~~ **Done.**
+   `exchangeGoogleAuthCode` and `refreshGoogleAccessToken` hold the secret in the functions'
+   environment; the client sends its authorization code and gets tokens back, and still stores
+   them where it always did — moving their storage server-side is a separate, larger decision.
+
+   The part worth knowing is what the move would have opened if done naively. A refresh callable
+   that refreshed whatever it was handed is an **oracle**: it turns any stolen refresh token into
+   an access token for any signed-in caller, which is precisely the capability that taking the
+   secret out of the APK removes. So the exchange records a SHA-256 of the refresh token against
+   the caller's uid (`google_oauth/{uid}`, denied to every client in both directions) and the
+   refresh grant refuses a token that is not the one this account was issued. An unknown token is
+   refused rather than trusted on first use, because trust-on-first-use hands the account to
+   whoever presents a stolen token first; the cost is one re-consent for anybody whose Calendar
+   was connected before this shipped, surfacing as the reconnect prompt the app already has.
+
+   PKCE is untouched and still absent. It is the *other* half of this line and it is not the half
+   that was leaking a credential.
 3. **Model calls, if AI ever returns.** The Gemini key used to ship in the APK too; the subsystem
    and the key are gone (**MON-7**), so this is a precondition rather than a live hole — nothing
    goes to a model again without the proxy in front of it.
@@ -738,19 +751,22 @@ is the parent's own open question and the way out of it is an answer or a withdr
 co-parent's banner is derived from the document — a type for it would cost the four places SEC-3
 requires to agree, to announce that something stopped existing.
 
-### UX-18 · P2 · S · A ratio agreed before pairing reaches the pair silently
+### UX-18 · **DONE** · A ratio agreed before pairing reached the pair silently
 
-**Where:** ☁️ cloud — four places per CLAUDE.md item 15, plus five locales.
+`publishCachedRatioIfMissing` wrote `family_settings/{pairId}` with no `notifyPartner`, so a parent
+who set 70/30 in the wizard had it become the pair's agreement of record — priced onto every
+expense from that moment — while the co-parent learned of it only by opening Settings.
 
-`FamilySettingsRepository.publishCachedRatioIfMissing` writes `family_settings/{pairId}` with no
-`notifyPartner`, where `submitRatio`'s propose branch sends `PushPayload.SPLIT_RATIO_PROPOSED`.
-Deliberate as far as it goes — this is the *first* agreement, so there is no proposal to answer —
-but the effect is that a parent who set 70/30 in the wizard has it become the pair's agreement of
-record, priced onto every expense from that moment, and the co-parent learns of it only by opening
-Settings. The honest fix is a push type of its own — an agreement, not a proposal: "the split is now
-X/Y, set before you paired". Do **not** fix it by routing the publish through `propose`: an
-unanswered proposal would leave the pair splitting evenly, which is the exact bug
-`publishCachedRatioIfMissing` was written to end.
+`PushPayload.SPLIT_RATIO_AGREED`, the four places CLAUDE.md item 15 requires to agree, and ten
+strings across five locales. Two things it does not do, both deliberate:
+
+- **It does not route through `propose`**, which is the tempting one-line fix. An unanswered
+  proposal leaves the pair splitting evenly, which is the exact bug `publishCachedRatioIfMissing`
+  was written to end.
+- **It carries no figure.** This item first proposed the wording "the split is now X/Y" — but the
+  three sibling types state the rule already, and it holds here: a push naming a number a reader
+  may act on puts it on a lock screen, written by the other side and unverifiable until the app is
+  opened. The app is where the number, and the setting that changes it, actually are.
 
 ---
 

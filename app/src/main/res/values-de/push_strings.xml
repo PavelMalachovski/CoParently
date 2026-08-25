@@ -52,4 +52,6 @@
     <string name="push_split_ratio_accepted_body">Dein Co-Elternteil hat der neuen Aufteilung zugestimmt. Sie gilt ab jetzt.</string>
     <string name="push_split_ratio_declined_title">Kostenaufteilung abgelehnt</string>
     <string name="push_split_ratio_declined_body">Dein Co-Elternteil hat die neue Aufteilung abgelehnt. Es hat sich nichts geändert.</string>
+    <string name="push_split_ratio_agreed_title">Kostenaufteilung vereinbart</string>
+    <string name="push_split_ratio_agreed_body">Die Aufteilung wurde festgelegt, bevor Sie verbunden waren. Öffnen Sie die Einstellungen.</string>
 </resources>

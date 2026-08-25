@@ -415,6 +415,11 @@ class CoPlanlyMessagingService : FirebaseMessagingService() {
                 R.string.push_split_ratio_declined_body,
                 BodyArgs.NONE
             ),
+            PushPayload.SPLIT_RATIO_AGREED to PushTextSpec(
+                R.string.push_split_ratio_agreed_title,
+                R.string.push_split_ratio_agreed_body,
+                BodyArgs.NONE
+            ),
             PushPayload.PAIRING_ACCEPTED to PushTextSpec(
                 R.string.push_pairing_accepted_title,
                 R.string.push_pairing_accepted_body,

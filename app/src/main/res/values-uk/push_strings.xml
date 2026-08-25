@@ -58,4 +58,6 @@
     <string name="push_split_ratio_accepted_body">Другий з батьків погодився з новим поділом. Він діє для нових витрат.</string>
     <string name="push_split_ratio_declined_title">Поділ витрат відхилено</string>
     <string name="push_split_ratio_declined_body">Другий з батьків відхилив новий поділ. Нічого не змінилося.</string>
+    <string name="push_split_ratio_agreed_title">Пропорцію витрат узгоджено</string>
+    <string name="push_split_ratio_agreed_body">Пропорцію, за якою діляться витрати, було задано ще до об\'єднання. Відкрийте налаштування.</string>
 </resources>

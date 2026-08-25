@@ -118,6 +118,23 @@ object PushPayload {
     const val SPLIT_RATIO_ACCEPTED = "split_ratio_accepted"
     const val SPLIT_RATIO_DECLINED = "split_ratio_declined"
 
+    /**
+     * The pair's **first** agreement, carried over from before they paired (UX-18).
+     *
+     * A separate type from [SPLIT_RATIO_PROPOSED] because it is not a proposal and must not read
+     * as one: there is nothing to confirm or decline. A parent who set 70/30 in the onboarding
+     * wizard has it published as the pair's agreement of record the moment they pair, priced
+     * onto every expense from then on, and until this existed the co-parent learned of it only
+     * by opening Settings.
+     *
+     * Routing it through the proposal path instead is the tempting fix and the wrong one: an
+     * unanswered proposal leaves the pair splitting evenly, which is the exact bug
+     * `publishCachedRatioIfMissing` was written to end.
+     *
+     * No figure rides along, for the reason the three types above give.
+     */
+    const val SPLIT_RATIO_AGREED = "split_ratio_agreed"
+
     // ---- types only a Cloud Function may produce -------------------------------
 
     /** Queued by `acceptPairingInvitation`. */
@@ -159,7 +176,8 @@ object PushPayload {
         DAY_SWAP_GROUP_DECLINED,
         SPLIT_RATIO_PROPOSED,
         SPLIT_RATIO_ACCEPTED,
-        SPLIT_RATIO_DECLINED
+        SPLIT_RATIO_DECLINED,
+        SPLIT_RATIO_AGREED
     )
 
     /**

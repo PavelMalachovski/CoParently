@@ -2917,3 +2917,246 @@ exports.deleteAccount = functions.runWith({timeoutSeconds: 540}).https.onCall(
 
       return removed;
     });
+
+// ---- Google OAuth token exchange (SEC-1 §2) ---------------------------------
+//
+// The Google **web** OAuth client needs a client secret to exchange an authorization code and
+// to refresh an access token, and until this existed that secret was compiled into every APK
+// (`BuildConfig.GOOGLE_CLIENT_SECRET`). An APK is not a secret: anyone who installs the app has
+// it, and with it can mint tokens against the project's OAuth client.
+//
+// The secret now lives only in the functions' environment. The client sends its authorization
+// code here and gets tokens back.
+
+/** Google's token endpoint, which both grants below post to. */
+const GOOGLE_TOKEN_HOST = 'oauth2.googleapis.com';
+
+/** The path on [GOOGLE_TOKEN_HOST]. */
+const GOOGLE_TOKEN_PATH = '/token';
+
+/** Where a uid's refresh-token fingerprint is recorded. Nothing but Admin ever reads it. */
+const GOOGLE_OAUTH_COLLECTION = 'google_oauth';
+
+/**
+ * The OAuth client this deployment speaks for, or null when it is not configured.
+ *
+ * Read from `process.env` on every call rather than cached, for the reason
+ * `backfillAdminUids` gives: a value bound at module load is a value a re-deploy cannot change.
+ *
+ * @return {?{clientId: string, clientSecret: string}} The configured client, or null.
+ */
+function googleOAuthConfig() {
+  const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID || '';
+  const clientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET || '';
+  if (!clientId || !clientSecret) {
+    return null;
+  }
+  return {clientId, clientSecret};
+}
+
+exports.googleOAuthConfig = googleOAuthConfig;
+
+/**
+ * Posts a form to Google's token endpoint and returns the parsed response.
+ *
+ * Takes the same shape as [sendViaSendGrid]: a plain `https.request`, so nothing is added to
+ * the dependency graph, and the body is drained on failure so the error says what Google said
+ * rather than only its status code.
+ *
+ * @param {!Object<string, string>} form The form fields to post.
+ * @return {!Promise<!Object>} Google's parsed JSON response.
+ */
+function postToGoogleToken(form) {
+  const https = require('https');
+  const payload = new URLSearchParams(form).toString();
+
+  return new Promise((resolve, reject) => {
+    const request = https.request({
+      hostname: GOOGLE_TOKEN_HOST,
+      path: GOOGLE_TOKEN_PATH,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Content-Length': Buffer.byteLength(payload),
+      },
+    }, (response) => {
+      const chunks = [];
+      response.on('data', (chunk) => chunks.push(chunk));
+      response.on('end', () => {
+        const body = Buffer.concat(chunks).toString('utf8');
+        if (response.statusCode >= 200 && response.statusCode < 300) {
+          try {
+            resolve(JSON.parse(body));
+          } catch (err) {
+            reject(new Error(`Google returned a body that is not JSON: ${body}`));
+          }
+          return;
+        }
+        reject(new Error(`Google token endpoint said ${response.statusCode}: ${body}`));
+      });
+    });
+    request.on('error', reject);
+    request.write(payload);
+    request.end();
+  });
+}
+
+/**
+ * A stable fingerprint of a refresh token, for binding it to the uid it was issued for.
+ *
+ * A SHA-256 hash, never the token: this document exists so a *stolen* token cannot be used, and
+ * storing the token itself would make the store worth stealing.
+ *
+ * @param {string} refreshToken The token to fingerprint.
+ * @return {string} Hex digest.
+ */
+function refreshTokenFingerprint(refreshToken) {
+  return require('crypto').createHash('sha256').update(refreshToken).digest('hex');
+}
+
+exports.refreshTokenFingerprint = refreshTokenFingerprint;
+
+/**
+ * Exchanges an authorization code for tokens, and records whose refresh token it is.
+ *
+ * **Why the fingerprint.** Moving the secret here closes one hole and would open another if the
+ * refresh grant below simply refreshed whatever it was handed: the function would become an
+ * oracle turning any stolen refresh token into an access token, which is precisely the
+ * capability the secret's removal takes away from an attacker. So the exchange records a hash
+ * of the refresh token against the caller's uid, and the refresh grant refuses a token that is
+ * not the one this account was issued.
+ *
+ * The auth code itself needs no such check: Google issues it for this project's client and to
+ * whoever completed the consent screen, so a caller can only ever redeem their own.
+ *
+ * @param {FirebaseFirestore.Firestore} db Firestore instance.
+ * @param {!{clientId: string, clientSecret: string}} config The OAuth client.
+ * @param {function(!Object<string, string>): !Promise<!Object>} post Posts to Google.
+ * @param {string} uid The signed-in caller.
+ * @param {string} authCode The authorization code to redeem.
+ * @return {!Promise<{accessToken: string, refreshToken: string, expiresInSeconds: number}>}
+ *   The tokens, for the client to store as it always has.
+ */
+async function exchangeGoogleAuthCodeImpl(db, config, post, uid, authCode) {
+  const response = await post({
+    code: authCode,
+    client_id: config.clientId,
+    client_secret: config.clientSecret,
+    grant_type: 'authorization_code',
+    // Google requires the parameter and accepts this value for an installed app redeeming a
+    // code obtained through the native sign-in flow, which is what the app does.
+    redirect_uri: '',
+  });
+
+  const accessToken = response.access_token || '';
+  const refreshToken = response.refresh_token || '';
+  if (!accessToken) {
+    throw new functions.https.HttpsError(
+        'internal', 'Google returned no access token', {reason: 'no-access-token'});
+  }
+
+  if (refreshToken) {
+    await db.collection(GOOGLE_OAUTH_COLLECTION).doc(uid).set({
+      refreshTokenHash: refreshTokenFingerprint(refreshToken),
+      updatedAtMillis: Date.now(),
+    });
+  }
+
+  return {
+    accessToken,
+    refreshToken,
+    expiresInSeconds: Number(response.expires_in) || 0,
+  };
+}
+
+exports.exchangeGoogleAuthCodeImpl = exchangeGoogleAuthCodeImpl;
+
+/**
+ * Refreshes an access token, but only for the refresh token this account was issued.
+ *
+ * A token with no recorded fingerprint is refused rather than trusted on first use: trusting it
+ * would let whoever presents a stolen token first bind it to themselves. The cost is one
+ * re-consent for anybody whose Calendar was connected before this shipped, which is a screen
+ * they have already seen once and the app already prompts for when a refresh fails.
+ *
+ * @param {FirebaseFirestore.Firestore} db Firestore instance.
+ * @param {!{clientId: string, clientSecret: string}} config The OAuth client.
+ * @param {function(!Object<string, string>): !Promise<!Object>} post Posts to Google.
+ * @param {string} uid The signed-in caller.
+ * @param {string} refreshToken The token to refresh with.
+ * @return {!Promise<{accessToken: string, expiresInSeconds: number}>} A fresh access token.
+ */
+async function refreshGoogleAccessTokenImpl(db, config, post, uid, refreshToken) {
+  const snap = await db.collection(GOOGLE_OAUTH_COLLECTION).doc(uid).get();
+  const recorded = snap.exists && snap.data() ? snap.data().refreshTokenHash : '';
+  if (!recorded || recorded !== refreshTokenFingerprint(refreshToken)) {
+    throw new functions.https.HttpsError(
+        'permission-denied',
+        'This refresh token was not issued to this account',
+        {reason: 'unknown-refresh-token'});
+  }
+
+  const response = await post({
+    refresh_token: refreshToken,
+    client_id: config.clientId,
+    client_secret: config.clientSecret,
+    grant_type: 'refresh_token',
+  });
+
+  const accessToken = response.access_token || '';
+  if (!accessToken) {
+    throw new functions.https.HttpsError(
+        'internal', 'Google returned no access token', {reason: 'no-access-token'});
+  }
+
+  return {accessToken, expiresInSeconds: Number(response.expires_in) || 0};
+}
+
+exports.refreshGoogleAccessTokenImpl = refreshGoogleAccessTokenImpl;
+
+/**
+ * Rejects the call when the deployment has no OAuth client configured.
+ *
+ * Visibly unconfigured rather than quietly broken, the same posture
+ * `sendEmailInvitation` takes for its mail provider.
+ *
+ * @return {!{clientId: string, clientSecret: string}} The configured client.
+ */
+function requireGoogleOAuthConfig() {
+  const config = googleOAuthConfig();
+  if (!config) {
+    throw new functions.https.HttpsError(
+        'failed-precondition',
+        'Google OAuth is not configured for this deployment',
+        {reason: 'oauth-not-configured'});
+  }
+  return config;
+}
+
+/** Redeems an authorization code. See [exchangeGoogleAuthCodeImpl]. */
+exports.exchangeGoogleAuthCode = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'Sign in first');
+  }
+  const authCode = data && data.authCode ? String(data.authCode) : '';
+  if (!authCode) {
+    throw new functions.https.HttpsError('invalid-argument', 'authCode is required');
+  }
+  return exchangeGoogleAuthCodeImpl(
+      admin.firestore(), requireGoogleOAuthConfig(), postToGoogleToken,
+      context.auth.uid, authCode);
+});
+
+/** Refreshes an access token. See [refreshGoogleAccessTokenImpl]. */
+exports.refreshGoogleAccessToken = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'Sign in first');
+  }
+  const refreshToken = data && data.refreshToken ? String(data.refreshToken) : '';
+  if (!refreshToken) {
+    throw new functions.https.HttpsError('invalid-argument', 'refreshToken is required');
+  }
+  return refreshGoogleAccessTokenImpl(
+      admin.firestore(), requireGoogleOAuthConfig(), postToGoogleToken,
+      context.auth.uid, refreshToken);
+});

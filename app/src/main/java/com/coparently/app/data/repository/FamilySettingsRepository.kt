@@ -194,6 +194,15 @@ class FamilySettingsRepository @Inject constructor(
             // The document is the record now; the cache goes back to merely mirroring it, and the
             // capture slot has done its one job.
             cacheAgreedRatio(anchored)
+            // **And the co-parent is told (UX-18).** This write makes one parent's wizard answer
+            // the pair's agreement of record, priced onto every expense from this moment; until
+            // it was announced the other parent learned of it only by opening Settings.
+            //
+            // Its own type, not `SPLIT_RATIO_PROPOSED`: there is nothing here to confirm or
+            // decline, and routing it through the proposal path — the tempting fix — would leave
+            // an unanswered proposal splitting the pair evenly, which is the exact bug this
+            // method was written to end.
+            notifyPartner(pair, PushPayload.SPLIT_RATIO_AGREED)
         }
     }
 

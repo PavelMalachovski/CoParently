@@ -58,4 +58,6 @@
     <string name="push_split_ratio_accepted_body">Второй родитель согласился с новым делением. Оно действует для новых расходов.</string>
     <string name="push_split_ratio_declined_title">Деление расходов отклонено</string>
     <string name="push_split_ratio_declined_body">Второй родитель отклонил новое деление. Ничего не изменилось.</string>
+    <string name="push_split_ratio_agreed_title">Пропорция расходов согласована</string>
+    <string name="push_split_ratio_agreed_body">Пропорция, по которой делятся расходы, была задана ещё до объединения. Откройте настройки.</string>
 </resources>

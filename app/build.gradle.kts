@@ -63,8 +63,6 @@ android {
             isMinifyEnabled = false
             buildConfigField("Boolean", "ENABLE_CRASHLYTICS", "false")
             buildConfigField("Boolean", "ENABLE_ANALYTICS", "false")
-            // Google OAuth client secret — never committed; supplied via ~/.gradle/gradle.properties or env
-            buildConfigField("String", "GOOGLE_CLIENT_SECRET", "\"${project.findProperty("GOOGLE_CLIENT_SECRET") ?: System.getenv("GOOGLE_CLIENT_SECRET") ?: ""}\"")
         }
 
         release {
@@ -75,8 +73,6 @@ android {
             )
             buildConfigField("Boolean", "ENABLE_CRASHLYTICS", "true")
             buildConfigField("Boolean", "ENABLE_ANALYTICS", "true")
-            // Google OAuth client secret — never committed; supplied via ~/.gradle/gradle.properties or env
-            buildConfigField("String", "GOOGLE_CLIENT_SECRET", "\"${project.findProperty("GOOGLE_CLIENT_SECRET") ?: System.getenv("GOOGLE_CLIENT_SECRET") ?: ""}\"")
         }
     }
 
