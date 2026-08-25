@@ -397,6 +397,18 @@ Data flow: UI → ViewModel → UseCase → Repository → Room (source of truth
   ratio wants the same. Until then do not delete `withdraw`: the gap is the missing UI, not the
   transition.
 
+- **A ratio agreed before pairing reaches the pair silently.**
+  `FamilySettingsRepository.publishCachedRatioIfMissing` writes `family_settings/{pairId}` with no
+  `notifyPartner`, where `submitRatio`'s propose branch sends `PushPayload.SPLIT_RATIO_PROPOSED`.
+  Deliberate as far as it goes — this is the *first* agreement, so there is no proposal to confirm
+  and nothing for the co-parent to answer — but the effect is that a parent who set 70/30 in the
+  wizard has it become the pair's agreement of record, priced onto every expense from that moment,
+  and the co-parent learns of it only by opening Settings. The honest fix is a push type of its own
+  — an agreement, not a proposal: "the split is now X/Y, set before you paired" — which is four
+  places per CLAUDE.md item 15 and five locales. Do not "fix" it
+  by routing the publish through `propose` instead: an unanswered proposal would leave the pair
+  splitting evenly, which is the exact bug `publishCachedRatioIfMissing` was written to end.
+
 - **`storage.rules` has never been deployed past its July 2026 state, and that is why attaching a
   photo to a pet fails.** The file in this repo covers `receipts/`, `event_images/`,
   `medical_photos/` and `pet_photos/`; the live bucket, on the evidence, still covers only the
