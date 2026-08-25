@@ -1,5 +1,6 @@
 package com.coparently.app.data.local.entity
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 
@@ -77,7 +78,13 @@ data class UserEntity(
      *
      * `NOT NULL DEFAULT 'CZ'` in SQLite, which is what stamps every pre-existing row as Czechia
      * — see [com.coparently.app.domain.model.User.countryCode].
+     *
+     * The default is declared **here as well as in the migration**, and the two must stay
+     * identical: Room compares its expected schema against the real one column by column,
+     * defaults included, so a `DEFAULT 'CZ'` that exists only in the `ALTER TABLE` reads as a
+     * mismatch on the next open.
      */
+    @ColumnInfo(defaultValue = "CZ")
     val countryCode: String = "CZ"
 )
 

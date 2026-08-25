@@ -439,11 +439,13 @@ fun SettingsScreen(
                         icon = Icons.Default.Public,
                         title = stringResource(R.string.country_label),
                         supporting = stringResource(R.string.country_settings_summary),
-                        value = stringResource(country.labelRes()),
                         onClick = {
                             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                             showCountryPicker = true
-                        }
+                        },
+                        // The value in the trailing slot, the way Language and Currency show
+                        // theirs — one trailing control, and it says more than a chevron would.
+                        trailing = { ValueLabel(stringResource(country.labelRes())) }
                     )
                     Divider()
                     // The money agreement lives with the family, not under App preferences: it
