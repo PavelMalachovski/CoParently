@@ -2,7 +2,7 @@
 <SmellBaseline>
   <ManuallySuppressedIssues></ManuallySuppressedIssues>
   <CurrentIssues>
-    <ID>ArgumentListWrapping:AuthViewModel.kt$AuthViewModel$("492948924829-m22iudtoaj437i518qm2p4do8t35vv1g.apps.googleusercontent.com")</ID>
+    <ID>ArgumentListWrapping:CalendarScreen.kt$( viewMode, queryAnchorDate, showHolidays, holidayCountry )</ID>
     <ID>ArgumentListWrapping:CalendarSyncRepository.kt$CalendarSyncRepository$("Network error: ${e.message ?: "Unable to connect to Google Calendar. Please check your internet connection."}")</ID>
     <ID>ArgumentListWrapping:CalendarSyncRepository.kt$CalendarSyncRepository$("Synchronization error: Network operation cannot run on main thread. Please try again.")</ID>
     <ID>ArgumentListWrapping:CalendarSyncRepository.kt$CalendarSyncRepository$(SyncResult.Error("Network error: ${e.message ?: "Unable to connect to Google Calendar. Please check your internet connection."}"))</ID>
@@ -11,26 +11,26 @@
     <ID>ArgumentListWrapping:ChildInfoRepositoryImpl.kt$ChildInfoRepositoryImpl$(emergencyContactsJson, Array&lt;com.coparently.app.domain.model.EmergencyContact&gt;::class.java)</ID>
     <ID>ArgumentListWrapping:ChildInfoRepositoryImpl.kt$ChildInfoRepositoryImpl$(it, com.coparently.app.domain.model.SchoolInfo::class.java)</ID>
     <ID>ArgumentListWrapping:ChildInfoRepositoryImpl.kt$ChildInfoRepositoryImpl$(medicationsJson, Array&lt;com.coparently.app.domain.model.Medication&gt;::class.java)</ID>
+    <ID>ArgumentListWrapping:ContactDirectoryTest.kt$ContactDirectoryTest$( "c1", "Mia", contact("Nina", "Grandmother", "+420111"), contact("Nina", "Neighbour", "+420222") )</ID>
+    <ID>ArgumentListWrapping:ContactDirectoryTest.kt$ContactDirectoryTest$( "c1", "Mia", contact("Nina", "Grandmother", phone = "+420111", alternate = "+420999") )</ID>
     <ID>ArgumentListWrapping:CredentialManagerService.kt$CredentialManagerService$("Google OAuth not configured. Please:\n1. Go to Google Cloud Console\n2. Create OAuth 2.0 Client ID for Web application\n3. Add the Client ID to default_web_client_id in strings.xml\n4. Enable Google Calendar API")</ID>
     <ID>ArgumentListWrapping:CredentialManagerService.kt$CredentialManagerService$("Web Client ID not configured. Please set up OAuth 2.0 Client ID in Google Cloud Console and update default_web_client_id in strings.xml")</ID>
     <ID>ArgumentListWrapping:CzechHolidays.kt$CzechHolidays$(LocalDate.of(year, 10, 28), "Independent Czechoslovak State Day", "Den vzniku samostatného československého státu")</ID>
     <ID>ArgumentListWrapping:CzechHolidays.kt$CzechHolidays$(LocalDate.of(year, 7, 5), "Saints Cyril and Methodius Day", "Den slovanských věrozvěstů Cyrila a Metoděje")</ID>
     <ID>ArgumentListWrapping:CzechHolidays.kt$CzechHolidays$(year, 10, 28)</ID>
     <ID>ArgumentListWrapping:CzechHolidays.kt$CzechHolidays$(year, 7, 5)</ID>
-    <ID>ArgumentListWrapping:EncryptedPreferences.kt$EncryptedPreferences$("EncryptedPreferences", "Critical: Failed to create any SharedPreferences, using in-memory fallback", e2)</ID>
-    <ID>ArgumentListWrapping:EncryptedPreferences.kt$EncryptedPreferences$("EncryptedPreferences", "Failed to create EncryptedSharedPreferences, trying to delete corrupted file", e)</ID>
+    <ID>ArgumentListWrapping:DatabaseMigrations.kt$DatabaseMigrations.&lt;no name provided&gt;$( "events", "expenses", "budgets", "child_info", "pets", "change_requests" )</ID>
     <ID>ArgumentListWrapping:FirebaseAuthService.kt$FirebaseAuthService$("FirebaseAuthService", "Firebase config - projectId: $projectId, apiKey: ${apiKey?.take(10)}...")</ID>
     <ID>ArgumentListWrapping:FirebaseAuthService.kt$FirebaseAuthService$(10)</ID>
     <ID>ArgumentListWrapping:FirestoreUserDataSource.kt$FirestoreUserDataSource$("FirestoreUserDataSource", "Got invitation from ${if (snapshot.metadata.isFromCache) "cache" else "server"}: $invitationId")</ID>
     <ID>ArgumentListWrapping:FirestoreUserDataSource.kt$FirestoreUserDataSource$("FirestoreUserDataSource", "Got invitations from ${if (snapshot.metadata.isFromCache) "cache" else "server"}: $email")</ID>
     <ID>ArgumentListWrapping:FirestoreUserDataSource.kt$FirestoreUserDataSource$("FirestoreUserDataSource", "Got user by email from ${if (snapshot.metadata.isFromCache) "cache" else "server"}: $email")</ID>
     <ID>ArgumentListWrapping:FirestoreUserDataSource.kt$FirestoreUserDataSource$("FirestoreUserDataSource", "Got user from ${if (snapshot.metadata.isFromCache) "cache" else "server"}: $uid")</ID>
-    <ID>ArgumentListWrapping:PairingScreen.kt$(timeRemaining % TimeUnit.HOURS.toMillis(1))</ID>
-    <ID>ArgumentListWrapping:PairingScreen.kt$(timeRemaining % TimeUnit.MINUTES.toMillis(1))</ID>
-    <ID>ArgumentListWrapping:PairingViewModel.kt$PairingViewModel$("PairingViewModel", "Created conversation with partner: $partnerName")</ID>
-    <ID>ArgumentListWrapping:PairingViewModel.kt$PairingViewModel$("PairingViewModel", "Failed to sync user data after accepting invitation", e)</ID>
-    <ID>ArgumentListWrapping:PairingViewModel.kt$PairingViewModel$("PairingViewModel", "Firestore unavailable, creating user from Firebase auth", e)</ID>
-    <ID>ArgumentListWrapping:PairingViewModel.kt$PairingViewModel$("PairingViewModel", "User data not found in local DB, creating from Firebase user")</ID>
+    <ID>ArgumentListWrapping:ParentPalette.kt$ParentColorChoice.BLUE$( "#1976D2", CoPlanlyColors.DadBlue, CoPlanlyColors.DadBlueLight, CoPlanlyColors.DadBlueDark, R.string.parent_color_blue )</ID>
+    <ID>ArgumentListWrapping:ParentPalette.kt$ParentColorChoice.ORANGE$( "#D84315", Color(0xFFD84315), Color(0xFFFFAB91), Color(0xFFBF360C), R.string.parent_color_orange )</ID>
+    <ID>ArgumentListWrapping:ParentPalette.kt$ParentColorChoice.PINK$( "#E91E63", CoPlanlyColors.MomPink, CoPlanlyColors.MomPinkLight, CoPlanlyColors.MomPinkDark, R.string.parent_color_pink )</ID>
+    <ID>ArgumentListWrapping:ParentPalette.kt$ParentColorChoice.PURPLE$( "#7B1FA2", Color(0xFF7B1FA2), Color(0xFFCE93D8), Color(0xFF4A148C), R.string.parent_color_purple )</ID>
+    <ID>ArgumentListWrapping:ParentPaletteTest.kt$ParentPaletteTest$( ParentColorChoice.PURPLE.storedCode, ParentColorChoice.PURPLE.storedCode )</ID>
     <ID>ArgumentListWrapping:QRCodeService.kt$QRCodeService$(x, y, if (bitMatrix[x, y]) android.graphics.Color.BLACK else android.graphics.Color.WHITE)</ID>
     <ID>ArgumentListWrapping:SyncViewModel.kt$SyncViewModel$("Signed in successfully as ${account.displayName ?: account.email}")</ID>
     <ID>ArgumentListWrapping:UseCaseModule.kt$UseCaseModule$( createEvent, updateEvent, deleteEvent, getEvents )</ID>
@@ -38,129 +38,134 @@
     <ID>ArgumentListWrapping:UseCaseModule.kt$UseCaseModule$( eventRepository, eventValidator, analyticsManager, crashlyticsManager, reminderScheduler )</ID>
     <ID>CommentWrapping:ErrorHandler.kt$ErrorHandler$/* retry network call */</ID>
     <ID>CommentWrapping:ErrorHandler.kt$ErrorHandler$/* retry sync */</ID>
+    <ID>ComplexCondition:ChangeRequestsScreen.kt$incoming.isEmpty() &amp;&amp; outgoing.isEmpty() &amp;&amp; daySwapGroups.isEmpty() &amp;&amp; eventsAwaitingMe.isEmpty() &amp;&amp; pendingProposal == null</ID>
     <ID>ComplexCondition:DayWeekView.kt$onDragDrop != null &amp;&amp; draggable &amp;&amp; columnWidthPx &gt; 0f &amp;&amp; hourHeightPx &gt; 0f</ID>
     <ID>ComplexCondition:DayWeekView.kt$showTime &amp;&amp; totalMinutes &gt;= 45 || isResizingStart || isResizingEnd</ID>
-    <ID>ComplexCondition:QRScannerActivity.kt$QRScannerActivity$invitationId != null &amp;&amp; inviterName != null &amp;&amp; inviterEmail != null &amp;&amp; timestamp != null</ID>
+    <ID>CyclomaticComplexMethod:ActivityCardText.kt$ActivityCardText$@StringRes fun resourceFor(kind: ActivityKind): Int</ID>
+    <ID>CyclomaticComplexMethod:ActivityFallbackText.kt$ActivityFallbackText$fun of(announcement: ActivityAnnouncement): String</ID>
     <ID>CyclomaticComplexMethod:AddEditChildInfoScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun AddEditChildInfoScreen( childInfoId: String?, onNavigateBack: () -&gt; Unit, viewModel: ChildInfoViewModel = hiltViewModel() )</ID>
-    <ID>CyclomaticComplexMethod:AddEditEventScreen.kt$@OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class) @Composable fun AddEditEventScreen( eventId: String?, initialDate: LocalDate? = null, initialHour: Int? = null, onSave: () -&gt; Unit, onCancel: () -&gt; Unit, onRequestChange: ((String) -&gt; Unit)? = null, viewModel: EventViewModel = hiltViewModel() )</ID>
+    <ID>CyclomaticComplexMethod:AddEditEventScreen.kt$@OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class) @Composable fun AddEditEventScreen( eventId: String?, initialDate: LocalDate? = null, initialHour: Int? = null, onSave: () -&gt; Unit, onCancel: () -&gt; Unit, onRequestChange: ((String) -&gt; Unit)? = null, viewModel: EventViewModel = hiltViewModel(), friendViewModel: com.coparently.app.presentation.friends.FriendViewModel = hiltViewModel() )</ID>
+    <ID>CyclomaticComplexMethod:AddEditPetScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun AddEditPetScreen( petId: String?, onNavigateBack: () -&gt; Unit, viewModel: PetsViewModel = hiltViewModel() )</ID>
+    <ID>CyclomaticComplexMethod:AddExpenseScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun AddExpenseScreen( onBack: () -&gt; Unit, expenseId: String? = null, viewModel: ExpenseViewModel = hiltViewModel() )</ID>
     <ID>CyclomaticComplexMethod:AuthScreen.kt$@Composable fun AuthScreen( onAuthSuccess: () -&gt; Unit, onViewModelReady: ((AuthViewModel) -&gt; Unit)? = null, viewModel: AuthViewModel = hiltViewModel() )</ID>
-    <ID>CyclomaticComplexMethod:CalendarScreen.kt$@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class) @Composable fun CalendarScreen( onEventClick: (String) -&gt; Unit = {}, onAddEventClick: (LocalDate?, Int?) -&gt; Unit, onSettingsClick: (() -&gt; Unit)? = null, onChangeRequestsClick: (() -&gt; Unit)? = null, onWeeklySummaryClick: (() -&gt; Unit)? = null, eventViewModel: EventViewModel = hiltViewModel(), calendarViewModel: CalendarViewModel = hiltViewModel(), changeRequestViewModel: com.coparently.app.presentation.changerequests.ChangeRequestViewModel = hiltViewModel() )</ID>
     <ID>CyclomaticComplexMethod:CalendarSyncRepository.kt$CalendarSyncRepository$suspend fun syncFromGoogle( startDate: LocalDateTime? = null, endDate: LocalDateTime? = null ): Flow&lt;SyncResult&gt;</ID>
     <ID>CyclomaticComplexMethod:CalendarSyncRepository.kt$CalendarSyncRepository$suspend fun syncToGoogle(event: Event): Flow&lt;SyncResult&gt;</ID>
+    <ID>CyclomaticComplexMethod:ChangeRequestsScreen.kt$@Suppress("LongMethod") // Compose screen: empty state + two list sections @OptIn(ExperimentalMaterial3Api::class) @Composable fun ChangeRequestsScreen( onBack: () -&gt; Unit, onOpenEvent: (String) -&gt; Unit, linkedEventId: String? = null, viewModel: ChangeRequestViewModel = hiltViewModel() )</ID>
     <ID>CyclomaticComplexMethod:CoPlanlySnackbarHost.kt$@Composable fun CoPlanlySnackbarHost( snackbarHostState: SnackbarHostState, modifier: Modifier = Modifier )</ID>
+    <ID>CyclomaticComplexMethod:ConflictResolver.kt$ConflictResolver$private fun countNonNullFields(childInfo: ChildInfoEntity): Int</ID>
     <ID>CyclomaticComplexMethod:CustodySetupScreen.kt$@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class) @Composable fun CustodySetupScreen( onNavigateBack: () -&gt; Unit, viewModel: CustodySetupViewModel = hiltViewModel() )</ID>
     <ID>CyclomaticComplexMethod:DayWeekView.kt$@Composable private fun EventChip( event: Event, onClick: () -&gt; Unit, columnWidthPx: Float, hourHeightPx: Float, baseDate: LocalDate, baseHour: Int, parentNames: ParentNames, onDragDrop: ((String, LocalDate, Int) -&gt; Unit)?, onResize: ((String, LocalDateTime?, LocalDateTime?) -&gt; Unit)? = null, onDelete: ((String) -&gt; Unit)? = null, onLongPressStart: ((String) -&gt; Unit)? = null, onLongPressEnd: (() -&gt; Unit)? = null, onDragOverDeleteButton: ((Boolean) -&gt; Unit)? = null, // Visible segment of the event within the current day (differs from the real event // times for multi-day / overnight events, which are clamped to each day). displayStart: LocalDateTime = event.startDateTime, displayEnd: LocalDateTime = event.endDateTime ?: event.startDateTime.plusHours(1), // Continuation segments of multi-day events are not resizable/movable (ambiguous). resizable: Boolean = true, draggable: Boolean = true, // Day view spells the time out under the title; week view leaves it to the block's // vertical position and spends the row on the title instead. showTime: Boolean = true )</ID>
     <ID>CyclomaticComplexMethod:DayWeekView.kt$private fun layoutDayEvents(events: List&lt;Event&gt;, date: LocalDate): List&lt;EventSegment&gt;</ID>
     <ID>CyclomaticComplexMethod:GoogleSignInService.kt$GoogleSignInService$suspend fun getAccessToken(account: GoogleSignInAccount): Pair&lt;String?, String?&gt;</ID>
-    <ID>CyclomaticComplexMethod:PairingScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun PairingScreen( onNavigateBack: () -&gt; Unit, viewModel: PairingViewModel = hiltViewModel() )</ID>
-    <ID>CyclomaticComplexMethod:PairingViewModel.kt$PairingViewModel$fun acceptInvitation(invitationId: String)</ID>
-    <ID>CyclomaticComplexMethod:PairingViewModel.kt$PairingViewModel$fun sendInvitation(onSuccess: () -&gt; Unit)</ID>
+    <ID>CyclomaticComplexMethod:MessagesList.kt$@Composable // Already over detekt's LongMethod threshold before this task added the clickable chevron (the // codebase's own baseline records that); explicit like the other screen composables that carry // the same suppression rather than relying on a baseline entry keyed to an exact signature. @Suppress("LongMethod") fun MessageItem( message: Message, isCurrentUser: Boolean, startsGroup: Boolean = true, endsGroup: Boolean = true, onEventLinkClick: ((String) -&gt; Unit)? = null, onOpenInbox: (() -&gt; Unit)? = null, onRetryFailed: (() -&gt; Unit)? = null )</ID>
+    <ID>CyclomaticComplexMethod:NavGraph.kt$@Composable // A NavHost's body is one flat list of route declarations, not branching logic — splitting it // would only relocate the length into a second file without reducing what a reader has to scan // to find a given route. Same reasoning HomeScreen.kt applies to its own linear column of // dashboard sections. @Suppress("LongMethod") fun NavGraph( navController: NavHostController, syncViewModel: SyncViewModel, pendingInviteCodes: PendingInviteCodes, pendingChatOpen: PendingChatOpen )</ID>
+    <ID>CyclomaticComplexMethod:PairingFunctions.kt$PairingFunctions.Companion$fun toPairingError(e: Throwable): PairingError</ID>
     <ID>CyclomaticComplexMethod:RecurrenceExpander.kt$RecurrenceExpander$fun expand(event: Event, rangeStart: LocalDateTime, rangeEnd: LocalDateTime): List&lt;Event&gt;</ID>
+    <ID>CyclomaticComplexMethod:SyncService.kt$SyncService$private suspend fun syncChildInfo(userId: String)</ID>
+    <ID>CyclomaticComplexMethod:SyncService.kt$SyncService$private suspend fun syncEvents(userId: String)</ID>
     <ID>Filename:Color.kt$com.coparently.app.presentation.theme.Color.kt</ID>
     <ID>ForEachOnRange:CustodySetupScreen.kt$0..6</ID>
     <ID>ForEachOnRange:CustodySetupScreen.kt$7..13.coerceAtMost(uiState.customPatternDays - 1)</ID>
-    <ID>ForbiddenComment:AuthScreen.kt$/* TODO: Implement password reset */</ID>
-    <ID>ForbiddenComment:CalendarSyncRepository.kt$CalendarSyncRepository$// TODO: Determine from event data</ID>
-    <ID>ForbiddenComment:ConversationSummarizer.kt$ConversationSummarizer$// TODO: Add method to MessageRepository to get messages since a specific date</ID>
-    <ID>ForbiddenComment:FamilyInsightsEngine.kt$FamilyInsightsEngine$// TODO: Add method to EventRepository to filter events by child</ID>
-    <ID>ForbiddenComment:FamilyInsightsEngine.kt$FamilyInsightsEngine$// TODO: Add method to ExpenseRepository to filter by child and date range</ID>
-    <ID>ForbiddenComment:PredictiveAnalytics.kt$PredictiveAnalytics$// TODO: Implement actual repository call</ID>
     <ID>ForbiddenComment:SecurityAudit.kt$SecurityAudit$// TODO: Implement actual check based on your database structure</ID>
     <ID>ForbiddenComment:SecurityAudit.kt$SecurityAudit$// TODO: Implement based on your OkHttp client configuration</ID>
-    <ID>ImplicitDefaultLocale:DayWeekView.kt$String.format("%02d:00", hour)</ID>
-    <ID>ImportOrdering:CalendarSyncRepository.kt$import com.coparently.app.data.local.dao.EventDao import com.coparently.app.data.local.entity.EventEntity import com.coparently.app.data.remote.google.CredentialProvider import com.coparently.app.data.remote.google.CredentialProviderImpl import com.coparently.app.data.remote.google.GoogleCalendarApi import com.coparently.app.domain.model.Event import com.google.api.client.auth.oauth2.Credential import com.google.api.services.calendar.model.Event as GoogleEvent import kotlinx.coroutines.Dispatchers import kotlinx.coroutines.flow.Flow import kotlinx.coroutines.flow.flow import kotlinx.coroutines.withContext import java.time.LocalDateTime import java.time.ZoneId import java.time.format.DateTimeFormatter import javax.inject.Inject import javax.inject.Singleton</ID>
-    <ID>ImportOrdering:CalendarViewModelTest.kt$import com.coparently.app.data.local.dao.CustodyScheduleDao import com.coparently.app.data.local.preferences.EncryptedPreferences import com.coparently.app.data.repository.CustodyModelRepository import io.mockk.clearAllMocks import io.mockk.every import io.mockk.just import io.mockk.mockk import io.mockk.Runs import kotlinx.coroutines.Dispatchers import kotlinx.coroutines.ExperimentalCoroutinesApi import kotlinx.coroutines.flow.flowOf import kotlinx.coroutines.test.StandardTestDispatcher import kotlinx.coroutines.test.resetMain import kotlinx.coroutines.test.runTest import kotlinx.coroutines.test.setMain import org.junit.After import org.junit.Before import org.junit.Test import java.time.LocalDate import kotlin.test.assertEquals import kotlin.test.assertFalse import kotlin.test.assertTrue</ID>
-    <ID>ImportOrdering:ChatViewModel.kt$import androidx.lifecycle.ViewModel import androidx.lifecycle.viewModelScope import com.coparently.app.domain.model.Conversation import com.coparently.app.domain.model.Message import com.coparently.app.domain.model.MessageSendStatus import com.coparently.app.domain.model.MessageTemplate import com.coparently.app.domain.model.MessageType import com.coparently.app.domain.model.Event import com.coparently.app.domain.repository.EventRepository import com.coparently.app.domain.repository.MessageRepository import com.coparently.app.domain.repository.UserRepository import dagger.hilt.android.lifecycle.HiltViewModel import kotlinx.coroutines.flow.MutableStateFlow import kotlinx.coroutines.flow.SharingStarted import kotlinx.coroutines.flow.StateFlow import kotlinx.coroutines.flow.asStateFlow import kotlinx.coroutines.flow.combine import kotlinx.coroutines.flow.map import kotlinx.coroutines.flow.stateIn import kotlinx.coroutines.launch import java.time.LocalDateTime import java.util.UUID import javax.inject.Inject</ID>
+    <ID>ImportOrdering:CalendarHeader.kt$import androidx.compose.foundation.clickable import androidx.compose.foundation.layout.Box import androidx.compose.foundation.layout.PaddingValues import androidx.compose.foundation.layout.defaultMinSize import androidx.compose.foundation.layout.Row import androidx.compose.foundation.layout.padding import androidx.compose.foundation.layout.size import androidx.compose.foundation.shape.RoundedCornerShape import androidx.compose.material.icons.Icons import androidx.compose.material.icons.filled.Check import androidx.compose.material.icons.filled.ExpandMore import androidx.compose.material.icons.filled.FilterList import androidx.compose.material.icons.filled.Settings import androidx.compose.material3.DropdownMenu import androidx.compose.material3.DropdownMenuItem import androidx.compose.material3.ExperimentalMaterial3Api import androidx.compose.material3.FilterChip import androidx.compose.material3.HorizontalDivider import androidx.compose.material3.Icon import androidx.compose.material3.IconButton import androidx.compose.material3.MaterialTheme import androidx.compose.material3.OutlinedButton import androidx.compose.material3.Text import androidx.compose.material3.TopAppBar import androidx.compose.runtime.Composable import androidx.compose.runtime.getValue import androidx.compose.runtime.mutableStateOf import androidx.compose.runtime.remember import androidx.compose.runtime.setValue import androidx.compose.ui.Alignment import androidx.compose.ui.Modifier import androidx.compose.ui.draw.clip import androidx.compose.ui.res.stringResource import androidx.compose.ui.semantics.Role import androidx.compose.ui.text.font.FontWeight import androidx.compose.ui.text.style.TextOverflow import androidx.compose.ui.tooling.preview.Preview import androidx.compose.ui.unit.dp import com.coparently.app.R import com.coparently.app.presentation.calendar.CalendarViewMode import com.coparently.app.presentation.theme.LayoutConstants import com.coparently.app.utils.LightDarkPreviews import com.coparently.app.utils.PreviewWrapper import java.time.LocalDate import java.time.YearMonth</ID>
+    <ID>ImportOrdering:CalendarPaging.kt$import com.google.api.services.calendar.model.Event as GoogleCalendarEvent import java.time.LocalDateTime</ID>
+    <ID>ImportOrdering:CalendarViewModel.kt$import androidx.lifecycle.ViewModel import androidx.lifecycle.viewModelScope import com.coparently.app.data.local.dao.CustodyScheduleDao import com.coparently.app.data.local.entity.CustodyScheduleEntity import com.coparently.app.data.local.preferences.EncryptedPreferences import com.coparently.app.data.local.preferences.PreferenceKeys import com.coparently.app.data.repository.CustodyModelRepository import com.coparently.app.data.repository.PartialSwapRun import com.coparently.app.domain.custody.CustodyChangeAnnouncement import com.coparently.app.domain.custody.CustodyProposal import com.coparently.app.domain.custody.CustodyResolver import com.coparently.app.domain.custody.DayOverride import com.coparently.app.domain.custody.DayOverrideTransition import com.coparently.app.domain.custody.SharedCustody import com.coparently.app.domain.friends.CalendarFriendGrant import com.coparently.app.domain.model.CustodyModel import com.coparently.app.domain.holidays.HolidayCountry import com.coparently.app.domain.repository.FriendRepository import com.coparently.app.domain.repository.UserRepository import com.coparently.app.presentation.common.Parents import com.coparently.app.presentation.common.ParentsSource import dagger.hilt.android.lifecycle.HiltViewModel import kotlinx.coroutines.ExperimentalCoroutinesApi import kotlinx.coroutines.flow.MutableStateFlow import kotlinx.coroutines.flow.SharingStarted import kotlinx.coroutines.flow.StateFlow import kotlinx.coroutines.flow.asStateFlow import kotlinx.coroutines.flow.combine import kotlinx.coroutines.flow.flatMapLatest import kotlinx.coroutines.flow.flowOf import kotlinx.coroutines.flow.map import kotlinx.coroutines.flow.stateIn import kotlinx.coroutines.launch import java.time.LocalDate import java.time.LocalDateTime import java.time.YearMonth import java.util.UUID import javax.inject.Inject</ID>
+    <ID>ImportOrdering:ChatMappers.kt$import com.coparently.app.data.local.entity.ConversationEntity import com.coparently.app.data.local.entity.MessageEntity import com.coparently.app.domain.model.Conversation import com.coparently.app.domain.model.Message import com.coparently.app.domain.model.MessageSendStatus import com.coparently.app.domain.activity.ActivityAnnouncement import com.coparently.app.domain.model.MessageType import com.google.gson.Gson import com.google.gson.reflect.TypeToken import java.time.LocalDateTime import java.time.ZoneId import java.time.format.DateTimeFormatter</ID>
     <ID>ImportOrdering:ConflictResolver.kt$import com.coparently.app.data.local.entity.EventEntity import com.coparently.app.data.local.entity.ChildInfoEntity import java.time.LocalDateTime import javax.inject.Inject import javax.inject.Singleton</ID>
-    <ID>ImportOrdering:EventViewModel.kt$import androidx.lifecycle.ViewModel import androidx.lifecycle.viewModelScope import com.coparently.app.data.analytics.AnalyticsManager import com.coparently.app.data.crashlytics.CrashlyticsManager import com.coparently.app.data.local.preferences.EncryptedPreferences import com.coparently.app.domain.model.Event import com.coparently.app.domain.repository.EventImageStorage import com.coparently.app.domain.repository.EventRepository import com.google.gson.Gson import dagger.hilt.android.lifecycle.HiltViewModel import kotlinx.coroutines.flow.MutableStateFlow import kotlinx.coroutines.flow.StateFlow import kotlinx.coroutines.flow.asStateFlow import kotlinx.coroutines.launch import java.time.LocalDateTime import java.time.LocalDate import java.time.LocalTime import java.time.Duration import java.time.format.DateTimeFormatter import java.util.UUID import javax.inject.Inject</ID>
+    <ID>ImportOrdering:EventListScreen.kt$import androidx.compose.foundation.background import androidx.compose.foundation.clickable import androidx.compose.foundation.layout.Arrangement import androidx.compose.foundation.layout.Box import androidx.compose.foundation.layout.Column import androidx.compose.foundation.layout.fillMaxSize import androidx.compose.foundation.layout.fillMaxWidth import androidx.compose.foundation.layout.padding import androidx.compose.foundation.lazy.LazyColumn import androidx.compose.foundation.lazy.items import androidx.compose.foundation.shape.RoundedCornerShape import androidx.compose.material.icons.Icons import androidx.compose.material.icons.automirrored.filled.ArrowBack import androidx.compose.material.icons.filled.Add import androidx.compose.material.icons.filled.Delete import androidx.compose.material.icons.filled.Event import androidx.compose.material3.Card import androidx.compose.material3.ExperimentalMaterial3Api import androidx.compose.material3.FloatingActionButton import androidx.compose.material3.Icon import androidx.compose.material3.IconButton import androidx.compose.material3.MaterialTheme import androidx.compose.material3.Scaffold import androidx.compose.material3.SnackbarDuration import androidx.compose.material3.SnackbarHost import androidx.compose.material3.SnackbarHostState import androidx.compose.material3.SnackbarResult import androidx.compose.material3.Surface import androidx.compose.material3.SwipeToDismissBox import androidx.compose.material3.SwipeToDismissBoxValue import androidx.compose.material3.Text import androidx.compose.material3.TopAppBar import androidx.compose.material3.rememberSwipeToDismissBoxState import androidx.compose.runtime.Composable import androidx.compose.runtime.collectAsState import androidx.compose.runtime.getValue import androidx.compose.runtime.remember import androidx.compose.runtime.rememberCoroutineScope import androidx.compose.ui.Alignment import androidx.compose.ui.Modifier import androidx.compose.ui.res.stringResource import androidx.compose.ui.unit.dp import androidx.hilt.navigation.compose.hiltViewModel import com.coparently.app.R import com.coparently.app.domain.model.Event import com.coparently.app.presentation.common.ParentNames import com.coparently.app.presentation.common.animations.AnimatedEmptyState import com.coparently.app.presentation.common.rememberParentNames import com.coparently.app.domain.events.CalendarVisibility import com.coparently.app.presentation.theme.CoPlanlyColors import kotlinx.coroutines.launch</ID>
+    <ID>ImportOrdering:EventViewModel.kt$import androidx.lifecycle.ViewModel import androidx.lifecycle.viewModelScope import com.coparently.app.data.analytics.AnalyticsManager import com.coparently.app.data.crashlytics.CrashlyticsManager import com.coparently.app.data.local.preferences.EncryptedPreferences import com.coparently.app.domain.model.Event import com.coparently.app.domain.repository.EventImageStorage import com.coparently.app.domain.repository.EventRepository import com.coparently.app.presentation.common.Parents import com.coparently.app.presentation.common.FamilyMember import com.coparently.app.presentation.common.FamilyMembersSource import com.coparently.app.presentation.common.ParentsSource import com.google.gson.Gson import dagger.hilt.android.lifecycle.HiltViewModel import kotlinx.coroutines.ExperimentalCoroutinesApi import kotlinx.coroutines.flow.MutableStateFlow import kotlinx.coroutines.flow.SharingStarted import kotlinx.coroutines.flow.StateFlow import kotlinx.coroutines.flow.asStateFlow import kotlinx.coroutines.flow.catch import kotlinx.coroutines.flow.combine import kotlinx.coroutines.flow.flatMapLatest import kotlinx.coroutines.flow.onEach import kotlinx.coroutines.flow.onStart import kotlinx.coroutines.flow.stateIn import kotlinx.coroutines.launch import java.time.Duration import java.time.LocalDate import java.time.LocalDateTime import java.time.LocalTime import java.time.format.DateTimeFormatter import java.util.UUID import javax.inject.Inject</ID>
+    <ID>ImportOrdering:ExpenseViewModel.kt$import android.util.Log import androidx.lifecycle.ViewModel import androidx.lifecycle.viewModelScope import com.coparently.app.data.repository.FamilySettingsRepository import com.coparently.app.domain.expenses.CurrencyBalance import com.coparently.app.domain.expenses.CurrencyBreakdown import com.coparently.app.domain.expenses.SplitRatio import com.coparently.app.domain.expenses.SplitRatioProposal import com.coparently.app.domain.expenses.breakdownByCurrency import com.coparently.app.domain.expenses.calculateExpenseBalancesByCurrency import com.coparently.app.domain.family.FamilyMemberRef import com.coparently.app.domain.model.Expense import com.coparently.app.domain.model.ExpenseCategory import com.coparently.app.domain.model.ExpenseSummary import com.coparently.app.domain.money.SupportedCurrency import com.coparently.app.domain.receipts.ReceiptParser import com.coparently.app.domain.receipts.ReceiptScan import com.coparently.app.domain.receipts.ReceiptTextRecognizer import com.coparently.app.domain.repository.ExpenseRepository import com.coparently.app.domain.repository.PreferencesRepository import com.coparently.app.domain.repository.ReceiptStorage import com.coparently.app.domain.repository.UserRepository import com.coparently.app.presentation.common.Loadable import com.coparently.app.presentation.common.Parents import com.coparently.app.presentation.common.FamilyMember import com.coparently.app.presentation.common.FamilyMembersSource import com.coparently.app.presentation.common.ParentsSource import com.coparently.app.presentation.common.stateInLoadable import com.coparently.app.presentation.common.toggling import com.coparently.app.presentation.common.valueOrNull import dagger.hilt.android.lifecycle.HiltViewModel import kotlinx.coroutines.channels.Channel import kotlinx.coroutines.flow.Flow import kotlinx.coroutines.flow.MutableStateFlow import kotlinx.coroutines.flow.SharingStarted import kotlinx.coroutines.flow.StateFlow import kotlinx.coroutines.flow.asStateFlow import kotlinx.coroutines.flow.combine import kotlinx.coroutines.flow.map import kotlinx.coroutines.flow.receiveAsFlow import kotlinx.coroutines.flow.stateIn import kotlinx.coroutines.flow.update import kotlinx.coroutines.launch import java.time.LocalDate import java.time.LocalDateTime import java.time.YearMonth import java.util.UUID import javax.inject.Inject</ID>
+    <ID>ImportOrdering:FriendViewModel.kt$import androidx.annotation.StringRes import androidx.lifecycle.ViewModel import androidx.lifecycle.viewModelScope import com.coparently.app.domain.friends.CalendarFriendGrant import com.coparently.app.domain.friends.FriendProfile import com.coparently.app.domain.friends.FriendRole import com.coparently.app.domain.guests.GuestAccessDuration import com.coparently.app.domain.guests.GuestInvite import com.coparently.app.domain.repository.FriendRepository import com.coparently.app.presentation.pairing.pairingMessageRes import dagger.hilt.android.lifecycle.HiltViewModel import kotlinx.coroutines.ExperimentalCoroutinesApi import kotlinx.coroutines.flow.MutableStateFlow import kotlinx.coroutines.flow.flatMapLatest import kotlinx.coroutines.flow.flowOf import kotlinx.coroutines.flow.SharingStarted import kotlinx.coroutines.flow.StateFlow import kotlinx.coroutines.flow.asStateFlow import kotlinx.coroutines.flow.stateIn import kotlinx.coroutines.flow.update import kotlinx.coroutines.launch import java.time.Instant import javax.inject.Inject</ID>
     <ID>ImportOrdering:GoogleCalendarApi.kt$import com.google.api.client.auth.oauth2.Credential import com.google.api.client.http.javanet.NetHttpTransport import com.google.api.client.googleapis.auth.oauth2.GoogleAuthorizationCodeFlow import com.google.api.client.googleapis.auth.oauth2.GoogleClientSecrets import com.google.api.client.json.gson.GsonFactory import com.google.api.client.util.DateTime import com.google.api.services.calendar.Calendar import com.google.api.services.calendar.CalendarScopes import com.google.api.services.calendar.model.Event as GoogleCalendarEvent import com.google.api.services.calendar.model.EventDateTime import com.google.api.services.calendar.model.Events import java.io.IOException import java.time.LocalDateTime import java.time.ZoneId import java.time.format.DateTimeFormatter import javax.inject.Inject import javax.inject.Singleton</ID>
     <ID>ImportOrdering:GoogleModule.kt$import com.coparently.app.data.remote.google.CredentialProvider import com.coparently.app.data.remote.google.CredentialProviderImpl import com.coparently.app.data.remote.google.GoogleCalendarApi import com.coparently.app.data.remote.google.GoogleSignInService import com.coparently.app.data.local.preferences.EncryptedPreferences import com.coparently.app.data.sync.CalendarSyncRepository import dagger.Binds import dagger.Module import dagger.hilt.InstallIn import dagger.hilt.components.SingletonComponent import javax.inject.Singleton</ID>
-    <ID>ImportOrdering:NaturalLanguageModels.kt$import java.time.LocalDateTime import java.time.LocalDate</ID>
-    <ID>ImportOrdering:PairingScreen.kt$import androidx.compose.foundation.Image import androidx.compose.foundation.layout.* import androidx.compose.material.icons.Icons import androidx.compose.material.icons.automirrored.filled.ArrowBack import androidx.compose.material.icons.filled.QrCode import androidx.compose.material.icons.filled.QrCodeScanner import androidx.compose.material3.* import androidx.activity.compose.rememberLauncherForActivityResult import androidx.activity.result.contract.ActivityResultContracts import androidx.compose.runtime.Composable import androidx.compose.runtime.collectAsState import androidx.compose.runtime.getValue import androidx.compose.ui.Alignment import androidx.compose.ui.Modifier import androidx.compose.ui.graphics.asImageBitmap import androidx.compose.ui.unit.dp import androidx.hilt.navigation.compose.hiltViewModel import androidx.compose.runtime.mutableStateOf import androidx.compose.runtime.remember import androidx.compose.runtime.setValue import androidx.compose.runtime.LaunchedEffect import androidx.compose.runtime.derivedStateOf import com.coparently.app.presentation.common.ConfirmationDialog import kotlinx.coroutines.delay import java.util.concurrent.TimeUnit</ID>
-    <ID>ImportOrdering:PairingViewModel.kt$import android.graphics.Bitmap import androidx.lifecycle.ViewModel import androidx.lifecycle.viewModelScope import com.coparently.app.data.analytics.AnalyticsManager import com.coparently.app.data.remote.firebase.CoParentPairingService import com.coparently.app.data.remote.firebase.FirebaseAuthService import com.coparently.app.data.remote.firebase.QRCodeService import com.coparently.app.domain.model.Conversation import com.coparently.app.domain.repository.MessageRepository import com.coparently.app.domain.repository.UserRepository import com.coparently.app.utils.ValidationResult import com.coparently.app.utils.ValidationUtils import java.time.LocalDateTime import java.util.UUID import dagger.hilt.android.lifecycle.HiltViewModel import kotlinx.coroutines.flow.MutableStateFlow import kotlinx.coroutines.flow.StateFlow import kotlinx.coroutines.flow.asStateFlow import kotlinx.coroutines.launch import kotlinx.coroutines.withTimeoutOrNull import kotlinx.coroutines.TimeoutCancellationException import javax.inject.Inject</ID>
-    <ID>ImportOrdering:QRScannerActivity.kt$import android.Manifest import android.content.Intent import android.content.pm.PackageManager import android.net.Uri import android.os.Bundle import android.util.Log import androidx.activity.ComponentActivity import androidx.activity.compose.setContent import androidx.activity.result.contract.ActivityResultContracts import androidx.compose.foundation.layout.* import androidx.compose.material3.* import androidx.compose.material.icons.Icons import androidx.compose.material.icons.automirrored.filled.ArrowBack import androidx.compose.runtime.* import androidx.compose.ui.Alignment import androidx.compose.ui.Modifier import androidx.compose.ui.platform.LocalContext import androidx.compose.ui.text.style.TextAlign import androidx.compose.ui.unit.dp import androidx.core.content.ContextCompat import androidx.hilt.navigation.compose.hiltViewModel import androidx.lifecycle.ViewModel import androidx.lifecycle.viewModelScope import com.coparently.app.data.remote.firebase.CoParentPairingService import com.coparently.app.data.remote.firebase.FirebaseAuthService import kotlinx.coroutines.flow.MutableStateFlow import kotlinx.coroutines.flow.StateFlow import kotlinx.coroutines.flow.asStateFlow import kotlinx.coroutines.launch import javax.inject.Inject import com.coparently.app.presentation.theme.CoPlanlyTheme import com.google.mlkit.vision.barcode.BarcodeScanner import com.google.mlkit.vision.barcode.BarcodeScannerOptions import com.google.mlkit.vision.barcode.BarcodeScanning import com.google.mlkit.vision.barcode.common.Barcode import com.google.mlkit.vision.common.InputImage import kotlinx.coroutines.launch</ID>
-    <ID>ImportOrdering:RepositoryModule.kt$import com.coparently.app.data.remote.firebase.FirebaseImageStorage import com.coparently.app.data.repository.BudgetRepositoryImpl import com.coparently.app.data.repository.ChangeRequestRepositoryImpl import com.coparently.app.data.repository.ChildInfoRepositoryImpl import com.coparently.app.data.repository.EventRepositoryImpl import com.coparently.app.data.repository.ExpenseRepositoryImpl import com.coparently.app.data.repository.MessageRepositoryImpl import com.coparently.app.data.repository.PreferencesRepositoryImpl import com.coparently.app.domain.repository.BudgetRepository import com.coparently.app.domain.repository.ChangeRequestRepository import com.coparently.app.domain.repository.ChildInfoRepository import com.coparently.app.domain.repository.EventRepository import com.coparently.app.domain.repository.ExpenseRepository import com.coparently.app.domain.repository.MessageRepository import com.coparently.app.domain.repository.PreferencesRepository import com.coparently.app.domain.repository.EventImageStorage import com.coparently.app.domain.repository.ReceiptStorage import dagger.Binds import dagger.Module import dagger.hilt.InstallIn import dagger.hilt.components.SingletonComponent import javax.inject.Singleton</ID>
-    <ID>ImportOrdering:SyncService.kt$import com.coparently.app.data.local.dao.EventDao import com.coparently.app.data.local.dao.ChildInfoDao import com.coparently.app.data.local.dao.UserDao import com.coparently.app.data.remote.firebase.FirebaseAuthService import com.coparently.app.data.remote.firebase.FcmService import com.coparently.app.data.remote.firebase.FirestoreEventDataSource import com.coparently.app.data.remote.firebase.FirestoreChildInfoDataSource import com.coparently.app.data.remote.firebase.FirestoreUserDataSource import com.google.gson.Gson import kotlinx.coroutines.flow.MutableStateFlow import kotlinx.coroutines.flow.StateFlow import kotlinx.coroutines.flow.asStateFlow import java.time.LocalDateTime import java.time.format.DateTimeFormatter import javax.inject.Inject import javax.inject.Singleton</ID>
-    <ID>Indentation:ActivityEditor.kt$ </ID>
+    <ID>ImportOrdering:ListSkeleton.kt$import androidx.compose.foundation.layout.Arrangement import androidx.compose.foundation.layout.Column import androidx.compose.foundation.layout.fillMaxWidth import androidx.compose.foundation.layout.height import androidx.compose.foundation.layout.padding import androidx.compose.foundation.shape.RoundedCornerShape import androidx.compose.runtime.Composable import androidx.compose.ui.Modifier import androidx.compose.ui.draw.clip import androidx.compose.ui.semantics.contentDescription import androidx.compose.ui.semantics.semantics import androidx.compose.ui.unit.Dp import androidx.compose.ui.unit.dp import androidx.compose.ui.res.stringResource import com.coparently.app.R import com.coparently.app.presentation.components.SkeletonBox</ID>
+    <ID>ImportOrdering:OnboardingViewModel.kt$import android.util.Log import androidx.lifecycle.ViewModel import androidx.lifecycle.viewModelScope import com.coparently.app.data.repository.FamilySettingsRepository import com.coparently.app.domain.expenses.SplitRatio import com.coparently.app.domain.expenses.WHOLE_PERCENT import com.coparently.app.domain.holidays.HolidayCountry import com.coparently.app.domain.model.ChildInfo import com.coparently.app.domain.model.EmergencyContact import com.coparently.app.domain.model.FamilyKind import com.coparently.app.presentation.theme.ParentColorChoice import com.coparently.app.domain.model.MedicalProfile import com.coparently.app.domain.model.Pet import com.coparently.app.domain.model.PetSpecies import com.coparently.app.domain.repository.ChildInfoRepository import com.coparently.app.domain.repository.PetRepository import com.coparently.app.domain.repository.UserRepository import dagger.hilt.android.lifecycle.HiltViewModel import kotlinx.coroutines.CancellationException import kotlinx.coroutines.flow.MutableStateFlow import kotlinx.coroutines.flow.StateFlow import kotlinx.coroutines.flow.asStateFlow import kotlinx.coroutines.flow.first import kotlinx.coroutines.flow.update import kotlinx.coroutines.launch import kotlinx.coroutines.sync.Mutex import kotlinx.coroutines.sync.withLock import java.time.LocalDate import java.time.LocalDateTime import java.util.UUID import javax.inject.Inject</ID>
+    <ID>ImportOrdering:ParentsSource.kt$import android.util.Log import com.coparently.app.domain.model.PairingState import com.coparently.app.presentation.theme.ParentPalette import com.coparently.app.domain.repository.PairingRepository import com.coparently.app.domain.repository.UserRepository import kotlinx.coroutines.CoroutineScope import kotlinx.coroutines.Dispatchers import kotlinx.coroutines.SupervisorJob import kotlinx.coroutines.flow.Flow import kotlinx.coroutines.flow.SharingStarted import kotlinx.coroutines.flow.combine import kotlinx.coroutines.flow.distinctUntilChanged import kotlinx.coroutines.flow.shareIn import javax.inject.Inject import javax.inject.Singleton</ID>
+    <ID>ImportOrdering:SettingsScreen.kt$import androidx.compose.animation.AnimatedVisibility import androidx.compose.foundation.background import androidx.compose.foundation.clickable import androidx.compose.foundation.layout.Arrangement import androidx.compose.foundation.layout.Box import androidx.compose.foundation.layout.Column import androidx.compose.foundation.layout.Row import androidx.compose.foundation.layout.Spacer import androidx.compose.foundation.layout.fillMaxSize import androidx.compose.foundation.layout.fillMaxWidth import androidx.compose.foundation.layout.height import androidx.compose.foundation.layout.padding import androidx.compose.foundation.layout.size import androidx.compose.foundation.layout.width import androidx.compose.foundation.rememberScrollState import androidx.compose.foundation.shape.CircleShape import androidx.compose.foundation.verticalScroll import androidx.compose.material.icons.Icons import androidx.compose.material.icons.automirrored.filled.ArrowBack import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight import androidx.compose.material.icons.automirrored.filled.Logout import androidx.compose.material.icons.filled.Balance import androidx.compose.material.icons.filled.ChildCare import androidx.compose.material.icons.filled.DateRange import androidx.compose.material.icons.filled.DeleteForever import androidx.compose.material.icons.filled.Diversity3 import androidx.compose.material.icons.filled.EventAvailable import androidx.compose.material.icons.filled.ExpandLess import androidx.compose.material.icons.filled.ExpandMore import androidx.compose.material.icons.filled.FamilyRestroom import androidx.compose.material.icons.filled.Group import androidx.compose.material.icons.filled.Info import androidx.compose.material.icons.filled.Language import androidx.compose.material.icons.filled.Notifications import androidx.compose.material.icons.filled.Palette import androidx.compose.material.icons.filled.SwapHoriz import androidx.compose.material.icons.filled.Payments import androidx.compose.material.icons.filled.Person import androidx.compose.material.icons.filled.PersonOutline import androidx.compose.material.icons.filled.Pets import androidx.compose.material.icons.filled.Public import androidx.compose.material.icons.filled.Refresh import androidx.compose.material.icons.filled.Sync import androidx.compose.material3.AlertDialog import androidx.compose.material3.Button import androidx.compose.material3.Checkbox import androidx.compose.material3.CircularProgressIndicator import androidx.compose.material3.ExperimentalMaterial3Api import androidx.compose.material3.Icon import androidx.compose.material3.IconButton import androidx.compose.material3.MaterialTheme import androidx.compose.material3.OutlinedButton import androidx.compose.material3.RadioButton import androidx.compose.material3.Scaffold import androidx.compose.material3.Slider import androidx.compose.material3.SnackbarHost import androidx.compose.material3.SnackbarHostState import androidx.compose.material3.Switch import androidx.compose.material3.Text import androidx.compose.material3.TextButton import androidx.compose.material3.TopAppBar import androidx.compose.runtime.Composable import androidx.compose.runtime.LaunchedEffect import androidx.compose.runtime.collectAsState import androidx.compose.runtime.getValue import androidx.compose.runtime.mutableIntStateOf import androidx.compose.runtime.mutableStateOf import androidx.compose.runtime.remember import androidx.compose.runtime.rememberCoroutineScope import androidx.compose.runtime.saveable.rememberSaveable import androidx.compose.runtime.setValue import androidx.compose.ui.Alignment import androidx.compose.ui.Modifier import androidx.compose.ui.draw.clip import androidx.compose.ui.graphics.Color import androidx.compose.ui.hapticfeedback.HapticFeedbackType import androidx.compose.ui.platform.LocalContext import androidx.compose.ui.platform.LocalHapticFeedback import androidx.compose.ui.res.stringResource import androidx.compose.ui.unit.dp import androidx.hilt.navigation.compose.hiltViewModel import com.coparently.app.R import com.coparently.app.data.repository.RatioSubmission import com.coparently.app.data.sync.SyncStatus import com.coparently.app.domain.expenses.SplitRatio import com.coparently.app.domain.holidays.HolidayCountry import com.coparently.app.domain.model.FamilyKind import com.coparently.app.domain.money.SupportedCurrency import com.coparently.app.presentation.common.ConfirmationDialog import com.coparently.app.presentation.common.GroupLabel import com.coparently.app.presentation.common.ParentNames import com.coparently.app.presentation.common.SectionGroup import com.coparently.app.presentation.common.SectionRow import com.coparently.app.presentation.common.labelRes import com.coparently.app.presentation.common.SignedInAsRow import com.coparently.app.presentation.common.rememberParentNames import com.coparently.app.data.family.FamilyOption import com.coparently.app.presentation.sync.GoogleCalendarSyncState import com.coparently.app.presentation.theme.ParentColorChoice import com.coparently.app.presentation.sync.SyncViewModel import kotlinx.coroutines.launch import java.time.format.DateTimeFormatter</ID>
+    <ID>ImportOrdering:SettingsViewModel.kt$import androidx.lifecycle.ViewModel import androidx.lifecycle.viewModelScope import com.coparently.app.data.analytics.AnalyticsManager import com.coparently.app.data.remote.firebase.FcmService import com.coparently.app.data.repository.FamilySettingsRepository import com.coparently.app.data.repository.RatioSubmission import com.coparently.app.data.session.AccountDeletionService import com.coparently.app.data.session.SignedInAccountSource import com.coparently.app.domain.expenses.SplitRatio import com.coparently.app.domain.holidays.HolidayCountry import com.coparently.app.domain.model.AccountSummary import com.coparently.app.domain.model.FamilyKind import com.coparently.app.presentation.theme.ParentColorChoice import com.coparently.app.domain.money.SupportedCurrency import com.coparently.app.domain.repository.PreferencesRepository import com.coparently.app.domain.repository.UserRepository import com.coparently.app.presentation.common.FamilyKindSource import com.coparently.app.presentation.common.Parents import com.coparently.app.data.family.FamilyOption import com.coparently.app.data.family.SelectedFamilySource import com.coparently.app.presentation.common.ParentsSource import com.coparently.app.presentation.common.UiError import com.coparently.app.presentation.common.UiState import dagger.hilt.android.lifecycle.HiltViewModel import kotlinx.coroutines.channels.Channel import kotlinx.coroutines.ExperimentalCoroutinesApi import kotlinx.coroutines.flow.Flow import kotlinx.coroutines.flow.MutableStateFlow import kotlinx.coroutines.flow.SharingStarted import kotlinx.coroutines.flow.StateFlow import kotlinx.coroutines.flow.asStateFlow import kotlinx.coroutines.flow.first import kotlinx.coroutines.flow.map import kotlinx.coroutines.flow.receiveAsFlow import kotlinx.coroutines.flow.flatMapLatest import kotlinx.coroutines.flow.flowOf import kotlinx.coroutines.flow.stateIn import kotlinx.coroutines.launch import java.io.IOException import javax.inject.Inject</ID>
     <ID>Indentation:AuthScreen.kt$ </ID>
-    <ID>Indentation:BudgetRepositoryImpl.kt$BudgetRepositoryImpl$ </ID>
     <ID>Indentation:CoPlanlySnackbarHost.kt$ </ID>
-    <ID>Indentation:EventSuggestionEngineUseCase.kt$EventSuggestionEngineUseCase$ </ID>
-    <ID>Indentation:GeminiAIService.kt$GeminiAIService$ </ID>
+    <ID>Indentation:ExpenseRepositoryImpl.kt$ExpenseRepositoryImpl$ </ID>
     <ID>Indentation:GoogleSignInService.kt$GoogleSignInService$ </ID>
-    <ID>Indentation:MessagesList.kt$ </ID>
+    <ID>Indentation:MonthView.kt$ </ID>
     <ID>Indentation:NetworkMonitor.kt$NetworkMonitor$ </ID>
-    <ID>Indentation:PairingScreen.kt$ </ID>
-    <ID>Indentation:PairingViewModel.kt$PairingViewModel$ </ID>
-    <ID>Indentation:PredictiveAnalytics.kt$PredictiveAnalytics$ </ID>
-    <ID>Indentation:QRScannerActivity.kt$ </ID>
-    <ID>Indentation:SmartSchedulingUseCase.kt$ConflictDetector$ </ID>
-    <ID>Indentation:SmartSchedulingUseCase.kt$SmartSchedulingUseCase$ </ID>
+    <ID>LongMethod:ActivityEditor.kt$@Composable private fun ActivityCard( activity: Activity, onEdit: () -&gt; Unit, onDelete: () -&gt; Unit )</ID>
     <ID>LongMethod:ActivityEditor.kt$@Composable private fun ActivityForm( activity: Activity? = null, onSave: (Activity) -&gt; Unit, onCancel: () -&gt; Unit )</ID>
-    <ID>LongMethod:AddBudgetSheet.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun AddBudgetSheet( onDismiss: () -&gt; Unit, onSave: (category: ExpenseCategory, monthlyLimit: Double) -&gt; Unit )</ID>
     <ID>LongMethod:AddEditChildInfoScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun AddEditChildInfoScreen( childInfoId: String?, onNavigateBack: () -&gt; Unit, viewModel: ChildInfoViewModel = hiltViewModel() )</ID>
-    <ID>LongMethod:AddEditEventScreen.kt$@OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class) @Composable fun AddEditEventScreen( eventId: String?, initialDate: LocalDate? = null, initialHour: Int? = null, onSave: () -&gt; Unit, onCancel: () -&gt; Unit, onRequestChange: ((String) -&gt; Unit)? = null, viewModel: EventViewModel = hiltViewModel() )</ID>
-    <ID>LongMethod:AddExpenseScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun AddExpenseScreen( onBack: () -&gt; Unit, viewModel: ExpenseViewModel = hiltViewModel() )</ID>
+    <ID>LongMethod:AddEditEventScreen.kt$@Composable private fun EventPhotoSection( displayImage: Any?, enabled: Boolean, onPickPhoto: () -&gt; Unit, onRemovePhoto: () -&gt; Unit )</ID>
+    <ID>LongMethod:AddEditEventScreen.kt$@OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class) @Composable fun AddEditEventScreen( eventId: String?, initialDate: LocalDate? = null, initialHour: Int? = null, onSave: () -&gt; Unit, onCancel: () -&gt; Unit, onRequestChange: ((String) -&gt; Unit)? = null, viewModel: EventViewModel = hiltViewModel(), friendViewModel: com.coparently.app.presentation.friends.FriendViewModel = hiltViewModel() )</ID>
+    <ID>LongMethod:AddEditPetScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun AddEditPetScreen( petId: String?, onNavigateBack: () -&gt; Unit, viewModel: PetsViewModel = hiltViewModel() )</ID>
+    <ID>LongMethod:AddExpenseScreen.kt$@Composable private fun ReceiptPicker( state: ReceiptPickerState, onTakePhoto: () -&gt; Unit, onPickPhoto: () -&gt; Unit, onRemovePhoto: () -&gt; Unit )</ID>
+    <ID>LongMethod:AddExpenseScreen.kt$@Composable private fun SplitSection( agreedRatio: SplitRatio, shared: Boolean, onSharedChange: (Boolean) -&gt; Unit, overrideMomPercent: Int?, onOverrideChange: (Int?) -&gt; Unit, enabled: Boolean )</ID>
+    <ID>LongMethod:AddExpenseScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun AddExpenseScreen( onBack: () -&gt; Unit, expenseId: String? = null, viewModel: ExpenseViewModel = hiltViewModel() )</ID>
     <ID>LongMethod:AllergyEditor.kt$@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class) @Composable fun AllergyEditor( allergies: List&lt;String&gt;, onAdd: (String) -&gt; Unit, onRemove: (Int) -&gt; Unit, modifier: Modifier = Modifier )</ID>
     <ID>LongMethod:AnimatedTheme.kt$@Composable private fun animateColorScheme(targetScheme: ColorScheme): ColorScheme</ID>
     <ID>LongMethod:AuthScreen.kt$@Composable fun AuthScreen( onAuthSuccess: () -&gt; Unit, onViewModelReady: ((AuthViewModel) -&gt; Unit)? = null, viewModel: AuthViewModel = hiltViewModel() )</ID>
+    <ID>LongMethod:BudgetItem.kt$@Composable fun BudgetItem( budget: Budget, spentAmount: Double, onClick: () -&gt; Unit )</ID>
     <ID>LongMethod:BudgetScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun BudgetScreen( onBack: (() -&gt; Unit)? = null, viewModel: BudgetViewModel = hiltViewModel() )</ID>
-    <ID>LongMethod:CalendarFilters.kt$@OptIn(ExperimentalMaterial3Api::class, FoundationExperimentalLayoutApi::class) @Composable fun EventTypeFilterSheet( allEventTypes: List&lt;String&gt;, hiddenEventTypes: Set&lt;String&gt;, showHolidays: Boolean, parentFilter: ParentFilter, parentNames: ParentNames, onParentFilterChange: (ParentFilter) -&gt; Unit, onToggleType: (String) -&gt; Unit, onAddCustomType: (String) -&gt; Unit, onShowHolidaysChange: (Boolean) -&gt; Unit, onDismiss: () -&gt; Unit, sheetState: SheetState )</ID>
-    <ID>LongMethod:CalendarScreen.kt$@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class) @Composable fun CalendarScreen( onEventClick: (String) -&gt; Unit = {}, onAddEventClick: (LocalDate?, Int?) -&gt; Unit, onSettingsClick: (() -&gt; Unit)? = null, onChangeRequestsClick: (() -&gt; Unit)? = null, onWeeklySummaryClick: (() -&gt; Unit)? = null, eventViewModel: EventViewModel = hiltViewModel(), calendarViewModel: CalendarViewModel = hiltViewModel(), changeRequestViewModel: com.coparently.app.presentation.changerequests.ChangeRequestViewModel = hiltViewModel() )</ID>
+    <ID>LongMethod:BudgetSheet.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun BudgetSheet( onDismiss: () -&gt; Unit, onSave: ( category: ExpenseCategory, monthlyLimit: Double, forMembers: List&lt;FamilyMemberRef&gt; ) -&gt; Unit, members: List&lt;FamilyMember&gt; = emptyList(), existing: Budget? = null, onDelete: () -&gt; Unit = {} )</ID>
+    <ID>LongMethod:CalendarFilters.kt$@OptIn(ExperimentalMaterial3Api::class, FoundationExperimentalLayoutApi::class) @Composable fun EventTypeFilterSheet( allEventTypes: List&lt;String&gt;, hiddenEventTypes: Set&lt;String&gt;, showHolidays: Boolean, parentFilter: ParentFilter, parentNames: ParentNames, friendName: String?, onParentFilterChange: (ParentFilter) -&gt; Unit, onToggleType: (String) -&gt; Unit, onAddCustomType: (String) -&gt; Unit, onShowHolidaysChange: (Boolean) -&gt; Unit, onDismiss: () -&gt; Unit, sheetState: SheetState )</ID>
     <ID>LongMethod:CalendarSyncRepository.kt$CalendarSyncRepository$suspend fun syncFromGoogle( startDate: LocalDateTime? = null, endDate: LocalDateTime? = null ): Flow&lt;SyncResult&gt;</ID>
     <ID>LongMethod:CalendarSyncRepository.kt$CalendarSyncRepository$suspend fun syncToGoogle(event: Event): Flow&lt;SyncResult&gt;</ID>
-    <ID>LongMethod:ChatScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun ChatScreen( conversationId: String, onBack: () -&gt; Unit, // Pre-filled composer text (e.g. a settle-up message drafted on Expenses). Never sent // automatically — a message to the co-parent is the user's to send. draft: String = "", onRequestChangeForEvent: (String) -&gt; Unit = {}, viewModel: ChatViewModel = hiltViewModel() )</ID>
-    <ID>LongMethod:ChildInfoScreen.kt$@Composable fun ChildInfoContent(childInfo: ChildInfo)</ID>
-    <ID>LongMethod:ChildInfoScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun ChildInfoScreen( onNavigateBack: () -&gt; Unit, onEditClick: (String) -&gt; Unit, viewModel: ChildInfoViewModel = hiltViewModel() )</ID>
+    <ID>LongMethod:ChangeRequestsScreen.kt$@Composable private fun DaySwapCard( group: DaySwapGroup, currentUserId: String, parentNames: ParentNames, onAccept: () -&gt; Unit, onDecline: () -&gt; Unit )</ID>
+    <ID>LongMethod:ChildDetailScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun ChildDetailScreen( childInfoId: String, onNavigateBack: () -&gt; Unit, onEditClick: (String) -&gt; Unit, viewModel: ChildInfoViewModel = hiltViewModel() )</ID>
+    <ID>LongMethod:ChildInfoScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun ChildInfoScreen( onNavigateBack: () -&gt; Unit, onOpenChild: (String) -&gt; Unit, onAddChild: () -&gt; Unit, viewModel: ChildInfoViewModel = hiltViewModel() )</ID>
     <ID>LongMethod:CoPlanlySnackbarHost.kt$@Composable fun CoPlanlySnackbarHost( snackbarHostState: SnackbarHostState, modifier: Modifier = Modifier )</ID>
-    <ID>LongMethod:ConflictAlertCard.kt$@Composable fun ConflictAlertCard( conflict: UpcomingConflict, onViewSolutions: () -&gt; Unit, onDismiss: () -&gt; Unit, modifier: Modifier = Modifier )</ID>
-    <ID>LongMethod:ConversationsScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun ConversationsScreen( onConversationClick: (String) -&gt; Unit, onNavigateToPairing: () -&gt; Unit, onOpenSettings: () -&gt; Unit, viewModel: ChatViewModel = hiltViewModel() )</ID>
-    <ID>LongMethod:CustodyRibbon.kt$@Composable fun CustodyRibbon( custody: String, handover: HandoverInfo?, parentNames: ParentNames, modifier: Modifier = Modifier )</ID>
+    <ID>LongMethod:ContactsScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun ContactsScreen( onNavigateUp: () -&gt; Unit, viewModel: ContactsViewModel = hiltViewModel() )</ID>
+    <ID>LongMethod:CustodySetupScreen.kt$@Composable private fun MidweekContactSection( uiState: CustodySetupUiState, onEnabledChange: (Boolean) -&gt; Unit, onDayChange: (DayOfWeek) -&gt; Unit, onEveryWeekChange: (Boolean) -&gt; Unit )</ID>
     <ID>LongMethod:CustodySetupScreen.kt$@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class) @Composable fun CustodySetupScreen( onNavigateBack: () -&gt; Unit, viewModel: CustodySetupViewModel = hiltViewModel() )</ID>
+    <ID>LongMethod:DaySwapSheet.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun DaySwapSheet( dates: List&lt;LocalDate&gt;, custodyFor: (LocalDate) -&gt; String?, parentNames: ParentNames, onOffer: (dates: List&lt;LocalDate&gt;, note: String?) -&gt; Unit, onDismiss: () -&gt; Unit )</ID>
     <ID>LongMethod:DayWeekView.kt$@Composable private fun EventChip( event: Event, onClick: () -&gt; Unit, columnWidthPx: Float, hourHeightPx: Float, baseDate: LocalDate, baseHour: Int, parentNames: ParentNames, onDragDrop: ((String, LocalDate, Int) -&gt; Unit)?, onResize: ((String, LocalDateTime?, LocalDateTime?) -&gt; Unit)? = null, onDelete: ((String) -&gt; Unit)? = null, onLongPressStart: ((String) -&gt; Unit)? = null, onLongPressEnd: (() -&gt; Unit)? = null, onDragOverDeleteButton: ((Boolean) -&gt; Unit)? = null, // Visible segment of the event within the current day (differs from the real event // times for multi-day / overnight events, which are clamped to each day). displayStart: LocalDateTime = event.startDateTime, displayEnd: LocalDateTime = event.endDateTime ?: event.startDateTime.plusHours(1), // Continuation segments of multi-day events are not resizable/movable (ambiguous). resizable: Boolean = true, draggable: Boolean = true, // Day view spells the time out under the title; week view leaves it to the block's // vertical position and spends the row on the title instead. showTime: Boolean = true )</ID>
     <ID>LongMethod:EmergencyContactEditor.kt$@Composable private fun EmergencyContactForm( contact: EmergencyContact? = null, onSave: (EmergencyContact) -&gt; Unit, onCancel: () -&gt; Unit )</ID>
     <ID>LongMethod:ErrorDisplay.kt$@Composable fun ErrorDisplay( error: UiError, modifier: Modifier = Modifier, onDismiss: (() -&gt; Unit)? = null )</ID>
     <ID>LongMethod:EventListScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun EventListScreen( onEventClick: (String) -&gt; Unit, onAddEventClick: () -&gt; Unit, onNavigateUp: () -&gt; Unit, viewModel: EventViewModel = hiltViewModel() )</ID>
-    <ID>LongMethod:EventSuggestionsScreen.kt$@Composable fun SuggestionCard( suggestion: EventSuggestion, onAccept: () -&gt; Unit, onReject: () -&gt; Unit, onModify: () -&gt; Unit, modifier: Modifier = Modifier )</ID>
-    <ID>LongMethod:ExpenseList.kt$@Composable fun ExpenseItem( expense: Expense, payerRole: String? = null, onReceiptClick: (String) -&gt; Unit = {} )</ID>
-    <ID>LongMethod:ExpenseScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun ExpenseScreen( onAddExpense: () -&gt; Unit, onOpenBudgets: (() -&gt; Unit)? = null, onOpenSettings: (() -&gt; Unit)? = null, onSettleUp: (String) -&gt; Unit = {}, viewModel: ExpenseViewModel = hiltViewModel() )</ID>
-    <ID>LongMethod:ExpenseSummaryHeader.kt$@Composable fun ExpenseSummaryHeader( balance: ExpenseBalance, currency: String, onSettleUp: (String) -&gt; Unit, modifier: Modifier = Modifier )</ID>
-    <ID>LongMethod:HomeScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun HomeScreen( onOpenEvent: (String) -&gt; Unit, onOpenChangeRequests: () -&gt; Unit, onOpenWeeklySummary: () -&gt; Unit, onOpenSettings: () -&gt; Unit, onNavigateToPairing: () -&gt; Unit, viewModel: HomeViewModel = hiltViewModel() )</ID>
+    <ID>LongMethod:ExpenseList.kt$@Composable fun ExpenseItem( expense: Expense, parentNames: ParentNames, payerRole: String? = null, splitKnown: Boolean, onClick: (() -&gt; Unit)? = null, onReceiptClick: (String) -&gt; Unit = {} )</ID>
+    <ID>LongMethod:ExpenseScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable @Suppress("LongParameterList") // one callback per navigation target this screen offers fun ExpenseScreen( onAddExpense: () -&gt; Unit, onEditExpense: (String) -&gt; Unit = {}, onOpenBudgets: (() -&gt; Unit)? = null, onOpenSettings: (() -&gt; Unit)? = null, onSettleUp: (String) -&gt; Unit = {}, viewModel: ExpenseViewModel = hiltViewModel(), budgetViewModel: BudgetViewModel = hiltViewModel() )</ID>
+    <ID>LongMethod:ExpenseSummaryHeader.kt$@Composable @Suppress("LongParameterList") // one card, one parameter per thing it displays fun ExpenseSummaryHeader( balance: ExpenseBalance, currency: String, parentNames: ParentNames, onSettleUp: (String) -&gt; Unit, monthLabel: String = defaultMonthLabel(), modifier: Modifier = Modifier, monthNavigation: MonthNavigation? = null )</ID>
+    <ID>LongMethod:FriendDetailScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun FriendDetailScreen( friendUid: String, onNavigateUp: () -&gt; Unit, onRevoked: () -&gt; Unit, viewModel: FriendViewModel = hiltViewModel() )</ID>
+    <ID>LongMethod:FriendInviteSheet.kt$@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class) @Composable fun FriendInviteSheet( state: FriendInviteState, onChooseDuration: (GuestAccessDuration) -&gt; Unit, onCreate: () -&gt; Unit, onDismiss: () -&gt; Unit )</ID>
+    <ID>LongMethod:FriendProfileScreen.kt$@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class) @Composable fun FriendProfileScreen( onNavigateUp: () -&gt; Unit, viewModel: FriendViewModel = hiltViewModel() )</ID>
+    <ID>LongMethod:FriendsScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun FriendsScreen( onNavigateUp: () -&gt; Unit, onOpenFriend: (String) -&gt; Unit, onOpenMyProfile: () -&gt; Unit, viewModel: FriendViewModel = hiltViewModel() )</ID>
+    <ID>LongMethod:HomeScreen.kt$@Composable private fun AwaitingDialogs( state: HomeUiState.Dashboard, parentNames: ParentNames, pendingProposal: com.coparently.app.domain.custody.CustodyProposal?, pendingProposalDiff: com.coparently.app.domain.custody.CustodyPatternDiff?, onAcceptSwap: (DaySwapGroup) -&gt; Unit, onDeclineSwap: (DaySwapGroup) -&gt; Unit, onAcceptProposal: () -&gt; Unit, onDeclineProposal: () -&gt; Unit, onOpenChangeRequests: () -&gt; Unit )</ID>
+    <ID>LongMethod:HomeScreen.kt$@Composable private fun TimelineRow( entry: WeekEntry, parentNames: ParentNames, isLast: Boolean, onClick: () -&gt; Unit )</ID>
     <ID>LongMethod:MainActivity.kt$MainActivity$override fun onCreate(savedInstanceState: Bundle?)</ID>
     <ID>LongMethod:MedicationEditor.kt$@Composable private fun MedicationForm( medication: Medication? = null, onSave: (Medication) -&gt; Unit, onCancel: () -&gt; Unit )</ID>
-    <ID>LongMethod:MessagesList.kt$@Composable fun MessageItem( message: Message, isCurrentUser: Boolean )</ID>
-    <ID>LongMethod:MessagesList.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun MessagesList( messages: List&lt;Message&gt;, currentUserId: String, onRefresh: (() -&gt; Unit)? = null, modifier: Modifier = Modifier )</ID>
-    <ID>LongMethod:MonthView.kt$@Suppress("LongParameterList") // screen-level composable: callbacks are its API surface @Composable fun MonthView( selectedMonth: YearMonth, selectedDate: LocalDate? = null, eventsByDay: Map&lt;LocalDate, List&lt;Event&gt;&gt;, getCustody: (LocalDate) -&gt; String?, parentNames: ParentNames, onDayClick: (LocalDate) -&gt; Unit, onMonthChange: (YearMonth) -&gt; Unit, holidays: Map&lt;LocalDate, Holiday&gt; = emptyMap() )</ID>
-    <ID>LongMethod:NaturalLanguageEventScreen.kt$@Composable fun NaturalLanguageEventScreen( onEventSaved: () -&gt; Unit, onNavigateToManualEdit: (ParsedEvent) -&gt; Unit, modifier: Modifier = Modifier, viewModel: NaturalLanguageEventViewModel = hiltViewModel() )</ID>
-    <ID>LongMethod:NaturalLanguageEventScreen.kt$@Composable fun ParsedEventConfirmation( parsedEvent: ParsedEvent, confidence: Double, validationIssues: List&lt;String&gt;, onConfirm: () -&gt; Unit, onEdit: () -&gt; Unit, modifier: Modifier = Modifier )</ID>
-    <ID>LongMethod:NavGraph.kt$@Composable fun NavGraph( navController: NavHostController, syncViewModel: SyncViewModel )</ID>
-    <ID>LongMethod:PairingScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun PairingScreen( onNavigateBack: () -&gt; Unit, viewModel: PairingViewModel = hiltViewModel() )</ID>
-    <ID>LongMethod:PairingViewModel.kt$PairingViewModel$fun acceptInvitation(invitationId: String)</ID>
-    <ID>LongMethod:PairingViewModel.kt$PairingViewModel$fun sendInvitation(onSuccess: () -&gt; Unit)</ID>
-    <ID>LongMethod:QRScannerActivity.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun QRScannerScreen( onQRCodeScanned: (String) -&gt; Unit, onPermissionRequest: () -&gt; Unit, onBackPressed: () -&gt; Unit, viewModel: QRScannerViewModel = hiltViewModel() )</ID>
+    <ID>LongMethod:PairingScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun PairingScreen( onNavigateBack: () -&gt; Unit, onCustodyConflict: () -&gt; Unit, prefilledCode: String? = null, viewModel: PairingViewModel = hiltViewModel() )</ID>
+    <ID>LongMethod:PetsScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun PetsScreen( onNavigateBack: () -&gt; Unit, onEditPet: (String) -&gt; Unit, viewModel: PetsViewModel = hiltViewModel() )</ID>
     <ID>LongMethod:SchoolInfoEditor.kt$@Composable fun SchoolInfoEditor( schoolInfo: SchoolInfo?, onSave: (SchoolInfo?) -&gt; Unit, modifier: Modifier = Modifier )</ID>
+    <ID>LongMethod:SettingsScreen.kt$@Composable @Suppress("LongParameterList") // one call site; splitting it would only add a wrapper type private fun GoogleCalendarActions( isSignedIn: Boolean, isSyncEnabled: Boolean, onToggleSync: (Boolean) -&gt; Unit, syncState: GoogleCalendarSyncState, onSignIn: () -&gt; Unit, onSyncNow: () -&gt; Unit, onCalendarSignOut: () -&gt; Unit )</ID>
     <ID>LongMethod:SkeletonLoading.kt$@Composable fun DayWeekViewSkeleton( modifier: Modifier = Modifier, itemCount: Int = 4 )</ID>
     <ID>LongMethod:SplashScreen.kt$@Composable fun SplashScreen( onFinished: () -&gt; Unit = {} )</ID>
     <ID>LongMethod:SyncService.kt$SyncService$private suspend fun syncChildInfo(userId: String)</ID>
     <ID>LongMethod:SyncService.kt$SyncService$private suspend fun syncEvents(userId: String)</ID>
-    <ID>LongParameterList:AddEditEventScreen.kt$( eventId: String?, initialDate: LocalDate? = null, initialHour: Int? = null, onSave: () -&gt; Unit, onCancel: () -&gt; Unit, onRequestChange: ((String) -&gt; Unit)? = null, viewModel: EventViewModel = hiltViewModel() )</ID>
-    <ID>LongParameterList:CalendarFilters.kt$( allEventTypes: List&lt;String&gt;, hiddenEventTypes: Set&lt;String&gt;, showHolidays: Boolean, parentFilter: ParentFilter, parentNames: ParentNames, onParentFilterChange: (ParentFilter) -&gt; Unit, onToggleType: (String) -&gt; Unit, onAddCustomType: (String) -&gt; Unit, onShowHolidaysChange: (Boolean) -&gt; Unit, onDismiss: () -&gt; Unit, sheetState: SheetState )</ID>
-    <ID>LongParameterList:CalendarHeader.kt$( selectedDate: LocalDate, onNavigateToToday: () -&gt; Unit, onSettingsClick: (() -&gt; Unit)? = null, onChangeRequestsClick: (() -&gt; Unit)? = null, pendingChangeRequests: Int = 0, onWeeklySummaryClick: (() -&gt; Unit)? = null )</ID>
-    <ID>LongParameterList:CalendarScreen.kt$( onEventClick: (String) -&gt; Unit = {}, onAddEventClick: (LocalDate?, Int?) -&gt; Unit, onSettingsClick: (() -&gt; Unit)? = null, onChangeRequestsClick: (() -&gt; Unit)? = null, onWeeklySummaryClick: (() -&gt; Unit)? = null, eventViewModel: EventViewModel = hiltViewModel(), calendarViewModel: CalendarViewModel = hiltViewModel(), changeRequestViewModel: com.coparently.app.presentation.changerequests.ChangeRequestViewModel = hiltViewModel() )</ID>
-    <ID>LongParameterList:ChildInfoViewModel.kt$ChildInfoViewModel$( id: String?, childName: String, dateOfBirth: LocalDateTime?, medications: List&lt;Medication&gt;, activities: List&lt;Activity&gt;, allergies: List&lt;String&gt;, medicalNotes: String?, emergencyContacts: List&lt;EmergencyContact&gt;, schoolInfo: SchoolInfo? )</ID>
+    <ID>LongParameterList:AddEditEventScreen.kt$( eventId: String?, initialDate: LocalDate? = null, initialHour: Int? = null, onSave: () -&gt; Unit, onCancel: () -&gt; Unit, onRequestChange: ((String) -&gt; Unit)? = null, viewModel: EventViewModel = hiltViewModel(), friendViewModel: com.coparently.app.presentation.friends.FriendViewModel = hiltViewModel() )</ID>
+    <ID>LongParameterList:AddEditPetScreen.kt$( name: String, onName: (String) -&gt; Unit, species: PetSpecies, onSpecies: (PetSpecies) -&gt; Unit, breed: String, onBreed: (String) -&gt; Unit, dateOfBirth: LocalDateTime?, onPickDate: () -&gt; Unit, enabled: Boolean )</ID>
+    <ID>LongParameterList:AddExpenseScreen.kt$( agreedRatio: SplitRatio, shared: Boolean, onSharedChange: (Boolean) -&gt; Unit, overrideMomPercent: Int?, onOverrideChange: (Int?) -&gt; Unit, enabled: Boolean )</ID>
+    <ID>LongParameterList:CalendarFilters.kt$( allEventTypes: List&lt;String&gt;, hiddenEventTypes: Set&lt;String&gt;, showHolidays: Boolean, parentFilter: ParentFilter, parentNames: ParentNames, friendName: String?, onParentFilterChange: (ParentFilter) -&gt; Unit, onToggleType: (String) -&gt; Unit, onAddCustomType: (String) -&gt; Unit, onShowHolidaysChange: (Boolean) -&gt; Unit, onDismiss: () -&gt; Unit, sheetState: SheetState )</ID>
     <ID>LongParameterList:ConfirmationDialog.kt$( title: String, message: String, confirmText: String = "Confirm", dismissText: String = "Cancel", onConfirm: () -&gt; Unit, onDismiss: () -&gt; Unit, modifier: Modifier = Modifier, isDestructive: Boolean = false )</ID>
     <ID>LongParameterList:DayWeekView.kt$( event: Event, onClick: () -&gt; Unit, columnWidthPx: Float, hourHeightPx: Float, baseDate: LocalDate, baseHour: Int, parentNames: ParentNames, onDragDrop: ((String, LocalDate, Int) -&gt; Unit)?, onResize: ((String, LocalDateTime?, LocalDateTime?) -&gt; Unit)? = null, onDelete: ((String) -&gt; Unit)? = null, onLongPressStart: ((String) -&gt; Unit)? = null, onLongPressEnd: (() -&gt; Unit)? = null, onDragOverDeleteButton: ((Boolean) -&gt; Unit)? = null, // Visible segment of the event within the current day (differs from the real event // times for multi-day / overnight events, which are clamped to each day). displayStart: LocalDateTime = event.startDateTime, displayEnd: LocalDateTime = event.endDateTime ?: event.startDateTime.plusHours(1), // Continuation segments of multi-day events are not resizable/movable (ambiguous). resizable: Boolean = true, draggable: Boolean = true, // Day view spells the time out under the title; week view leaves it to the block's // vertical position and spends the row on the title instead. showTime: Boolean = true )</ID>
+    <ID>LongParameterList:EventPreviewSheet.kt$( event: Event, parentNames: ParentNames, members: List&lt;FamilyMember&gt; = emptyList(), onEdit: () -&gt; Unit, onDelete: () -&gt; Unit, onDismiss: () -&gt; Unit )</ID>
+    <ID>LongParameterList:EventViewModel.kt$EventViewModel$( private val eventUseCases: com.coparently.app.domain.usecase.EventUseCases, private val errorHandler: com.coparently.app.domain.error.ErrorHandler, private val encryptedPreferences: EncryptedPreferences, private val gson: Gson, private val eventImageStorage: EventImageStorage, private val parentsSource: ParentsSource, familyMembersSource: FamilyMembersSource )</ID>
     <ID>LongParameterList:EventViewModel.kt$EventViewModel$( title: String, description: String, parentOwner: String, eventType: String, startDate: LocalDate, startTime: LocalTime, endTime: LocalTime )</ID>
+    <ID>LongParameterList:ExpenseAnalytics.kt$( title: String, titleColor: androidx.compose.ui.graphics.Color, expenses: List&lt;Expense&gt;, currency: String, modifier: Modifier = Modifier, photoUrl: String? = null )</ID>
+    <ID>LongParameterList:ExpenseList.kt$( expense: Expense, parentNames: ParentNames, payerRole: String? = null, splitKnown: Boolean, onClick: (() -&gt; Unit)? = null, onReceiptClick: (String) -&gt; Unit = {} )</ID>
+    <ID>LongParameterList:ExpenseViewModel.kt$ExpenseViewModel$( private val expenseRepository: ExpenseRepository, private val userRepository: UserRepository, private val receiptStorage: ReceiptStorage, private val preferencesRepository: PreferencesRepository, private val receiptTextRecognizer: ReceiptTextRecognizer, private val familySettingsRepository: FamilySettingsRepository, private val parentsSource: ParentsSource, familyMembersSource: FamilyMembersSource )</ID>
     <ID>LongParameterList:GoogleCalendarApi.kt$GoogleCalendarApi$( credential: Credential, calendarId: String = "primary", eventId: String, title: String, description: String?, startDateTime: LocalDateTime, endDateTime: LocalDateTime? )</ID>
     <ID>LongParameterList:GoogleCalendarApi.kt$GoogleCalendarApi$( credential: Credential, calendarId: String = "primary", title: String, description: String?, startDateTime: LocalDateTime, endDateTime: LocalDateTime? )</ID>
-    <ID>LongParameterList:HomeScreen.kt$( onOpenEvent: (String) -&gt; Unit, onOpenChangeRequests: () -&gt; Unit, onOpenWeeklySummary: () -&gt; Unit, onOpenSettings: () -&gt; Unit, onNavigateToPairing: () -&gt; Unit, viewModel: HomeViewModel = hiltViewModel() )</ID>
-    <ID>LongParameterList:LoadingButton.kt$( onClick: () -&gt; Unit, modifier: Modifier = Modifier, enabled: Boolean = true, isLoading: Boolean = false, loadingText: String? = null, colors: androidx.compose.material3.ButtonColors = ButtonDefaults.buttonColors(), content: @Composable RowScope.() -&gt; Unit )</ID>
-    <ID>LongParameterList:LoadingButton.kt$( onClick: () -&gt; Unit, modifier: Modifier = Modifier, enabled: Boolean = true, isLoading: Boolean = false, loadingText: String? = null, content: @Composable RowScope.() -&gt; Unit )</ID>
-    <ID>LongParameterList:NaturalLanguageEventScreen.kt$( parsedEvent: ParsedEvent, confidence: Double, validationIssues: List&lt;String&gt;, onConfirm: () -&gt; Unit, onEdit: () -&gt; Unit, modifier: Modifier = Modifier )</ID>
-    <ID>LongParameterList:SettingsCard.kt$( title: String, description: String, icon: ImageVector, checked: Boolean, onCheckedChange: (Boolean) -&gt; Unit, enabled: Boolean = true, modifier: Modifier = Modifier )</ID>
-    <ID>LongParameterList:SyncService.kt$SyncService$( private val eventDao: EventDao, private val childInfoDao: ChildInfoDao, private val userDao: UserDao, private val firestoreEventDataSource: FirestoreEventDataSource, private val firestoreChildInfoDataSource: FirestoreChildInfoDataSource, private val firestoreUserDataSource: FirestoreUserDataSource, private val firebaseAuthService: FirebaseAuthService, private val fcmService: FcmService, private val conflictResolver: ConflictResolver )</ID>
+    <ID>LongParameterList:HomeScreen.kt$( state: HomeUiState.Dashboard, parentNames: ParentNames, pendingProposal: com.coparently.app.domain.custody.CustodyProposal?, pendingProposalDiff: com.coparently.app.domain.custody.CustodyPatternDiff?, onAcceptSwap: (DaySwapGroup) -&gt; Unit, onDeclineSwap: (DaySwapGroup) -&gt; Unit, onAcceptProposal: () -&gt; Unit, onDeclineProposal: () -&gt; Unit, onOpenChangeRequests: () -&gt; Unit )</ID>
+    <ID>LongParameterList:HomeViewModel.kt$HomeViewModel$( eventRepository: EventRepository, changeRequestRepository: ChangeRequestRepository, custodyModelRepository: CustodyModelRepository, monthSpendDependencies: MonthSpendDependencies, messageRepository: MessageRepository, familyKindSource: FamilyKindSource, homeIdentityDependencies: HomeIdentityDependencies )</ID>
+    <ID>LongParameterList:MessagesList.kt$( message: Message, isCurrentUser: Boolean, startsGroup: Boolean = true, endsGroup: Boolean = true, onEventLinkClick: ((String) -&gt; Unit)? = null, onOpenInbox: (() -&gt; Unit)? = null, onRetryFailed: (() -&gt; Unit)? = null )</ID>
+    <ID>LongParameterList:MessagesList.kt$( messages: List&lt;Message&gt;, currentUserId: String, onRefresh: (() -&gt; Unit)? = null, onEventLinkClick: ((String) -&gt; Unit)? = null, onOpenInbox: (() -&gt; Unit)? = null, onRetryFailed: (() -&gt; Unit)? = null, modifier: Modifier = Modifier )</ID>
+    <ID>LongParameterList:PairingRepositoryImpl.kt$PairingRepositoryImpl$( private val firestore: FirebaseFirestore, private val authService: FirebaseAuthService, private val pairingFunctions: PairingFunctions, private val postPairingConversationSetup: PostPairingConversationSetup, private val userDao: UserDao, private val selectedFamilySource: SelectedFamilySource, // Application context only, for the localized conversation-title fallback. This is a // repository, not a ViewModel, so it is allowed to resolve resources directly. @ApplicationContext private val context: Context )</ID>
+    <ID>LongParameterList:ParentLabels.kt$( slot: String, me: NamedParent?, coParent: NamedParent?, youFallback: String, coParentFallback: String, unknownFallback: String )</ID>
+    <ID>LongParameterList:PhotoStrip.kt$( photo: String, position: Int, total: Int, strings: PhotoStripStrings, onOpen: () -&gt; Unit, onRemove: ((String) -&gt; Unit)? )</ID>
+    <ID>LongParameterList:PhotoStrip.kt$( photos: List&lt;String&gt;, strings: PhotoStripStrings, modifier: Modifier = Modifier, onAdd: (() -&gt; Unit)? = null, onRemove: ((String) -&gt; Unit)? = null, enabled: Boolean = true )</ID>
+    <ID>LongParameterList:SettingsViewModel.kt$SettingsViewModel$( private val fcmService: FcmService, private val accountDeletionService: AccountDeletionService, private val userRepository: UserRepository, private val preferencesRepository: PreferencesRepository, private val analyticsManager: AnalyticsManager, signedInAccountSource: SignedInAccountSource, private val familyKindSource: FamilyKindSource, parentsSource: ParentsSource, private val selectedFamilySource: SelectedFamilySource, private val familySettingsRepository: FamilySettingsRepository )</ID>
+    <ID>LoopWithTooManyJumpStatements:ChildInfoRepositoryImpl.kt$ChildInfoRepositoryImpl$for</ID>
+    <ID>LoopWithTooManyJumpStatements:PetRepositoryImpl.kt$PetRepositoryImpl$for</ID>
     <ID>LoopWithTooManyJumpStatements:RecurrenceExpander.kt$RecurrenceExpander$while</ID>
-    <ID>MagicNumber:AIModule.kt$AIModule$30</ID>
+    <ID>LoopWithTooManyJumpStatements:SyncService.kt$SyncService$for</ID>
     <ID>MagicNumber:AdaptiveDimensions.kt$0.8f</ID>
     <ID>MagicNumber:AdaptiveDimensions.kt$0.9f</ID>
     <ID>MagicNumber:AdaptiveDimensions.kt$1.3f</ID>
@@ -176,8 +181,9 @@
     <ID>MagicNumber:AuthScreen.kt$1.5f</ID>
     <ID>MagicNumber:AuthScreen.kt$2000</ID>
     <ID>MagicNumber:AuthScreen.kt$3.33f</ID>
-    <ID>MagicNumber:BudgetItem.kt$0xFF4CAF50</ID>
-    <ID>MagicNumber:BudgetItem.kt$0xFFFFC107</ID>
+    <ID>MagicNumber:BudgetItem.kt$100</ID>
+    <ID>MagicNumber:BudgetScreen.kt$100</ID>
+    <ID>MagicNumber:CalendarFilters.kt$50</ID>
     <ID>MagicNumber:CalendarHeader.kt$20</ID>
     <ID>MagicNumber:CalendarHeader.kt$2026</ID>
     <ID>MagicNumber:CalendarHeader.kt$7</ID>
@@ -195,19 +201,51 @@
     <ID>MagicNumber:CalendarSyncRepository.kt$CalendarSyncRepository$429</ID>
     <ID>MagicNumber:CalendarSyncRepository.kt$CalendarSyncRepository$500</ID>
     <ID>MagicNumber:CalendarSyncRepository.kt$CalendarSyncRepository$503</ID>
+    <ID>MagicNumber:CategoryPalette.kt$CategoryPalette$0.0031308</ID>
+    <ID>MagicNumber:CategoryPalette.kt$CategoryPalette$0.0259040371</ID>
+    <ID>MagicNumber:CategoryPalette.kt$CategoryPalette$0.04045</ID>
+    <ID>MagicNumber:CategoryPalette.kt$CategoryPalette$0.0514459929</ID>
+    <ID>MagicNumber:CategoryPalette.kt$CategoryPalette$0.055</ID>
+    <ID>MagicNumber:CategoryPalette.kt$CategoryPalette$0.0638541728</ID>
+    <ID>MagicNumber:CategoryPalette.kt$CategoryPalette$0.0883024619</ID>
+    <ID>MagicNumber:CategoryPalette.kt$CategoryPalette$0.0894841775</ID>
+    <ID>MagicNumber:CategoryPalette.kt$CategoryPalette$0.1055613458</ID>
+    <ID>MagicNumber:CategoryPalette.kt$CategoryPalette$0.1073969566</ID>
+    <ID>MagicNumber:CategoryPalette.kt$CategoryPalette$0.2119034982</ID>
+    <ID>MagicNumber:CategoryPalette.kt$CategoryPalette$0.2158037573</ID>
+    <ID>MagicNumber:CategoryPalette.kt$CategoryPalette$0.2817188376</ID>
+    <ID>MagicNumber:CategoryPalette.kt$CategoryPalette$0.3963377774</ID>
+    <ID>MagicNumber:CategoryPalette.kt$CategoryPalette$0.4122214708</ID>
+    <ID>MagicNumber:CategoryPalette.kt$CategoryPalette$0.4505937099</ID>
+    <ID>MagicNumber:CategoryPalette.kt$CategoryPalette$0.5363325363</ID>
+    <ID>MagicNumber:CategoryPalette.kt$CategoryPalette$0.6299787005</ID>
+    <ID>MagicNumber:CategoryPalette.kt$CategoryPalette$0.6806995451</ID>
+    <ID>MagicNumber:CategoryPalette.kt$CategoryPalette$0.7827717662</ID>
+    <ID>MagicNumber:CategoryPalette.kt$CategoryPalette$0.8086757660</ID>
+    <ID>MagicNumber:CategoryPalette.kt$CategoryPalette$0xFF</ID>
+    <ID>MagicNumber:CategoryPalette.kt$CategoryPalette$1.055</ID>
+    <ID>MagicNumber:CategoryPalette.kt$CategoryPalette$1.2914855480</ID>
+    <ID>MagicNumber:CategoryPalette.kt$CategoryPalette$1.9779984951</ID>
+    <ID>MagicNumber:CategoryPalette.kt$CategoryPalette$12.92</ID>
+    <ID>MagicNumber:CategoryPalette.kt$CategoryPalette$16</ID>
+    <ID>MagicNumber:CategoryPalette.kt$CategoryPalette$2.4</ID>
+    <ID>MagicNumber:CategoryPalette.kt$CategoryPalette$2.4285922050</ID>
+    <ID>MagicNumber:CategoryPalette.kt$CategoryPalette$24</ID>
+    <ID>MagicNumber:CategoryPalette.kt$CategoryPalette$255</ID>
+    <ID>MagicNumber:CategoryPalette.kt$CategoryPalette$255.0</ID>
+    <ID>MagicNumber:CategoryPalette.kt$CategoryPalette$3</ID>
+    <ID>MagicNumber:CategoryPalette.kt$CategoryPalette$8</ID>
+    <ID>MagicNumber:CategoryPieChart.kt$100.0</ID>
+    <ID>MagicNumber:CategoryPieChart.kt$1200.0</ID>
     <ID>MagicNumber:CoPlanlyApplication.kt$CoPlanlyApplication$10</ID>
     <ID>MagicNumber:CoPlanlySnackbarHost.kt$0xFF4CAF50</ID>
     <ID>MagicNumber:CoPlanlySnackbarHost.kt$0xFFF44336</ID>
     <ID>MagicNumber:CoPlanlySnackbarHost.kt$0xFFFF9800</ID>
-    <ID>MagicNumber:CommunicationAnalyzer.kt$CommunicationAnalyzer$0.7</ID>
-    <ID>MagicNumber:ConflictAlertCard.kt$24</ID>
-    <ID>MagicNumber:ConversationSummarizer.kt$ConversationSummarizer$7</ID>
     <ID>MagicNumber:CredentialManagerService.kt$CredentialManagerService$1000</ID>
     <ID>MagicNumber:CredentialManagerService.kt$CredentialManagerService$12500</ID>
     <ID>MagicNumber:CredentialManagerService.kt$CredentialManagerService$12501</ID>
     <ID>MagicNumber:CredentialManagerService.kt$CredentialManagerService$12502</ID>
     <ID>MagicNumber:CredentialManagerService.kt$CredentialManagerService$300000</ID>
-    <ID>MagicNumber:CredentialManagerService.kt$CredentialManagerService$3600</ID>
     <ID>MagicNumber:CustodyModel.kt$CustodyModel.Companion$10</ID>
     <ID>MagicNumber:CustodyModel.kt$CustodyModel.Companion$11</ID>
     <ID>MagicNumber:CustodyModel.kt$CustodyModel.Companion$12</ID>
@@ -224,14 +262,9 @@
     <ID>MagicNumber:CustodySetupViewModel.kt$CustodySetupViewModel$28</ID>
     <ID>MagicNumber:CustodySetupViewModel.kt$CustodySetupViewModel$7</ID>
     <ID>MagicNumber:CzechHolidays.kt$CzechHolidays$10</ID>
-    <ID>MagicNumber:CzechHolidays.kt$CzechHolidays$100</ID>
     <ID>MagicNumber:CzechHolidays.kt$CzechHolidays$11</ID>
-    <ID>MagicNumber:CzechHolidays.kt$CzechHolidays$114</ID>
     <ID>MagicNumber:CzechHolidays.kt$CzechHolidays$12</ID>
-    <ID>MagicNumber:CzechHolidays.kt$CzechHolidays$15</ID>
     <ID>MagicNumber:CzechHolidays.kt$CzechHolidays$17</ID>
-    <ID>MagicNumber:CzechHolidays.kt$CzechHolidays$19</ID>
-    <ID>MagicNumber:CzechHolidays.kt$CzechHolidays$22</ID>
     <ID>MagicNumber:CzechHolidays.kt$CzechHolidays$23</ID>
     <ID>MagicNumber:CzechHolidays.kt$CzechHolidays$24</ID>
     <ID>MagicNumber:CzechHolidays.kt$CzechHolidays$25</ID>
@@ -241,9 +274,6 @@
     <ID>MagicNumber:CzechHolidays.kt$CzechHolidays$3</ID>
     <ID>MagicNumber:CzechHolidays.kt$CzechHolidays$30</ID>
     <ID>MagicNumber:CzechHolidays.kt$CzechHolidays$31</ID>
-    <ID>MagicNumber:CzechHolidays.kt$CzechHolidays$32</ID>
-    <ID>MagicNumber:CzechHolidays.kt$CzechHolidays$4</ID>
-    <ID>MagicNumber:CzechHolidays.kt$CzechHolidays$451</ID>
     <ID>MagicNumber:CzechHolidays.kt$CzechHolidays$5</ID>
     <ID>MagicNumber:CzechHolidays.kt$CzechHolidays$6</ID>
     <ID>MagicNumber:CzechHolidays.kt$CzechHolidays$7</ID>
@@ -267,67 +297,49 @@
     <ID>MagicNumber:DynamicTheme.kt$0xFF003314</ID>
     <ID>MagicNumber:DynamicTheme.kt$0xFF66FF99</ID>
     <ID>MagicNumber:EncryptionManager.kt$EncryptionManager$256</ID>
-    <ID>MagicNumber:EventSuggestionEngineUseCase.kt$EventSuggestionEngineUseCase$14</ID>
-    <ID>MagicNumber:EventSuggestionEngineUseCase.kt$EventSuggestionEngineUseCase$50</ID>
-    <ID>MagicNumber:EventSuggestionEngineUseCase.kt$EventSuggestionEngineUseCase$7</ID>
     <ID>MagicNumber:EventValidator.kt$EventValidator$100</ID>
     <ID>MagicNumber:EventValidator.kt$EventValidator$5</ID>
     <ID>MagicNumber:EventViewModel.kt$EventViewModel$1500</ID>
     <ID>MagicNumber:EventViewModel.kt$EventViewModel$2000</ID>
     <ID>MagicNumber:EventViewModel.kt$EventViewModel$24</ID>
     <ID>MagicNumber:EventViewModel.kt$EventViewModel$60</ID>
-    <ID>MagicNumber:FamilyInsightsEngine.kt$FamilyInsightsEngine$10</ID>
-    <ID>MagicNumber:FamilyInsightsEngine.kt$FamilyInsightsEngine$100</ID>
-    <ID>MagicNumber:FamilyInsightsEngine.kt$FamilyInsightsEngine$15</ID>
-    <ID>MagicNumber:FamilyInsightsEngine.kt$FamilyInsightsEngine$20</ID>
-    <ID>MagicNumber:FamilyInsightsEngine.kt$FamilyInsightsEngine$4.0</ID>
-    <ID>MagicNumber:FamilyInsightsEngine.kt$FamilyInsightsEngine$5</ID>
     <ID>MagicNumber:FeatureManager.kt$FeatureManager$3600</ID>
     <ID>MagicNumber:FirebaseAuthService.kt$FirebaseAuthService$10</ID>
     <ID>MagicNumber:FirebaseAuthService.kt$FirebaseAuthService$100</ID>
-    <ID>MagicNumber:GeminiAIService.kt$GeminiAIService$0.5</ID>
-    <ID>MagicNumber:GeminiAIService.kt$GeminiAIService$0.8</ID>
-    <ID>MagicNumber:GeminiAIService.kt$GeminiAIService$10</ID>
-    <ID>MagicNumber:GeminiAIService.kt$GeminiAIService$100</ID>
-    <ID>MagicNumber:GeminiAIService.kt$GeminiAIService$200</ID>
-    <ID>MagicNumber:GeminiAIService.kt$GeminiAIService$3</ID>
-    <ID>MagicNumber:GeminiAIService.kt$GeminiAIService$5</ID>
-    <ID>MagicNumber:InsightsModels.kt$DateRange$180</ID>
-    <ID>MagicNumber:InsightsModels.kt$DateRange$30</ID>
-    <ID>MagicNumber:InsightsModels.kt$DateRange$365</ID>
-    <ID>MagicNumber:InsightsModels.kt$DateRange$7</ID>
-    <ID>MagicNumber:InsightsModels.kt$DateRange$90</ID>
+    <ID>MagicNumber:GuestAccessDuration.kt$GuestAccessDuration.QUARTER$90</ID>
+    <ID>MagicNumber:GuestAccessDuration.kt$GuestAccessDuration.WEEK$7</ID>
+    <ID>MagicNumber:HolidayProvider.kt$100</ID>
+    <ID>MagicNumber:HolidayProvider.kt$11</ID>
+    <ID>MagicNumber:HolidayProvider.kt$114</ID>
+    <ID>MagicNumber:HolidayProvider.kt$15</ID>
+    <ID>MagicNumber:HolidayProvider.kt$19</ID>
+    <ID>MagicNumber:HolidayProvider.kt$22</ID>
+    <ID>MagicNumber:HolidayProvider.kt$25</ID>
+    <ID>MagicNumber:HolidayProvider.kt$3</ID>
+    <ID>MagicNumber:HolidayProvider.kt$30</ID>
+    <ID>MagicNumber:HolidayProvider.kt$31</ID>
+    <ID>MagicNumber:HolidayProvider.kt$32</ID>
+    <ID>MagicNumber:HolidayProvider.kt$4</ID>
+    <ID>MagicNumber:HolidayProvider.kt$451</ID>
+    <ID>MagicNumber:HolidayProvider.kt$7</ID>
+    <ID>MagicNumber:HolidayProvider.kt$8</ID>
+    <ID>MagicNumber:HomeScreen.kt$4</ID>
     <ID>MagicNumber:LoadingSkeleton.kt$200f</ID>
     <ID>MagicNumber:MainActivity.kt$MainActivity$500</ID>
-    <ID>MagicNumber:MessagesList.kt$3</ID>
-    <ID>MagicNumber:MessagesList.kt$500</ID>
     <ID>MagicNumber:MonthView.kt$0.8f</ID>
     <ID>MagicNumber:MonthView.kt$6</ID>
     <ID>MagicNumber:MonthView.kt$8</ID>
-    <ID>MagicNumber:NaturalLanguageEventParserUseCase.kt$NaturalLanguageEventParserUseCase$10</ID>
-    <ID>MagicNumber:NaturalLanguageEventScreen.kt$0.6</ID>
-    <ID>MagicNumber:NaturalLanguageEventScreen.kt$0.8</ID>
-    <ID>MagicNumber:NaturalLanguageEventScreen.kt$100</ID>
-    <ID>MagicNumber:PairingScreen.kt$1000</ID>
-    <ID>MagicNumber:PairingViewModel.kt$PairingViewModel$1000</ID>
-    <ID>MagicNumber:PairingViewModel.kt$PairingViewModel$20000</ID>
-    <ID>MagicNumber:PairingViewModel.kt$PairingViewModel$24</ID>
-    <ID>MagicNumber:PairingViewModel.kt$PairingViewModel$30000</ID>
-    <ID>MagicNumber:PairingViewModel.kt$PairingViewModel$60</ID>
-    <ID>MagicNumber:PredictiveAnalytics.kt$PredictiveAnalytics$0.7</ID>
-    <ID>MagicNumber:PredictiveAnalytics.kt$PredictiveAnalytics$30</ID>
+    <ID>MagicNumber:ParentPalette.kt$ParentColorChoice.ORANGE$0xFFBF360C</ID>
+    <ID>MagicNumber:ParentPalette.kt$ParentColorChoice.ORANGE$0xFFD84315</ID>
+    <ID>MagicNumber:ParentPalette.kt$ParentColorChoice.ORANGE$0xFFFFAB91</ID>
+    <ID>MagicNumber:ParentPalette.kt$ParentColorChoice.PURPLE$0xFF4A148C</ID>
+    <ID>MagicNumber:ParentPalette.kt$ParentColorChoice.PURPLE$0xFF7B1FA2</ID>
+    <ID>MagicNumber:ParentPalette.kt$ParentColorChoice.PURPLE$0xFFCE93D8</ID>
     <ID>MagicNumber:PreviewHelpers.kt$10</ID>
     <ID>MagicNumber:PreviewHelpers.kt$12</ID>
     <ID>MagicNumber:PreviewHelpers.kt$9</ID>
-    <ID>MagicNumber:ProactiveConflictMonitorUseCase.kt$ProactiveConflictMonitorUseCase$0.7</ID>
-    <ID>MagicNumber:QRScannerActivity.kt$1000</ID>
-    <ID>MagicNumber:QRScannerActivity.kt$QRScannerActivity$1000</ID>
-    <ID>MagicNumber:QRScannerActivity.kt$QRScannerActivity$24</ID>
-    <ID>MagicNumber:QRScannerActivity.kt$QRScannerActivity$60</ID>
     <ID>MagicNumber:RecurrenceExpander.kt$RecurrenceExpander$23</ID>
     <ID>MagicNumber:RecurrenceExpander.kt$RecurrenceExpander$59</ID>
-    <ID>MagicNumber:SchedulingModels.kt$ConflictSeverity.Companion$0.5</ID>
-    <ID>MagicNumber:SchedulingModels.kt$ConflictSeverity.Companion$0.8</ID>
     <ID>MagicNumber:SkeletonLoading.kt$0.4f</ID>
     <ID>MagicNumber:SkeletonLoading.kt$0.5f</ID>
     <ID>MagicNumber:SkeletonLoading.kt$0.6f</ID>
@@ -348,10 +360,8 @@
     <ID>MagicNumber:SyncService.kt$SyncService$100</ID>
     <ID>MagicNumber:SyncService.kt$SyncService$40</ID>
     <ID>MagicNumber:SyncService.kt$SyncService$70</ID>
-    <ID>MagicNumber:SyncStatusIndicator.kt$10</ID>
-    <ID>MagicNumber:SyncStatusIndicator.kt$100</ID>
-    <ID>MagicNumber:SyncStatusIndicator.kt$3000</ID>
-    <ID>MagicNumber:SyncStatusIndicator.kt$5</ID>
+    <ID>MagicNumber:SyncService.kt$SyncService$80</ID>
+    <ID>MagicNumber:SyncService.kt$SyncService$90</ID>
     <ID>MagicNumber:ThemePreferences.kt$CustomColorScheme$0xFF1976D2</ID>
     <ID>MagicNumber:ThemePreferences.kt$CustomColorScheme$0xFFE91E63</ID>
     <ID>MagicNumber:TimePicker.kt$14</ID>
@@ -366,13 +376,6 @@
     <ID>MagicNumber:ValidationUtils.kt$ValidationUtils$50</ID>
     <ID>MatchingDeclarationName:Color.kt$CoPlanlyColors</ID>
     <ID>MatchingDeclarationName:WindowSize.kt$Dimensions</ID>
-    <ID>MaxLineLength:AddEditEventScreen.kt$contentDescription = "$label event type, ${if (eventType == value) "selected" else "not selected"}"</ID>
-    <ID>MaxLineLength:AddEditEventScreen.kt$contentDescription = "Assign to $label, ${if (isSelected) "selected" else "not selected"}"</ID>
-    <ID>MaxLineLength:AddEditEventScreen.kt$contentDescription = "Select date, currently ${startDate.format(DateTimeFormatter.ofPattern("EEEE, MMMM dd, yyyy"))}"</ID>
-    <ID>MaxLineLength:AddEditEventScreen.kt$contentDescription = "Select end time, currently ${endTime.format(DateTimeFormatter.ofPattern("HH:mm"))}"</ID>
-    <ID>MaxLineLength:AddEditEventScreen.kt$contentDescription = "Select start time, currently ${startTime.format(DateTimeFormatter.ofPattern("HH:mm"))}"</ID>
-    <ID>MaxLineLength:AuthViewModel.kt$AuthViewModel$.</ID>
-    <ID>MaxLineLength:AuthViewModel.kt$AuthViewModel$is androidx.credentials.exceptions.GetCredentialInterruptedException -&gt; "Sign in interrupted. Please try again."</ID>
     <ID>MaxLineLength:CalendarScreen.kt$onEventResize</ID>
     <ID>MaxLineLength:CalendarSyncRepository.kt$CalendarSyncRepository$emit(SyncResult.Error("Network error: ${e.message ?: "Unable to connect to Google Calendar. Please check your internet connection."}"))</ID>
     <ID>MaxLineLength:CalendarSyncRepository.kt$CalendarSyncRepository$emit(SyncResult.Error("Synchronization error: Network operation cannot run on main thread. Please try again."))</ID>
@@ -380,70 +383,46 @@
     <ID>MaxLineLength:ChildInfoRepositoryImpl.kt$ChildInfoRepositoryImpl$emergencyContacts = gson.fromJson(emergencyContactsJson, Array&lt;com.coparently.app.domain.model.EmergencyContact&gt;::class.java).toList()</ID>
     <ID>MaxLineLength:ChildInfoRepositoryImpl.kt$ChildInfoRepositoryImpl$medications = gson.fromJson(medicationsJson, Array&lt;com.coparently.app.domain.model.Medication&gt;::class.java).toList()</ID>
     <ID>MaxLineLength:ChildInfoRepositoryImpl.kt$ChildInfoRepositoryImpl$schoolInfo = schoolInfoJson?.let { gson.fromJson(it, com.coparently.app.domain.model.SchoolInfo::class.java) }</ID>
-    <ID>MaxLineLength:ConversationsScreen.kt$color = if (conversation.unreadCount &gt; 0) MaterialTheme.typography.bodyLarge.color else MaterialTheme.colorScheme.onSurfaceVariant</ID>
-    <ID>MaxLineLength:ConversationsScreen.kt$style = if (conversation.unreadCount &gt; 0) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodySmall</ID>
     <ID>MaxLineLength:CredentialManagerService.kt$CredentialManagerService$throw IllegalStateException("Google OAuth not configured. Please:\n1. Go to Google Cloud Console\n2. Create OAuth 2.0 Client ID for Web application\n3. Add the Client ID to default_web_client_id in strings.xml\n4. Enable Google Calendar API")</ID>
     <ID>MaxLineLength:CredentialManagerService.kt$CredentialManagerService$throw IllegalStateException("Web Client ID not configured. Please set up OAuth 2.0 Client ID in Google Cloud Console and update default_web_client_id in strings.xml")</ID>
-    <ID>MaxLineLength:CustodySetupViewModel.kt$CustodySetupUiState$"$whoFirst gets Mon-Tue, ${if (momFirst) "Dad" else "Mom"} gets Wed-Thu, then alternates for Fri-Sun."</ID>
-    <ID>MaxLineLength:CustodySetupViewModel.kt$CustodySetupUiState$"$whoFirst gets Mon-Wed (3 days), ${if (momFirst) "Dad" else "Mom"} gets Thu-Sun (4 days), then reverses."</ID>
-    <ID>MaxLineLength:CzechHolidays.kt$CzechHolidays$Holiday(LocalDate.of(year, 10, 28), "Independent Czechoslovak State Day", "Den vzniku samostatného československého státu")</ID>
-    <ID>MaxLineLength:CzechHolidays.kt$CzechHolidays$Holiday(LocalDate.of(year, 7, 5), "Saints Cyril and Methodius Day", "Den slovanských věrozvěstů Cyrila a Metoděje")</ID>
+    <ID>MaxLineLength:CzechHolidays.kt$CzechHolidays$cs(LocalDate.of(year, 10, 28), "Independent Czechoslovak State Day", "Den vzniku samostatného československého státu")</ID>
+    <ID>MaxLineLength:CzechHolidays.kt$CzechHolidays$cs(LocalDate.of(year, 7, 5), "Saints Cyril and Methodius Day", "Den slovanských věrozvěstů Cyrila a Metoděje")</ID>
     <ID>MaxLineLength:DatabaseMigrations.kt$DatabaseMigrations.&lt;no name provided&gt;$"CREATE INDEX IF NOT EXISTS index_events_parentOwner_startDateTime ON events(parentOwner, startDateTime)"</ID>
-    <ID>MaxLineLength:DayWeekView.kt$contentDescription = "Time slot at ${String.format("%02d:00", hour)} on ${date.format(DateTimeFormatter.ofPattern("MMM dd"))}. Tap to add event."</ID>
     <ID>MaxLineLength:DayWeekView.kt$val minuteShift = (rawMinuteShift / RESIZE_SNAP_MINUTES.toFloat()).roundToInt() * RESIZE_SNAP_MINUTES</ID>
-    <ID>MaxLineLength:EncryptedPreferences.kt$EncryptedPreferences$Log.e("EncryptedPreferences", "Critical: Failed to create any SharedPreferences, using in-memory fallback", e2)</ID>
-    <ID>MaxLineLength:EncryptedPreferences.kt$EncryptedPreferences$Log.e("EncryptedPreferences", "Failed to create EncryptedSharedPreferences, trying to delete corrupted file", e)</ID>
     <ID>MaxLineLength:FirebaseAuthService.kt$FirebaseAuthService$android.util.Log.d("FirebaseAuthService", "Firebase config - projectId: $projectId, apiKey: ${apiKey?.take(10)}...")</ID>
     <ID>MaxLineLength:FirestoreUserDataSource.kt$FirestoreUserDataSource$android.util.Log.d("FirestoreUserDataSource", "Got invitation from ${if (snapshot.metadata.isFromCache) "cache" else "server"}: $invitationId")</ID>
     <ID>MaxLineLength:FirestoreUserDataSource.kt$FirestoreUserDataSource$android.util.Log.d("FirestoreUserDataSource", "Got invitations from ${if (snapshot.metadata.isFromCache) "cache" else "server"}: $email")</ID>
     <ID>MaxLineLength:FirestoreUserDataSource.kt$FirestoreUserDataSource$android.util.Log.d("FirestoreUserDataSource", "Got user by email from ${if (snapshot.metadata.isFromCache) "cache" else "server"}: $email")</ID>
     <ID>MaxLineLength:FirestoreUserDataSource.kt$FirestoreUserDataSource$android.util.Log.d("FirestoreUserDataSource", "Got user from ${if (snapshot.metadata.isFromCache) "cache" else "server"}: $uid")</ID>
-    <ID>MaxLineLength:MessageTemplate.kt$DefaultMessageTemplates$content = "[Ребенок] плохо себя чувствует. Симптомы: [симптомы]. Температура [температура]. Я остаюсь дома с ним/ней."</ID>
-    <ID>MaxLineLength:MessageTemplate.kt$DefaultMessageTemplates$content = "[Ребенок] сегодня был у врача по поводу [жалоба]. Диагноз: [диагноз]. Нужно [рекомендации врача]."</ID>
-    <ID>MaxLineLength:MessageTemplate.kt$DefaultMessageTemplates$content = "Привет! Я немного задержусь с передачей [ребенка]. Буду через [время] минут. Извини за неудобство!"</ID>
     <ID>MaxLineLength:NavGraph.kt$val conversationId = backStackEntry.arguments?.getString(Screen.Chat.ARG_CONVERSATION_ID) ?: return@composable</ID>
     <ID>MaxLineLength:NavGraph.kt$val eventId = backStackEntry.arguments?.getString(Screen.RequestChange.ARG_EVENT_ID) ?: return@composable</ID>
-    <ID>MaxLineLength:PairingScreen.kt$message = "Are you sure you want to pair with $fromName ($fromEmail)? This will allow you to share calendar events and communicate with them."</ID>
-    <ID>MaxLineLength:PairingScreen.kt$text = "Share this QR code with your co-parent. They can scan it to accept your invitation."</ID>
-    <ID>MaxLineLength:PairingScreen.kt$val minutes = TimeUnit.MILLISECONDS.toMinutes(timeRemaining % TimeUnit.HOURS.toMillis(1))</ID>
-    <ID>MaxLineLength:PairingScreen.kt$val seconds = TimeUnit.MILLISECONDS.toSeconds(timeRemaining % TimeUnit.MINUTES.toMillis(1))</ID>
-    <ID>MaxLineLength:PairingViewModel.kt$PairingViewModel$"Firestore API is not enabled. Please enable it in Google Cloud Console:\nhttps://console.developers.google.com/apis/api/firestore.googleapis.com/overview?project=coparently-a39c9"</ID>
-    <ID>MaxLineLength:PairingViewModel.kt$PairingViewModel$"Firestore database is not created. Please create it:\nhttps://console.cloud.google.com/datastore/setup?project=coparently-a39c9"</ID>
-    <ID>MaxLineLength:PairingViewModel.kt$PairingViewModel$"No internet connection or DNS error. Please check your internet connection and try again."</ID>
-    <ID>MaxLineLength:PairingViewModel.kt$PairingViewModel$"Permission denied. Please check Firestore security rules:\nhttps://console.firebase.google.com/project/coparently-a39c9/firestore/rules\n\nMake sure rules are deployed and allow authenticated users to read/write their data."</ID>
-    <ID>MaxLineLength:PairingViewModel.kt$PairingViewModel$android.util.Log.d("PairingViewModel", "Created conversation with partner: $partnerName")</ID>
-    <ID>MaxLineLength:PairingViewModel.kt$PairingViewModel$android.util.Log.d("PairingViewModel", "User data not found in local DB, creating from Firebase user")</ID>
-    <ID>MaxLineLength:PairingViewModel.kt$PairingViewModel$android.util.Log.w("PairingViewModel", "Failed to sync user data after accepting invitation", e)</ID>
-    <ID>MaxLineLength:PairingViewModel.kt$PairingViewModel$android.util.Log.w("PairingViewModel", "Firestore unavailable, creating user from Firebase auth", e)</ID>
-    <ID>MaxLineLength:PairingViewModel.kt$PairingViewModel$errorMessage = "Firestore database is not created. Please create it:\nhttps://console.cloud.google.com/datastore/setup?project=coparently-a39c9"</ID>
     <ID>MaxLineLength:QRCodeService.kt$QRCodeService$bitmap.setPixel(x, y, if (bitMatrix[x, y]) android.graphics.Color.BLACK else android.graphics.Color.WHITE)</ID>
-    <ID>MaxLineLength:QRScannerActivity.kt$QRScannerActivity$// Expected format: {"type":"coparent_invitation","invitationId":"...","inviterName":"...","inviterEmail":"...","timestamp":...}</ID>
     <ID>MaxLineLength:SyncService.kt$SyncService$"emergencyContacts" to gson.fromJson(localEntity.emergencyContactsJson, List::class.java)</ID>
     <ID>MaxLineLength:SyncViewModel.kt$SyncViewModel$suspend</ID>
     <ID>MaxLineLength:SyncViewModel.kt$SyncViewModel$val successState = GoogleCalendarSyncState.Success("Signed in successfully as ${account.displayName ?: account.email}")</ID>
-    <ID>MaximumLineLength:AddEditEventScreen.kt$ </ID>
-    <ID>MaximumLineLength:AuthViewModel.kt$AuthViewModel$ </ID>
     <ID>MaximumLineLength:CalendarScreen.kt$ </ID>
     <ID>MaximumLineLength:CalendarSyncRepository.kt$CalendarSyncRepository$ </ID>
     <ID>MaximumLineLength:ChildInfoRepositoryImpl.kt$ChildInfoRepositoryImpl$ </ID>
-    <ID>MaximumLineLength:ConversationsScreen.kt$ </ID>
     <ID>MaximumLineLength:CredentialManagerService.kt$CredentialManagerService$ </ID>
-    <ID>MaximumLineLength:CustodySetupViewModel.kt$CustodySetupUiState$ </ID>
     <ID>MaximumLineLength:CzechHolidays.kt$CzechHolidays$ </ID>
     <ID>MaximumLineLength:DatabaseMigrations.kt$DatabaseMigrations.&lt;no name provided&gt;$ </ID>
     <ID>MaximumLineLength:DayWeekView.kt$ </ID>
-    <ID>MaximumLineLength:EncryptedPreferences.kt$EncryptedPreferences$ </ID>
     <ID>MaximumLineLength:FirebaseAuthService.kt$FirebaseAuthService$ </ID>
     <ID>MaximumLineLength:FirestoreUserDataSource.kt$FirestoreUserDataSource$ </ID>
-    <ID>MaximumLineLength:MessageTemplate.kt$DefaultMessageTemplates$ </ID>
     <ID>MaximumLineLength:NavGraph.kt$ </ID>
-    <ID>MaximumLineLength:PairingScreen.kt$ </ID>
-    <ID>MaximumLineLength:PairingViewModel.kt$PairingViewModel$ </ID>
     <ID>MaximumLineLength:QRCodeService.kt$QRCodeService$ </ID>
     <ID>MaximumLineLength:SyncService.kt$SyncService$ </ID>
     <ID>MaximumLineLength:SyncViewModel.kt$SyncViewModel$ </ID>
     <ID>MayBeConst:GoogleCalendarApi.kt$GoogleCalendarApi.Companion$private val APPLICATION_NAME = "CoPlanly"</ID>
-    <ID>MemberNameEqualsClassName:EncryptedPreferences.kt$EncryptedPreferences$private val encryptedPreferences: SharedPreferences = try { if (masterKey != null) { try { EncryptedSharedPreferences.create( context, "encrypted_prefs", masterKey, EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV, EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM ) } catch (e: Exception) { Log.e("EncryptedPreferences", "Failed to create EncryptedSharedPreferences, trying to delete corrupted file", e) // Try to delete the corrupted encrypted file and fall back try { context.deleteFile("encrypted_prefs.xml") context.deleteFile("encrypted_prefs.xml.bak") } catch (deleteEx: Exception) { Log.w("EncryptedPreferences", "Could not delete corrupted encrypted file", deleteEx) } // Fallback to regular SharedPreferences Log.w("EncryptedPreferences", "Using regular SharedPreferences as fallback") context.getSharedPreferences("encrypted_prefs", Context.MODE_PRIVATE) } } else { // Fallback to regular SharedPreferences if encryption fails Log.w("EncryptedPreferences", "Using regular SharedPreferences as fallback (no master key)") context.getSharedPreferences("encrypted_prefs", Context.MODE_PRIVATE) } } catch (e: Exception) { Log.e("EncryptedPreferences", "Failed to create SharedPreferences, using application context", e) // Last resort: use application context try { context.applicationContext.getSharedPreferences("encrypted_prefs", Context.MODE_PRIVATE) } catch (e2: Exception) { Log.e("EncryptedPreferences", "Critical: Failed to create any SharedPreferences, using in-memory fallback", e2) // Ultimate fallback: use in-memory SharedPreferences // This will lose data on app restart but prevents crash context.getSharedPreferences("encrypted_prefs_memory", Context.MODE_PRIVATE) } }</ID>
+    <ID>MemberNameEqualsClassName:EncryptedPreferences.kt$EncryptedPreferences$private val encryptedPreferences: SharedPreferences = createEncryptedStore(context)</ID>
+    <ID>MultiLineIfElse:AddEditEventScreen.kt$R.string.event_form_cd_not_selected</ID>
+    <ID>MultiLineIfElse:AddEditEventScreen.kt$R.string.event_form_cd_selected</ID>
+    <ID>MultiLineIfElse:AddEditEventScreen.kt$R.string.event_form_pickup_confirm</ID>
+    <ID>MultiLineIfElse:AddEditEventScreen.kt$R.string.event_form_pickup_undo</ID>
+    <ID>MultiLineIfElse:AddEditPetScreen.kt$stringResource(R.string.pet_add_button)</ID>
+    <ID>MultiLineIfElse:AddEditPetScreen.kt$stringResource(R.string.pet_save_changes)</ID>
+    <ID>MultiLineIfElse:AddEditPetScreen.kt$stringResource(R.string.pet_title_add)</ID>
+    <ID>MultiLineIfElse:AddEditPetScreen.kt$stringResource(R.string.pet_title_edit)</ID>
     <ID>MultiLineIfElse:CalendarFilters.kt$null</ID>
     <ID>MultiLineIfElse:CustodySetupScreen.kt$CoPlanlyColors.DadBlue.copy(alpha = 0.3f)</ID>
     <ID>MultiLineIfElse:CustodySetupScreen.kt$CoPlanlyColors.MomPink.copy(alpha = 0.3f)</ID>
@@ -452,32 +431,26 @@
     <ID>MultiLineIfElse:ErrorHandler.kt$ErrorHandler$null</ID>
     <ID>MultiLineIfElse:Extensions.kt$take(maxLength - ellipsis.length) + ellipsis</ID>
     <ID>MultiLineIfElse:Extensions.kt$this</ID>
-    <ID>MultiLineIfElse:MessagesList.kt$MaterialTheme.colorScheme.onPrimary</ID>
-    <ID>MultiLineIfElse:MessagesList.kt$MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f)</ID>
-    <ID>MultiLineIfElse:MessagesList.kt$MaterialTheme.colorScheme.onSurfaceVariant</ID>
-    <ID>MultiLineIfElse:MessagesList.kt$MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)</ID>
-    <ID>MultiLineIfElse:MessagesList.kt$MaterialTheme.colorScheme.primary</ID>
-    <ID>MultiLineIfElse:MessagesList.kt$MaterialTheme.colorScheme.surfaceVariant</ID>
-    <ID>MultiLineIfElse:PairingScreen.kt$null</ID>
     <ID>MultiLineIfElse:RecurrenceExpander.kt$RecurrenceExpander$emptyList()</ID>
     <ID>MultiLineIfElse:RecurrenceExpander.kt$RecurrenceExpander$listOf(event)</ID>
     <ID>NestedBlockDepth:SyncService.kt$SyncService$private suspend fun syncEvents(userId: String)</ID>
-    <ID>NoBlankLineBeforeRbrace:AuthViewModel.kt$AuthViewModel$ </ID>
+    <ID>NoBlankLineBeforeRbrace:ChangeRequestHighlightTest.kt$ChangeRequestHighlightTest$ </ID>
+    <ID>NoBlankLineBeforeRbrace:ChatMappersWireFormatTest.kt$ChatMappersWireFormatTest$ </ID>
+    <ID>NoBlankLineBeforeRbrace:CredentialManagerService.kt$CredentialManagerService$ </ID>
     <ID>NoBlankLineBeforeRbrace:CredentialProviderImpl.kt$CredentialProviderImpl$ </ID>
-    <ID>NoConsecutiveBlankLines:AIService.kt$ </ID>
+    <ID>NoBlankLineBeforeRbrace:DayCellFillsTest.kt$DayCellFillsTest$ </ID>
+    <ID>NoBlankLineBeforeRbrace:RequestChangeViewModel.kt$RequestChangeViewModel$ </ID>
     <ID>NoConsecutiveBlankLines:ActivityEditor.kt$ </ID>
     <ID>NoConsecutiveBlankLines:AllergyEditor.kt$ </ID>
     <ID>NoConsecutiveBlankLines:AnalyticsManager.kt$ </ID>
     <ID>NoConsecutiveBlankLines:AnimationUtils.kt$ </ID>
     <ID>NoConsecutiveBlankLines:AuthScreen.kt$ </ID>
-    <ID>NoConsecutiveBlankLines:AuthViewModel.kt$ </ID>
     <ID>NoConsecutiveBlankLines:CalendarSyncRepository.kt$ </ID>
     <ID>NoConsecutiveBlankLines:ChildInfo.kt$ </ID>
     <ID>NoConsecutiveBlankLines:ChildInfoDao.kt$ </ID>
     <ID>NoConsecutiveBlankLines:ChildInfoEntity.kt$ </ID>
     <ID>NoConsecutiveBlankLines:ChildInfoRepository.kt$ </ID>
     <ID>NoConsecutiveBlankLines:ChildInfoRepositoryImpl.kt$ </ID>
-    <ID>NoConsecutiveBlankLines:ChildInfoScreen.kt$ </ID>
     <ID>NoConsecutiveBlankLines:ChildInfoViewModel.kt$ </ID>
     <ID>NoConsecutiveBlankLines:CoPlanlyApplication.kt$ </ID>
     <ID>NoConsecutiveBlankLines:CoPlanlyDatabase.kt$ </ID>
@@ -496,8 +469,8 @@
     <ID>NoConsecutiveBlankLines:EncryptedPreferences.kt$ </ID>
     <ID>NoConsecutiveBlankLines:ErrorDisplay.kt$ </ID>
     <ID>NoConsecutiveBlankLines:Event.kt$ </ID>
-    <ID>NoConsecutiveBlankLines:EventDao.kt$ </ID>
     <ID>NoConsecutiveBlankLines:EventEntity.kt$ </ID>
+    <ID>NoConsecutiveBlankLines:EventListScreen.kt$ </ID>
     <ID>NoConsecutiveBlankLines:EventRepository.kt$ </ID>
     <ID>NoConsecutiveBlankLines:EventViewModel.kt$ </ID>
     <ID>NoConsecutiveBlankLines:Extensions.kt$ </ID>
@@ -506,15 +479,13 @@
     <ID>NoConsecutiveBlankLines:FirestoreChildInfoDataSource.kt$ </ID>
     <ID>NoConsecutiveBlankLines:FirestoreEventDataSource.kt$ </ID>
     <ID>NoConsecutiveBlankLines:FirestoreUserDataSource.kt$ </ID>
-    <ID>NoConsecutiveBlankLines:GeminiAIService.kt$GeminiAIService$ </ID>
     <ID>NoConsecutiveBlankLines:GoogleCalendarApi.kt$ </ID>
     <ID>NoConsecutiveBlankLines:GoogleModule.kt$ </ID>
     <ID>NoConsecutiveBlankLines:GoogleSignInService.kt$ </ID>
     <ID>NoConsecutiveBlankLines:LoadingSkeleton.kt$ </ID>
     <ID>NoConsecutiveBlankLines:MedicationEditor.kt$ </ID>
+    <ID>NoConsecutiveBlankLines:MonthView.kt$ </ID>
     <ID>NoConsecutiveBlankLines:NotificationManager.kt$ </ID>
-    <ID>NoConsecutiveBlankLines:PairingScreen.kt$ </ID>
-    <ID>NoConsecutiveBlankLines:PairingViewModel.kt$ </ID>
     <ID>NoConsecutiveBlankLines:PreferencesRepository.kt$ </ID>
     <ID>NoConsecutiveBlankLines:PreferencesRepositoryImpl.kt$ </ID>
     <ID>NoConsecutiveBlankLines:PreviewHelpers.kt$ </ID>
@@ -523,7 +494,6 @@
     <ID>NoConsecutiveBlankLines:SettingsViewModel.kt$ </ID>
     <ID>NoConsecutiveBlankLines:SkeletonLoading.kt$ </ID>
     <ID>NoConsecutiveBlankLines:SyncService.kt$ </ID>
-    <ID>NoConsecutiveBlankLines:SyncStatusIndicator.kt$ </ID>
     <ID>NoConsecutiveBlankLines:Theme.kt$ </ID>
     <ID>NoConsecutiveBlankLines:TimePicker.kt$ </ID>
     <ID>NoConsecutiveBlankLines:Type.kt$ </ID>
@@ -535,49 +505,25 @@
     <ID>NoConsecutiveBlankLines:UserRepositoryImpl.kt$ </ID>
     <ID>NoConsecutiveBlankLines:ValidationUtils.kt$ </ID>
     <ID>NoConsecutiveBlankLines:WindowSize.kt$ </ID>
-    <ID>NoEmptyFirstLineInMethodBlock:ConversationSummarizer.kt$ConversationSummarizer$ </ID>
-    <ID>NoEmptyFirstLineInMethodBlock:FamilyInsightsEngine.kt$FamilyInsightsEngine$ </ID>
-    <ID>NoEmptyFirstLineInMethodBlock:PairingScreen.kt$ </ID>
-    <ID>NoEmptyFirstLineInMethodBlock:PredictiveAnalytics.kt$PredictiveAnalytics$ </ID>
-    <ID>NoMultipleSpaces:Grade.kt$GradeScale.GPA_4$ </ID>
-    <ID>NoMultipleSpaces:Grade.kt$GradeScale.GPA_5$ </ID>
-    <ID>NoMultipleSpaces:Grade.kt$GradeScale.LETTER$ </ID>
-    <ID>NoMultipleSpaces:Grade.kt$GradeScale.PERCENTAGE$ </ID>
-    <ID>NoMultipleSpaces:InsightsModels.kt$TimeDistribution$ </ID>
+    <ID>NoUnusedImports:AddEditPetScreen.kt$com.coparently.app.presentation.pets.AddEditPetScreen.kt</ID>
     <ID>NoUnusedImports:AnimatedTheme.kt$com.coparently.app.presentation.theme.AnimatedTheme.kt</ID>
     <ID>NoUnusedImports:AuthScreen.kt$com.coparently.app.presentation.auth.AuthScreen.kt</ID>
-    <ID>NoUnusedImports:AuthViewModel.kt$com.coparently.app.presentation.auth.AuthViewModel.kt</ID>
     <ID>NoUnusedImports:BudgetRepository.kt$com.coparently.app.domain.repository.BudgetRepository.kt</ID>
+    <ID>NoUnusedImports:CalendarScreen.kt$com.coparently.app.presentation.calendar.CalendarScreen.kt</ID>
     <ID>NoUnusedImports:CalendarSyncRepository.kt$com.coparently.app.data.sync.CalendarSyncRepository.kt</ID>
-    <ID>NoUnusedImports:ChatScreen.kt$com.coparently.app.presentation.chat.ChatScreen.kt</ID>
-    <ID>NoUnusedImports:CoPlanlyMessagingService.kt$com.coparently.app.data.remote.firebase.CoPlanlyMessagingService.kt</ID>
     <ID>NoUnusedImports:ConflictResolver.kt$com.coparently.app.data.sync.ConflictResolver.kt</ID>
-    <ID>NoUnusedImports:ConversationsScreen.kt$com.coparently.app.presentation.chat.ConversationsScreen.kt</ID>
     <ID>NoUnusedImports:CredentialManagerService.kt$com.coparently.app.data.remote.google.CredentialManagerService.kt</ID>
     <ID>NoUnusedImports:CustodySetupScreen.kt$com.coparently.app.presentation.custody.CustodySetupScreen.kt</ID>
     <ID>NoUnusedImports:DateRangeHelper.kt$com.coparently.app.presentation.calendar.DateRangeHelper.kt</ID>
     <ID>NoUnusedImports:DynamicTheme.kt$com.coparently.app.presentation.theme.DynamicTheme.kt</ID>
-    <ID>NoUnusedImports:EducationRepository.kt$com.coparently.app.domain.repository.EducationRepository.kt</ID>
-    <ID>NoUnusedImports:EducationRepositoryImpl.kt$com.coparently.app.data.repository.EducationRepositoryImpl.kt</ID>
-    <ID>NoUnusedImports:EventSuggestionEngineUseCase.kt$com.coparently.app.domain.usecase.ai.EventSuggestionEngineUseCase.kt</ID>
     <ID>NoUnusedImports:EventViewModel.kt$com.coparently.app.presentation.event.EventViewModel.kt</ID>
-    <ID>NoUnusedImports:FirestoreEventDataSource.kt$com.coparently.app.data.remote.firebase.FirestoreEventDataSource.kt</ID>
     <ID>NoUnusedImports:GoogleCalendarApi.kt$com.coparently.app.data.remote.google.GoogleCalendarApi.kt</ID>
     <ID>NoUnusedImports:GoogleModule.kt$com.coparently.app.di.GoogleModule.kt</ID>
-    <ID>NoUnusedImports:LoadingButton.kt$com.coparently.app.presentation.common.LoadingButton.kt</ID>
     <ID>NoUnusedImports:LoadingSkeleton.kt$com.coparently.app.presentation.common.animations.LoadingSkeleton.kt</ID>
-    <ID>NoUnusedImports:MedicalRepositoryImpl.kt$com.coparently.app.data.repository.MedicalRepositoryImpl.kt</ID>
     <ID>NoUnusedImports:MedicationEditor.kt$com.coparently.app.presentation.childinfo.components.MedicationEditor.kt</ID>
-    <ID>NoUnusedImports:MessageRepositoryImpl.kt$com.coparently.app.data.repository.MessageRepositoryImpl.kt</ID>
-    <ID>NoUnusedImports:MessagesList.kt$com.coparently.app.presentation.chat.MessagesList.kt</ID>
-    <ID>NoUnusedImports:NaturalLanguageEventParserUseCase.kt$com.coparently.app.domain.usecase.ai.NaturalLanguageEventParserUseCase.kt</ID>
     <ID>NoUnusedImports:PairingScreen.kt$com.coparently.app.presentation.pairing.PairingScreen.kt</ID>
     <ID>NoUnusedImports:PairingViewModel.kt$com.coparently.app.presentation.pairing.PairingViewModel.kt</ID>
-    <ID>NoUnusedImports:QRScannerActivity.kt$com.coparently.app.presentation.pairing.QRScannerActivity.kt</ID>
-    <ID>NoUnusedImports:QRScannerActivity.kt$import kotlinx.coroutines.launch</ID>
     <ID>NoUnusedImports:SkeletonLoading.kt$com.coparently.app.presentation.components.SkeletonLoading.kt</ID>
-    <ID>NoUnusedImports:SmartSchedulingUseCase.kt$com.coparently.app.domain.usecase.ai.SmartSchedulingUseCase.kt</ID>
-    <ID>NoWildcardImports:AIService.kt$import com.coparently.app.domain.model.ai.*</ID>
     <ID>NoWildcardImports:ActivityEditor.kt$import androidx.compose.foundation.layout.*</ID>
     <ID>NoWildcardImports:ActivityEditor.kt$import androidx.compose.material3.*</ID>
     <ID>NoWildcardImports:ActivityEditor.kt$import androidx.compose.runtime.*</ID>
@@ -601,9 +547,6 @@
     <ID>NoWildcardImports:ChildInfoScreen.kt$import androidx.compose.material.icons.filled.*</ID>
     <ID>NoWildcardImports:ChildInfoScreen.kt$import androidx.compose.material3.*</ID>
     <ID>NoWildcardImports:ChildInfoScreen.kt$import androidx.compose.runtime.*</ID>
-    <ID>NoWildcardImports:CommunicationAnalyzer.kt$import com.coparently.app.domain.model.ai.*</ID>
-    <ID>NoWildcardImports:ConflictAlertCard.kt$import androidx.compose.foundation.layout.*</ID>
-    <ID>NoWildcardImports:ConflictAlertCard.kt$import androidx.compose.material3.*</ID>
     <ID>NoWildcardImports:DatePickerDialog.kt$import androidx.compose.material3.*</ID>
     <ID>NoWildcardImports:DatePickerDialog.kt$import androidx.compose.runtime.*</ID>
     <ID>NoWildcardImports:EmergencyContactEditor.kt$import androidx.compose.foundation.layout.*</ID>
@@ -613,162 +556,111 @@
     <ID>NoWildcardImports:ErrorDisplay.kt$import androidx.compose.material.icons.filled.*</ID>
     <ID>NoWildcardImports:ErrorDisplay.kt$import androidx.compose.material3.*</ID>
     <ID>NoWildcardImports:ErrorDisplay.kt$import androidx.compose.runtime.*</ID>
-    <ID>NoWildcardImports:EventSuggestionEngineUseCase.kt$import com.coparently.app.domain.model.ai.*</ID>
-    <ID>NoWildcardImports:EventSuggestionsScreen.kt$import androidx.compose.foundation.layout.*</ID>
-    <ID>NoWildcardImports:EventSuggestionsScreen.kt$import androidx.compose.material3.*</ID>
-    <ID>NoWildcardImports:FamilyInsightsEngine.kt$import com.coparently.app.domain.model.ai.*</ID>
-    <ID>NoWildcardImports:GeminiAIService.kt$import com.coparently.app.domain.model.ai.*</ID>
     <ID>NoWildcardImports:LoadingSkeleton.kt$import androidx.compose.animation.core.*</ID>
     <ID>NoWildcardImports:LoadingSkeleton.kt$import androidx.compose.foundation.layout.*</ID>
-    <ID>NoWildcardImports:LottieAnimations.kt$import androidx.compose.foundation.layout.*</ID>
-    <ID>NoWildcardImports:LottieAnimations.kt$import com.airbnb.lottie.compose.*</ID>
     <ID>NoWildcardImports:MedicationEditor.kt$import androidx.compose.foundation.layout.*</ID>
     <ID>NoWildcardImports:MedicationEditor.kt$import androidx.compose.material3.*</ID>
     <ID>NoWildcardImports:MedicationEditor.kt$import androidx.compose.runtime.*</ID>
-    <ID>NoWildcardImports:NaturalLanguageEventParserUseCase.kt$import com.coparently.app.domain.model.ai.*</ID>
-    <ID>NoWildcardImports:NaturalLanguageEventScreen.kt$import androidx.compose.foundation.layout.*</ID>
-    <ID>NoWildcardImports:NaturalLanguageEventScreen.kt$import androidx.compose.material3.*</ID>
-    <ID>NoWildcardImports:NaturalLanguageEventScreen.kt$import androidx.compose.runtime.*</ID>
     <ID>NoWildcardImports:NavGraph.kt$import com.coparently.app.presentation.common.animations.*</ID>
-    <ID>NoWildcardImports:PairingScreen.kt$import androidx.compose.foundation.layout.*</ID>
-    <ID>NoWildcardImports:PairingScreen.kt$import androidx.compose.material3.*</ID>
-    <ID>NoWildcardImports:PredictiveAnalytics.kt$import com.coparently.app.domain.model.ai.*</ID>
-    <ID>NoWildcardImports:ProactiveConflictMonitorUseCase.kt$import com.coparently.app.domain.model.ai.*</ID>
-    <ID>NoWildcardImports:QRScannerActivity.kt$import androidx.compose.foundation.layout.*</ID>
-    <ID>NoWildcardImports:QRScannerActivity.kt$import androidx.compose.material3.*</ID>
-    <ID>NoWildcardImports:QRScannerActivity.kt$import androidx.compose.runtime.*</ID>
     <ID>NoWildcardImports:SchoolInfoEditor.kt$import androidx.compose.foundation.layout.*</ID>
     <ID>NoWildcardImports:SchoolInfoEditor.kt$import androidx.compose.material3.*</ID>
     <ID>NoWildcardImports:SchoolInfoEditor.kt$import androidx.compose.runtime.*</ID>
-    <ID>NoWildcardImports:SettingsCard.kt$import androidx.compose.foundation.layout.*</ID>
-    <ID>NoWildcardImports:SettingsCard.kt$import androidx.compose.material3.*</ID>
-    <ID>NoWildcardImports:SettingsScreen.kt$import androidx.compose.foundation.layout.*</ID>
-    <ID>NoWildcardImports:SettingsScreen.kt$import androidx.compose.material.icons.filled.*</ID>
-    <ID>NoWildcardImports:SettingsScreen.kt$import androidx.compose.material3.*</ID>
-    <ID>NoWildcardImports:SettingsScreen.kt$import androidx.compose.runtime.*</ID>
     <ID>NoWildcardImports:SkeletonLoading.kt$import androidx.compose.animation.core.*</ID>
     <ID>NoWildcardImports:SkeletonLoading.kt$import androidx.compose.foundation.layout.*</ID>
     <ID>NoWildcardImports:SkeletonLoading.kt$import androidx.compose.runtime.*</ID>
-    <ID>NoWildcardImports:SmartSchedulingUseCase.kt$import com.coparently.app.domain.model.ai.*</ID>
-    <ID>NoWildcardImports:SyncStatusIndicator.kt$import androidx.compose.foundation.layout.*</ID>
-    <ID>NoWildcardImports:SyncStatusIndicator.kt$import androidx.compose.material.icons.filled.*</ID>
-    <ID>NoWildcardImports:SyncStatusIndicator.kt$import androidx.compose.material3.*</ID>
-    <ID>NoWildcardImports:SyncStatusIndicator.kt$import androidx.compose.runtime.*</ID>
     <ID>NoWildcardImports:UseCaseModule.kt$import com.coparently.app.domain.usecase.*</ID>
     <ID>ParameterListWrapping:SyncViewModel.kt$SyncViewModel$(completedTask: com.google.android.gms.tasks.Task&lt;com.google.android.gms.auth.api.signin.GoogleSignInAccount&gt;)</ID>
-    <ID>PrintStackTrace:GoogleSignInService.kt$GoogleSignInService$e</ID>
+    <ID>ReturnCount:ActivityAnnouncement.kt$ActivityAnnouncement.Companion$fun fromMap(map: Map&lt;*, *&gt;?): ActivityAnnouncement?</ID>
+    <ID>ReturnCount:CalendarPaging.kt$internal fun &lt;T&gt; collectPages( limit: Int, maxPages: Int, fetch: (pageToken: String?) -&gt; PageOf&lt;T&gt; ): Paged&lt;T&gt;</ID>
+    <ID>ReturnCount:CalendarScreen.kt$private fun Set&lt;LocalDate&gt;.toggledForSwap(date: LocalDate): Set&lt;LocalDate&gt;</ID>
+    <ID>ReturnCount:CoPlanlyMessagingService.kt$CoPlanlyMessagingService$private fun compose(type: String?, data: Map&lt;String, String&gt;): PushText?</ID>
+    <ID>ReturnCount:CustodyDiffText.kt$@Composable fun custodyDiffDescription(diff: CustodyPatternDiff?, parentNames: ParentNames): String?</ID>
+    <ID>ReturnCount:CustodyModelRepository.kt$CustodyModelRepository$private suspend fun decideProposal( transform: (SharedCustody, String, String, Long) -&gt; Result&lt;SharedCustody&gt; ): Result&lt;Unit&gt;</ID>
+    <ID>ReturnCount:CustodyModelRepository.kt$CustodyModelRepository$private suspend fun writeSwap( pair: CustodyPair, date: String, transform: (Map&lt;String, DayOverride&gt;) -&gt; Result&lt;Map&lt;String, DayOverride&gt;&gt; ): Result&lt;SwapWrite&gt;</ID>
+    <ID>ReturnCount:CustodyModelRepository.kt$CustodyModelRepository$suspend fun applyDayOverridesForDates( dates: List&lt;String&gt;, transform: (Map&lt;String, DayOverride&gt;, String) -&gt; Result&lt;Map&lt;String, DayOverride&gt;&gt; ): Result&lt;Map&lt;String, DayOverride&gt;&gt;</ID>
+    <ID>ReturnCount:CustodyModelRepository.kt$CustodyModelRepository$suspend fun submitPattern(model: CustodyModel): PatternSubmission</ID>
+    <ID>ReturnCount:DayOverrideTransition.kt$DayOverrideTransition$@Suppress("LongParameterList") // the caller's five inputs, plus which answer is being given private fun Map&lt;String, DayOverride&gt;.decide( date: String, byUid: String, atIso: String, note: String?, outcome: DayOverrideStatus ): Result&lt;Map&lt;String, DayOverride&gt;&gt;</ID>
+    <ID>ReturnCount:EventAcceptanceTransition.kt$EventAcceptanceTransition$fun required(event: Event, creatorSlot: String?, partnerUid: String?): Boolean</ID>
+    <ID>ReturnCount:EventRepositoryImpl.kt$EventRepositoryImpl$override suspend fun fetchRemoteEvent(id: String): Event?</ID>
+    <ID>ReturnCount:FamilyKey.kt$FamilyKey$fun orNull(uid: String?, partnerId: String?): String?</ID>
+    <ID>ReturnCount:FamilySettingsRepository.kt$FamilySettingsRepository$private suspend fun currentPair(): SettingsPair?</ID>
+    <ID>ReturnCount:FamilySettingsRepository.kt$FamilySettingsRepository$private suspend fun decide(accept: Boolean): Result&lt;Unit&gt;</ID>
+    <ID>ReturnCount:FamilySettingsRepository.kt$FamilySettingsRepository$suspend fun publishCachedRatioIfMissing()</ID>
+    <ID>ReturnCount:FamilySettingsRepository.kt$FamilySettingsRepository$suspend fun submitRatio(ratio: SplitRatio): Result&lt;RatioSubmission&gt;</ID>
+    <ID>ReturnCount:FamilySettingsRepository.kt$FamilySettingsRepository$suspend fun withdrawProposal(): Result&lt;Unit&gt;</ID>
+    <ID>ReturnCount:FirestoreCustodyDataSource.kt$FirestoreCustodyDataSource$private fun Map&lt;*, *&gt;.toDayOverride(): DayOverride?</ID>
+    <ID>ReturnCount:FirestoreFamilySettingsDataSource.kt$FirestoreFamilySettingsDataSource$private fun Map&lt;String, Any?&gt;.toSettings(): FamilySettings?</ID>
+    <ID>ReturnCount:FriendMappers.kt$FriendMappers$fun grantFrom(friendUid: String, data: Map&lt;String, Any?&gt;?): CalendarFriendGrant?</ID>
+    <ID>ReturnCount:HandoverCalculator.kt$HandoverCalculator$fun nextHandoverFrom( model: CustodyModel, today: LocalDate, overrides: Map&lt;String, DayOverride&gt; = emptyMap() ): HandoverInfo?</ID>
+    <ID>ReturnCount:RecurrenceExpander.kt$RecurrenceExpander$private fun firstIndexEndingAtOrAfter( start: LocalDateTime, pattern: String, rangeStart: LocalDateTime, duration: Duration? ): Long</ID>
     <ID>ReturnCount:ReminderWorker.kt$ReminderWorker$override suspend fun doWork(): Result</ID>
     <ID>SpacingAroundCurly:ChildInfoRepositoryImpl.kt$ChildInfoRepositoryImpl$}</ID>
-    <ID>SpacingAroundCurly:MedicalRepositoryImpl.kt$MedicalRepositoryImpl$}</ID>
-    <ID>StringTemplate:FcmService.kt$FcmService$${action}</ID>
+    <ID>SpacingBetweenDeclarationsWithAnnotations:ChatMappersWireFormatTest.kt$ChatMappersWireFormatTest$@Suppress("UNCHECKED_CAST") val read = (document as Map&lt;String, Any&gt;).toMessageOrNull()</ID>
+    <ID>SpacingBetweenDeclarationsWithComments:CustodyChangeAnnouncementTest.kt$CustodyChangeAnnouncementTest.Companion$/** Built through the projection so the fixture still reads as a date. */</ID>
+    <ID>SpacingBetweenDeclarationsWithComments:NavGraph.kt$Screen.GuestAccept$/** * Redeeming a guest invitation — a separate route from [Pairing], mirroring the two * separate callables behind them. Nothing about a guest belongs on a screen whose other * outcome is a co-parent link. */</ID>
+    <ID>SpacingBetweenDeclarationsWithComments:NavGraph.kt$Screen.RequestChange$/** * The change-request form. * * It used to carry the conversation it was opened from, because the chat card was posted only * when one was supplied — so a change proposed from the calendar reached the thread not at * all. `ActivityAnnouncer` resolves the pair's thread from the two uids itself, so the * argument had nothing left to do and is gone rather than left as dead weight. */</ID>
     <ID>TooGenericExceptionCaught:AddEditEventScreen.kt$e: Exception</ID>
-    <ID>TooGenericExceptionCaught:AuthViewModel.kt$AuthViewModel$e: Exception</ID>
     <ID>TooGenericExceptionCaught:CalendarSyncRepository.kt$CalendarSyncRepository$e: Exception</ID>
     <ID>TooGenericExceptionCaught:ChildInfoViewModel.kt$ChildInfoViewModel$e: Exception</ID>
     <ID>TooGenericExceptionCaught:CoPlanlyMessagingService.kt$CoPlanlyMessagingService$e: Exception</ID>
-    <ID>TooGenericExceptionCaught:ConflictMonitorViewModel.kt$ConflictMonitorViewModel$e: Exception</ID>
     <ID>TooGenericExceptionCaught:CreateEventUseCase.kt$CreateEventUseCase$e: Exception</ID>
     <ID>TooGenericExceptionCaught:CredentialManagerService.kt$CredentialManagerService$e: Exception</ID>
     <ID>TooGenericExceptionCaught:CustodySetupViewModel.kt$CustodySetupViewModel$e: Exception</ID>
     <ID>TooGenericExceptionCaught:DeleteEventUseCase.kt$DeleteEventUseCase$e: Exception</ID>
-    <ID>TooGenericExceptionCaught:EncryptedPreferences.kt$EncryptedPreferences$deleteEx: Exception</ID>
-    <ID>TooGenericExceptionCaught:EncryptedPreferences.kt$EncryptedPreferences$e2: Exception</ID>
-    <ID>TooGenericExceptionCaught:EncryptedPreferences.kt$EncryptedPreferences$e: Exception</ID>
     <ID>TooGenericExceptionCaught:EncryptionManager.kt$EncryptionManager$e: Exception</ID>
-    <ID>TooGenericExceptionCaught:EventSuggestionEngineUseCase.kt$EventSuggestionEngineUseCase$e: Exception</ID>
-    <ID>TooGenericExceptionCaught:EventSuggestionsViewModel.kt$EventSuggestionsViewModel$e: Exception</ID>
     <ID>TooGenericExceptionCaught:EventViewModel.kt$EventViewModel$e: Exception</ID>
     <ID>TooGenericExceptionCaught:FcmService.kt$FcmService$e: Exception</ID>
     <ID>TooGenericExceptionCaught:FeatureManager.kt$FeatureManager$e: Exception</ID>
     <ID>TooGenericExceptionCaught:FirebaseAuthService.kt$FirebaseAuthService$e: Exception</ID>
     <ID>TooGenericExceptionCaught:FirestoreChildInfoDataSource.kt$FirestoreChildInfoDataSource$e: Exception</ID>
-    <ID>TooGenericExceptionCaught:FirestoreEducationDataSource.kt$FirestoreEducationDataSource$e: Exception</ID>
     <ID>TooGenericExceptionCaught:FirestoreEventDataSource.kt$FirestoreEventDataSource$e: Exception</ID>
-    <ID>TooGenericExceptionCaught:FirestoreMedicalDataSource.kt$FirestoreMedicalDataSource$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:FirestorePetDataSource.kt$FirestorePetDataSource$e: Exception</ID>
     <ID>TooGenericExceptionCaught:FirestoreUserDataSource.kt$FirestoreUserDataSource$e: Exception</ID>
-    <ID>TooGenericExceptionCaught:GeminiAIService.kt$GeminiAIService$e: Exception</ID>
     <ID>TooGenericExceptionCaught:GoogleSignInService.kt$GoogleSignInService$e: Exception</ID>
     <ID>TooGenericExceptionCaught:MainActivity.kt$MainActivity$e: Exception</ID>
-    <ID>TooGenericExceptionCaught:MessageRepositoryImpl.kt$MessageRepositoryImpl$e: Exception</ID>
-    <ID>TooGenericExceptionCaught:NaturalLanguageEventParserUseCase.kt$NaturalLanguageEventParserUseCase$e: Exception</ID>
-    <ID>TooGenericExceptionCaught:NaturalLanguageEventViewModel.kt$NaturalLanguageEventViewModel$e: Exception</ID>
     <ID>TooGenericExceptionCaught:NotificationManager.kt$NotificationManager$e: Exception</ID>
-    <ID>TooGenericExceptionCaught:PairingViewModel.kt$PairingViewModel$e: Exception</ID>
-    <ID>TooGenericExceptionCaught:ProactiveConflictMonitorUseCase.kt$ProactiveConflictMonitorUseCase$e: Exception</ID>
     <ID>TooGenericExceptionCaught:QRCodeService.kt$QRCodeService$e: Exception</ID>
-    <ID>TooGenericExceptionCaught:QRScannerActivity.kt$QRScannerActivity$e: Exception</ID>
-    <ID>TooGenericExceptionCaught:QRScannerActivity.kt$QRScannerViewModel$e: Exception</ID>
     <ID>TooGenericExceptionCaught:SecurityAudit.kt$SecurityAudit$e: Exception</ID>
     <ID>TooGenericExceptionCaught:SettingsViewModel.kt$SettingsViewModel$e: Exception</ID>
     <ID>TooGenericExceptionCaught:SyncService.kt$SyncService$e: Exception</ID>
     <ID>TooGenericExceptionCaught:SyncViewModel.kt$SyncViewModel$e: Exception</ID>
-    <ID>TooGenericExceptionCaught:SyncWorker.kt$SyncWorker$e: Exception</ID>
     <ID>TooGenericExceptionCaught:UpdateEventUseCase.kt$UpdateEventUseCase$e: Exception</ID>
     <ID>TooGenericExceptionCaught:UserRepositoryImpl.kt$UserRepositoryImpl$e: Exception</ID>
-    <ID>TooGenericExceptionThrown:GeminiAIService.kt$GeminiAIService$throw Exception("Empty response from AI")</ID>
-    <ID>TooGenericExceptionThrown:GeminiAIService.kt$GeminiAIService$throw Exception("Empty response")</ID>
-    <ID>TooManyFunctions:AIService.kt$AIService</ID>
+    <ID>TooManyFunctions:AnalyticsManager.kt$AnalyticsManager</ID>
     <ID>TooManyFunctions:ChildInfoDao.kt$ChildInfoDao</ID>
-    <ID>TooManyFunctions:EducationRepository.kt$EducationRepository</ID>
-    <ID>TooManyFunctions:EducationRepositoryImpl.kt$EducationRepositoryImpl : EducationRepository</ID>
+    <ID>TooManyFunctions:DatabaseModule.kt$DatabaseModule</ID>
     <ID>TooManyFunctions:EncryptedPreferences.kt$EncryptedPreferences</ID>
     <ID>TooManyFunctions:EventDao.kt$EventDao</ID>
+    <ID>TooManyFunctions:EventRepository.kt$EventRepository</ID>
     <ID>TooManyFunctions:EventViewModel.kt$EventViewModel : ViewModel</ID>
     <ID>TooManyFunctions:Extensions.kt$com.coparently.app.utils.Extensions.kt</ID>
-    <ID>TooManyFunctions:GeminiAIService.kt$GeminiAIService : AIService</ID>
+    <ID>TooManyFunctions:OnboardingScreen.kt$com.coparently.app.presentation.onboarding.OnboardingScreen.kt</ID>
+    <ID>TooManyFunctions:OnboardingViewModel.kt$OnboardingViewModel : ViewModel</ID>
+    <ID>TooManyFunctions:PairingScreen.kt$com.coparently.app.presentation.pairing.PairingScreen.kt</ID>
+    <ID>TooManyFunctions:PetDao.kt$PetDao</ID>
     <ID>TooManyFunctions:ValidationUtils.kt$ValidationUtils</ID>
-    <ID>UnusedParameter:AIModule.kt$AIModule$@ApplicationContext context: Context</ID>
     <ID>UnusedParameter:AnimatedEmptyState.kt$icon: ImageVector</ID>
-    <ID>UnusedParameter:ChatViewModel.kt$ChatViewModel$template: MessageTemplate</ID>
-    <ID>UnusedParameter:ConversationSummarizer.kt$ConversationSummarizer$conversationId: String</ID>
-    <ID>UnusedParameter:ConversationSummarizer.kt$ConversationSummarizer$since: LocalDateTime</ID>
     <ID>UnusedParameter:DayWeekView.kt$baseDate: LocalDate</ID>
     <ID>UnusedParameter:DayWeekView.kt$baseHour: Int</ID>
-    <ID>UnusedParameter:FamilyInsightsEngine.kt$FamilyInsightsEngine$childId: String</ID>
-    <ID>UnusedParameter:FamilyInsightsEngine.kt$FamilyInsightsEngine$timeRange: DateRange</ID>
-    <ID>UnusedParameter:FirestoreMessageDataSource.kt$FirestoreMessageDataSource$conversationId: String</ID>
-    <ID>UnusedParameter:FirestoreMessageDataSource.kt$FirestoreMessageDataSource$userId: String</ID>
-    <ID>UnusedParameter:GeminiAIService.kt$GeminiAIService$responseText: String</ID>
-    <ID>UnusedParameter:PredictiveAnalytics.kt$PredictiveAnalytics$childId: String</ID>
-    <ID>UnusedParameter:PredictiveAnalytics.kt$PredictiveAnalytics$timeRange: DateRange</ID>
-    <ID>UnusedParameter:ProactiveConflictMonitorUseCase.kt$ProactiveConflictMonitorUseCase$to: LocalDateTime</ID>
-    <ID>UnusedParameter:QRScannerActivity.kt$onQRCodeScanned: (String) -&gt; Unit</ID>
-    <ID>UnusedParameter:SmartSchedulingUseCase.kt$ConflictDetector$requestedDuration: java.time.Duration</ID>
     <ID>UnusedPrivateMember:CalendarHeader.kt$@LightDarkPreviews @Composable private fun CalendarHeaderTodayPreview()</ID>
     <ID>UnusedPrivateMember:CalendarHeader.kt$@Preview(name = "Week mode, filters active", showBackground = true) @Composable private fun CalendarHeaderWeekPreview()</ID>
-    <ID>UnusedPrivateMember:CalendarLegend.kt$@LightDarkPreviews @Composable private fun CalendarLegendPreview()</ID>
-    <ID>UnusedPrivateMember:CustodyRibbon.kt$@LightDarkPreviews @Composable private fun CustodyRibbonMomPreview()</ID>
-    <ID>UnusedPrivateMember:CustodyRibbon.kt$@Preview(name = "Dad, handover tomorrow", showBackground = true) @Composable private fun CustodyRibbonDadTomorrowPreview()</ID>
-    <ID>UnusedPrivateMember:CustodyRibbon.kt$@Preview(name = "No handover known", showBackground = true) @Composable private fun CustodyRibbonNoHandoverPreview()</ID>
+    <ID>UnusedPrivateMember:CategoryPieChart.kt$@LightDarkPreviews @Composable private fun CategoryPieChartAllNinePreview()</ID>
+    <ID>UnusedPrivateMember:CategoryPieChart.kt$@LightDarkPreviews @Composable private fun CategoryPieChartOneSlicePreview()</ID>
+    <ID>UnusedPrivateMember:CategoryPieChart.kt$@Preview(showBackground = true) @Composable private fun CategoryPieChartEmptyPreview()</ID>
     <ID>UnusedPrivateMember:ExpenseSummaryHeader.kt$@LightDarkPreviews @Composable private fun ExpenseSummaryHeaderPairedPreview()</ID>
     <ID>UnusedPrivateMember:ExpenseSummaryHeader.kt$@LightDarkPreviews @Composable private fun ExpenseSummaryHeaderUnpairedPreview()</ID>
-    <ID>UnusedPrivateMember:QuickActionsBottomSheet.kt$@LightDarkPreviews @Composable private fun QuickActionItemPreview()</ID>
-    <ID>UnusedPrivateMember:QuickActionsBottomSheet.kt$@Preview(name = "Quick Actions List", showBackground = true) @Composable private fun QuickActionsListPreview()</ID>
-    <ID>UnusedPrivateMember:SyncStatusIndicator.kt$@LightDarkPreviews @Composable private fun SyncStatusIndicatorSyncingPreview()</ID>
-    <ID>UnusedPrivateMember:SyncStatusIndicator.kt$@Preview(name = "Error State", showBackground = true) @Composable private fun SyncStatusIndicatorErrorPreview()</ID>
-    <ID>UnusedPrivateMember:SyncStatusIndicator.kt$@Preview(name = "Status Badges", showBackground = true) @Composable private fun SyncStatusBadgePreview()</ID>
-    <ID>UnusedPrivateMember:SyncStatusIndicator.kt$@Preview(name = "Status Icons", showBackground = true) @Composable private fun SyncStatusIconPreview()</ID>
-    <ID>UnusedPrivateMember:SyncStatusIndicator.kt$@Preview(name = "Success State", showBackground = true) @Composable private fun SyncStatusIndicatorSuccessPreview()</ID>
     <ID>UnusedPrivateMember:TimePicker.kt$@LightDarkPreviews @Composable private fun TimePickerDialogPreview()</ID>
     <ID>UnusedPrivateMember:TimePicker.kt$@Preview(name = "Evening Time", showBackground = true) @Composable private fun TimePickerDialogEveningPreview()</ID>
     <ID>UnusedPrivateMember:TimePicker.kt$@Preview(name = "Morning Time", showBackground = true) @Composable private fun TimePickerDialogMorningPreview()</ID>
-    <ID>UnusedPrivateProperty:AuthViewModel.kt$AuthViewModel$private val credentialManagerService: CredentialManagerService</ID>
-    <ID>UnusedPrivateProperty:CalendarNavigation.kt$val density = LocalDensity.current</ID>
-    <ID>UnusedPrivateProperty:ConversationSummarizer.kt$ConversationSummarizer$private val messageRepository: MessageRepository</ID>
     <ID>UnusedPrivateProperty:CredentialManagerService.kt$CredentialManagerService$private val credentialManager: CredentialManager? = try { CredentialManager.create(context) } catch (e: Exception) { Log.e(TAG, "Failed to create CredentialManager", e) null }</ID>
     <ID>UnusedPrivateProperty:DayWeekView.kt$val headerHeight = dims.buttonHeight * 1.6f // Match header height</ID>
     <ID>UnusedPrivateProperty:EncryptionManager.kt$EncryptionManager$@ApplicationContext private val context: Context</ID>
-    <ID>UnusedPrivateProperty:FamilyInsightsEngine.kt$FamilyInsightsEngine$private val eventRepository: EventRepository</ID>
-    <ID>UnusedPrivateProperty:FamilyInsightsEngine.kt$FamilyInsightsEngine$private val expenseRepository: ExpenseRepository</ID>
     <ID>UnusedPrivateProperty:FcmService.kt$FcmService$private val gson = Gson()</ID>
-    <ID>UnusedPrivateProperty:GeminiAIService.kt$GeminiAIService$private val gson: Gson</ID>
     <ID>UnusedPrivateProperty:GoogleCalendarApi.kt$GoogleCalendarApi.Companion$private val SCOPES = listOf(CalendarScopes.CALENDAR)</ID>
-    <ID>UnusedPrivateProperty:PredictiveAnalytics.kt$PredictiveAnalytics$private val eventRepository: EventRepository</ID>
-    <ID>UnusedPrivateProperty:PredictiveAnalytics.kt$PredictiveAnalytics$private val expenseRepository: ExpenseRepository</ID>
-    <ID>UnusedPrivateProperty:QRScannerActivity.kt$val scope = rememberCoroutineScope()</ID>
-    <ID>UnusedPrivateProperty:SmartSchedulingUseCase.kt$SmartSchedulingUseCase$private val eventRepository: EventRepository</ID>
+    <ID>UnusedPrivateProperty:HomeViewModel.kt$HomeViewModel$/** * Whether a co-parent is linked. Driven by the pairing repository's realtime state, so * the CTA disappears the moment the other parent accepts — without the user reopening * the screen. It now gates the whole page rather than one card; see [uiState]. * * [PairingState.Loading] (the initial state, and what the repository falls back to if its * Firestore listener fails permanently) is treated as "not paired" here, i.e. this card * shows. Note this is not the user's only route to pairing — Settings has its own * unconditional "Co-Parent Pairing" entry (`SettingsScreen`, wired in `NavGraph`) that * works regardless of this flow, so a stuck `Loading` state never makes pairing * unreachable app-wide. The choice below is scoped to *this card* only: showing it to an * already-paired user is a one-frame cosmetic glitch that self-corrects on the next * snapshot, while hiding it from an unpaired user silently drops Home's primary, most * visible invitation to pair — with nothing on this screen hinting that anything is * wrong or that they should look in Settings instead. Between an occasional redundant * card and a silently missing primary CTA, the former is the smaller cost, so "not * paired" is what this flow defaults to while the real answer is unknown. * * That reasoning got *stronger* when this began gating the page — and then stopped applying * at all, because [uiState] no longer has to choose. While the answer is unknown the page * draws [HomeUiState.Loading] and asserts neither thing. This flow is kept for the one case * that still needs a decision: a `Loading` that never resolves. */ private val paired: StateFlow&lt;Boolean&gt; = pairingState .map { it is PairingState.Paired } .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), false)</ID>
+    <ID>UnusedPrivateProperty:MainActivity.kt$MainActivity$private val pendingGuestCode: StateFlow&lt;String?&gt; = _pendingGuestCode</ID>
+    <ID>UnusedPrivateProperty:MainActivity.kt$MainActivity$private val pendingPairingCode: StateFlow&lt;String?&gt; = _pendingPairingCode</ID>
     <ID>UnusedPrivateProperty:UserRepositoryImpl.kt$UserRepositoryImpl$private val fcmService: FcmService</ID>
-    <ID>WildcardImport:AIService.kt$import com.coparently.app.domain.model.ai.*</ID>
     <ID>WildcardImport:ActivityEditor.kt$import androidx.compose.foundation.layout.*</ID>
     <ID>WildcardImport:ActivityEditor.kt$import androidx.compose.material3.*</ID>
     <ID>WildcardImport:ActivityEditor.kt$import androidx.compose.runtime.*</ID>
@@ -792,9 +684,6 @@
     <ID>WildcardImport:ChildInfoScreen.kt$import androidx.compose.material.icons.filled.*</ID>
     <ID>WildcardImport:ChildInfoScreen.kt$import androidx.compose.material3.*</ID>
     <ID>WildcardImport:ChildInfoScreen.kt$import androidx.compose.runtime.*</ID>
-    <ID>WildcardImport:CommunicationAnalyzer.kt$import com.coparently.app.domain.model.ai.*</ID>
-    <ID>WildcardImport:ConflictAlertCard.kt$import androidx.compose.foundation.layout.*</ID>
-    <ID>WildcardImport:ConflictAlertCard.kt$import androidx.compose.material3.*</ID>
     <ID>WildcardImport:DatePickerDialog.kt$import androidx.compose.material3.*</ID>
     <ID>WildcardImport:DatePickerDialog.kt$import androidx.compose.runtime.*</ID>
     <ID>WildcardImport:EmergencyContactEditor.kt$import androidx.compose.foundation.layout.*</ID>
@@ -804,48 +693,21 @@
     <ID>WildcardImport:ErrorDisplay.kt$import androidx.compose.material.icons.filled.*</ID>
     <ID>WildcardImport:ErrorDisplay.kt$import androidx.compose.material3.*</ID>
     <ID>WildcardImport:ErrorDisplay.kt$import androidx.compose.runtime.*</ID>
-    <ID>WildcardImport:EventSuggestionEngineUseCase.kt$import com.coparently.app.domain.model.ai.*</ID>
-    <ID>WildcardImport:EventSuggestionsScreen.kt$import androidx.compose.foundation.layout.*</ID>
-    <ID>WildcardImport:EventSuggestionsScreen.kt$import androidx.compose.material3.*</ID>
-    <ID>WildcardImport:FamilyInsightsEngine.kt$import com.coparently.app.domain.model.ai.*</ID>
-    <ID>WildcardImport:GeminiAIService.kt$import com.coparently.app.domain.model.ai.*</ID>
     <ID>WildcardImport:LoadingSkeleton.kt$import androidx.compose.animation.core.*</ID>
     <ID>WildcardImport:LoadingSkeleton.kt$import androidx.compose.foundation.layout.*</ID>
-    <ID>WildcardImport:LottieAnimations.kt$import androidx.compose.foundation.layout.*</ID>
-    <ID>WildcardImport:LottieAnimations.kt$import com.airbnb.lottie.compose.*</ID>
     <ID>WildcardImport:MedicationEditor.kt$import androidx.compose.foundation.layout.*</ID>
     <ID>WildcardImport:MedicationEditor.kt$import androidx.compose.material3.*</ID>
     <ID>WildcardImport:MedicationEditor.kt$import androidx.compose.runtime.*</ID>
-    <ID>WildcardImport:NaturalLanguageEventParserUseCase.kt$import com.coparently.app.domain.model.ai.*</ID>
-    <ID>WildcardImport:NaturalLanguageEventScreen.kt$import androidx.compose.foundation.layout.*</ID>
-    <ID>WildcardImport:NaturalLanguageEventScreen.kt$import androidx.compose.material3.*</ID>
-    <ID>WildcardImport:NaturalLanguageEventScreen.kt$import androidx.compose.runtime.*</ID>
     <ID>WildcardImport:NavGraph.kt$import com.coparently.app.presentation.common.animations.*</ID>
-    <ID>WildcardImport:PairingScreen.kt$import androidx.compose.foundation.layout.*</ID>
-    <ID>WildcardImport:PairingScreen.kt$import androidx.compose.material3.*</ID>
-    <ID>WildcardImport:PredictiveAnalytics.kt$import com.coparently.app.domain.model.ai.*</ID>
-    <ID>WildcardImport:ProactiveConflictMonitorUseCase.kt$import com.coparently.app.domain.model.ai.*</ID>
-    <ID>WildcardImport:QRScannerActivity.kt$import androidx.compose.foundation.layout.*</ID>
-    <ID>WildcardImport:QRScannerActivity.kt$import androidx.compose.material3.*</ID>
-    <ID>WildcardImport:QRScannerActivity.kt$import androidx.compose.runtime.*</ID>
     <ID>WildcardImport:SchoolInfoEditor.kt$import androidx.compose.foundation.layout.*</ID>
     <ID>WildcardImport:SchoolInfoEditor.kt$import androidx.compose.material3.*</ID>
     <ID>WildcardImport:SchoolInfoEditor.kt$import androidx.compose.runtime.*</ID>
-    <ID>WildcardImport:SettingsCard.kt$import androidx.compose.foundation.layout.*</ID>
-    <ID>WildcardImport:SettingsCard.kt$import androidx.compose.material3.*</ID>
-    <ID>WildcardImport:SettingsScreen.kt$import androidx.compose.foundation.layout.*</ID>
-    <ID>WildcardImport:SettingsScreen.kt$import androidx.compose.material.icons.filled.*</ID>
-    <ID>WildcardImport:SettingsScreen.kt$import androidx.compose.material3.*</ID>
-    <ID>WildcardImport:SettingsScreen.kt$import androidx.compose.runtime.*</ID>
     <ID>WildcardImport:SkeletonLoading.kt$import androidx.compose.animation.core.*</ID>
     <ID>WildcardImport:SkeletonLoading.kt$import androidx.compose.foundation.layout.*</ID>
     <ID>WildcardImport:SkeletonLoading.kt$import androidx.compose.runtime.*</ID>
-    <ID>WildcardImport:SmartSchedulingUseCase.kt$import com.coparently.app.domain.model.ai.*</ID>
-    <ID>WildcardImport:SyncStatusIndicator.kt$import androidx.compose.foundation.layout.*</ID>
-    <ID>WildcardImport:SyncStatusIndicator.kt$import androidx.compose.material.icons.filled.*</ID>
-    <ID>WildcardImport:SyncStatusIndicator.kt$import androidx.compose.material3.*</ID>
-    <ID>WildcardImport:SyncStatusIndicator.kt$import androidx.compose.runtime.*</ID>
     <ID>WildcardImport:UseCaseModule.kt$import com.coparently.app.domain.usecase.*</ID>
+    <ID>Wrapping:CalendarScreen.kt${ date: LocalDate -&gt; swapSelection = swapSelection.toggledForSwap(date) }</ID>
+    <ID>Wrapping:CalendarSyncRepositoryTest.kt$CalendarSyncRepositoryTest$(</ID>
     <ID>Wrapping:ChildInfoRepositoryImpl.kt$ChildInfoRepositoryImpl$mapOf( "name" to it.name, "address" to it.address, "phone" to it.phone, "teacherName" to it.teacherName, "teacherEmail" to it.teacherEmail, "grade" to it.grade )</ID>
     <ID>Wrapping:ChildInfoRepositoryImpl.kt$ChildInfoRepositoryImpl$mapOf( "name" to it.name, "dosage" to it.dosage, "frequency" to it.frequency, "notes" to it.notes )</ID>
     <ID>Wrapping:ChildInfoRepositoryImpl.kt$ChildInfoRepositoryImpl$mapOf( "name" to it.name, "relationship" to it.relationship, "phone" to it.phone, "alternatePhone" to it.alternatePhone )</ID>
@@ -853,11 +715,5 @@
     <ID>Wrapping:CredentialManagerService.kt$CredentialManagerService$(</ID>
     <ID>Wrapping:EventDao.kt$EventDao$(</ID>
     <ID>Wrapping:GoogleCalendarApi.kt$GoogleCalendarApi$(</ID>
-    <ID>Wrapping:MedicalRecordDao.kt$MedicalRecordDao$(</ID>
-    <ID>Wrapping:MedicalRepositoryImpl.kt$MedicalRepositoryImpl$mapOf( "name" to it.name, "dosage" to it.dosage, "frequency" to it.frequency, "startDate" to it.startDate.format(dateFormatter), "endDate" to it.endDate?.format(dateFormatter), "notes" to it.notes )</ID>
-    <ID>Wrapping:PairingScreen.kt$Text( text = uiState.emailError ?: "", color = MaterialTheme.colorScheme.error )</ID>
-    <ID>Wrapping:PairingViewModel.kt$PairingViewModel$(</ID>
-    <ID>Wrapping:PredictiveAnalytics.kt$PredictiveAnalytics$(</ID>
-    <ID>Wrapping:SchoolEventDao.kt$SchoolEventDao$(</ID>
   </CurrentIssues>
 </SmellBaseline>
