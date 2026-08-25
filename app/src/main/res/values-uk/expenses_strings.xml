@@ -101,4 +101,7 @@
     <string name="budget_status_near">Близько до ліміту</string>
     <string name="budget_status_over">Перевищено</string>
     <string name="expenses_budget_chip_status">%1$s · %2$s</string>
+    <string name="expense_for_members">Для кого це?</string>
+    <string name="expenses_filter_members">Показати для</string>
+    <string name="budget_for_members">Для кого цей бюджет?</string>
 </resources>

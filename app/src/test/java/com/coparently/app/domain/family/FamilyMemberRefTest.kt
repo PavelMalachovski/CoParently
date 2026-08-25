@@ -54,10 +54,9 @@ class FamilyMemberRefTest {
     @Test
     fun `an unknown reference matches nobody`() {
         val refs = listOf<FamilyMemberRef>(Unknown("grandparent:g1"))
-        assertTrue(refs.childIds().isEmpty())
-        assertTrue(refs.petIds().isEmpty())
         assertFalse(refs.names(Child("g1")), "an unknown reference is nobody's child")
         assertFalse(refs.names(Pet("g1")), "and nobody's pet")
+        assertFalse(refs.names(Unknown("grandparent:other")), "and not some other unknown")
     }
 
     @Test
@@ -112,9 +111,10 @@ class FamilyMemberRefTest {
     }
 
     @Test
-    fun `children and pets can be read out separately`() {
-        val refs = listOf(Child("c1"), Pet("p1"), Child("c2"))
-        assertEquals(listOf("c1", "c2"), refs.childIds())
-        assertEquals(listOf("p1"), refs.petIds())
+    fun `an unknown reference is still selectable by its own stored text`() {
+        // Not a feature anybody uses - it is the proof that Unknown is a value like any other,
+        // so carrying one through an edit cannot corrupt the rest of the list.
+        val refs = listOf<FamilyMemberRef>(Unknown("grandparent:g1"), Child("c1"))
+        assertTrue(refs.names(Unknown("grandparent:g1")))
     }
 }

@@ -930,7 +930,7 @@ Removing a draft deletes its record when one was written, through the same
 the missing-tombstone defect recorded in CLAUDE.md's known issues. Not a new caller of a broken
 path so much as a second one; fixing it there fixes it here.
 
-### FAM-2 · P1 · M · One reference for "who this is about", and expenses that use it
+### FAM-2 · **DONE** · One reference for "who this is about", and expenses that use it
 
 `Expense.childId` and `Budget.childId` become `forMembers`, a list of a new
 `domain/family/FamilyMemberRef` — the same shape as `data/sync/Tombstone.kt` and
@@ -945,8 +945,17 @@ child-only field never could. Then: the picker on `AddExpenseScreen` and `Budget
 filter on the expenses screen, and per-member balances. Room v26 → v27; no data is lost because
 there is none.
 
-**Ship it with FAM-3**, or the wizard will let a parent name two children and nothing outside
-their record cards will know the difference.
+Two rules came out of building it, and both have an obvious wrong answer one keystroke away:
+
+* **Naming nobody is not naming everybody.** An untagged expense appears in the unfiltered month
+  and under no chip. The alternative puts the family's whole grocery bill under every child's
+  chip, and every chip then shows the same list. The same rule scopes a budget: one that names
+  members is charged only what names them back.
+* **An unrecognised reference survives a round trip.** `FamilyMemberRef.Unknown` keeps the stored
+  text verbatim, so an older build cannot erase a tag a newer one wrote.
+
+Still open here: the calendar (**FAM-3**), which is where a family with two children actually
+feels the difference.
 
 ### FAM-3 · P1 · L · Events know who they are about
 

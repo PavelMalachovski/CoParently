@@ -47,7 +47,7 @@ sealed interface FamilyMemberRef {
      * A reference written by a build that knows a kind this one does not.
      *
      * Carried through unchanged so an edit here cannot erase it. It is nobody's child and
-     * nobody's pet, so [childIds] and [petIds] pass it by and no chip ever selects it.
+     * nobody's pet, so [names] never matches it and no chip ever selects it.
      */
     data class Unknown(override val stored: String) : FamilyMemberRef
 
@@ -103,14 +103,6 @@ sealed interface FamilyMemberRef {
             childId?.takeIf { it.isNotBlank() }?.let { listOf(Child(it)) }.orEmpty()
     }
 }
-
-/** The children named here, in order. [FamilyMemberRef.Unknown]s are not children. */
-fun List<FamilyMemberRef>.childIds(): List<String> =
-    filterIsInstance<FamilyMemberRef.Child>().map { it.id }
-
-/** The pets named here, in order. */
-fun List<FamilyMemberRef>.petIds(): List<String> =
-    filterIsInstance<FamilyMemberRef.Pet>().map { it.id }
 
 /**
  * Whether this record **names** [member].

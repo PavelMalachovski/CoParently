@@ -247,9 +247,24 @@ cd firestore-tests && npm test              # firestore.rules against the local 
   screen they saw before — a picker for a set of one is design item 8 in miniature. The wizard
   was the last place in the app insisting on exactly one of anything (`ChildInfoScreen`,
   `PetsScreen` and `ContactDirectory` were already plural); what is still singular is the
-  calendar, which carries no child reference at all — see **FAM-2/FAM-3** in `docs/BACKLOG.md`
-  before adding one, because the shape is one `FamilyMemberRef` covering children *and* pets, not
-  a `childId`.
+  calendar, which carries no child reference at all — see **FAM-3** in `docs/BACKLOG.md` before
+  adding one.
+- **Who a record is about goes through `domain/family/FamilyMemberRef`** (FAM-2, Aug 2026) — one
+  file defining the stored vocabulary, like `Tombstone.kt` and `PushPayload.kt`. Children *and*
+  pets, because a vet's bill is an expense and the `Expense.childId` it replaced had nowhere to
+  put it. `Expense.forMembers` and `Budget.forMembers` are lists of it; the wire form is a JSON
+  array of the prefixed strings (`"child:abc"`, `"pet:xyz"`), never a Gson serialisation of the
+  type — R8 rewrote a Gson model's field names once already and it shipped. Three things not to
+  invert. **Naming nobody is not naming everybody:** an untagged record shows in the unfiltered
+  list and under no chip, or every chip shows the same untagged pile and the filter says nothing;
+  a budget naming members is charged only what names them back. **An unrecognised reference
+  survives a round trip** as `FamilyMemberRef.Unknown`, so an older build cannot erase a tag a
+  newer one wrote — dropping it on read is data loss, not a missing feature. And **a member is a
+  name, never a colour**: pink and blue are the parent slots, teal is a calendar friend, neutral
+  grey is the weekend, and a fifth colour channel breaks what `DayCellFills.kt` protects. The
+  `childId` columns survive on `ExpenseEntity`/`BudgetEntity`, dead and documented: dropping a
+  SQLite column needs a table rebuild, this migration file has never contained one, and with
+  `app/schemas/` stopping at v14 (**CQ-1**) there is nothing to check a rebuild against.
 - Conventional Commits (`feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`).
 
 ## Architecture map

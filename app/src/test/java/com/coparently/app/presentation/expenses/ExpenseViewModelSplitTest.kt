@@ -10,6 +10,7 @@ import com.coparently.app.domain.receipts.ReceiptTextRecognizer
 import com.coparently.app.domain.repository.ExpenseRepository
 import com.coparently.app.domain.repository.UserRepository
 import com.coparently.app.presentation.common.ParentsSource
+import com.coparently.app.presentation.common.testFamilyMembersSource
 import com.coparently.app.presentation.common.testParentsSource
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -155,7 +156,8 @@ class ExpenseViewModelSplitTest {
             every { observeSettings() } returns flowOf(null)
             every { agreedRatioOrDefault() } returns SplitRatio.EVEN
         },
-        parentsSource(paired)
+        parentsSource(paired),
+        testFamilyMembersSource()
     )
 
     /**

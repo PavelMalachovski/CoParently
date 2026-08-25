@@ -48,6 +48,7 @@ fun BudgetScreen(
     val budgetsState by viewModel.budgets.collectAsState()
     val budgets = budgetsState.valueOrNull.orEmpty()
     val alerts by viewModel.activeAlerts.collectAsState()
+    val familyMembers by viewModel.familyMembers.collectAsState()
     var showAddSheet by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf<Budget?>(null) }
 
@@ -132,20 +133,26 @@ fun BudgetScreen(
     if (showAddSheet) {
         BudgetSheet(
             onDismiss = { showAddSheet = false },
-            onSave = { category, monthlyLimit ->
-                viewModel.addBudget(category = category, monthlyLimit = monthlyLimit)
+            onSave = { category, monthlyLimit, forMembers ->
+                viewModel.addBudget(
+                    category = category,
+                    monthlyLimit = monthlyLimit,
+                    forMembers = forMembers
+                )
                 showAddSheet = false
-            }
+            },
+            members = familyMembers
         )
     }
 
     editing?.let { budget ->
         BudgetSheet(
             onDismiss = { editing = null },
-            onSave = { _, monthlyLimit ->
-                viewModel.updateBudget(budget, monthlyLimit)
+            onSave = { _, monthlyLimit, forMembers ->
+                viewModel.updateBudget(budget, monthlyLimit, forMembers)
                 editing = null
             },
+            members = familyMembers,
             existing = budget,
             onDelete = {
                 viewModel.deleteBudget(budget.id)
