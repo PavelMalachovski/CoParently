@@ -13,17 +13,22 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ChildCare
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Pets
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -41,6 +46,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
@@ -52,6 +58,7 @@ import com.coparently.app.domain.model.PetSpecies
 import com.coparently.app.presentation.childinfo.components.AllergyEditor
 import com.coparently.app.presentation.childinfo.components.DatePickerDialog
 import com.coparently.app.presentation.childinfo.components.EmergencyContactEditor
+import com.coparently.app.presentation.common.ConfirmationDialog
 import com.coparently.app.presentation.common.MedicalProfileEditor
 import com.coparently.app.presentation.common.SectionGroup
 import com.coparently.app.presentation.common.SectionRow
@@ -251,7 +258,18 @@ private fun ProfileStep(state: OnboardingUiState, viewModel: OnboardingViewModel
 }
 
 /**
- * The child's details — name, date of birth, allergies and medical profile only.
+ * The children this family is setting up — one form each, and a button for another.
+ *
+ * A repeatable list rather than the single form this used to be. The wizard asked how a family
+ * works and then could not express one with two children: the second had to be found in the
+ * child list afterwards, and the emergency contacts collected on the next step landed on
+ * whichever child happened to be written first.
+ *
+ * **Nobody is asked how many children they have.** The step asks for names and the count falls
+ * out of them, because a stored "one or several" would be a fact that goes stale the day a
+ * second child arrives and would then need a settings toggle to correct. Everything downstream
+ * reads `children.size` instead, so a family with one child sees the form they saw before —
+ * no heading, no remove action, nothing new but the Add button that makes a second reachable.
  *
  * Deliberately not the whole `AddEditChildInfoScreen`: medications, activities and school are
  * not first-run questions, and a wizard that asks for a teacher's email before the calendar has
@@ -261,37 +279,124 @@ private fun ProfileStep(state: OnboardingUiState, viewModel: OnboardingViewModel
 private fun ChildStep(state: OnboardingUiState, viewModel: OnboardingViewModel) {
     StepHeading(title = R.string.onboarding_child_title, body = R.string.onboarding_child_body)
 
-    OutlinedTextField(
-        value = state.childName,
-        onValueChange = viewModel::updateChildName,
-        label = { Text(stringResource(R.string.childinfo_child_name_label)) },
-        singleLine = true,
-        modifier = Modifier.fillMaxWidth()
-    )
+    state.children.forEachIndexed { index, draft ->
+        ChildDraftForm(
+            draft = draft,
+            index = index,
+            // One child is the case this wizard has always served, and it must look exactly as
+            // it did: no heading, no remove action, just the form.
+            showHeader = state.children.size > 1,
+            viewModel = viewModel
+        )
+    }
 
-    DateOfBirthField(
-        date = state.childDateOfBirth,
-        onDateChange = viewModel::updateChildDateOfBirth
-    )
-
-    SectionHeading(title = R.string.childinfo_section_allergies)
-    AllergyEditor(
-        allergies = state.childAllergies,
-        onAdd = { viewModel.updateChildAllergies(state.childAllergies + it) },
-        onRemove = { index ->
-            viewModel.updateChildAllergies(
-                state.childAllergies.toMutableList().apply { removeAt(index) }
-            )
-        }
-    )
-
-    MedicalProfileEditor(
-        profile = state.childMedicalProfile,
-        onChange = viewModel::updateChildMedicalProfile,
-        enabled = true
-    )
+    AddAnotherButton(label = R.string.onboarding_child_add, onClick = viewModel::addChild)
 
     Footnote()
+}
+
+/** One child's form, with the heading and remove action that only a second child needs. */
+@Composable
+private fun ChildDraftForm(
+    draft: ChildDraft,
+    index: Int,
+    showHeader: Boolean,
+    viewModel: OnboardingViewModel
+) {
+    var confirmRemove by remember(draft.id) { mutableStateOf(false) }
+
+    if (confirmRemove) {
+        ConfirmationDialog(
+            title = stringResource(R.string.childinfo_delete_title, draft.name),
+            message = stringResource(R.string.childinfo_delete_message),
+            confirmText = stringResource(R.string.childinfo_delete_confirm),
+            dismissText = stringResource(R.string.childinfo_delete_cancel),
+            isDestructive = true,
+            onDismiss = { confirmRemove = false },
+            onConfirm = {
+                confirmRemove = false
+                viewModel.removeChild(draft.id)
+            }
+        )
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        if (showHeader) {
+            DraftHeader(
+                title = draft.name.ifBlank {
+                    stringResource(R.string.onboarding_child_unnamed, index + 1)
+                },
+                removeDescription = stringResource(R.string.childinfo_delete_action),
+                // Only a named child can have reached Room, so only that one is worth
+                // interrupting for. A blank draft is removed outright.
+                onRemove = { if (draft.isBlank) viewModel.removeChild(draft.id) else confirmRemove = true }
+            )
+        }
+
+        OutlinedTextField(
+            value = draft.name,
+            onValueChange = { viewModel.updateChildName(draft.id, it) },
+            label = { Text(stringResource(R.string.childinfo_child_name_label)) },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        DateOfBirthField(
+            date = draft.dateOfBirth,
+            onDateChange = { viewModel.updateChildDateOfBirth(draft.id, it) }
+        )
+
+        SectionHeading(title = R.string.childinfo_section_allergies)
+        AllergyEditor(
+            allergies = draft.allergies,
+            onAdd = { viewModel.updateChildAllergies(draft.id, draft.allergies + it) },
+            onRemove = { position ->
+                viewModel.updateChildAllergies(
+                    draft.id,
+                    draft.allergies.toMutableList().apply { removeAt(position) }
+                )
+            }
+        )
+
+        MedicalProfileEditor(
+            profile = draft.medicalProfile,
+            onChange = { viewModel.updateChildMedicalProfile(draft.id, it) },
+            enabled = true
+        )
+    }
+}
+
+/** The name of a draft in a list of them, and the action that takes it back out. */
+@Composable
+private fun DraftHeader(title: String, removeDescription: String, onRemove: () -> Unit) {
+    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.weight(1f)
+        )
+        IconButton(onClick = onRemove) {
+            Icon(
+                imageVector = Icons.Default.Delete,
+                contentDescription = removeDescription,
+                tint = MaterialTheme.colorScheme.error
+            )
+        }
+    }
+}
+
+/** Appends one more blank form. Shown from the first draft on — that is how a second is reached. */
+@Composable
+private fun AddAnotherButton(@StringRes label: Int, onClick: () -> Unit) {
+    TextButton(onClick = onClick) {
+        Icon(
+            imageVector = Icons.Default.Add,
+            contentDescription = null,
+            modifier = Modifier.size(18.dp)
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(stringResource(label))
+    }
 }
 
 /**
@@ -351,7 +456,10 @@ private fun FamilyKindStep(state: OnboardingUiState, viewModel: OnboardingViewMo
 }
 
 /**
- * The pet's name and species — the pet equivalent of [ChildStep], and as short.
+ * The pets — the pet equivalent of [ChildStep], repeatable on the same terms and as short.
+ *
+ * The pets screen has always been a genuine list; until this step became one, the wizard was
+ * the only place in the app that insisted a family had exactly one pet.
  *
  * Deliberately not the whole pet record: vaccinations, feeding notes and the vet's number are
  * collected on the pet screen afterwards, the same trade [ChildStep] makes by leaving out school
@@ -361,30 +469,79 @@ private fun FamilyKindStep(state: OnboardingUiState, viewModel: OnboardingViewMo
 private fun PetStep(state: OnboardingUiState, viewModel: OnboardingViewModel) {
     StepHeading(title = R.string.onboarding_pet_title, body = R.string.onboarding_pet_body)
 
-    OutlinedTextField(
-        value = state.petName,
-        onValueChange = viewModel::setPetName,
-        label = { Text(stringResource(R.string.pet_name_label)) },
-        singleLine = true,
-        modifier = Modifier.fillMaxWidth()
-    )
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        PetSpecies.entries.forEach { species ->
-            FilterChip(
-                selected = state.petSpecies == species,
-                onClick = { viewModel.setPetSpecies(species) },
-                label = { Text(stringResource(species.labelRes())) }
-            )
-        }
+    state.pets.forEachIndexed { index, draft ->
+        PetDraftForm(
+            draft = draft,
+            index = index,
+            showHeader = state.pets.size > 1,
+            viewModel = viewModel
+        )
     }
 
+    AddAnotherButton(label = R.string.onboarding_pet_add, onClick = viewModel::addPet)
+
     Footnote()
+}
+
+/** One pet's form. Same anatomy as [ChildDraftForm], down to the confirmation. */
+@Composable
+private fun PetDraftForm(
+    draft: PetDraft,
+    index: Int,
+    showHeader: Boolean,
+    viewModel: OnboardingViewModel
+) {
+    var confirmRemove by remember(draft.id) { mutableStateOf(false) }
+
+    if (confirmRemove) {
+        ConfirmationDialog(
+            title = stringResource(R.string.pet_delete_title, draft.name),
+            message = stringResource(R.string.pet_delete_message),
+            confirmText = stringResource(R.string.pet_delete_confirm),
+            dismissText = stringResource(R.string.pet_delete_cancel),
+            isDestructive = true,
+            onDismiss = { confirmRemove = false },
+            onConfirm = {
+                confirmRemove = false
+                viewModel.removePet(draft.id)
+            }
+        )
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        if (showHeader) {
+            DraftHeader(
+                title = draft.name.ifBlank {
+                    stringResource(R.string.onboarding_pet_unnamed, index + 1)
+                },
+                removeDescription = stringResource(R.string.pet_delete_confirm),
+                onRemove = { if (draft.isBlank) viewModel.removePet(draft.id) else confirmRemove = true }
+            )
+        }
+
+        OutlinedTextField(
+            value = draft.name,
+            onValueChange = { viewModel.setPetName(draft.id, it) },
+            label = { Text(stringResource(R.string.pet_name_label)) },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            PetSpecies.entries.forEach { species ->
+                FilterChip(
+                    selected = draft.species == species,
+                    onClick = { viewModel.setPetSpecies(draft.id, species) },
+                    label = { Text(stringResource(species.labelRes())) }
+                )
+            }
+        }
+    }
 }
 
 /**
@@ -444,18 +601,43 @@ private fun RelativesStep(state: OnboardingUiState, viewModel: OnboardingViewMod
         body = R.string.onboarding_relatives_body
     )
 
-    if (state.canEditRelatives) {
+    val child = state.relativesChild
+    if (child != null) {
+        // The picker earns its place only when there is a choice to make. With one child every
+        // contact belongs to them, and a chip row would be an affordance for nothing — design
+        // item 8. With two it is the difference between filing a contact and mis-filing it,
+        // which is what a single flat list of contacts used to do.
+        if (state.namedChildren.size > 1) {
+            SectionHeading(title = R.string.onboarding_relatives_whose)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                state.namedChildren.forEach { candidate ->
+                    FilterChip(
+                        selected = candidate.id == child.id,
+                        onClick = { viewModel.selectRelativesChild(candidate.id) },
+                        label = { Text(candidate.name) }
+                    )
+                }
+            }
+        }
+
         EmergencyContactEditor(
-            contacts = state.relatives,
-            onAdd = { viewModel.updateRelatives(state.relatives + it) },
+            contacts = child.relatives,
+            onAdd = { viewModel.updateRelatives(child.id, child.relatives + it) },
             onEdit = { index, contact ->
                 viewModel.updateRelatives(
-                    state.relatives.toMutableList().apply { this[index] = contact }
+                    child.id,
+                    child.relatives.toMutableList().apply { this[index] = contact }
                 )
             },
             onRemove = { index ->
                 viewModel.updateRelatives(
-                    state.relatives.toMutableList().apply { removeAt(index) }
+                    child.id,
+                    child.relatives.toMutableList().apply { removeAt(index) }
                 )
             }
         )

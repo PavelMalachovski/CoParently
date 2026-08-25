@@ -4,6 +4,9 @@ import com.coparently.app.data.repository.FamilySettingsRepository
 import com.coparently.app.domain.expenses.SplitRatio
 import com.coparently.app.domain.model.ChildInfo
 import com.coparently.app.domain.model.EmergencyContact
+import com.coparently.app.domain.model.FamilyKind
+import com.coparently.app.domain.model.Pet
+import com.coparently.app.domain.model.PetSpecies
 import com.coparently.app.domain.model.User
 import com.coparently.app.domain.repository.ChildInfoRepository
 import com.coparently.app.domain.repository.PetRepository
@@ -88,6 +91,12 @@ class OnboardingViewModelTest {
         viewModel.updateName("Olya")
         while (viewModel.uiState.value.step != step) viewModel.next()
     }
+
+    /** The draft the child step opens with — the wizard always has one to fill in. */
+    private fun firstChildId(): String = viewModel.uiState.value.children.first().id
+
+    /** The draft the pet step opens with. */
+    private fun firstPetId(): String = viewModel.uiState.value.pets.first().id
 
     @Test
     fun `the intro can always be advanced, because it asks for nothing`() = runTest(dispatcher) {
@@ -240,11 +249,15 @@ class OnboardingViewModelTest {
         }
 
         walkTo(OnboardingStep.Child)
-        viewModel.updateChildName("Anya")
+        val anya = firstChildId()
+        viewModel.updateChildName(anya, "Anya")
         viewModel.next()
         advanceUntilIdle()
 
-        viewModel.updateRelatives(listOf(EmergencyContact("Baba Vera", "grandmother", "+420 111")))
+        viewModel.updateRelatives(
+            anya,
+            listOf(EmergencyContact("Baba Vera", "grandmother", "+420 111"))
+        )
         viewModel.next()
         advanceUntilIdle()
 
@@ -261,7 +274,10 @@ class OnboardingViewModelTest {
             advanceUntilIdle()
 
             assertFalse(viewModel.uiState.value.canEditRelatives)
-            viewModel.updateRelatives(listOf(EmergencyContact("Baba Vera", "grandmother", "+420")))
+            viewModel.updateRelatives(
+                firstChildId(),
+                listOf(EmergencyContact("Baba Vera", "grandmother", "+420"))
+            )
             viewModel.next()
             advanceUntilIdle()
 
@@ -336,8 +352,180 @@ class OnboardingViewModelTest {
         val state = viewModel.uiState.value
         assertEquals("Olya", state.name)
         assertEquals("+420 777", state.phone)
-        assertEquals("Anya", state.childName)
-        assertEquals(listOf("peanuts"), state.childAllergies)
-        assertEquals(2018, state.childDateOfBirth?.year)
+        val anya = state.children.single()
+        assertEquals("Anya", anya.name)
+        assertEquals(listOf("peanuts"), anya.allergies)
+        assertEquals(2018, anya.dateOfBirth?.year)
+        assertEquals("c1", anya.id, "the stored record is edited, not duplicated")
+    }
+
+    @Test
+    fun `two children are written as two records, not one`() = runTest(dispatcher) {
+        val written = mutableListOf<ChildInfo>()
+        coEvery { childInfoRepository.upsertChildInfo(capture(written)) } returns Unit
+        coEvery { childInfoRepository.getChildInfoById(any()) } answers {
+            written.lastOrNull { it.id == firstArg<String>() }
+        }
+
+        walkTo(OnboardingStep.Child)
+        viewModel.updateChildName(firstChildId(), "Anya")
+        viewModel.addChild()
+        viewModel.updateChildName(viewModel.uiState.value.children[1].id, "Petr")
+        viewModel.next()
+        advanceUntilIdle()
+
+        assertEquals(listOf("Anya", "Petr"), written.map { it.childName })
+        assertEquals(2, written.map { it.id }.toSet().size, "each child needs its own record")
+    }
+
+    @Test
+    fun `the relatives land on the child they were entered for, not the first`() =
+        runTest(dispatcher) {
+            val written = mutableListOf<ChildInfo>()
+            coEvery { childInfoRepository.upsertChildInfo(capture(written)) } returns Unit
+            coEvery { childInfoRepository.getChildInfoById(any()) } answers {
+                written.lastOrNull { it.id == firstArg<String>() }
+            }
+
+            walkTo(OnboardingStep.Child)
+            viewModel.updateChildName(firstChildId(), "Anya")
+            viewModel.addChild()
+            val petr = viewModel.uiState.value.children[1].id
+            viewModel.updateChildName(petr, "Petr")
+            viewModel.next()
+            advanceUntilIdle()
+            written.clear()
+
+            // The step defaults to the first named child; picking the second is what the chip
+            // row does, and is the whole point of the picker existing.
+            viewModel.selectRelativesChild(petr)
+            viewModel.updateRelatives(petr, listOf(EmergencyContact("Baba Vera", "grandmother", "+420")))
+            viewModel.next()
+            advanceUntilIdle()
+
+            val anyaWrite = written.first { it.childName == "Anya" }
+            val petrWrite = written.first { it.childName == "Petr" }
+            assertTrue(anyaWrite.emergencyContacts.isEmpty(), "a flat list used to file these here")
+            assertEquals("Baba Vera", petrWrite.emergencyContacts.single().name)
+        }
+
+    @Test
+    fun `the relatives step follows a child whose name is cleared`() = runTest(dispatcher) {
+        walkTo(OnboardingStep.Child)
+        val anya = firstChildId()
+        viewModel.updateChildName(anya, "Anya")
+        viewModel.addChild()
+        val petr = viewModel.uiState.value.children[1].id
+        viewModel.updateChildName(petr, "Petr")
+        viewModel.selectRelativesChild(petr)
+
+        viewModel.updateChildName(petr, "")
+
+        // Not left pointing at a draft that no longer takes contacts.
+        assertEquals(anya, viewModel.uiState.value.relativesChild?.id)
+    }
+
+    @Test
+    fun `removing a draft nobody named never reaches Room`() = runTest(dispatcher) {
+        walkTo(OnboardingStep.Child)
+        viewModel.addChild()
+        val blank = viewModel.uiState.value.children[1].id
+
+        viewModel.removeChild(blank)
+        advanceUntilIdle()
+
+        assertEquals(1, viewModel.uiState.value.children.size)
+        coVerify(exactly = 0) { childInfoRepository.deleteChildInfo(any()) }
+    }
+
+    @Test
+    fun `removing a child the wizard already wrote deletes its record`() = runTest(dispatcher) {
+        val stored = ChildInfo(
+            id = "c1",
+            childName = "Anya",
+            dateOfBirth = null,
+            createdAt = LocalDateTime.parse("2026-01-01T09:00:00"),
+            updatedAt = LocalDateTime.parse("2026-01-01T09:00:00")
+        )
+        every { childInfoRepository.getAllChildInfo() } returns flowOf(listOf(stored))
+        coEvery { childInfoRepository.getChildInfoById("c1") } returns stored
+        viewModel = OnboardingViewModel(
+            userRepository,
+            childInfoRepository,
+            petRepository,
+            familySettingsRepository
+        )
+        advanceUntilIdle()
+
+        // Dropping the draft alone would leave a child the parent explicitly removed sitting in
+        // the child list, because the step saves on Next.
+        viewModel.removeChild("c1")
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { childInfoRepository.deleteChildInfo(stored) }
+    }
+
+    @Test
+    fun `a removed last draft is replaced, so the step always has a form`() = runTest(dispatcher) {
+        walkTo(OnboardingStep.Child)
+        viewModel.removeChild(firstChildId())
+        advanceUntilIdle()
+
+        assertEquals(1, viewModel.uiState.value.children.size)
+        assertTrue(viewModel.uiState.value.children.single().isBlank)
+    }
+
+    @Test
+    fun `two pets are written as two records`() = runTest(dispatcher) {
+        val written = mutableListOf<Pet>()
+        coEvery { petRepository.upsertPet(capture(written)) } returns Unit
+        coEvery { petRepository.getPetById(any()) } answers {
+            written.lastOrNull { it.id == firstArg<String>() }
+        }
+        viewModel.setCaresFor(setOf(FamilyKind.PETS))
+
+        walkTo(OnboardingStep.Pet)
+        viewModel.setPetName(firstPetId(), "Rex")
+        viewModel.setPetSpecies(firstPetId(), PetSpecies.DOG)
+        viewModel.addPet()
+        val second = viewModel.uiState.value.pets[1].id
+        viewModel.setPetName(second, "Murka")
+        viewModel.setPetSpecies(second, PetSpecies.CAT)
+        viewModel.next()
+        advanceUntilIdle()
+
+        assertEquals(listOf("Rex", "Murka"), written.map { it.name })
+        assertEquals(listOf(PetSpecies.DOG, PetSpecies.CAT), written.map { it.species })
+    }
+
+    @Test
+    fun `an account with two stored children opens with both`() = runTest(dispatcher) {
+        every { childInfoRepository.getAllChildInfo() } returns flowOf(
+            listOf(
+                ChildInfo(
+                    id = "c1",
+                    childName = "Anya",
+                    dateOfBirth = null,
+                    createdAt = LocalDateTime.parse("2026-01-01T09:00:00"),
+                    updatedAt = LocalDateTime.parse("2026-01-01T09:00:00")
+                ),
+                ChildInfo(
+                    id = "c2",
+                    childName = "Petr",
+                    dateOfBirth = null,
+                    createdAt = LocalDateTime.parse("2026-01-01T09:00:00"),
+                    updatedAt = LocalDateTime.parse("2026-01-01T09:00:00")
+                )
+            )
+        )
+        viewModel = OnboardingViewModel(
+            userRepository,
+            childInfoRepository,
+            petRepository,
+            familySettingsRepository
+        )
+        advanceUntilIdle()
+
+        assertEquals(listOf("Anya", "Petr"), viewModel.uiState.value.children.map { it.name })
     }
 }

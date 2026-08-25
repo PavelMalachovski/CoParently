@@ -236,6 +236,20 @@ cd firestore-tests && npm test              # firestore.rules against the local 
   single place that joins the two halves. A ViewModel that needs the two parents exposes
   `parents: StateFlow<Parents>` from there; a composable resolves the fallback strings with
   `rememberParentNames` and passes one `ParentNames` down its tree.
+- **How many children or pets a family has is derived, never stored** (FAM-1, Aug 2026). Nothing
+  asks "one child or several", and no flag records the answer: the onboarding wizard's child and
+  pet steps are repeatable lists that collect *names*, and everything downstream reads
+  `children.size`. A stored count is a fact that goes stale the day a second child arrives or a
+  pet dies, and would then need a settings toggle to correct; a derived one cannot disagree with
+  the records. It is the same reasoning `FamilyKind` documents for reading an unanswered account
+  as "show everything". The visible consequence, and the rule for every screen that grows a
+  per-child affordance: **it appears at two, not at one.** A family with one child must see the
+  screen they saw before — a picker for a set of one is design item 8 in miniature. The wizard
+  was the last place in the app insisting on exactly one of anything (`ChildInfoScreen`,
+  `PetsScreen` and `ContactDirectory` were already plural); what is still singular is the
+  calendar, which carries no child reference at all — see **FAM-2/FAM-3** in `docs/BACKLOG.md`
+  before adding one, because the shape is one `FamilyMemberRef` covering children *and* pets, not
+  a `childId`.
 - Conventional Commits (`feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`).
 
 ## Architecture map

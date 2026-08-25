@@ -15,8 +15,8 @@
     <string name="onboarding_footnote">Kept for you and your co-parent, in case of an emergency.</string>
     <string name="onboarding_profile_title">About you</string>
     <string name="onboarding_profile_name_required">Your name is the one thing the app needs — it labels every event and expense.</string>
-    <string name="onboarding_child_title">About your child</string>
-    <string name="onboarding_child_body">You can add medications, activities and school details later, from Settings.</string>
+    <string name="onboarding_child_title">Your children</string>
+    <string name="onboarding_child_body">One for each child. Medications, activities and school details can be added later, from Settings.</string>
     <string name="onboarding_relatives_title">People who can help</string>
     <string name="onboarding_relatives_body">A grandparent, an aunt, an uncle — anyone who might collect your child or be called in an emergency.</string>
     <string name="onboarding_relatives_needs_child">These contacts are saved with your child, so add your child first — go back a step, or add them later from Settings.</string>
@@ -32,9 +32,14 @@
     <string name="onboarding_family_children_hint">Child records, contacts and school details</string>
     <string name="onboarding_family_pets">Pets</string>
     <string name="onboarding_family_pets_hint">Pet records, vaccinations and the vet\'s number</string>
-    <string name="onboarding_pet_title">Your pet</string>
-    <string name="onboarding_pet_body">Just a name and what kind. Vaccinations, feeding notes and the vet come later, on the pet\'s own screen.</string>
+    <string name="onboarding_pet_title">Your pets</string>
+    <string name="onboarding_pet_body">One for each pet — just a name and what kind. Vaccinations, feeding notes and the vet come later, on the pet\'s own screen.</string>
     <string name="onboarding_split_title">How will you split costs?</string>
     <string name="onboarding_split_body">Half each unless you agree otherwise. Once your co-parent is linked, changing this becomes something they confirm — and expenses already recorded keep the split they were entered under.</string>
     <string name="onboarding_split_value">You %1$d / Co-parent %2$d</string>
+    <string name="onboarding_child_add">Add another child</string>
+    <string name="onboarding_child_unnamed">Child %1$d</string>
+    <string name="onboarding_pet_add">Add another pet</string>
+    <string name="onboarding_pet_unnamed">Pet %1$d</string>
+    <string name="onboarding_relatives_whose">Who are these contacts for?</string>
 </resources>

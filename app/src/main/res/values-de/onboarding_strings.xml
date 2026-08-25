@@ -12,8 +12,8 @@
     <string name="onboarding_footnote">Für dich und deinen Co-Elternteil aufbewahrt, für den Notfall.</string>
     <string name="onboarding_profile_title">Über dich</string>
     <string name="onboarding_profile_name_required">Dein Name ist das Einzige, was die App braucht — er steht an jedem Termin und jeder Ausgabe.</string>
-    <string name="onboarding_child_title">Über dein Kind</string>
-    <string name="onboarding_child_body">Medikamente, Aktivitäten und Angaben zur Schule kannst du später in den Einstellungen ergänzen.</string>
+    <string name="onboarding_child_title">Eure Kinder</string>
+    <string name="onboarding_child_body">Ein Feld pro Kind. Medikamente, Aktivitäten und Angaben zur Schule kannst du später in den Einstellungen ergänzen.</string>
     <string name="onboarding_relatives_title">Wer helfen kann</string>
     <string name="onboarding_relatives_body">Oma, Opa, Tante, Onkel — jeder, der dein Kind abholen könnte oder im Notfall angerufen wird.</string>
     <string name="onboarding_relatives_needs_child">Diese Kontakte werden bei deinem Kind gespeichert, füge also zuerst dein Kind hinzu — geh einen Schritt zurück oder ergänze sie später in den Einstellungen.</string>
@@ -29,9 +29,14 @@
     <string name="onboarding_family_children_hint">Kinderdaten, Kontakte und Schulangaben</string>
     <string name="onboarding_family_pets">Haustiere</string>
     <string name="onboarding_family_pets_hint">Haustierdaten, Impfungen und die Nummer der Tierarztpraxis</string>
-    <string name="onboarding_pet_title">Euer Haustier</string>
-    <string name="onboarding_pet_body">Nur Name und Art. Impfungen, Fütterungsnotizen und Tierarzt folgen später auf der Haustierseite.</string>
+    <string name="onboarding_pet_title">Eure Haustiere</string>
+    <string name="onboarding_pet_body">Ein Feld pro Haustier — nur Name und Art. Impfungen, Fütterungsnotizen und Tierarzt folgen später auf der Haustierseite.</string>
     <string name="onboarding_split_title">Wie teilt ihr die Kosten?</string>
     <string name="onboarding_split_body">Hälfte/Hälfte, sofern ihr nichts anderes vereinbart. Sobald dein Co-Elternteil verknüpft ist, muss es Änderungen bestätigen — bereits erfasste Ausgaben behalten ihre Aufteilung.</string>
     <string name="onboarding_split_value">Du %1$d / Co-Elternteil %2$d</string>
+    <string name="onboarding_child_add">Weiteres Kind hinzufügen</string>
+    <string name="onboarding_child_unnamed">Kind %1$d</string>
+    <string name="onboarding_pet_add">Weiteres Haustier hinzufügen</string>
+    <string name="onboarding_pet_unnamed">Haustier %1$d</string>
+    <string name="onboarding_relatives_whose">Zu wem gehören diese Kontakte?</string>
 </resources>

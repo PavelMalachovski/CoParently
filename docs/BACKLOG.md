@@ -884,7 +884,99 @@ attachments. Re-baseline before planning MVP 3, or the plan describes work alrea
 
 ---
 
-## 6. Done — so it is not re-litigated
+## 6. [FAM] More than one child, more than one pet
+
+The app is architecturally single-child in the place that matters most — the calendar — and half
+built for several everywhere else. Found in August 2026 by asking a question nobody had asked:
+what happens when a pair is raising two children, or two children and a dog.
+
+Four facts, measured rather than assumed:
+
+* `Event` carries **no reference to a child at all** — not in the domain model, not in
+  `EventEntity`, not among the 25 fields `EventRepositoryImpl.toFirestoreMap()` writes. With two
+  children nothing can say whose Thursday training this is.
+* `Expense.childId` and `Budget.childId` exist through the whole stack — Room columns, Firestore
+  fields, `getExpensesForChild`/`getBudgetsForChild` DAO queries — and **nothing writes them and
+  nothing reads them.** `AddExpenseScreen` and `BudgetScreen` never pass a child, and the two
+  query methods have zero callers, so every row production has ever written holds `null`. This
+  is the `splitBetween` pattern exactly: a field that looks implemented and never was. The one
+  mercy is that a migration costs nothing, because there is no data to convert.
+* `custody_models/{pairId}` is **one schedule per pair**, so siblings on different arrangements
+  cannot be described, and Home's handover hero is written in the singular to match.
+* A pet cannot be the subject of anything — not an event, and not even an expense, because a
+  single `childId` has nowhere to put a vet's bill.
+
+What already works, and should not be rebuilt: `ChildInfoScreen` and `PetsScreen` are genuine
+lists, and `ContactDirectory` already groups by child *and* by pet.
+
+### FAM-1 · **DONE** · The wizard could only ever create one child and one pet
+
+`OnboardingViewModel` held the child flat — `childName`, `childDateOfBirth`, `childAllergies`,
+`childMedicalProfile` — and the pet the same way, with a single `childInfoId`/`petId` apiece and
+a `prefill` that read `.firstOrNull()`. A family with two children could not say so during
+setup: they had to finish the questionnaire, then find the child list. The relatives step was
+worse than incomplete — emergency contacts were one flat list written onto whichever child was
+saved first, so with two children they were silently mis-filed.
+
+Both steps are now repeatable lists of drafts, and the relatives step asks which child a contact
+belongs to once there is more than one to choose between. **Nobody is asked how many children
+they have.** The steps collect names and the count falls out of them — see the rule in CLAUDE.md
+for why a stored "one or several" is the wrong shape of answer. A family with one child sees the
+form they saw before: no heading, no remove action, nothing new but the Add button that makes a
+second reachable.
+
+Removing a draft deletes its record when one was written, through the same
+`ChildInfoRepository.deleteChildInfo` the child editor's own Delete uses — which means it rides
+the missing-tombstone defect recorded in CLAUDE.md's known issues. Not a new caller of a broken
+path so much as a second one; fixing it there fixes it here.
+
+### FAM-2 · P1 · M · One reference for "who this is about", and expenses that use it
+
+`Expense.childId` and `Budget.childId` become `forMembers`, a list of a new
+`domain/family/FamilyMemberRef` — the same shape as `data/sync/Tombstone.kt` and
+`data/remote/firebase/PushPayload.kt`: one file defining a wire vocabulary, typed in Kotlin
+(`Child(id)` / `Pet(id)`) and one string on the wire (`"child:abc"` / `"pet:xyz"`).
+
+The prefix convention is not invented here — `ContactDirectory` already writes
+`childId = "pet:" + pet.id` by hand. This gives that a name and a single definition.
+
+One reference covering both is what makes a vet's bill expressible at all, which a
+child-only field never could. Then: the picker on `AddExpenseScreen` and `BudgetScreen`, a
+filter on the expenses screen, and per-member balances. Room v26 → v27; no data is lost because
+there is none.
+
+**Ship it with FAM-3**, or the wizard will let a parent name two children and nothing outside
+their record cards will know the difference.
+
+### FAM-3 · P1 · L · Events know who they are about
+
+`Event.forMembers`, empty meaning "the whole family" — the same reading `FamilyKind` gives an
+unanswered account, and the reason an upgrade hides nothing. Room migration, the field in
+`toFirestoreMap()` **and** the matching `SyncService` map (CLAUDE.md item 5), and a chip strip
+in the calendar header that appears only at two or more.
+
+Two constraints that are not negotiable:
+
+* **A child is initials or an avatar, never a colour.** Pink and blue are the parent slots, teal
+  is a calendar friend, neutral grey is the weekend. A fifth colour channel breaks exactly what
+  `DayCellFills` was written to protect.
+* **`firestore.rules` needs no change** — the `events` block validates with
+  `keys().hasAll([...])`, presence-based, so a new key passes. Verified, not assumed.
+
+Known and accepted: a co-parent on an older build who edits an event drops the tag, because
+their `toFirestoreMap()` does not know the field.
+
+### FAM-4 · P2 · L · Custody per child
+
+One schedule per pair stays the default; a per-child schedule is an override. It drags Home's
+handover hero (singular today), the calendar banners and `getCustody` with it — and **SEC-4
+first**: `lastModifiedAt` is a naive local date-time that already decides which phone's schedule
+survives, and multiplying the documents multiplies that defect before fixing it.
+
+Genuinely rarer than FAM-2 and FAM-3 — a teenager who negotiated their own arrangement, an
+infant who stays with one parent — which is why it is last rather than never.
+
+## 7. Done — so it is not re-litigated
 
 Closed in PR #68 and #69, listed only to stop these reappearing as "todo":
 
@@ -907,7 +999,7 @@ Closed in PR #68 and #69, listed only to stop these reappearing as "todo":
 
 ---
 
-## 7. The order to actually do it in
+## 8. The order to actually do it in
 
 Not a wish-list ordering — a dependency ordering. Each block assumes the one above it.
 

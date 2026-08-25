@@ -25,13 +25,23 @@ enum class OnboardingStep {
     /** The parent's own details. The only step with a required field. */
     Profile,
 
-    /** The child's name, date of birth, allergies and medical profile. */
+    /**
+     * Each child's name, date of birth, allergies and medical profile.
+     *
+     * A repeatable list, not one child: the wizard used to write exactly one record, so a
+     * family with two could not say so here at all.
+     */
     Child,
 
-    /** Emergency contacts, saved onto the child's record so both parents may edit them. */
+    /**
+     * Emergency contacts, saved onto a child's record so both parents may edit them.
+     *
+     * They belong to **one** child, and with several the step asks which. A single flat list
+     * filed every contact against whichever child was written first.
+     */
     Relatives,
 
-    /** The pet's name and species. */
+    /** Each pet's name and species, repeatable on the same terms as [Child]. */
     Pet,
 
     /**

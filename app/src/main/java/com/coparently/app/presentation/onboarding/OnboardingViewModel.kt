@@ -45,6 +45,64 @@ private val DEFAULT_CARES_FOR = FamilyKind.DEFAULT
 private const val EVEN_SPLIT_PERCENT = 50
 
 /**
+ * One child the wizard is setting up.
+ *
+ * A **list** of these rather than the flat `childName`/`childDateOfBirth`/… fields this state
+ * used to hold, because a family with two children could not say so: the wizard wrote one record
+ * and the child list was the only place a second could be added, after the questionnaire had
+ * already asked how the family works. It also silently mis-filed the emergency contacts — see
+ * [relatives].
+ *
+ * **How many children a family has is never stored as an answer.** The wizard asks for names and
+ * the count falls out of them. A stored "one or several" would be a fact that goes stale the
+ * moment a second child arrives, and would then need a settings toggle to correct; a derived
+ * count cannot disagree with the records. It is the same reasoning `FamilyKind` documents for
+ * treating an unanswered account as "show everything".
+ *
+ * @property id The id the [ChildInfo] record will have, generated when the draft is created.
+ *   Fixed up front rather than at save time so nothing has to be written back into a form the
+ *   parent may be typing into, and so the child step and the relatives step address one record.
+ * @property name The child's name; blank means this draft is never written
+ * @property dateOfBirth The child's date of birth, or null while unanswered
+ * @property allergies The child's allergies
+ * @property medicalProfile The child's emergency medical profile
+ * @property relatives Emergency contacts for **this** child. They live on the draft rather than
+ *   beside it because that is where they live in the data model — `ChildInfo.emergencyContacts`
+ *   — and a single flat list landed every contact on whichever child happened to be first.
+ */
+data class ChildDraft(
+    val id: String,
+    val name: String = "",
+    val dateOfBirth: LocalDate? = null,
+    val allergies: List<String> = emptyList(),
+    val medicalProfile: MedicalProfile = MedicalProfile(),
+    val relatives: List<EmergencyContact> = emptyList()
+) {
+    /** True while nothing has been entered, which is what makes a draft safe to replace. */
+    val isBlank: Boolean
+        get() = name.isBlank() && dateOfBirth == null && allergies.isEmpty() &&
+            medicalProfile == MedicalProfile() && relatives.isEmpty()
+}
+
+/**
+ * One pet the wizard is setting up, on the same terms as [ChildDraft].
+ *
+ * The pets screen has always been a genuine list — this is the wizard catching up with it.
+ *
+ * @property id The id the [Pet] record will have, generated when the draft is created
+ * @property name The pet's name; blank means this draft is never written
+ * @property species What kind of animal this is
+ */
+data class PetDraft(
+    val id: String,
+    val name: String = "",
+    val species: PetSpecies = PetSpecies.DOG
+) {
+    /** True while nothing has been entered. See [ChildDraft.isBlank]. */
+    val isBlank: Boolean get() = name.isBlank() && species == PetSpecies.DOG
+}
+
+/**
  * Everything the wizard has collected so far, plus which step is showing it.
  *
  * The parent's fields and the child's are held flat rather than as a `User` and a `ChildInfo`
@@ -60,11 +118,11 @@ private const val EVEN_SPLIT_PERCENT = 50
  * @property phone The parent's own phone, free text as typed
  * @property allergies The parent's own allergies
  * @property medicalProfile The parent's own emergency medical profile
- * @property childName The child's name; blank means the child step was left unanswered
- * @property childDateOfBirth The child's date of birth, or null while unanswered
- * @property childAllergies The child's allergies
- * @property childMedicalProfile The child's emergency medical profile
- * @property relatives Emergency contacts, saved onto the child's record
+ * @property children The children being set up, one [ChildDraft] each. Never empty: the step
+ *   always has one form to render, and a draft nobody names is never written.
+ * @property pets The pets, on the same terms as [children]
+ * @property relativesForId Which child the relatives step is collecting contacts for, or null
+ *   to let [relativesChild] fall back to the first named one
  * @property isSaving True while [OnboardingViewModel.finish]'s write is in flight
  * @property isFinished True once onboarding is recorded as complete and the host may leave
  */
@@ -75,14 +133,10 @@ data class OnboardingUiState(
     val phone: String = "",
     val allergies: List<String> = emptyList(),
     val medicalProfile: MedicalProfile = MedicalProfile(),
-    val childName: String = "",
-    val childDateOfBirth: LocalDate? = null,
-    val childAllergies: List<String> = emptyList(),
-    val childMedicalProfile: MedicalProfile = MedicalProfile(),
-    val relatives: List<EmergencyContact> = emptyList(),
+    val children: List<ChildDraft> = emptyList(),
+    val pets: List<PetDraft> = emptyList(),
+    val relativesForId: String? = null,
     val caresFor: Set<FamilyKind> = DEFAULT_CARES_FOR,
-    val petName: String = "",
-    val petSpecies: PetSpecies = PetSpecies.DOG,
     /** Slot 1's share of a shared expense, as a whole percent. Half each until changed. */
     val splitMomPercent: Int = EVEN_SPLIT_PERCENT,
     val isSaving: Boolean = false,
@@ -133,7 +187,20 @@ data class OnboardingUiState(
      * nowhere honest to put one, so the step says so rather than collecting contacts it would
      * then drop on the floor.
      */
-    val canEditRelatives: Boolean get() = childName.isNotBlank()
+    val canEditRelatives: Boolean get() = namedChildren.isNotEmpty()
+
+    /** The children that have been named, which are the only ones anything is written for. */
+    val namedChildren: List<ChildDraft> get() = children.filter { it.name.isNotBlank() }
+
+    /**
+     * The child the relatives step is collecting contacts for.
+     *
+     * Resolved rather than read straight off [relativesForId] so the selection heals itself: a
+     * child whose name is cleared, or who is removed from the wizard, must not leave the step
+     * pointing at a draft that no longer takes contacts.
+     */
+    val relativesChild: ChildDraft?
+        get() = namedChildren.firstOrNull { it.id == relativesForId } ?: namedChildren.firstOrNull()
 }
 
 /**
@@ -151,14 +218,18 @@ data class OnboardingUiState(
  * for the reason `ProfileViewModel.save` documents: a held snapshot carries `partnerId`,
  * `createdByFirebaseUid` and sync flags that belong to whoever last wrote them, not to this form.
  *
- * **The child is read once, not observed.** [prefill] takes the first emission of
+ * **The children are read once, not observed.** [prefill] takes the first emission of
  * [ChildInfoRepository.getAllChildInfo] and lets go. A screen-lifetime subscription to the whole
  * list is the exact shape of the `ChildInfoViewModel` defect CLAUDE.md records under "Known
  * issues", where a background sync tick re-emits the list and overwrites the form the user is
  * mid-edit on.
  *
+ * **Children and pets are lists, and how many there are is never asked.** The steps collect
+ * names and the count falls out of them — see [ChildDraft] for why a stored "one or several"
+ * would be the wrong shape of answer.
+ *
  * @param userRepository Reads and writes the signed-in parent's own record
- * @param childInfoRepository Reads and writes the child record the wizard fills in
+ * @param childInfoRepository Reads and writes the child records the wizard fills in
  */
 @HiltViewModel
 class OnboardingViewModel @Inject constructor(
@@ -168,21 +239,15 @@ class OnboardingViewModel @Inject constructor(
     private val familySettingsRepository: FamilySettingsRepository
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(OnboardingUiState())
+    private val _uiState = MutableStateFlow(
+        // One blank draft of each kind, so both steps open with a form rather than an empty
+        // list and an Add button. Neither is written unless it is named.
+        OnboardingUiState(
+            children = listOf(ChildDraft(id = newDraftId())),
+            pets = listOf(PetDraft(id = newDraftId()))
+        )
+    )
     val uiState: StateFlow<OnboardingUiState> = _uiState.asStateFlow()
-
-    /**
-     * The child record this wizard is filling in, once one is known.
-     *
-     * Held outside [OnboardingUiState] because no part of the UI renders it: it exists so the
-     * child step and the relatives step write to the **same** record rather than creating a
-     * second one, and so an account that already has a child edits that child instead of
-     * duplicating it.
-     */
-    private var childInfoId: String? = null
-
-    /** The pet record this wizard is filling in, for the same reason [childInfoId] exists. */
-    private var petId: String? = null
 
     /**
      * Serializes every write this wizard makes, so a read-modify-write cannot interleave with
@@ -218,13 +283,8 @@ class OnboardingViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val user = userRepository.getCurrentUser()
-                val child = childInfoRepository.getAllChildInfo().first().firstOrNull()
-                val pet = petRepository.getAllPets().first().firstOrNull()
-                petId = petId ?: pet?.id
-                // Never clears an id a step has already claimed: this read is asynchronous, and
-                // "no child yet" arriving after a child was created would orphan that record and
-                // make the next save create a second one.
-                childInfoId = childInfoId ?: child?.id
+                val storedChildren = childInfoRepository.getAllChildInfo().first()
+                val storedPets = petRepository.getAllPets().first()
                 _uiState.update { state ->
                     state.copy(
                         name = state.name.orStored(user?.name),
@@ -239,17 +299,13 @@ class OnboardingViewModel @Inject constructor(
                             ?: DEFAULT_CARES_FOR,
                         splitMomPercent = state.splitMomPercent.takeIf { it != EVEN_SPLIT_PERCENT }
                             ?: familySettingsRepository.agreedRatioOrDefault().momPercent,
-                        petName = state.petName.orStored(pet?.name),
-                        petSpecies = if (state.petSpecies == PetSpecies.DOG && pet != null) {
-                            pet.species
-                        } else {
-                            state.petSpecies
-                        },
-                        childName = state.childName.orStored(child?.childName),
-                        childDateOfBirth = state.childDateOfBirth ?: child?.dateOfBirth?.toLocalDate(),
-                        childAllergies = state.childAllergies.orStored(child?.allergies),
-                        childMedicalProfile = state.childMedicalProfile.orStored(child?.medicalProfile),
-                        relatives = state.relatives.orStored(child?.emergencyContacts)
+                        // Whole-list, not field-by-field: with several drafts there is no
+                        // honest way to merge a stored record into a form the parent may have
+                        // started, so a touched list is left alone entirely. The race is
+                        // theoretical — this runs at construction, while the intro step, which
+                        // collects nothing, is what the parent is looking at.
+                        children = state.children.orStoredChildren(storedChildren),
+                        pets = state.pets.orStoredPets(storedPets)
                     )
                 }
             } catch (e: CancellationException) {
@@ -279,24 +335,55 @@ class OnboardingViewModel @Inject constructor(
     fun updateMedicalProfile(profile: MedicalProfile) =
         _uiState.update { it.copy(medicalProfile = profile) }
 
-    /** Updates the child's name. */
-    fun updateChildName(name: String) = _uiState.update { it.copy(childName = name) }
+    /** Updates one child's name. */
+    fun updateChildName(id: String, name: String) = updateChild(id) { it.copy(name = name) }
 
-    /** Updates the child's date of birth. */
-    fun updateChildDateOfBirth(date: LocalDate?) =
-        _uiState.update { it.copy(childDateOfBirth = date) }
+    /** Updates one child's date of birth. */
+    fun updateChildDateOfBirth(id: String, date: LocalDate?) =
+        updateChild(id) { it.copy(dateOfBirth = date) }
 
-    /** Updates the child's allergies. */
-    fun updateChildAllergies(allergies: List<String>) =
-        _uiState.update { it.copy(childAllergies = allergies) }
+    /** Updates one child's allergies. */
+    fun updateChildAllergies(id: String, allergies: List<String>) =
+        updateChild(id) { it.copy(allergies = allergies) }
 
-    /** Updates the child's medical profile. */
-    fun updateChildMedicalProfile(profile: MedicalProfile) =
-        _uiState.update { it.copy(childMedicalProfile = profile) }
+    /** Updates one child's medical profile. */
+    fun updateChildMedicalProfile(id: String, profile: MedicalProfile) =
+        updateChild(id) { it.copy(medicalProfile = profile) }
 
-    /** Replaces the list of emergency contacts. */
-    fun updateRelatives(relatives: List<EmergencyContact>) =
-        _uiState.update { it.copy(relatives = relatives) }
+    /** Replaces one child's emergency contacts. */
+    fun updateRelatives(id: String, relatives: List<EmergencyContact>) =
+        updateChild(id) { it.copy(relatives = relatives) }
+
+    /** Appends a blank child draft. Nothing is written for it until it is named. */
+    fun addChild() = _uiState.update { it.copy(children = it.children + ChildDraft(id = newDraftId())) }
+
+    /**
+     * Takes a child out of the wizard, and deletes its record if one was already written.
+     *
+     * Dropping the draft alone would leave a child the parent has explicitly removed sitting in
+     * the child list — the step saves on Next, so a draft removed after one is a record. The
+     * delete is a no-op for a draft that never reached Room.
+     *
+     * It goes through [ChildInfoRepository.deleteChildInfo], which removes the Firestore document
+     * outright instead of writing a tombstone. That is the defect CLAUDE.md records under "Known
+     * issues" for the child editor's own Delete action, and this is the same call, not a new one:
+     * fixing it there fixes it here. It is also the least harmful place for it — the record is
+     * seconds old and the co-parent has almost certainly never seen it.
+     */
+    fun removeChild(id: String) {
+        val removed = _uiState.value.children.firstOrNull { it.id == id } ?: return
+        _uiState.update { state ->
+            val remaining = state.children.filterNot { it.id == id }
+            // Never leave the step with nothing to render.
+            state.copy(children = remaining.ifEmpty { listOf(ChildDraft(id = newDraftId())) })
+        }
+        if (!removed.isBlank) {
+            persist { childInfoRepository.getChildInfoById(id)?.let { childInfoRepository.deleteChildInfo(it) } }
+        }
+    }
+
+    /** Which child the relatives step is collecting contacts for. */
+    fun selectRelativesChild(id: String) = _uiState.update { it.copy(relativesForId = id) }
 
     /**
      * Saves this step's answers and moves to the next one.
@@ -314,9 +401,9 @@ class OnboardingViewModel @Inject constructor(
         when (state.step) {
             OnboardingStep.Family -> persist { saveCaresFor(state) }
             OnboardingStep.Profile -> persist { saveProfile(state) }
-            OnboardingStep.Child -> persist { saveChild(state) }
-            OnboardingStep.Relatives -> persist { saveChild(state) }
-            OnboardingStep.Pet -> persist { savePet(state) }
+            OnboardingStep.Child -> persist { saveChildren(state) }
+            OnboardingStep.Relatives -> persist { saveChildren(state) }
+            OnboardingStep.Pet -> persist { savePets(state) }
             OnboardingStep.Split -> persist {
                 familySettingsRepository.submitRatio(
                     SplitRatio.ofMomPercent(state.splitMomPercent)
@@ -360,15 +447,38 @@ class OnboardingViewModel @Inject constructor(
         _uiState.update { it.copy(caresFor = kinds) }
     }
 
-    /** The pet step's name field. */
-    fun setPetName(value: String) {
-        _uiState.update { it.copy(petName = value) }
+    /** One pet's name. */
+    fun setPetName(id: String, value: String) = updatePet(id) { it.copy(name = value) }
+
+    /** One pet's species. */
+    fun setPetSpecies(id: String, value: PetSpecies) = updatePet(id) { it.copy(species = value) }
+
+    /** Appends a blank pet draft. Nothing is written for it until it is named. */
+    fun addPet() = _uiState.update { it.copy(pets = it.pets + PetDraft(id = newDraftId())) }
+
+    /** Takes a pet out of the wizard, deleting its record if one was written. See [removeChild]. */
+    fun removePet(id: String) {
+        val removed = _uiState.value.pets.firstOrNull { it.id == id } ?: return
+        _uiState.update { state ->
+            val remaining = state.pets.filterNot { it.id == id }
+            state.copy(pets = remaining.ifEmpty { listOf(PetDraft(id = newDraftId())) })
+        }
+        if (!removed.isBlank) {
+            persist { petRepository.getPetById(id)?.let { petRepository.deletePet(it) } }
+        }
     }
 
-    /** The pet step's species. */
-    fun setPetSpecies(value: PetSpecies) {
-        _uiState.update { it.copy(petSpecies = value) }
-    }
+    /** Applies [transform] to the one child with [id], leaving the rest of the list alone. */
+    private fun updateChild(id: String, transform: (ChildDraft) -> ChildDraft) =
+        _uiState.update { state ->
+            state.copy(children = state.children.map { if (it.id == id) transform(it) else it })
+        }
+
+    /** Applies [transform] to the one pet with [id]. See [updateChild]. */
+    private fun updatePet(id: String, transform: (PetDraft) -> PetDraft) =
+        _uiState.update { state ->
+            state.copy(pets = state.pets.map { if (it.id == id) transform(it) else it })
+        }
 
     /** The split step's share for slot 1, as a whole percent. */
     fun setSplitMomPercent(value: Int) {
@@ -456,28 +566,31 @@ class OnboardingViewModel @Inject constructor(
         userRepository.updateUser(fresh.copy(caresFor = state.caresFor))
     }
 
+    /** Writes every named pet. See [saveChildren]. */
+    private suspend fun savePets(state: OnboardingUiState) {
+        state.pets.forEach { savePetDraft(it) }
+    }
+
     /**
-     * Writes the pet the wizard collected, onto one record.
+     * Writes one pet's record.
      *
-     * Same shape as [saveChild], and for the same reason: [petId] is held so a second Next does
-     * not create a second pet. Nothing is written for a blank name — a nameless pet is not
-     * creatable anywhere else in the app, and would show as an unidentifiable row.
+     * Same shape as [saveChildDraft]: the draft's id **is** the record's id, so a second Next
+     * updates rather than duplicating. Nothing is written for a blank name — a nameless pet is
+     * not creatable anywhere else in the app, and would show as an unidentifiable row.
      */
-    private suspend fun savePet(state: OnboardingUiState) {
-        val name = state.petName.trim()
+    private suspend fun savePetDraft(draft: PetDraft) {
+        val name = draft.name.trim()
         if (name.isBlank()) return
 
         val uid = userRepository.getCurrentUserId()
         val now = LocalDateTime.now()
-        val existing = petId?.let { petRepository.getPetById(it) }
-        val id = existing?.id ?: petId ?: UUID.randomUUID().toString()
-        petId = id
+        val existing = petRepository.getPetById(draft.id)
 
         // `copy()` onto whatever is stored, never a fresh object: the same field-preserving rule
         // the event and child editors follow, so ownership and sync stamps survive.
-        val pet = (existing ?: Pet(id = id, name = name, createdAt = now, updatedAt = now)).copy(
+        val pet = (existing ?: Pet(id = draft.id, name = name, createdAt = now, updatedAt = now)).copy(
             name = name,
-            species = state.petSpecies,
+            species = draft.species,
             createdByFirebaseUid = existing?.createdByFirebaseUid ?: uid,
             lastModifiedBy = uid,
             syncedToFirestore = false,
@@ -506,37 +619,45 @@ class OnboardingViewModel @Inject constructor(
     }
 
     /**
-     * Writes the child's answers, and the relatives, onto one record.
+     * Writes every named child, each onto its own record.
      *
      * Both the child step and the relatives step call this, so the two never create separate
-     * rows. Nothing is written for a blank child name: a nameless child is not creatable
-     * anywhere else in the app — `AddEditChildInfoScreen` refuses to save one — and it would
-     * appear in the child list as an empty row nobody could identify.
+     * rows: the contacts a parent enters on the relatives step belong to a [ChildDraft] and are
+     * written by the same pass that writes that child's name.
      */
-    private suspend fun saveChild(state: OnboardingUiState) {
-        val name = state.childName.trim()
+    private suspend fun saveChildren(state: OnboardingUiState) {
+        state.children.forEach { saveChildDraft(it) }
+    }
+
+    /**
+     * Writes one child's record.
+     *
+     * Nothing is written for a blank name: a nameless child is not creatable anywhere else in
+     * the app — `AddEditChildInfoScreen` refuses to save one — and it would appear in the child
+     * list as an empty row nobody could identify.
+     */
+    private suspend fun saveChildDraft(draft: ChildDraft) {
+        val name = draft.name.trim()
         if (name.isBlank()) return
 
         val uid = userRepository.getCurrentUserId()
         val now = LocalDateTime.now()
-        val existing = childInfoId?.let { childInfoRepository.getChildInfoById(it) }
-        val id = existing?.id ?: childInfoId ?: UUID.randomUUID().toString()
-        childInfoId = id
+        val existing = childInfoRepository.getChildInfoById(draft.id)
 
         val base = existing ?: ChildInfo(
-            id = id,
+            id = draft.id,
             childName = name,
-            dateOfBirth = state.childDateOfBirth?.atStartOfDay(),
+            dateOfBirth = draft.dateOfBirth?.atStartOfDay(),
             createdAt = now,
             updatedAt = now
         )
         childInfoRepository.upsertChildInfo(
             base.copy(
                 childName = name,
-                dateOfBirth = state.childDateOfBirth?.atStartOfDay(),
-                allergies = state.childAllergies,
-                medicalProfile = state.childMedicalProfile,
-                emergencyContacts = state.relatives,
+                dateOfBirth = draft.dateOfBirth?.atStartOfDay(),
+                allergies = draft.allergies,
+                medicalProfile = draft.medicalProfile,
+                emergencyContacts = draft.relatives,
                 updatedAt = now,
                 createdByFirebaseUid = base.createdByFirebaseUid ?: uid,
                 lastModifiedBy = uid,
@@ -547,6 +668,40 @@ class OnboardingViewModel @Inject constructor(
 
     private companion object {
         const val TAG = "OnboardingViewModel"
+
+        /** A fresh record id for a draft the parent has just opened. */
+        fun newDraftId(): String = UUID.randomUUID().toString()
+
+        /**
+         * The drafts already on screen, unless none has been touched — then the stored records.
+         *
+         * Whole-list rather than field-by-field: with several drafts there is no honest way to
+         * merge a stored record into a form the parent may have started typing into, so a list
+         * with anything in it is left entirely alone.
+         */
+        fun List<ChildDraft>.orStoredChildren(stored: List<ChildInfo>): List<ChildDraft> =
+            if (stored.isEmpty() || any { !it.isBlank }) {
+                this
+            } else {
+                stored.map { child ->
+                    ChildDraft(
+                        id = child.id,
+                        name = child.childName,
+                        dateOfBirth = child.dateOfBirth?.toLocalDate(),
+                        allergies = child.allergies,
+                        medicalProfile = child.medicalProfile,
+                        relatives = child.emergencyContacts
+                    )
+                }
+            }
+
+        /** The pet drafts on screen, unless none has been touched. See [orStoredChildren]. */
+        fun List<PetDraft>.orStoredPets(stored: List<Pet>): List<PetDraft> =
+            if (stored.isEmpty() || any { !it.isBlank }) {
+                this
+            } else {
+                stored.map { PetDraft(id = it.id, name = it.name, species = it.species) }
+            }
 
         /** This text unless it is blank, in which case [stored] — but never a blank [stored]. */
         fun String.orStored(stored: String?): String =
