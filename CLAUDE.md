@@ -437,6 +437,25 @@ Data flow: UI → ViewModel → UseCase → Repository → Room (source of truth
     a stamped document. See `docs/DESIGN-multi-family.md` M-2 for why the relaxed version of that
     pin is not a pin at all. The switch is M-4, where `familyId` **replaces** `sharedWith` rather
     than joining it, after a server-side pass has stamped the documents themselves.
+19. **The parent slot and `caresFor` belong to a relationship, not to a person** (M-3, Aug 2026).
+    Both live on `families/{id}` as maps keyed by uid — `slots` written only by Cloud Functions,
+    `caresFor` written by each parent for **their own key only**, which `firestore.rules` enforces
+    with two nested `hasOnly` checks. The asymmetry is the point: a slot decides whose events are
+    whose, so a parent who could set their own would take the co-parent's colour and re-point what
+    `parentOwner` means across the calendar, while `caresFor` only decides which sections are
+    drawn — exactly the authority a parent already had over their own profile. Both sides of the
+    `caresFor` diff read through `.get('caresFor', {})`, because a family created before the field
+    existed carries no such key and a missing key is an evaluation error, not null.
+    As with item 18, **the client writes the new location and still reads the old one.**
+    `UserRepositoryImpl.updateUser` mirrors `caresFor` onto the family from the one choke point a
+    parent's answer changes through — do not add a second call site in Settings or the wizard —
+    and `users/{uid}.caresFor` keeps being written until M-5 so a co-parent on an older build
+    still sees the change. Nothing reads the family's copy yet: until the switcher exists a person
+    has one family, so a family-scoped slot *is* the profile slot, and the read switch would buy
+    no behaviour while adding a Firestore listener to `ParentsSource`/`FamilyKindSource` — shared
+    flows this project has already had to optimise twice for that. `ParentSlotMigrator` cannot
+    take its `familyId` scope yet either: a row whose backfill has not run carries null, so
+    scoping the re-stamp on it would silently skip exactly the rows that need it.
 
 ## Known issues / do not "fix" silently
 

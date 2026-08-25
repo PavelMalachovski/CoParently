@@ -172,19 +172,33 @@ has exactly that authority over `users/{uid}.caresFor` today. The rule is two ne
 checks — the write may affect only `caresFor`, and within it only the caller's own key, so one
 parent cannot answer for the other and neither can reach `members` or `slots`.
 
-**The read path is family-first with a fallback to `users/{uid}`, and the fallback is not
-belt-and-braces.** M-1 writes `families/{id}` on the accept path only, so for every pair already
-in production the document does not exist and the fallback is the only answer there is.
+M-1 wrote `families/{id}` on the accept path only, so for every pair already in production the
+document does not exist. That makes a prerequisite explicit that was not in M-1:
+`backfillFamilyDocuments`, a callable that creates the family for every live pair, carrying the
+`role`s and `caresFor`s those two accounts already hold. Its source is `users` and not
+`invitations` — the difference from `backfillParentSlots`, which needs to know who *accepted* and
+is therefore beyond helping a pair whose invitation was deleted. A family needs no such fact: two
+accounts that name each other are one.
 
-That makes the stage's real prerequisite explicit, and it is not in M-1: **a callable that
-creates `families/{id}` for every existing pair**, carrying the `role`s and `caresFor`s those two
-accounts already have. It is the same admin pass M-4 needs for `familyId` on documents; running
-it once here is what makes both read switches possible.
+**The client writes the new location and still reads the old one — the same order M-2 used, and
+for a reason worth stating rather than rediscovering.** `UserRepositoryImpl.updateUser` mirrors
+`caresFor` onto the family beside the profile, from the one choke point through which a parent's
+answer changes; nothing reads the family's copy yet.
 
-**`ParentSlotMigrator` is the sharpest edge, and M-2 is what makes it tractable.** Its marker is
-one slot per person and `EventDao.reslotOwner` is scoped by `createdByFirebaseUid` alone — so
-with two families, a slot change in one would re-stamp this parent's events in *both*.
-`Event.familyId` is what the query can newly be scoped by, and the marker becomes per family.
+Reading it early would buy nothing and cost something. Until the switcher exists a person has one
+family, so a family-scoped slot *is* the profile slot — the read switch changes no behaviour
+whatsoever. What it does change is that `ParentsSource` and `FamilyKindSource` grow a Firestore
+listener each, in shared flows this project has already had to optimise twice for exactly that
+(read `ParentsSource.shared`'s own KDoc). And the switcher needs a "which family am I looking at"
+source anyway, so the family document is better read there, once, than bolted onto two sources
+now and refactored again later.
+
+**`ParentSlotMigrator` is the sharpest edge, and it cannot move yet either.** Its marker is one
+slot per person and `EventDao.reslotOwner` is scoped by `createdByFirebaseUid` alone, so with two
+families a slot change in one would re-stamp this parent's events in *both*. `Event.familyId` is
+what the query can newly be scoped by — but a row whose backfill has not run carries null, and
+scoping on the field today would silently stop re-stamping exactly the rows that need it most.
+It moves once M-2's backfill has shipped and run, which is M-4.
 
 ### M-4 · The switcher, and pairing with more than one partner
 
@@ -204,6 +218,10 @@ pair; `firestore.rules` replaces the `sharedWith` / `isPartnerOf` read gates wit
 membership, pinning `familyId` the way `sharedWith` is pinned today; and the client queries
 become `whereEqualTo("familyId", …)`. Until the first of those has run, a rule keyed on
 `familyId` denies every document written before the field existed.
+
+And M-3's two deferred reads land here with it: the switcher's own "which family am I looking
+at" source is what `ParentsSource` and `FamilyKindSource` resolve slots and `caresFor` through,
+and `ParentSlotMigrator` gains its `familyId` scope once M-2's backfill has run.
 
 ### M-5 · Cleanup
 

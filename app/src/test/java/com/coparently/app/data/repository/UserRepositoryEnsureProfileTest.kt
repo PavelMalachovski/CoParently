@@ -55,7 +55,15 @@ class UserRepositoryEnsureProfileTest {
         coEvery { firestoreUserDataSource.updateUser(any(), any()) } returns Result.success(Unit)
         coEvery { userDao.getUserById(any()) } returns null
 
-        repository = UserRepositoryImpl(userDao, authService, firestoreUserDataSource, fcmService)
+        repository = UserRepositoryImpl(
+            userDao,
+            authService,
+            firestoreUserDataSource,
+            // The family mirror: relaxed, because `caresFor` reaching the family document
+            // is not what this class tests and an unpaired fixture never calls it anyway.
+            mockk(relaxed = true),
+            fcmService
+        )
     }
 
     @Test

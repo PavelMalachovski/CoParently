@@ -4,8 +4,10 @@ import com.coparently.app.data.local.dao.UserDao
 import com.coparently.app.data.local.entity.UserEntity
 import com.coparently.app.data.remote.firebase.FcmService
 import com.coparently.app.data.remote.firebase.FirebaseAuthService
+import com.coparently.app.data.remote.firebase.FirestoreFamilyDataSource
 import com.coparently.app.data.remote.firebase.FirestoreUserDataSource
 import com.coparently.app.data.session.ProfileIdentity
+import com.coparently.app.domain.family.FamilyKey
 import com.coparently.app.domain.model.FamilyKind
 import com.coparently.app.domain.model.MedicalProfile
 import com.coparently.app.domain.model.User
@@ -38,6 +40,7 @@ class UserRepositoryImpl @Inject constructor(
     private val userDao: UserDao,
     private val firebaseAuthService: FirebaseAuthService,
     private val firestoreUserDataSource: FirestoreUserDataSource,
+    private val firestoreFamilyDataSource: FirestoreFamilyDataSource,
     private val fcmService: FcmService
 ) : UserRepository {
 
@@ -432,10 +435,46 @@ class UserRepositoryImpl @Inject constructor(
                     "caresFor" to (FamilyKind.toStored(user.caresFor) ?: "")
                 )
                 firestoreUserDataSource.updateUser(firebaseUser.uid, userData).getOrThrow()
+                mirrorCaresForToFamily(firebaseUser.uid, user)
             } catch (e: Exception) {
                 android.util.Log.e("UserRepository", "Failed to sync user update to Firestore", e)
                 // Don't throw here - local update succeeded, Firestore sync failed
             }
+        }
+    }
+
+    /**
+     * Copies this parent's `caresFor` answer onto their family, alongside their profile.
+     *
+     * "Children, pets, or both" stopped being a fact about a person the moment somebody can
+     * co-parent with two others: a man with children by one woman and a dog with another would
+     * otherwise get child sections in the pet family, because the app shows the *union* of the
+     * pair's two answers (docs/DESIGN-multi-family.md, M-3). The family's copy is the one that
+     * will be read; the profile's stays written until M-5 so a co-parent on an older build,
+     * which knows nothing about `families`, still sees the answer change.
+     *
+     * Here rather than in the two screens that collect the answer — Settings and the onboarding
+     * wizard — because this is the single choke point through which a parent's answer changes,
+     * and two call sites is two places that must both remember. The same reasoning
+     * `ParentsSource` exists for.
+     *
+     * A failure is logged and swallowed, matching the profile write above: the local row is
+     * already correct, and the ordinary failure here is not a defect but a pair whose
+     * `families/{id}` does not exist yet — everyone who paired before it was introduced, until
+     * the `backfillFamilyDocuments` pass runs. Nothing reads the family's copy yet, so a miss
+     * costs nothing today; what it must not do is fail the profile write that already landed.
+     */
+    private suspend fun mirrorCaresForToFamily(uid: String, user: User) {
+        val familyId = FamilyKey.orNull(uid, user.partnerId) ?: return
+        runCatching {
+            firestoreFamilyDataSource
+                .setCaresFor(familyId, uid, FamilyKind.toStored(user.caresFor) ?: "")
+        }.onFailure { e ->
+            android.util.Log.w(
+                "UserRepository",
+                "caresFor not mirrored to family $familyId; the profile copy stands",
+                e
+            )
         }
     }
 
