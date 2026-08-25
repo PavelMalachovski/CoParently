@@ -2,6 +2,7 @@ package com.coparently.app.presentation.expenses
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.coparently.app.domain.family.FamilyMemberRef
 import com.coparently.app.domain.model.Budget
 import com.coparently.app.domain.model.BudgetAlert
 import com.coparently.app.domain.model.ExpenseCategory
@@ -65,15 +66,21 @@ class BudgetViewModel @Inject constructor(
         return budgetRepository.getSpentForBudget(budgetId)
     }
 
+    /**
+     * Creates a budget for [category].
+     *
+     * [forMembers] scopes it: empty is the family's budget and every expense in the category
+     * counts against it, while naming members counts only what names them back.
+     */
     fun addBudget(
         category: ExpenseCategory,
         monthlyLimit: Double,
-        childId: String? = null
+        forMembers: List<FamilyMemberRef> = emptyList()
     ) {
         viewModelScope.launch {
             val budget = Budget(
                 id = UUID.randomUUID().toString(),
-                childId = childId,
+                forMembers = forMembers,
                 category = category,
                 monthlyLimit = monthlyLimit,
                 currency = defaultCurrency.value.code,

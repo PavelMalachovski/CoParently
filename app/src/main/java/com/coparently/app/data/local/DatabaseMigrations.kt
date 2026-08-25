@@ -543,6 +543,42 @@ object DatabaseMigrations {
     }
 
     /**
+     * v26 -> v27: an expense or a budget can name the children *and pets* it is about.
+     *
+     * Two additive columns holding a JSON array of `FamilyMemberRef` stored strings, and one
+     * conversion of the single `childId` each table used to carry.
+     *
+     * **The conversion moves nothing in practice.** `childId` existed through the whole stack —
+     * Room column, Firestore field, `getExpensesForChild`/`getBudgetsForChild` DAO queries — and
+     * nothing wrote it and nothing read it: no screen ever passed a child, and both queries had
+     * zero callers. Every row production has ever written holds null. The `CASE` below is here
+     * because a conversion that costs four lines is cheaper than finding out we were wrong.
+     *
+     * **`childId` is not dropped.** Removing a column from SQLite means rebuilding the table,
+     * and this file has no rebuild in it: every migration since v5 is `ALTER TABLE ADD COLUMN`.
+     * With `app/schemas/` stopping at v14 (CQ-1) and no instrumented migration job in CI, a
+     * blind rebuild of the expenses table would be the riskiest statement in the file and the
+     * least verifiable. The column stays declared on the entity, dead and documented, until
+     * CQ-1 gives it something to be checked against.
+     */
+    val MIGRATION_26_27 = object : Migration(26, 27) {
+        override fun migrate(database: SupportSQLiteDatabase) {
+            listOf("expenses", "budgets").forEach { table ->
+                database.execSQL(
+                    "ALTER TABLE $table ADD COLUMN forMembersJson TEXT NOT NULL DEFAULT '[]'"
+                )
+                database.execSQL(
+                    """
+                    UPDATE $table
+                    SET forMembersJson = '["child:' || childId || '"]'
+                    WHERE childId IS NOT NULL AND childId != ''
+                    """.trimIndent()
+                )
+            }
+        }
+    }
+
+    /**
      * List of all migrations in order.
      */
     val ALL_MIGRATIONS = arrayOf(
@@ -566,6 +602,7 @@ object DatabaseMigrations {
         MIGRATION_22_23,
         MIGRATION_23_24,
         MIGRATION_24_25,
-        MIGRATION_25_26
+        MIGRATION_25_26,
+        MIGRATION_26_27
     )
 }

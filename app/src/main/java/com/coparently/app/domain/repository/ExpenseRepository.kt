@@ -17,11 +17,6 @@ interface ExpenseRepository {
     fun getAllExpenses(): Flow<List<Expense>>
 
     /**
-     * Gets expenses for a specific child as a Flow.
-     */
-    fun getExpensesForChild(childId: String): Flow<List<Expense>>
-
-    /**
      * Gets expenses for a specific date range as a Flow.
      */
     fun getExpensesForPeriod(start: LocalDate, end: LocalDate): Flow<List<Expense>>

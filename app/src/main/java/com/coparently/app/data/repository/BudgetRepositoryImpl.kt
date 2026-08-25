@@ -6,10 +6,13 @@ import com.coparently.app.data.local.dao.UserDao
 import com.coparently.app.data.local.entity.BudgetEntity
 import com.coparently.app.data.remote.firebase.FirebaseAuthService
 import com.coparently.app.data.remote.firebase.FirestoreBudgetDataSource
+import com.coparently.app.domain.family.FamilyMemberRef
 import com.coparently.app.domain.model.Budget
 import com.coparently.app.domain.model.BudgetAlert
 import com.coparently.app.domain.model.ExpenseCategory
 import com.coparently.app.domain.repository.BudgetRepository
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.first
@@ -30,6 +33,19 @@ class BudgetRepositoryImpl @Inject constructor(
 ) : BudgetRepository {
 
     private val dateTimeFormatter = DateTimeFormatter.ISO_LOCAL_DATE_TIME
+    private val gson = Gson()
+    private val stringListType = object : TypeToken<List<String>>() {}.type
+
+    /**
+     * Reads a `forMembersJson` column.
+     *
+     * A JSON array of plain strings, never a Gson serialisation of `FamilyMemberRef` — see that
+     * type for why, and `ExpenseRepositoryImpl`, which reads its own column the same way.
+     */
+    private fun refsFrom(json: String): List<FamilyMemberRef> {
+        val stored: List<String> = gson.fromJson(json, stringListType)
+        return FamilyMemberRef.parse(stored)
+    }
 
     override fun getAllBudgets(): Flow<List<Budget>> {
         return budgetDao.getAllBudgets().map { entities ->
@@ -39,12 +55,6 @@ class BudgetRepositoryImpl @Inject constructor(
 
     override fun getActiveBudgets(): Flow<List<Budget>> {
         return budgetDao.getActiveBudgets().map { entities ->
-            entities.map { it.toDomain() }
-        }
-    }
-
-    override fun getBudgetsForChild(childId: String): Flow<List<Budget>> {
-        return budgetDao.getBudgetsForChild(childId).map { entities ->
             entities.map { it.toDomain() }
         }
     }
@@ -85,9 +95,14 @@ class BudgetRepositoryImpl @Inject constructor(
 
         val expenses = expenseDao.getExpensesByCategory(budget.category.name).first()
 
-        return expenses.filter {
-            !it.date.isBefore(startOfMonth) && !it.date.isAfter(endOfMonth) &&
-            (budget.childId == null || it.childId == budget.childId)
+        // A budget that names nobody is the family's, and every expense in the category counts
+        // against it. One that names members counts only what names them back — an untagged
+        // expense is not silently charged to a child's budget, for the same reason a filter chip
+        // does not show the untagged pile: see `FamilyMemberRef.names`.
+        val scope = budget.forMembers
+        return expenses.filter { expense ->
+            !expense.date.isBefore(startOfMonth) && !expense.date.isAfter(endOfMonth) &&
+                (scope.isEmpty() || refsFrom(expense.forMembersJson).any { it in scope })
         }.sumOf { it.amount }
     }
 
@@ -145,7 +160,7 @@ class BudgetRepositoryImpl @Inject constructor(
      */
     private fun budgetToFirestoreMap(budget: Budget, ownerUid: String): Map<String, Any> = mapOf(
         "id" to budget.id,
-        "childId" to (budget.childId ?: ""),
+        "forMembers" to FamilyMemberRef.store(budget.forMembers),
         "category" to budget.category.name,
         "monthlyLimit" to budget.monthlyLimit,
         "currency" to budget.currency,
@@ -181,7 +196,8 @@ class BudgetRepositoryImpl @Inject constructor(
                 budgets.forEach { data ->
                     val budget = Budget(
                         id = data["id"] as String,
-                        childId = (data["childId"] as? String)?.takeIf { it.isNotEmpty() },
+                        forMembers = FamilyMemberRef.parse(data["forMembers"])
+                            .ifEmpty { FamilyMemberRef.fromLegacyChildId(data["childId"] as? String) },
                         category = ExpenseCategory.valueOf(data["category"] as String),
                         monthlyLimit = (data["monthlyLimit"] as Number).toDouble(),
                         currency = data["currency"] as String,
@@ -198,7 +214,7 @@ class BudgetRepositoryImpl @Inject constructor(
     private fun BudgetEntity.toDomain(): Budget {
         return Budget(
             id = id,
-            childId = childId,
+            forMembers = refsFrom(forMembersJson),
             category = ExpenseCategory.valueOf(category),
             monthlyLimit = monthlyLimit,
             currency = currency,
@@ -212,7 +228,8 @@ class BudgetRepositoryImpl @Inject constructor(
     private fun Budget.toEntity(): BudgetEntity {
         return BudgetEntity(
             id = id,
-            childId = childId,
+            // `childId` is a dead column and is left null; see BudgetEntity.
+            forMembersJson = gson.toJson(FamilyMemberRef.store(forMembers)),
             category = category.name,
             monthlyLimit = monthlyLimit,
             currency = currency,

@@ -10,6 +10,7 @@ import com.coparently.app.domain.expenses.SplitRatio
 import com.coparently.app.domain.expenses.SplitRatioProposal
 import com.coparently.app.domain.expenses.breakdownByCurrency
 import com.coparently.app.domain.expenses.calculateExpenseBalancesByCurrency
+import com.coparently.app.domain.family.FamilyMemberRef
 import com.coparently.app.domain.model.Expense
 import com.coparently.app.domain.model.ExpenseCategory
 import com.coparently.app.domain.model.ExpenseSummary
@@ -423,7 +424,7 @@ class ExpenseViewModel @Inject constructor(
         amount: Double,
         category: ExpenseCategory,
         currency: String,
-        childId: String? = null,
+        forMembers: List<FamilyMemberRef> = emptyList(),
         date: LocalDate = LocalDate.now(),
         notes: String? = null,
         receiptImageUri: String? = null,
@@ -467,7 +468,7 @@ class ExpenseViewModel @Inject constructor(
             val splitBetween = if (shared) sharedWith(userId) else emptyList()
             val expense = Expense(
                 id = expenseId,
-                childId = childId,
+                forMembers = forMembers,
                 title = title,
                 amount = amount,
                 category = category,
@@ -516,7 +517,8 @@ class ExpenseViewModel @Inject constructor(
         currency: String,
         date: LocalDate = original.date,
         notes: String? = null,
-        receiptImageUri: String? = null
+        receiptImageUri: String? = null,
+        forMembers: List<FamilyMemberRef> = original.forMembers
     ) {
         if (_saveState.value is ExpenseSaveState.Saving) return
 
@@ -539,6 +541,7 @@ class ExpenseViewModel @Inject constructor(
             }
 
             val updated = original.copy(
+                forMembers = forMembers,
                 title = title,
                 amount = amount,
                 category = category,

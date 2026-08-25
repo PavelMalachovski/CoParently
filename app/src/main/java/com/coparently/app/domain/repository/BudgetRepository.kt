@@ -21,11 +21,6 @@ interface BudgetRepository {
     fun getActiveBudgets(): Flow<List<Budget>>
 
     /**
-     * Gets budgets for a specific child as a Flow.
-     */
-    fun getBudgetsForChild(childId: String): Flow<List<Budget>>
-
-    /**
      * Gets a budget by ID.
      */
     suspend fun getBudgetById(id: String): Budget?

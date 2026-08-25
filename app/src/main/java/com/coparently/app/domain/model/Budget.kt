@@ -1,5 +1,6 @@
 package com.coparently.app.domain.model
 
+import com.coparently.app.domain.family.FamilyMemberRef
 import java.time.LocalDateTime
 
 /**
@@ -7,7 +8,10 @@ import java.time.LocalDateTime
  * This is the clean architecture model used in the domain layer.
  *
  * @property id Unique identifier for the budget
- * @property childId ID of the child this budget is for (null for all children)
+ * @property forMembers The children and pets this budget is about. Empty means the whole
+ *   family, which is what every record written before the reference type holds — see
+ *   [com.coparently.app.domain.family.FamilyMemberRef]. It replaces a single `childId`, which
+ *   had nowhere to put a vet's bill.
  * @property category Expense category this budget applies to
  * @property monthlyLimit Monthly spending limit
  * @property currency Currency code (default: USD)
@@ -18,7 +22,7 @@ import java.time.LocalDateTime
  */
 data class Budget(
     val id: String,
-    val childId: String? = null,
+    val forMembers: List<FamilyMemberRef> = emptyList(),
     val category: ExpenseCategory,
     val monthlyLimit: Double,
     val currency: String = "USD",

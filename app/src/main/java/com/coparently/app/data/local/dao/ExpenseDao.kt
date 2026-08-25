@@ -16,9 +16,6 @@ interface ExpenseDao {
     @Query("SELECT * FROM expenses WHERE deletedAtMillis IS NULL ORDER BY date DESC")
     fun getAllExpenses(): Flow<List<ExpenseEntity>>
 
-    @Query("SELECT * FROM expenses WHERE deletedAtMillis IS NULL AND childId = :childId ORDER BY date DESC")
-    fun getExpensesForChild(childId: String): Flow<List<ExpenseEntity>>
-
     @Query(
         "SELECT * FROM expenses WHERE deletedAtMillis IS NULL " +
             "AND date BETWEEN :start AND :end ORDER BY date DESC"
