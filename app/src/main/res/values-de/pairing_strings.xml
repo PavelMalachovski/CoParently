@@ -77,4 +77,6 @@
     <!-- Shown after an email invitation is created. Deliberately does not claim the email
          arrived: the app cannot know that, and the code works either way. -->
     <string name="pairing_email_invite_created">Einladung gesendet. Falls sie nicht ankommt, geben Sie den Code direkt weiter.</string>
+    <string name="pairing_add_another_title">Weiteren Elternteil hinzufügen</string>
+    <string name="pairing_add_another_description">Teile einen Code mit jemandem, mit dem du getrennt Kinder betreust. Diese Familie bleibt von dieser hier getrennt.</string>
 </resources>

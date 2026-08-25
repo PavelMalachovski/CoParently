@@ -77,4 +77,6 @@
     <!-- Shown after an email invitation is created. Deliberately does not claim the email
          arrived: the app cannot know that, and the code works either way. -->
     <string name="pairing_email_invite_created">Pozvánka odeslána. Pokud nedorazí, předejte kód přímo.</string>
+    <string name="pairing_add_another_title">Přidat dalšího rodiče</string>
+    <string name="pairing_add_another_description">Sdílejte kód s někým, s kým vychováváte děti odděleně. Jejich rodina zůstane oddělená od této.</string>
 </resources>

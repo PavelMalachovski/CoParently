@@ -80,4 +80,6 @@
     <!-- Shown after an email invitation is created. Deliberately does not claim the email
          arrived: the app cannot know that, and the code works either way. -->
     <string name="pairing_email_invite_created">Invitation sent. If it doesn\'t arrive, share the code directly.</string>
+    <string name="pairing_add_another_title">Add another co-parent</string>
+    <string name="pairing_add_another_description">Share a code with someone you co-parent with separately. Their family stays separate from this one.</string>
 </resources>

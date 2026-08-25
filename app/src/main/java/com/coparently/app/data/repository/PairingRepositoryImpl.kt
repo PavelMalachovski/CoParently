@@ -99,7 +99,12 @@ class PairingRepositoryImpl @Inject constructor(
                                             email = "",
                                             pairedSinceMillis = pairedAt
                                         )
-                                    }
+                                    },
+                                // Carried into the paired state too, so the screen can offer a
+                                // second co-parent: a person may have more than one, and
+                                // without these the invite has nothing to render.
+                                activeInvite = own.firstOrNull(),
+                                incoming = incoming
                             )
                         }
                     }
