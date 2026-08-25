@@ -178,6 +178,7 @@ fun SettingsScreen(
     var showFamilyKindPicker by rememberSaveable { mutableStateOf(false) }
     var showColorPicker by rememberSaveable { mutableStateOf(false) }
     var showCountryPicker by rememberSaveable { mutableStateOf(false) }
+    val country by settingsViewModel.country.collectAsState()
     var showFamilySwitcher by rememberSaveable { mutableStateOf(false) }
     val families by settingsViewModel.families.collectAsState()
     val selectedFamilyId by settingsViewModel.selectedFamilyId.collectAsState()
@@ -240,7 +241,6 @@ fun SettingsScreen(
             onDismiss = { showColorPicker = false }
         )
     }
-    val country by settingsViewModel.country.collectAsState()
     val darkTheme by settingsViewModel.darkThemeFlow.collectAsState()
     val account by settingsViewModel.account.collectAsState()
     val defaultCurrency by settingsViewModel.defaultCurrency.collectAsState()
