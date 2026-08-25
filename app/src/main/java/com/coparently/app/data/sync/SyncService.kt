@@ -1,6 +1,7 @@
 package com.coparently.app.data.sync
 
 import android.util.Log
+import com.coparently.app.data.family.SelectedFamilySource
 import com.coparently.app.data.local.dao.ChildInfoDao
 import com.coparently.app.data.local.dao.EventDao
 import com.coparently.app.data.local.dao.UserDao
@@ -58,6 +59,7 @@ class SyncService @Inject constructor(
     private val changeRequestRepository: ChangeRequestRepository,
     private val familySettingsRepository: FamilySettingsRepository,
     private val familyIdBackfill: FamilyIdBackfill,
+    private val selectedFamilySource: SelectedFamilySource,
     private val accountSwitchGuard: AccountSwitchGuard
 ) {
     // `LocalDate::class.java` needs the same adapter `ChildInfoRepositoryImpl` and
@@ -604,7 +606,13 @@ class SyncService @Inject constructor(
         val remoteUserData = firestoreUserDataSource.getUserById(userId)
         if (remoteUserData != null) {
             val updatedUser = localUser.copy(
-                partnerId = remoteUserData["partnerId"] as? String,
+                // **`partnerId` is deliberately not refreshed from the remote document.** It
+                // stopped meaning "my co-parent" and started meaning "the family this device is
+                // showing" (`SelectedFamilySource`), so copying the server's value here would
+                // yank a parent out of the family they are looking at on every sync tick. The
+                // real set arrives as `partnerIds`, below, and the selection is reconciled
+                // against it afterwards.
+                partnerIdsJson = gson.toJson(remotePartnerUids(remoteUserData)),
                 fcmToken = remoteUserData["fcmToken"] as? String,
                 // A document that predates the `role` field, a failed partial read, or one
                 // that (should not, but did) carry a blank string must not blank out a role
@@ -616,6 +624,11 @@ class SyncService @Inject constructor(
                 role = (remoteUserData["role"] as? String)?.takeIf { it.isNotBlank() } ?: localUser.role
             )
             userDao.updateUser(updatedUser)
+
+            // Now that the set is current, make the projection agree with it. This is what
+            // moves a device off a family the parent has been removed from — an unpair
+            // performed on the other phone reaches this one only as a shorter `partnerIds`.
+            selectedFamilySource.reconcile()
 
             // The parent slot as the server actually states it, next to what this device held.
             // Without this the two are indistinguishable in the field: a slot that never got
@@ -705,6 +718,20 @@ class SyncService @Inject constructor(
      * Converts Firestore child info data to ChildInfoEntity.
      */
     @Suppress("UNCHECKED_CAST")
+    /**
+     * The co-parents a remote `users/{uid}` document names, in either shape it may carry.
+     *
+     * `partnerIds` is the answer and the singular `partnerId` is the fallback, unioned rather
+     * than one winning — the same rule `UserRepositoryImpl.partnerUids` and `functions`'
+     * `partnersOf` follow, because three places deciding who somebody co-parents with must
+     * decide it identically.
+     */
+    private fun remotePartnerUids(remote: Map<String, Any?>): List<String> {
+        val many = (remote["partnerIds"] as? List<*>)?.mapNotNull { it as? String }.orEmpty()
+        val one = listOfNotNull(remote["partnerId"] as? String)
+        return (many + one).filter { it.isNotBlank() }.distinct()
+    }
+
     private fun Map<String, Any?>.toChildInfoEntity(): com.coparently.app.data.local.entity.ChildInfoEntity {
         return com.coparently.app.data.local.entity.ChildInfoEntity(
             id = this["id"] as String,

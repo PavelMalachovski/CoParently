@@ -673,6 +673,27 @@ object DatabaseMigrations {
     }
 
     /**
+     * v30 -> v31: a user row remembers every co-parent, not just one.
+     *
+     * `partnerId` held the single co-parent an account could have. With more than one it holds
+     * whichever family the device is currently showing, and the real set moves here — a JSON
+     * array, defaulted to `[]` rather than null so "not migrated yet" and "no co-parents" are
+     * not two spellings of the same thing.
+     *
+     * Nothing is converted, and it does not need to be: `SyncService` refreshes the row from
+     * `users/{uid}` on every pass, and `UserRepositoryImpl` seeds the list from `partnerId`
+     * when the remote document predates the array. A migration that guessed would only be
+     * guessing at what the next sync states outright.
+     */
+    val MIGRATION_30_31 = object : Migration(30, 31) {
+        override fun migrate(database: SupportSQLiteDatabase) {
+            database.execSQL(
+                "ALTER TABLE users ADD COLUMN partnerIdsJson TEXT NOT NULL DEFAULT '[]'"
+            )
+        }
+    }
+
+    /**
      * List of all migrations in order.
      */
     val ALL_MIGRATIONS = arrayOf(
@@ -700,6 +721,7 @@ object DatabaseMigrations {
         MIGRATION_26_27,
         MIGRATION_27_28,
         MIGRATION_28_29,
-        MIGRATION_29_30
+        MIGRATION_29_30,
+        MIGRATION_30_31
     )
 }

@@ -3,6 +3,7 @@ package com.coparently.app.data.repository
 import android.content.Context
 import android.util.Log
 import com.coparently.app.R
+import com.coparently.app.data.family.SelectedFamilySource
 import com.coparently.app.data.local.dao.UserDao
 import com.coparently.app.data.remote.firebase.FirebaseAuthService
 import com.coparently.app.data.remote.firebase.PairingException
@@ -16,6 +17,7 @@ import com.coparently.app.domain.pairing.InviteCodeGenerator
 import com.coparently.app.domain.repository.PairingRepository
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.gson.Gson
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -48,10 +50,14 @@ class PairingRepositoryImpl @Inject constructor(
     private val pairingFunctions: PairingFunctions,
     private val postPairingConversationSetup: PostPairingConversationSetup,
     private val userDao: UserDao,
+    private val selectedFamilySource: SelectedFamilySource,
     // Application context only, for the localized conversation-title fallback. This is a
     // repository, not a ViewModel, so it is allowed to resolve resources directly.
     @ApplicationContext private val context: Context
 ) : PairingRepository {
+
+    /** For the stored co-parent list, which is a JSON array of plain uid strings. */
+    private val gson = Gson()
 
     /**
      * The `(uid, partnerId)` pair last mirrored into Room by [onPairingStateObserved], so
@@ -215,8 +221,25 @@ class PairingRepositoryImpl @Inject constructor(
 
         try {
             val local = userDao.getUserById(uid)
-            if (local != null && local.partnerId != partnerId) {
-                userDao.updateUser(local.copy(partnerId = partnerId))
+            if (local != null) {
+                // The **list** is what a pairing transition changes. `partnerId` is no longer
+                // "my co-parent" but "the family this device is showing", and only
+                // `SelectedFamilySource` writes it — mirroring the observed partner onto it
+                // here would drag a parent looking at one family into another the moment the
+                // other one's pairing state re-emitted.
+                val partners = (
+                    gson.fromJson(local.partnerIdsJson, Array<String>::class.java)
+                        ?.toList().orEmpty()
+                    ).toMutableList()
+                if (partnerId != null && partnerId !in partners) partners += partnerId
+                val nextJson = gson.toJson(partners)
+                if (nextJson != local.partnerIdsJson) {
+                    userDao.updateUser(local.copy(partnerIdsJson = nextJson))
+                }
+                // Re-point the projection only when what it names has actually gone: an unpair
+                // observed from the other side leaves this device showing an ex-partner
+                // otherwise, and nothing else would notice until the switcher was opened.
+                selectedFamilySource.reconcile()
             }
             if (partnerId != null) ensureConversationWith(partnerId)
         } catch (e: CancellationException) {

@@ -101,6 +101,9 @@ class PairingRepositoryImplTest {
             pairingFunctions = pairingFunctions,
             postPairingConversationSetup = PostPairingConversationSetup(messageRepository, conversationMigrator),
             userDao = userDao,
+            // Relaxed: which family this device shows is a per-device projection these tests
+            // never assert on, and reconciling it needs Firebase Auth.
+            selectedFamilySource = mockk(relaxed = true),
             context = context
         )
     }
@@ -169,6 +172,11 @@ class PairingRepositoryImplTest {
         // Everything outside the pairing screen (chat, expenses, budgets, event sync) reads
         // the link from Room, so the observed transition — not the redeem() call, which only
         // ever runs on the accepting device — is what has to write it.
+        //
+        // What it writes is the **list**. `partnerId` stopped meaning "my co-parent" and
+        // started meaning "the family this device is showing", and only `SelectedFamilySource`
+        // writes that — mirroring the observed partner onto it here would drag a parent
+        // looking at one family into another the moment the other one's state re-emitted.
         coEvery { userDao.getUserById("user-a") } returns userEntity(partnerId = null)
         val listeners = stubRealtimeListeners()
 
@@ -181,7 +189,9 @@ class PairingRepositoryImplTest {
             cancelAndIgnoreRemainingEvents()
         }
 
-        coVerify { userDao.updateUser(userEntity(partnerId = "u2")) }
+        coVerify {
+            userDao.updateUser(userEntity(partnerId = null).copy(partnerIdsJson = "[\"u2\"]"))
+        }
         // The legacy-conversation merge runs immediately after the canonical conversation is
         // ensured, inside the same guarded block, so a merge failure can never surface as a
         // failed pairing.

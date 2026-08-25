@@ -359,6 +359,7 @@ class UserRepositoryImpl @Inject constructor(
             googleCalendarSyncEnabled = remote?.get("googleCalendarSyncEnabled") as? Boolean ?: false,
             googleCalendarId = remote?.string("googleCalendarId"),
             partnerId = remote?.string("partnerId"),
+            partnerIdsJson = gson.toJson(remote?.partnerUids().orEmpty()),
             fcmToken = remote?.string("fcmToken"),
             dateOfBirth = remote?.string("dateOfBirth"),
             phone = remote?.string("phone"),
@@ -410,6 +411,14 @@ class UserRepositoryImpl @Inject constructor(
                 // `momDayIndices` means "the days slot 1 has custody", so a pair in that state
                 // has a custody pattern that distinguishes nobody.
                 //
+                // **`partnerId` is absent for the same reason, and it became load-bearing the
+                // day a person could have two co-parents.** The field is server-managed —
+                // `acceptPairingInvitation` and `unpairCoParent` own it, alongside
+                // `partnerIds` — and locally it no longer even means the same thing: Room's
+                // copy is *which family this device is showing* (`SelectedFamilySource`).
+                // Sending that back would publish a per-device UI choice into a document the
+                // co-parent reads, and would overwrite the server's answer with it.
+                //
                 // This is a `set(..., merge)` (see `FirestoreUserDataSource.updateUser`), so
                 // omitting the key leaves the stored slot untouched rather than clearing it.
                 val userData = mapOf(
@@ -421,7 +430,6 @@ class UserRepositoryImpl @Inject constructor(
                     "profilePhotoUrl" to (user.profilePhotoUrl ?: ""),
                     "googleCalendarSyncEnabled" to user.googleCalendarSyncEnabled,
                     "googleCalendarId" to (user.googleCalendarId ?: ""),
-                    "partnerId" to (user.partnerId ?: ""),
                     "fcmToken" to (user.fcmToken ?: ""),
                     "dateOfBirth" to (user.dateOfBirth?.toString() ?: ""),
                     "phone" to (user.phone ?: ""),
@@ -543,6 +551,8 @@ class UserRepositoryImpl @Inject constructor(
             googleCalendarSyncEnabled = googleCalendarSyncEnabled,
             googleCalendarId = googleCalendarId,
             partnerId = partnerId,
+            partnerIds = gson.fromJson(partnerIdsJson, Array<String>::class.java)
+                ?.toList().orEmpty(),
             fcmToken = fcmToken,
             dateOfBirth = parseProfileDate(dateOfBirth),
             phone = phone,
@@ -569,6 +579,7 @@ class UserRepositoryImpl @Inject constructor(
             googleCalendarSyncEnabled = googleCalendarSyncEnabled,
             googleCalendarId = googleCalendarId,
             partnerId = partnerId,
+            partnerIdsJson = gson.toJson(partnerIds),
             fcmToken = fcmToken,
             dateOfBirth = dateOfBirth?.toString(),
             phone = phone,
@@ -577,6 +588,21 @@ class UserRepositoryImpl @Inject constructor(
             onboardingCompletedAt = onboardingCompletedAt,
             caresForKinds = FamilyKind.toStored(caresFor)
         )
+    }
+
+    /**
+     * The co-parents a `users/{uid}` document names, in either shape it may carry.
+     *
+     * `partnerIds` is the answer; the singular `partnerId` is a fallback for a document written
+     * before the array existed, and the two are **unioned** rather than one winning, so a
+     * document caught mid-migration names both. The same rule `functions/index.js` follows in
+     * `partnersOf`, and it has to be the same rule: the client and the callables must not
+     * disagree about who somebody co-parents with.
+     */
+    private fun Map<String, Any?>.partnerUids(): List<String> {
+        val many = (this["partnerIds"] as? List<*>)?.mapNotNull { it as? String }.orEmpty()
+        val one = listOfNotNull(this["partnerId"] as? String)
+        return (many + one).filter { it.isNotBlank() }.distinct()
     }
 
     /**
@@ -593,6 +619,7 @@ class UserRepositoryImpl @Inject constructor(
             googleCalendarSyncEnabled = this["googleCalendarSyncEnabled"] as? Boolean ?: false,
             googleCalendarId = this["googleCalendarId"] as? String,
             partnerId = this["partnerId"] as? String,
+            partnerIds = partnerUids(),
             fcmToken = this["fcmToken"] as? String,
             dateOfBirth = parseProfileDate(this["dateOfBirth"] as? String),
             phone = (this["phone"] as? String)?.takeIf { it.isNotBlank() },
