@@ -188,4 +188,72 @@ describe('acceptPairingInvitation', () => {
 
     assert.deepStrictEqual(db._docs.families['adam__zoe'].members, ['adam', 'zoe']);
   });
+
+  it('records the two slots on the family, keyed by uid', async () => {
+    // The slot belongs to the pair, not to the person: somebody who co-parents with two
+    // others holds two of them, and one `users/{uid}.role` cannot carry both. Written here
+    // as admin and by no client, because a parent who could set their own would take the
+    // co-parent's colour and re-point what `parentOwner` means across the calendar.
+    const db = fakeDb({
+      invitations: {
+        inv1: {id: 'inv1', status: 'pending', fromUserId: 'alice', toEmail: 'bob@example.com'},
+      },
+      users: {
+        alice: {id: 'alice', name: 'Alice', role: 'dad'},
+        bob: {id: 'bob', name: 'Bob'},
+      },
+    });
+
+    await myFunctions.acceptPairingInvitationImpl(
+        db, 'bob', 'bob@example.com', {code: null, invitationId: 'inv1'});
+
+    // The inviter keeps the slot they had; the accepter takes the other. Exactly what lands
+    // on the two profiles, so the family and the profiles cannot disagree.
+    assert.deepStrictEqual(db._docs.families['alice__bob'].slots, {alice: 'dad', bob: 'mom'});
+    assert.strictEqual(db._docs.users.alice.role, 'dad');
+    assert.strictEqual(db._docs.users.bob.role, 'mom');
+  });
+
+  it('carries each parent\'s own caresFor answer onto the family', async () => {
+    // Per family, not per person: a man with children by one woman and a dog with another
+    // must not get child sections in the pet family. The stored form is the one
+    // `users/{uid}.caresFor` already uses, so there is a single spelling to parse.
+    const db = fakeDb({
+      invitations: {
+        inv1: {id: 'inv1', status: 'pending', fromUserId: 'alice', toEmail: 'bob@example.com'},
+      },
+      users: {
+        alice: {id: 'alice', name: 'Alice', role: 'mom', caresFor: 'CHILDREN|PETS'},
+        bob: {id: 'bob', name: 'Bob', caresFor: 'PETS'},
+      },
+    });
+
+    await myFunctions.acceptPairingInvitationImpl(
+        db, 'bob', 'bob@example.com', {code: null, invitationId: 'inv1'});
+
+    assert.deepStrictEqual(db._docs.families['alice__bob'].caresFor, {
+      alice: 'CHILDREN|PETS',
+      bob: 'PETS',
+    });
+  });
+
+  it('reads an account that never answered as \'\', not as the string undefined', async () => {
+    // `String(undefined)` is four characters that `FamilyKind.fromStored` drops as an unknown
+    // name — but only after both phones have read it. Empty is the honest value, and an empty
+    // union already reads as "show everything", so silence hides nothing.
+    const db = fakeDb({
+      invitations: {
+        inv1: {id: 'inv1', status: 'pending', fromUserId: 'alice', toEmail: 'bob@example.com'},
+      },
+      users: {
+        alice: {id: 'alice', name: 'Alice', role: 'mom'},
+        bob: {id: 'bob', name: 'Bob'},
+      },
+    });
+
+    await myFunctions.acceptPairingInvitationImpl(
+        db, 'bob', 'bob@example.com', {code: null, invitationId: 'inv1'});
+
+    assert.deepStrictEqual(db._docs.families['alice__bob'].caresFor, {alice: '', bob: ''});
+  });
 });

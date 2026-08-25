@@ -778,10 +778,20 @@ service cloud.firestore {
     // `family_settings` and `conversations` are already keyed by, which is why those three need
     // no migration at all.
     //
-    // **No client write, ever.** The document is the membership, and the membership is the
-    // grant: `acceptPairingInvitation` and `unpairCoParent` write it as admin, bypassing rules.
-    // Leaving a create path open to clients would let anyone name themselves a member of any
-    // pair — the same escalation the `users`-array design would have shipped.
+    // **`members` and `slots` are written only by Cloud Functions, never by a client.** The
+    // document is the membership, and the membership is the grant: `acceptPairingInvitation`
+    // and `unpairCoParent` write it as admin, bypassing rules. A create path open to clients
+    // would let anyone name themselves a member of any pair — the same escalation the
+    // `users`-array design would have shipped. `slots` is the same kind of value one level
+    // down: a parent who could set their own would take the co-parent's colour and re-point
+    // what `parentOwner` means across the whole calendar.
+    //
+    // **`caresFor` is the one exception, and the asymmetry is deliberate.** It says whether
+    // this family's app offers child records, pet records or both, per parent, unioned; it
+    // decides which sections are drawn and nothing about whose records are whose. A parent
+    // already has exactly that authority over `users/{uid}.caresFor`, which is where the field
+    // lived before it became a fact about a family rather than about a person
+    // (docs/DESIGN-multi-family.md, M-3).
     //
     // Reads are open to the two members. A list is allowed on the same terms, so a client can
     // ask "which families am I in" with one indexed query rather than being told the answer by
@@ -791,7 +801,26 @@ service cloud.firestore {
     match /families/{familyId} {
       allow get: if isAuthenticated() && request.auth.uid in resource.data.members;
       allow list: if isAuthenticated() && request.auth.uid in resource.data.members;
-      allow create, update, delete: if false;
+
+      // A member may edit their own `caresFor` entry, and nothing else. Two nested `hasOnly`
+      // checks, because either one alone is not enough: the outer keeps the write away from
+      // `members` and `slots`, the inner keeps one parent from answering for the other.
+      //
+      // `.get('caresFor', {})` on **both** sides. A family created before this field existed
+      // carries no such key, and reading a missing key in Rules is an evaluation error, not
+      // null — a rule that errors denies, which would lock exactly those pairs out of the
+      // first write they need to make. The same hazard that has already bitten this file
+      // twice. On the request side it also means a write that removes the key outright diffs
+      // as both members' entries changing, and is refused rather than erroring.
+      allow update: if isAuthenticated() &&
+                      request.auth.uid in resource.data.members &&
+                      request.resource.data.diff(resource.data)
+                        .affectedKeys().hasOnly(['caresFor']) &&
+                      request.resource.data.get('caresFor', {})
+                        .diff(resource.data.get('caresFor', {}))
+                        .affectedKeys().hasOnly([request.auth.uid]);
+
+      allow create, delete: if false;
     }
 
     match /custody_models/{modelId} {

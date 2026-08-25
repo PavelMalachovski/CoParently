@@ -102,6 +102,16 @@ function fakeDb(seed, options) {
       async update(update) {
         applyUpdate(collection, id, update);
       },
+      // `set(data, {merge: true})` behaves as an update; a bare `set` replaces the document,
+      // which is the distinction `backfillFamilyDocuments` relies on not getting wrong.
+      async set(data, options) {
+        if (options && options.merge) {
+          applyUpdate(collection, id, data);
+        } else {
+          docs[collection] = docs[collection] || {};
+          docs[collection][id] = Object.assign({}, data);
+        }
+      },
       async delete() {
         if (docs[collection]) {
           delete docs[collection][id];
@@ -146,6 +156,18 @@ function fakeDb(seed, options) {
         async add(data) {
           added.push({collection: name, data});
           return {id: `generated-${added.length}`};
+        },
+        // An unfiltered scan of the whole collection — what `backfillFamilyDocuments` does
+        // over `users`, the way `backfillParentSlots` scans `invitations` with a filter.
+        async get() {
+          const all = Object.values(docs[name] || {});
+          return {
+            docs: all.map((doc) => ({
+              id: doc.id,
+              data: () => doc,
+              ref: docRef(name, doc.id),
+            })),
+          };
         },
         where(field, op, value) {
           return {
@@ -763,5 +785,207 @@ describe('backfillParentSlots operator gate', () => {
   it('is empty when no allow-list is configured', () => {
     delete process.env.BACKFILL_ADMIN_UIDS;
     assert.deepStrictEqual(myFunctions.backfillAdminUids(), []);
+  });
+});
+
+describe('backfillFamilyDocumentsImpl', () => {
+  let backfillFamilyDocumentsImpl;
+
+  before(() => {
+    backfillFamilyDocumentsImpl = require('../index').backfillFamilyDocumentsImpl;
+  });
+
+  it('creates the family a pair formed before pairing wrote one never got', async () => {
+    const db = fakeDb({
+      users: {
+        alice: {id: 'alice', partnerId: 'bob', role: 'mom', caresFor: 'CHILDREN'},
+        bob: {id: 'bob', partnerId: 'alice', role: 'dad', caresFor: 'PETS'},
+      },
+    });
+
+    const summary = await backfillFamilyDocumentsImpl(db);
+
+    assert.strictEqual(summary.scanned, 1, 'a pair is one row of work, not two');
+    assert.strictEqual(summary.created, 1);
+    assert.deepStrictEqual(db._docs.families['alice__bob'], {
+      members: ['alice', 'bob'],
+      slots: {alice: 'mom', bob: 'dad'},
+      caresFor: {alice: 'CHILDREN', bob: 'PETS'},
+    });
+  });
+
+  it('completes an M-1 family that has members but not the two new fields', async () => {
+    // The pairs that accepted between M-1 and M-3. `set` with merge, so `members` — which the
+    // read rule keys on — survives rather than being rewritten from scratch.
+    const db = fakeDb({
+      users: {
+        alice: {id: 'alice', partnerId: 'bob', role: 'mom'},
+        bob: {id: 'bob', partnerId: 'alice', role: 'dad'},
+      },
+      families: {
+        alice__bob: {id: 'alice__bob', members: ['alice', 'bob'], createdAt: 42},
+      },
+    });
+
+    const summary = await backfillFamilyDocumentsImpl(db);
+
+    assert.strictEqual(summary.updated, 1);
+    assert.strictEqual(summary.created, 0);
+    const family = db._docs.families['alice__bob'];
+    assert.strictEqual(family.createdAt, 42, 'merge must not drop what was already there');
+    assert.deepStrictEqual(family.slots, {alice: 'mom', bob: 'dad'});
+  });
+
+  it('leaves a complete family alone, so a second run looks like the first', async () => {
+    // And specifically: a `caresFor` either parent has edited through the app since must not
+    // be rolled back to whatever their profile happens to say.
+    const db = fakeDb({
+      users: {
+        alice: {id: 'alice', partnerId: 'bob', role: 'mom', caresFor: 'CHILDREN'},
+        bob: {id: 'bob', partnerId: 'alice', role: 'dad', caresFor: 'CHILDREN'},
+      },
+      families: {
+        alice__bob: {
+          id: 'alice__bob',
+          members: ['alice', 'bob'],
+          slots: {alice: 'mom', bob: 'dad'},
+          caresFor: {alice: 'PETS', bob: ''},
+        },
+      },
+    });
+
+    const summary = await backfillFamilyDocumentsImpl(db);
+
+    assert.strictEqual(summary.skipped, 1);
+    assert.strictEqual(summary.skippedReasons.alreadyComplete, 1);
+    assert.deepStrictEqual(
+        db._docs.families['alice__bob'].caresFor, {alice: 'PETS', bob: ''});
+  });
+
+  it('refuses a one-sided pairing, which is what an interrupted unpair leaves', async () => {
+    // Bob has moved on; Alice's row still names him. Turning that into a family would hand
+    // Alice membership of a relationship Bob has already left.
+    const db = fakeDb({
+      users: {
+        alice: {id: 'alice', partnerId: 'bob', role: 'mom'},
+        bob: {id: 'bob', partnerId: '', role: 'dad'},
+      },
+    });
+
+    const summary = await backfillFamilyDocumentsImpl(db);
+
+    assert.strictEqual(summary.skippedReasons.notMutual, 1);
+    assert.strictEqual(db._docs.families, undefined);
+  });
+
+  it('reports a deleted account separately from a one-sided link', async () => {
+    const db = fakeDb({
+      users: {
+        alice: {id: 'alice', partnerId: 'ghost', role: 'mom'},
+      },
+    });
+
+    const summary = await backfillFamilyDocumentsImpl(db);
+
+    assert.strictEqual(summary.skippedReasons.missingAccount, 1);
+    assert.strictEqual(summary.skippedReasons.notMutual, 0);
+  });
+
+  it('ignores unpaired accounts and a row that names itself', async () => {
+    const db = fakeDb({
+      users: {
+        alice: {id: 'alice', role: 'mom'},
+        bob: {id: 'bob', partnerId: '', role: 'dad'},
+        carol: {id: 'carol', partnerId: 'carol', role: 'mom'},
+      },
+    });
+
+    const summary = await backfillFamilyDocumentsImpl(db);
+
+    assert.strictEqual(summary.scanned, 0);
+    assert.strictEqual(summary.skipped, 0);
+  });
+
+  it('counts a pair whose two parents still share a slot without inventing one', async () => {
+    // Who is parent 1 needs the invitation, which only `backfillParentSlots` reads. This
+    // records what the profiles actually hold and says how many pairs came out indistinct,
+    // rather than guessing and risking re-stamping the wrong person's events.
+    const db = fakeDb({
+      users: {
+        alice: {id: 'alice', partnerId: 'bob', role: 'mom'},
+        bob: {id: 'bob', partnerId: 'alice', role: 'mom'},
+      },
+    });
+
+    const summary = await backfillFamilyDocumentsImpl(db);
+
+    assert.strictEqual(summary.sameSlot, 1);
+    assert.deepStrictEqual(
+        db._docs.families['alice__bob'].slots, {alice: 'mom', bob: 'mom'});
+  });
+
+  it('reads a missing caresFor as empty, never as the string undefined', async () => {
+    const db = fakeDb({
+      users: {
+        alice: {id: 'alice', partnerId: 'bob', role: 'mom'},
+        bob: {id: 'bob', partnerId: 'alice', role: 'dad'},
+      },
+    });
+
+    await backfillFamilyDocumentsImpl(db);
+
+    assert.deepStrictEqual(
+        db._docs.families['alice__bob'].caresFor, {alice: '', bob: ''});
+  });
+});
+
+describe('backfillParentSlots keeps the family in step', () => {
+  let backfillParentSlotsImpl;
+
+  before(() => {
+    backfillParentSlotsImpl = require('../index').backfillParentSlotsImpl;
+  });
+
+  it('updates an existing family\'s slots when it separates a pair', async () => {
+    const db = fakeDb({
+      invitations: {
+        inv1: {id: 'inv1', status: 'accepted', fromUserId: 'alice', acceptedBy: 'bob'},
+      },
+      users: {
+        alice: {id: 'alice', partnerId: 'bob', role: 'mom'},
+        bob: {id: 'bob', partnerId: 'alice', role: 'mom'},
+      },
+      families: {
+        alice__bob: {
+          id: 'alice__bob',
+          members: ['alice', 'bob'],
+          slots: {alice: 'mom', bob: 'mom'},
+        },
+      },
+    });
+
+    await backfillParentSlotsImpl(db);
+
+    assert.deepStrictEqual(
+        db._docs.families['alice__bob'].slots, {alice: 'mom', bob: 'dad'});
+  });
+
+  it('does not create a family that has none, which would be unreadable', async () => {
+    // A `set` here would write `slots` with no `members`, and the read rule keys on
+    // `members`: a missing key errors in Rules, so neither parent could ever read it again.
+    const db = fakeDb({
+      invitations: {
+        inv1: {id: 'inv1', status: 'accepted', fromUserId: 'alice', acceptedBy: 'bob'},
+      },
+      users: {
+        alice: {id: 'alice', partnerId: 'bob', role: 'mom'},
+        bob: {id: 'bob', partnerId: 'alice', role: 'mom'},
+      },
+    });
+
+    const summary = await backfillParentSlotsImpl(db);
+
+    assert.strictEqual(summary.updated, 1, 'the profiles are still re-slotted');
+    assert.strictEqual(db._docs.families, undefined);
   });
 });

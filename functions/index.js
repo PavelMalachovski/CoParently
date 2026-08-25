@@ -654,6 +654,32 @@ async function acceptPairingInvitationImpl(db, acceptingUserId, acceptingEmail, 
     tx.set(db.collection('families').doc(
         custodyModelKey(invite.fromUserId, acceptingUserId)), {
       members: [invite.fromUserId, acceptingUserId].sort(),
+      // The slots the pair just agreed on, keyed by uid. The same two values written to
+      // `users/{uid}.role` below, in the place they actually belong: a slot says "you are
+      // parent 1 or parent 2 *in this pair*", so a person who co-parents with two others
+      // holds two of them and one field on their profile cannot carry both. Written here as
+      // admin and by no client, ever — a parent who could write their own slot would take the
+      // co-parent's colour and re-point what `parentOwner` means across the whole calendar.
+      slots: {
+        [invite.fromUserId]: slots.inviterRole,
+        [acceptingUserId]: slots.accepterRole,
+      },
+      // Each parent's own answer to "children, pets, or both", carried over from their
+      // profile so the family starts out knowing what the two accounts already said. Unlike
+      // `slots` this one is member-writable afterwards — for the caller's own key only —
+      // because it decides which sections the app draws and nothing about whose records are
+      // whose. An account that has never answered contributes `''`, which is not the same as
+      // answering "neither": `FamilyKind.effective` reads an empty union as everything, so
+      // silence never hides a section somebody was already using.
+      //
+      // The value keeps `users/{uid}.caresFor`'s exact stored form — the constant names
+      // joined by `|`, which `FamilyKind.toStored` writes and `fromStored` reads — rather
+      // than becoming an array here. One spelling of a `FamilyKind` set in the whole system:
+      // a second one would be a second parser to keep in step with the enum.
+      caresFor: {
+        [invite.fromUserId]: storedKinds(inviterSnap.data().caresFor),
+        [acceptingUserId]: storedKinds(accepterSnap.data().caresFor),
+      },
       createdAt: pairedAt,
     });
 
@@ -1793,6 +1819,27 @@ function normalizedSlot(role) {
 exports.normalizedSlot = normalizedSlot;
 
 /**
+ * A stored `caresFor` value, as a string this can safely write into a family document.
+ *
+ * `users/{uid}.caresFor` is the constant names joined by `|` (`FamilyKind.toStored`), absent on
+ * every account that predates the question and `''` on one that answered and then cleared it.
+ * All three of those mean "has not said", and `FamilyKind.effective` reads an empty union as
+ * everything — so they collapse to `''` here rather than being distinguished.
+ *
+ * Anything that is not a string is discarded rather than coerced: `String(undefined)` is the
+ * four characters `undefined`, which `fromStored` would read as an unknown name and drop, but
+ * only after it had been written into the document and read by both phones.
+ *
+ * @param {*} caresFor The value stored on a user document, whatever shape it is in.
+ * @return {string} The same stored form, or `''`.
+ */
+function storedKinds(caresFor) {
+  return typeof caresFor === 'string' ? caresFor : '';
+}
+
+exports.storedKinds = storedKinds;
+
+/**
  * Body of the `backfillParentSlots` callable — re-slots pairs that were created before
  * pairing started assigning distinct slots.
  *
@@ -1900,6 +1947,19 @@ async function backfillParentSlotsImpl(db) {
         const slots = assignSlots(inviterData.role);
         await inviterRef.update({role: slots.inviterRole});
         await accepterRef.update({role: slots.accepterRole});
+        // And the pair's family, if it has one, so the two copies of the slot cannot drift.
+        // `update` on an existing document only: a `set` here would create a family carrying
+        // `slots` and no `members`, and the read rule keys on `members` — a missing key is an
+        // evaluation error in Rules, so that document would be unreadable by either parent
+        // with no way back. Which is also why this is not the function that *creates* a
+        // family; `backfillFamilyDocuments` is, and it reads the slots this just wrote.
+        const familyRef = db.collection('families').doc(
+            custodyModelKey(inviterId, accepterId));
+        if ((await familyRef.get()).exists) {
+          await familyRef.update({
+            slots: {[inviterId]: slots.inviterRole, [accepterId]: slots.accepterRole},
+          });
+        }
         summary.updated++;
       } else {
         summary.skipped++;
@@ -1915,6 +1975,176 @@ async function backfillParentSlotsImpl(db) {
 }
 
 exports.backfillParentSlotsImpl = backfillParentSlotsImpl;
+
+/**
+ * Body of the `backfillFamilyDocuments` callable — gives every pair already in production the
+ * `families/{id}` document that pairing only started writing for pairs formed afterwards.
+ *
+ * `families/{id}.members` is what the security rules read to answer "may this person see this
+ * record", and `slots`/`caresFor` are the two fields that stop being facts about a person the
+ * moment somebody co-parents with two others (docs/DESIGN-multi-family.md, M-3). None of that
+ * reaches a pair whose accept ran before M-1, so without this pass those pairs would sit on the
+ * `users/{uid}` fallback forever and no family-keyed feature could ever be switched on for them.
+ *
+ * **The source is `users`, not `invitations`, and that is the difference from
+ * [backfillParentSlotsImpl].** That one has to know *who accepted* — the two profiles are
+ * symmetric afterwards and only the invitation remembers — so a pair whose invitation was
+ * deleted is beyond its help. A family needs no such fact: any two accounts that name each other
+ * are a family, whatever paperwork survives. Reading the live `partnerId` on both sides is also
+ * what keeps a stale one-sided link from inventing one.
+ *
+ * A pair is seen twice, once from each member, and the second sighting is dropped rather than
+ * counted: `scanned` is pairs examined, not user rows read.
+ *
+ * Skipped, not guessed at, when:
+ * - the named partner's document is gone (a deleted account) — `skippedReasons.missingAccount`;
+ * - the two do not name *each other* — `skippedReasons.notMutual`. A one-sided `partnerId` is
+ *   what an interrupted unpair leaves behind, and turning it into a family would hand somebody
+ *   membership of a relationship the other person has already left;
+ * - the family document already carries all three fields — `skippedReasons.alreadyComplete`. A
+ *   second run must look like the first, and a `caresFor` either parent has edited since must
+ *   not be reset to what their profile happened to say.
+ *
+ * `slots` records what the two profiles hold **right now**, normalized the way `assignSlots`
+ * normalizes: this does not decide who is parent 1: that needs the invitation, and it is
+ * [backfillParentSlotsImpl]'s job. A pair that one has not separated yet lands here with both
+ * members in the same slot, which is faithful and is counted as `sameSlot` so an operator can
+ * see it. **Run `backfillParentSlots` first.** Run in the other order and nothing is lost —
+ * that function updates an existing family's `slots` as it separates a pair — but the operator
+ * then has to run it knowing this one already went.
+ *
+ * A failure on one pair is caught and counted rather than aborting: a migration with no undo
+ * must not discard what it already wrote because a later pair was malformed.
+ *
+ * @param {FirebaseFirestore.Firestore} db Firestore instance.
+ * @return {Promise<{scanned: number, created: number, updated: number, skipped: number,
+ *   failed: number, sameSlot: number, skippedReasons: {missingAccount: number,
+ *   notMutual: number, alreadyComplete: number}}>} What the migration did.
+ */
+async function backfillFamilyDocumentsImpl(db) {
+  const summary = {
+    scanned: 0,
+    created: 0,
+    updated: 0,
+    skipped: 0,
+    failed: 0,
+    sameSlot: 0,
+    skippedReasons: {
+      missingAccount: 0,
+      notMutual: 0,
+      alreadyComplete: 0,
+    },
+  };
+
+  const users = await db.collection('users').get();
+  const seen = new Set();
+
+  for (const doc of users.docs) {
+    const uid = doc.id;
+    const user = doc.data() || {};
+    const partnerId = user.partnerId;
+
+    // Unpaired, or a document that names itself — neither is a relationship, and neither is
+    // an error worth counting.
+    if (typeof partnerId !== 'string' || !partnerId || partnerId === uid) {
+      continue;
+    }
+
+    const familyId = custodyModelKey(uid, partnerId);
+    if (seen.has(familyId)) {
+      continue;
+    }
+    seen.add(familyId);
+    summary.scanned++;
+
+    try {
+      const partnerSnap = await db.collection('users').doc(partnerId).get();
+      if (!partnerSnap.exists) {
+        summary.skipped++;
+        summary.skippedReasons.missingAccount++;
+        continue;
+      }
+      const partner = partnerSnap.data() || {};
+      if (partner.partnerId !== uid) {
+        summary.skipped++;
+        summary.skippedReasons.notMutual++;
+        continue;
+      }
+
+      const familyRef = db.collection('families').doc(familyId);
+      const familySnap = await familyRef.get();
+      const family = familySnap.exists ? (familySnap.data() || {}) : {};
+      if (family.members && family.slots && family.caresFor) {
+        summary.skipped++;
+        summary.skippedReasons.alreadyComplete++;
+        continue;
+      }
+
+      const mySlot = normalizedSlot(user.role);
+      const theirSlot = normalizedSlot(partner.role);
+      if (mySlot === theirSlot) {
+        summary.sameSlot++;
+      }
+
+      // `set` with merge rather than `update`: the document may not exist at all, and where it
+      // does — an M-1 pairing that wrote `members` before `slots` and `caresFor` existed — the
+      // fields it already has must survive. Only the missing ones are supplied, so a `caresFor`
+      // a parent has since edited through the app is never rolled back to their profile's copy.
+      const patch = {};
+      if (!family.members) {
+        patch.members = [uid, partnerId].sort();
+      }
+      if (!family.slots) {
+        patch.slots = {[uid]: mySlot, [partnerId]: theirSlot};
+      }
+      if (!family.caresFor) {
+        patch.caresFor = {
+          [uid]: storedKinds(user.caresFor),
+          [partnerId]: storedKinds(partner.caresFor),
+        };
+      }
+      await familyRef.set(patch, {merge: true});
+
+      if (familySnap.exists) {
+        summary.updated++;
+      } else {
+        summary.created++;
+      }
+    } catch (err) {
+      console.error(`backfillFamilyDocuments failed on ${familyId}`, err);
+      summary.failed++;
+    }
+  }
+
+  return summary;
+}
+
+exports.backfillFamilyDocumentsImpl = backfillFamilyDocumentsImpl;
+
+/**
+ * Creates the `families/{id}` document for pairs that formed before pairing wrote one.
+ *
+ * Operator-only on the same allow-list as [backfillParentSlots] and for the same reason, only
+ * more so: this writes the document the security rules read to decide who may see a family's
+ * records. A signed-in caller must not be able to run it, whatever it happens to write today.
+ *
+ * 540 seconds, matching its sibling. The scan is one unbounded `.get()` over `users` with no
+ * pagination, plus up to two reads and one write per pair — the same shape, and the same
+ * reasoning: this runs once over a historical, bounded set.
+ *
+ * @return {Promise<{scanned: number, created: number, updated: number, skipped: number,
+ *   failed: number, sameSlot: number, skippedReasons: {missingAccount: number,
+ *   notMutual: number, alreadyComplete: number}}>} See [backfillFamilyDocumentsImpl].
+ */
+exports.backfillFamilyDocuments = functions.runWith({timeoutSeconds: 540}).https.onCall(
+    async (data, context) => {
+      if (!isBackfillOperator(context)) {
+        throw new functions.https.HttpsError(
+            'permission-denied', 'Operator access only', {reason: 'not-operator'});
+      }
+      return backfillFamilyDocumentsImpl(admin.firestore());
+    },
+);
 
 /**
  * Re-slots pairs created before pairing started assigning distinct parent slots.

@@ -140,8 +140,51 @@ outbox and the create rule (`createdByFirebaseUid == auth.uid`) rejects them for
 
 ### M-3 · The slot and the family kind move onto the family
 
-`ParentsSource` becomes family-scoped. `assignSlots` assigns within a family, and the collision
-described above stops being expressible. `ParentSlotMigrator` retargets.
+Two fields on `users/{uid}` are facts about a *relationship* wearing the shape of facts about a
+person, and each breaks in its own way the moment there are two relationships.
+
+**`role`** — the parent slot. A man is `"dad"` in both his families, so both his co-parents are
+assigned `"mom"`: two pink parents, and `getCustody` cannot tell whose day it is. The slot says
+"you are parent 1 or parent 2 *in this pair*", which is what `assignSlots` already computes and
+then stores in the wrong place.
+
+**`caresFor`** — whether the app offers child records, pet records or both, as the union of the
+two parents' answers. Across two families the union is taken over all of them, so a man with
+children by one woman and a dog with another gets child sections in the pet family and pet
+sections in the child one. That is the exact case this whole plan was asked for.
+
+`families/{id}` gains both, as maps keyed by uid rather than as a pair of scalars — the same
+reason `custody_models` carries `participants` rather than `momUid`/`dadUid`: a map cannot get
+out of step with `members`.
+
+```
+families/{familyId}
+  members:  [uidA, uidB]                       // M-1, admin-only
+  slots:    { uidA: "mom", uidB: "dad" }       // admin-only
+  caresFor: { uidA: ["CHILDREN"], uidB: [] }   // each parent writes their own key
+```
+
+**`slots` is admin-only and `caresFor` is member-writable, and that asymmetry is the whole
+security surface of this stage.** A slot decides whose events are whose; a parent who could write
+their own would take the co-parent's colour and re-point what `parentOwner` means across the
+whole calendar. `caresFor` decides only which sections a family's app draws, and a parent already
+has exactly that authority over `users/{uid}.caresFor` today. The rule is two nested `hasOnly`
+checks — the write may affect only `caresFor`, and within it only the caller's own key, so one
+parent cannot answer for the other and neither can reach `members` or `slots`.
+
+**The read path is family-first with a fallback to `users/{uid}`, and the fallback is not
+belt-and-braces.** M-1 writes `families/{id}` on the accept path only, so for every pair already
+in production the document does not exist and the fallback is the only answer there is.
+
+That makes the stage's real prerequisite explicit, and it is not in M-1: **a callable that
+creates `families/{id}` for every existing pair**, carrying the `role`s and `caresFor`s those two
+accounts already have. It is the same admin pass M-4 needs for `familyId` on documents; running
+it once here is what makes both read switches possible.
+
+**`ParentSlotMigrator` is the sharpest edge, and M-2 is what makes it tractable.** Its marker is
+one slot per person and `EventDao.reslotOwner` is scoped by `createdByFirebaseUid` alone — so
+with two families, a slot change in one would re-stamp this parent's events in *both*.
+`Event.familyId` is what the query can newly be scoped by, and the marker becomes per family.
 
 ### M-4 · The switcher, and pairing with more than one partner
 

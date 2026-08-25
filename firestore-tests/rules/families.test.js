@@ -39,7 +39,12 @@ describe('families: membership is the grant, and no client may write it', () => 
   beforeEach(async () => {
     await env.clearFirestore();
     await seed(env, {
-      [`families/${ALICE_BOB}`]: {members: [ALICE, BOB], createdAt: 1},
+      [`families/${ALICE_BOB}`]: {
+        members: [ALICE, BOB],
+        createdAt: 1,
+        slots: {[ALICE]: 'mom', [BOB]: 'dad'},
+        caresFor: {[ALICE]: 'CHILDREN', [BOB]: ''},
+      },
       [`families/${ALICE_CAROL}`]: {members: [ALICE, CAROL], createdAt: 2},
     });
   });
@@ -114,5 +119,79 @@ describe('families: membership is the grant, and no client may write it', () => 
     await assertFails(
         env.unauthenticatedContext().firestore()
             .doc(`families/${ALICE_BOB}`).get());
+  });
+
+  // ---- caresFor: the one field a member may write --------------------------
+
+  it('lets a member set their own caresFor entry', async () => {
+    await assertSucceeds(
+        as(ALICE).doc(`families/${ALICE_BOB}`)
+            .update({[`caresFor.${ALICE}`]: 'CHILDREN|PETS'}));
+  });
+
+  it('refuses a member answering for the other parent', async () => {
+    // The whole point of keying `caresFor` by uid: one parent's answer is theirs alone, and
+    // the union of the two is what the app shows. Writing the co-parent's entry would let
+    // either of them put words in the other's mouth — and, through the union, hide a section
+    // the other is using.
+    await assertFails(
+        as(ALICE).doc(`families/${ALICE_BOB}`)
+            .update({[`caresFor.${BOB}`]: 'PETS'}));
+  });
+
+  it('refuses a write that changes both entries at once', async () => {
+    await assertFails(
+        as(ALICE).doc(`families/${ALICE_BOB}`)
+            .update({caresFor: {[ALICE]: 'PETS', [BOB]: 'PETS'}}));
+  });
+
+  it('refuses a caresFor write that also touches slots', async () => {
+    // The dangerous combination: a legitimate-looking field carrying an illegitimate one.
+    // `slots` decides whose events are whose, so a parent who could set their own would take
+    // the co-parent's colour and their side of the custody grid.
+    await assertFails(
+        as(ALICE).doc(`families/${ALICE_BOB}`).update({
+          [`caresFor.${ALICE}`]: 'PETS',
+          [`slots.${ALICE}`]: 'dad',
+        }));
+  });
+
+  it('refuses a caresFor write that also touches members', async () => {
+    await assertFails(
+        as(ALICE).doc(`families/${ALICE_BOB}`).update({
+          [`caresFor.${ALICE}`]: 'PETS',
+          members: [ALICE, BOB, CAROL],
+        }));
+  });
+
+  it('refuses a stranger writing caresFor at all', async () => {
+    await assertFails(
+        as(CAROL).doc(`families/${ALICE_BOB}`)
+            .update({[`caresFor.${CAROL}`]: 'PETS'}));
+  });
+
+  it('lets a member write caresFor onto a family that has none yet', async () => {
+    // Every pair that accepted before this field existed. Reading a missing key in Rules is an
+    // evaluation error, so without `.get('caresFor', {})` on the stored side the rule would
+    // error — and an erroring rule denies — locking exactly those pairs out of the first write
+    // they need to make.
+    await assertSucceeds(
+        as(ALICE).doc(`families/${ALICE_CAROL}`)
+            .update({[`caresFor.${ALICE}`]: 'PETS'}));
+  });
+
+  it('refuses removing the caresFor map outright', async () => {
+    // Not an escalation, but not a write the app makes either: clearing an answer is an empty
+    // string, and dropping the map would take the co-parent's entry with it.
+    const {deleteField} = require('firebase/firestore');
+    await assertFails(
+        as(ALICE).doc(`families/${ALICE_BOB}`)
+            .update({caresFor: deleteField()}));
+  });
+
+  it('refuses a member editing slots even on its own', async () => {
+    await assertFails(
+        as(ALICE).doc(`families/${ALICE_BOB}`)
+            .update({[`slots.${ALICE}`]: 'dad'}));
   });
 });
