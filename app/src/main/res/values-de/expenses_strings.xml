@@ -105,4 +105,8 @@
     <string name="expense_for_members">Für wen ist das?</string>
     <string name="expenses_filter_members">Anzeigen für</string>
     <string name="budget_for_members">Für wen ist dieses Budget?</string>
+    <!-- UX-17: the proposer's side of the same conversation. -->
+    <string name="expenses_split_proposal_waiting_title">Warten auf eine Antwort</string>
+    <string name="expenses_split_proposal_waiting_body">Sie haben %1$d/%2$d vorgeschlagen. Der andere Elternteil hat noch nicht geantwortet.</string>
+    <string name="expenses_split_proposal_withdraw">Zurückziehen</string>
 </resources>

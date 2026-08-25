@@ -120,6 +120,7 @@ fun ExpenseScreen(
 
     val snackbarHostState = remember { SnackbarHostState() }
     val pendingRatioProposal by viewModel.pendingRatioProposal.collectAsState()
+    val myPendingRatioProposal by viewModel.myPendingRatioProposal.collectAsState()
     // Plain `remember`: putting the banner off is for this visit to the screen. A dismissal that
     // survived the process would quietly turn "later" into "never", and the co-parent would go
     // on waiting for an answer that was never coming.
@@ -202,6 +203,16 @@ fun ExpenseScreen(
                     // and still in the inbox. An answer that quietly meant "no" is the silent
                     // outcome this whole family of features exists to remove.
                     onLater = { ratioProposalDismissed = true }
+                )
+            }
+            // The other side of the same conversation (UX-17), and it sits here rather than in
+            // Settings so both halves live where the money does. Not dismissible: this is the
+            // parent's own open question, and there is nothing to defer — the way out of it is
+            // the co-parent answering or this parent taking it back.
+            myPendingRatioProposal?.let { proposal ->
+                SplitRatioWaitingBanner(
+                    proposal = proposal,
+                    onWithdraw = viewModel::withdrawRatioProposal
                 )
             }
             if (expensesState is Loadable.Loading) {
@@ -402,6 +413,54 @@ private fun ViewSwitcher(
 private fun rememberMonthLabel(month: YearMonth): String = remember(month) {
     month.format(DateTimeFormatter.ofPattern("LLLL yyyy", Locale.getDefault()))
         .replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() }
+}
+
+/**
+ * This parent proposed a split and is waiting for an answer (UX-17).
+ *
+ * `SplitRatioTransition.withdraw` was written and unit-tested when the feature landed and then
+ * called by nothing, so the proposer had no sign anything was pending and no way to take a
+ * mistake back — while the custody schedule, which is the same shape, has had the whole thing
+ * all along.
+ *
+ * Deliberately quieter than [SplitRatioProposalBanner]: a surface tint rather than a filled
+ * button, because this banner asks nothing of the reader. The only action is the one that
+ * undoes it.
+ *
+ * @param proposal What this parent put forward.
+ * @param onWithdraw Takes it back; the agreed ratio never moved, so nothing else changes.
+ */
+@Composable
+private fun SplitRatioWaitingBanner(
+    proposal: SplitRatioProposal,
+    onWithdraw: () -> Unit
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 14.dp, vertical = 6.dp),
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.surfaceContainer
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                text = stringResource(R.string.expenses_split_proposal_waiting_title),
+                style = MaterialTheme.typography.titleSmall
+            )
+            Text(
+                text = stringResource(
+                    R.string.expenses_split_proposal_waiting_body,
+                    proposal.ratio.momPercent,
+                    proposal.ratio.dadPercent
+                ),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            TextButton(onClick = onWithdraw) {
+                Text(stringResource(R.string.expenses_split_proposal_withdraw))
+            }
+        }
+    }
 }
 
 /**

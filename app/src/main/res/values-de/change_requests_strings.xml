@@ -27,4 +27,7 @@
     <string name="change_request_ok">OK</string>
     <string name="change_request_cancel">Abbrechen</string>
     <string name="change_request_link_missing">Diese Anfrage ist nicht mehr offen.</string>
+    <!-- CQ-20: this device has a write that has not reached Firestore yet. -->
+    <string name="change_request_status_queued">In der Warteschlange</string>
+    <string name="change_request_status_queued_desc">Noch nicht gesendet – wartet auf eine Verbindung</string>
 </resources>

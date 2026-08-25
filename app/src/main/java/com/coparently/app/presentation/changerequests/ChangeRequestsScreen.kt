@@ -10,13 +10,16 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -535,11 +538,36 @@ fun ChangeRequestCard(
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.weight(1f)
                 )
-                AssistChip(
-                    onClick = {},
-                    enabled = false,
-                    label = { Text(stringResource(statusLabel(request.status))) }
-                )
+                // **Queued beats the status (CQ-20.** A row that is not synced is one this
+                // device has written and not yet delivered: the co-parent does not have it, and
+                // saying "Pending" — or "Accepted" for a reply made offline — claims something
+                // the app cannot know. Only this device's own writes can be unsynced; a request
+                // mirrored down from the co-parent always arrives marked synced.
+                //
+                // The clock icon is the one `MessagesList` already uses for a message that has
+                // not left, so the two surfaces say "not delivered" the same way.
+                if (request.syncedToFirestore) {
+                    AssistChip(
+                        onClick = {},
+                        enabled = false,
+                        label = { Text(stringResource(statusLabel(request.status))) }
+                    )
+                } else {
+                    AssistChip(
+                        onClick = {},
+                        enabled = false,
+                        label = { Text(stringResource(R.string.change_request_status_queued)) },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Default.Schedule,
+                                contentDescription = stringResource(
+                                    R.string.change_request_status_queued_desc
+                                ),
+                                modifier = Modifier.size(AssistChipDefaults.IconSize)
+                            )
+                        }
+                    )
+                }
             }
 
             Row(verticalAlignment = Alignment.CenterVertically) {

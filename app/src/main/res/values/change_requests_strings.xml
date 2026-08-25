@@ -32,4 +32,7 @@
     <string name="change_request_ok">OK</string>
     <string name="change_request_cancel">Cancel</string>
     <string name="change_request_link_missing">That request is no longer open.</string>
+    <!-- CQ-20: this device has a write that has not reached Firestore yet. -->
+    <string name="change_request_status_queued">Queued</string>
+    <string name="change_request_status_queued_desc">Not sent yet — waiting for a connection</string>
 </resources>

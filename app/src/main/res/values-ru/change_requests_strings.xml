@@ -27,4 +27,7 @@
     <string name="change_request_ok">OK</string>
     <string name="change_request_cancel">Отмена</string>
     <string name="change_request_link_missing">Этот запрос уже закрыт.</string>
+    <!-- CQ-20: this device has a write that has not reached Firestore yet. -->
+    <string name="change_request_status_queued">В очереди</string>
+    <string name="change_request_status_queued_desc">Ещё не отправлено — ждёт подключения</string>
 </resources>

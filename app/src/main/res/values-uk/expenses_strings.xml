@@ -104,4 +104,8 @@
     <string name="expense_for_members">Для кого це?</string>
     <string name="expenses_filter_members">Показати для</string>
     <string name="budget_for_members">Для кого цей бюджет?</string>
+    <!-- UX-17: the proposer's side of the same conversation. -->
+    <string name="expenses_split_proposal_waiting_title">Чекаємо на відповідь</string>
+    <string name="expenses_split_proposal_waiting_body">Ви запропонували %1$d/%2$d. Другий з батьків ще не відповів.</string>
+    <string name="expenses_split_proposal_withdraw">Відкликати</string>
 </resources>

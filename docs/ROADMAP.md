@@ -70,13 +70,11 @@ invocation is yours.
 | **CQ-14** | User-facing strings produced inside ViewModels and services | P2 | M |
 | **CQ-15** | The last of the dead code, and one decision about it | P3 | S |
 | **CQ-17** | Six dependencies worth moving | P3 | S |
-| **CQ-20** | A change request says "Sent" whether or not it left the phone | P2 | S |
 | **UX-9** | Five different empty-state anatomies, one of which renders under the top bar | P2 | M |
 | **UX-12** | Clerical English success messages — and a branch on the literal that will break when they are localised | P2 | S |
 | **UX-14** | Four different brand purples | P3 | S |
 | **UX-15** | `ParentColors` is adopted at roughly a quarter | P3 | S |
 | **UX-16** | Drag an event to reschedule it (MVP 3) | P3 | S |
-| **UX-17** | A proposed split ratio cannot be withdrawn | P2 | S |
 | **UX-18** | A ratio agreed before pairing becomes the pair's agreement silently | P2 | S |
 | **MON-2** | Verify the market facts — most of them are public pages | P0 | S |
 | **MON-3** | Export to PDF/CSV — the first paid feature (needs MON-4 first) | P1 | M |
@@ -136,9 +134,9 @@ In this order, and each is genuinely finishable in the cloud:
    grows.
 2. **MON-4 → MON-3** — settle what the record guarantees, then build the export. In that order: an
    export of a record nobody can vouch for is worth nothing to a lawyer.
-3. **CQ-20** and **UX-17/UX-18** — three small honesty gaps: an app that says "Sent" when it means
-   "queued", a proposal that cannot be withdrawn, and a split ratio that becomes the pair's
-   agreement without telling the other parent.
+3. **UX-18** — the last of the honesty gaps: a split ratio agreed before pairing becomes the
+   pair's agreement of record without telling the other parent. (**CQ-20** and **UX-17**, which
+   were the other two, are done.)
 
 *(**M-6** and **CQ-19**, which headed this list, are done.)*
 
@@ -172,7 +170,7 @@ shipped, and a plan that describes work already done is worse than no plan.
 | Feature | Original detail | Diff | Pri | Status |
 | --- | --- | --- | --- | --- |
 | Receipts | Extra section | L | High | **Done.** On-device OCR (ML Kit → `ReceiptParser`); no receipt text or photo leaves the device |
-| Change requests | Shown as notification and in the dashboard | M | High | **Done** — with one honesty gap: the app says "Sent" whether or not it left the phone → **CQ-20** |
+| Change requests | Shown as notification and in the dashboard | M | High | **Done**, and the honesty gap that outlived it is closed too — a request that has not left the phone says Queued (**CQ-20**) |
 | Weekly summary | Dashboard of next week's mutual activities | M | High | **Done.** Exactly one entry point, at the bottom of Home |
 | First screen updates | Last 5 changes both parents can see | L | Medium | **Done.** The recent-changes feed on Home |
 | Structured chat → change request | Button, new date, notification | M | Medium | **Done** |
@@ -625,18 +623,22 @@ delete by other means, and the two halves must be added together: a collection i
 with no client writing tombstones sweeps nothing, and a client writing them into an unlisted
 collection keeps them for ever.
 
-### CQ-20 · P2 · S · A change request says "Sent" whether or not it left the phone
-
-**Where:** ☁️ cloud — five locales in the same commit.
+### CQ-20 · **DONE** · A change request said "Sent" whether or not it left the phone
 
 `ChangeRequestRepositoryImpl.publish` catches everything and returns, leaving
-`syncedToFirestore = false`, and `RequestChangeViewModel` sets `Sent` unconditionally before the
-screen pops. `ChangeRequest.syncedToFirestore` reaches the domain model and **no** screen reads it,
-so there is no queued badge and no way to tell a request the co-parent has from one sitting in
-Room. The August 2026 outbox (`flushOutbox`, drained on every sync) means it does eventually go —
-this is a wording and visibility gap, not a loss — but "sent" is still a claim the app cannot make.
-`MessagesList` already renders the honest version for a message; a request should say "queued" the
-same way.
+`syncedToFirestore = false` for the outbox to retry, and `RequestChangeViewModel` set `Sent`
+either way. The flag reached the domain model and **no** screen read it, so there was no way to
+tell a request the co-parent has from one sitting in Room.
+
+The request card's status chip now says **Queued**, with the clock icon `MessagesList` already
+uses for a message that has not left, so the two surfaces say "not delivered" the same way. The
+rule is `!syncedToFirestore` alone, and it is unambiguous: a request mirrored down from the
+co-parent is always written back marked synced, so only this device's own writes can be unsynced.
+That also covers a *reply* made offline — accepting an incoming request while disconnected shows
+Queued rather than "Accepted", which is the honest report of what the co-parent knows.
+
+The state that lied is renamed `Saved`: the screen pops on it whether or not the write landed, so
+the honest report of what happened is the chip, not the state's name.
 
 ---
 
@@ -718,17 +720,23 @@ by single minutes. The smallest item in MVP 3 and the one a user touches daily. 
 are `HorizontalPager` with fling physics, so the gesture has to be nested inside a pager that
 already claims horizontal drags — which is the whole difficulty.
 
-### UX-17 · P2 · S · A proposed split ratio cannot be withdrawn, and the proposer is told nothing
+### UX-17 · **DONE** · A proposed split ratio could not be withdrawn, and the proposer was told nothing
 
-**Where:** ☁️ cloud.
+`SplitRatioTransition.withdraw` existed and was unit-tested from the day the feature landed, and
+**nothing called it** — so a parent who proposed 70/30 by mistake could only wait for the co-parent
+to answer it. `ExpenseViewModel.pendingRatioProposal` even documented the missing half: "the
+proposer sees theirs as a waiting state instead", which was not true of any state that existed.
 
-`SplitRatioTransition.withdraw` exists and is unit-tested; **nothing calls it** (verified again on
-2026-08-25). `FamilySettingsRepository` exposes `submitRatio`/`acceptProposal`/`declineProposal`
-only, and Settings renders the agreed ratio with no sign that a proposal of your own is pending —
-the banner is the *co-parent's* view. The sibling feature wires the whole shape
-(`CustodyModelRepository.withdrawProposal`, plus a Withdraw button on the inbox card); the split
-ratio wants the same. Until then do not delete `withdraw`: the gap is the missing UI, not the
-transition.
+Now it does. `FamilySettingsRepository.withdrawProposal()`, a `myPendingRatioProposal` mirror of
+the existing flow, and a quieter waiting banner with one action.
+
+Three decisions worth keeping. It lives on **Expenses, next to the co-parent's banner**, rather
+than in Settings as this item first said — both halves of one conversation belong where the money
+is. It is **not dismissible**: "Later" is meaningful for a question somebody else asked, but this
+is the parent's own open question and the way out of it is an answer or a withdrawal. And it sends
+**no push**: the other three answers announce a decision, a withdrawal decides nothing, and the
+co-parent's banner is derived from the document — a type for it would cost the four places SEC-3
+requires to agree, to announce that something stopped existing.
 
 ### UX-18 · P2 · S · A ratio agreed before pairing reaches the pair silently
 
@@ -938,9 +946,13 @@ document said, and the reversal has a cost worth stating: the school-vacation st
 genuinely about the child's school, follow the viewer too. A per-family school calendar is the
 honest fix and is part of what is left.
 
-**Left: five of the six tables.** `HolidayCountry` lists Slovakia, Germany, Austria, Ukraine and
-Russia with no provider, and the picker says so on the row — a country with no table draws **no**
-holidays, which is honest, rather than another country's, which was the bug. They are unimplemented
+**Left: five of the six tables — and leaving them is an owner decision, not a deferral** (Aug
+2026). Offered the choice between authoring them from knowledge with a "needs a native check"
+marker and waiting for verified data, the owner chose to wait. So the five stay listed with no
+provider and the picker keeps saying so. Do not fill them in from memory on the way past.
+
+`HolidayCountry` lists Slovakia, Germany, Austria, Ukraine and Russia with no provider, and the
+picker says so on the row — a country with no table draws **no** holidays, which is honest, rather than another country's, which was the bug. They are unimplemented
 for a stated reason: a holiday table is a set of user-visible facts and a wrong date is worse than
 no date. This environment's egress policy blocks every reference site, so they cannot be verified
 here, and one search while writing this already turned up a change memory would have got wrong —

@@ -106,4 +106,8 @@
     <string name="expense_for_members">Pro koho to je?</string>
     <string name="expenses_filter_members">Zobrazit pro</string>
     <string name="budget_for_members">Pro koho je tento rozpočet?</string>
+    <!-- UX-17: the proposer's side of the same conversation. -->
+    <string name="expenses_split_proposal_waiting_title">Čeká se na odpověď</string>
+    <string name="expenses_split_proposal_waiting_body">Navrhli jste %1$d/%2$d. Druhý rodič zatím neodpověděl.</string>
+    <string name="expenses_split_proposal_withdraw">Vzít zpět</string>
 </resources>
