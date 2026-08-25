@@ -509,13 +509,6 @@ class HomeViewModel @Inject constructor(
     )
 
     /**
-     * Day swaps still waiting for this parent's answer, soonest first.
-     *
-     * Same source and same filter as the inbox (`DaySwapInbox`), so the main page can never
-     * disagree with the screen that answers them. `LocalDate.now()` is read per emission for
-     * the reason `ChangeRequestViewModel.daySwaps` documents: this flow outlives midnight.
-     */
-    /**
      * Whether this family's app offers child records, pet records, or both.
      *
      * The union of the two parents' answers; an account that has never been asked reads as both,
@@ -524,6 +517,13 @@ class HomeViewModel @Inject constructor(
     val caresFor: StateFlow<Set<FamilyKind>> = familyKindSource.observe()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), FamilyKind.ALL)
 
+    /**
+     * Day swaps still waiting for this parent's answer, soonest first.
+     *
+     * Same source and same filter as the inbox (`DaySwapInbox`), so the main page can never
+     * disagree with the screen that answers them. `LocalDate.now()` is read per emission for
+     * the reason `ChangeRequestViewModel.daySwaps` documents: this flow outlives midnight.
+     */
     private val awaitingSwaps: StateFlow<List<DaySwapGroup>> = combine(
         custodyModelRepository.observeDayOverrides(),
         _userId

@@ -178,6 +178,28 @@ class ParentsSource @Inject constructor(
         return userRepository.getUserById(uid)?.role
     }
 
+    /**
+     * The co-parent's uid, or null when this account is unpaired.
+     *
+     * The other cheap question, and it exists for a sharper reason than [signedInSlot]: a
+     * **save path** must never depend on somebody having subscribed to [observe]. Every
+     * ViewModel shares that flow with `WhileSubscribed`, so `parents.value` answers `Parents()`
+     * in any ViewModel instance no screen has collected — which is exactly what a form-only
+     * route is. `ExpenseViewModel` read it that way to decide who a shared expense is split
+     * between, and the Add Expense screen collects `agreedRatio` but not `parents`: every
+     * expense was written naming only the payer, and the co-parent's phone showed a month in
+     * which nobody owed anybody anything.
+     *
+     * Read from the signed-in parent's own Room row, which is where the pairing lives —
+     * `FamilySettingsRepository.currentPair` derives the pair the same way. Never
+     * [UserRepository.getAllUsers], which CLAUDE.md records cannot answer "who is the other
+     * parent".
+     */
+    suspend fun coParentUid(): String? {
+        val uid = userRepository.getCurrentUserId() ?: return null
+        return userRepository.getUserById(uid)?.partnerId?.takeIf { it.isNotBlank() && it != uid }
+    }
+
     private companion object {
         /** Keeps the shared upstream warm across a tab switch or a config change. */
         const val STOP_TIMEOUT_MS = 5_000L

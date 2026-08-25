@@ -367,9 +367,12 @@ class UserRepositoryImpl @Inject constructor(
                 ?.let { gson.toJson(it) }
                 ?: DEFAULT_MEDICAL_PROFILE_JSON,
             onboardingCompletedAt = remote?.string("onboardingCompletedAt"),
-            // `?: local?.caresForKinds`, not a bare remote read: a co-parent's build that does
-            // not write the field must not clear the answer this device already holds.
-            caresForKinds = remote?.string("caresFor") ?: local?.caresForKinds
+            // No `?: local?.caresForKinds`: this whole constructor is the right-hand side of
+            // `local?.copy(…) ?:`, so it runs only when `local` is null and the fallback could
+            // never fire. The protection it was reaching for is already there — the `copy`
+            // branch does not touch `caresForKinds` at all, so a co-parent's build that never
+            // writes the field cannot clear the answer this device holds.
+            caresForKinds = remote?.string("caresFor")
         )
         if (updated != local) userDao.insertUser(updated)
     }

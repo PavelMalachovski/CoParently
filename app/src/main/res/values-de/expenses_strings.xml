@@ -47,6 +47,7 @@
     <string name="expenses_row_subtitle">%1$s · %2$s bezahlt · %3$s</string>
     <string name="expenses_row_subtitle_unknown_payer">%1$s · %2$s</string>
     <string name="expenses_split_even">50/50 geteilt</string>
+    <string name="expenses_split_ratio">%1$d/%2$d geteilt</string>
     <string name="expenses_split_n_ways">1/%1$d geteilt</string>
     <string name="expenses_split_none">nicht geteilt</string>
     <string name="expenses_delete">Ausgabe löschen</string>
@@ -92,6 +93,7 @@
     <string name="expenses_split_proposal_confirm">Bestätigen</string>
     <string name="expenses_split_proposal_decline">Ablehnen</string>
     <string name="expenses_split_proposal_later">Später</string>
+    <string name="expenses_split_answer_failed">Die Antwort auf die Aufteilung konnte nicht gesendet werden. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.</string>
     <string name="expense_split_shared">Mit deinem Co-Elternteil teilen</string>
     <string name="expense_split_not_shared_hint">Zählt zu deinen Ausgaben, aber niemand schuldet dem anderen etwas dafür.</string>
     <string name="expense_split_ratio">Aufteilung %1$d / %2$d</string>

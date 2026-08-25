@@ -31,6 +31,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -123,6 +124,17 @@ fun ExpenseScreen(
     val scope = rememberCoroutineScope()
     val deletedMessage = stringResource(R.string.expenses_deleted)
     val undoLabel = stringResource(R.string.expenses_deleted_undo)
+
+    // A refused answer has to say so. The banner is the only route to accepting or declining a
+    // split, and the ViewModel used to report the refusal into `saveState`, which belongs to the
+    // Add Expense form and nothing here reads — so the tap looked like it had simply done
+    // nothing while the co-parent went on waiting.
+    val answerFailedMessage = stringResource(R.string.expenses_split_answer_failed)
+    LaunchedEffect(Unit) {
+        viewModel.ratioAnswerFailed.collect {
+            snackbarHostState.showSnackbar(answerFailedMessage)
+        }
+    }
 
     // Delete now, offer Undo — the same shape EventListScreen uses. The receipt photo is only
     // purged once the window closes, because a deleted photo cannot be brought back and Undo

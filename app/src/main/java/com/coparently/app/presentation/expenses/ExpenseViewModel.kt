@@ -1,5 +1,6 @@
 package com.coparently.app.presentation.expenses
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.coparently.app.data.repository.FamilySettingsRepository
@@ -26,9 +27,12 @@ import com.coparently.app.presentation.common.ParentsSource
 import com.coparently.app.presentation.common.stateInLoadable
 import com.coparently.app.presentation.common.valueOrNull
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
@@ -83,7 +87,7 @@ class ExpenseViewModel @Inject constructor(
     private val preferencesRepository: PreferencesRepository,
     private val receiptTextRecognizer: ReceiptTextRecognizer,
     private val familySettingsRepository: FamilySettingsRepository,
-    parentsSource: ParentsSource
+    private val parentsSource: ParentsSource
 ) : ViewModel() {
 
     /**
@@ -108,9 +112,15 @@ class ExpenseViewModel @Inject constructor(
      *
      * Both uids, or just the payer while unpaired: an expense recorded before there is a
      * co-parent has nobody to owe a share of it, and naming one would invent a debt.
+     *
+     * Resolved through [ParentsSource.coParentUid], **not** through `parents.value`. That
+     * StateFlow is `WhileSubscribed` and the Add Expense screen — a route with its own
+     * `hiltViewModel()` instance — collects `agreedRatio` but never `parents`, so it had never
+     * emitted and answered `null` for every save. The result was a `splitBetween` naming only
+     * the payer: the payer's own month looked right, and the co-parent's showed nothing owed.
      */
-    private fun sharedWith(userId: String): List<String> {
-        val coParent = parents.value.coParent?.uid
+    private suspend fun sharedWith(userId: String): List<String> {
+        val coParent = parentsSource.coParentUid()
         return listOfNotNull(userId, coParent?.takeIf { it != userId })
     }
 
@@ -137,6 +147,16 @@ class ExpenseViewModel @Inject constructor(
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), null)
 
     /**
+     * Raised when answering the co-parent's proposal was refused.
+     *
+     * A one-shot signal rather than state: the screen turns it into a snackbar, and a value that
+     * stayed set would re-raise it on the next recomposition. `extraBufferCapacity = 1` so
+     * `tryEmit` from a non-suspending failure branch cannot drop it.
+     */
+    private val _ratioAnswerFailed = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val ratioAnswerFailed: SharedFlow<Unit> = _ratioAnswerFailed.asSharedFlow()
+
+    /**
      * Answers the co-parent's proposed split.
      *
      * **Later is not a third answer.** Dismissing the banner leaves the proposal pending, so it
@@ -153,9 +173,12 @@ class ExpenseViewModel @Inject constructor(
                 familySettingsRepository.declineProposal()
             }
             result.onFailure { e ->
-                _saveState.value = ExpenseSaveState.Error(
-                    e.message ?: "The split could not be answered"
-                )
+                // Emitted, not written into `saveState`: nothing on the Expenses screen reads
+                // that — it belongs to the Add Expense form — so a refused answer left the
+                // banner sitting there as if the tap had done nothing. A silent refusal is the
+                // exact outcome this whole family of features exists to remove.
+                Log.w(TAG, "The split proposal could not be answered", e)
+                _ratioAnswerFailed.tryEmit(Unit)
             }
         }
     }
@@ -604,6 +627,10 @@ class ExpenseViewModel @Inject constructor(
         viewModelScope.launch {
             runCatching { receiptStorage.deleteReceipt(expenseId) }
         }
+    }
+
+    private companion object {
+        const val TAG = "ExpenseViewModel"
     }
 }
 

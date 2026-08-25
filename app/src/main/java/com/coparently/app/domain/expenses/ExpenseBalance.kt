@@ -38,6 +38,19 @@ data class CurrencyBalance(
 )
 
 /**
+ * Whether the two parents can actually be told apart — both slots present in [roleByUid].
+ *
+ * One definition, because three answers have to agree: [ExpenseBalance.splitKnown], the share
+ * `shareOf` applies to an expense, and the split label an expense row prints. A pair whose two
+ * parents still read the same slot fails it, and each of the three falls back to an even
+ * division — applying a slot-keyed share there would charge one parent the other's part.
+ *
+ * @param roleByUid Map of uid to `"mom"`/`"dad"`; incomplete while unpaired
+ */
+fun bothSlotsKnown(roleByUid: Map<String, String>): Boolean =
+    roleByUid.values.toSet().containsAll(setOf("mom", "dad"))
+
+/**
  * Works out the split bar and settle-up figure for a month of expenses.
  *
  * The money screen of a two-household app never said who paid; this is what makes
@@ -90,7 +103,7 @@ fun calculateExpenseBalance(
 
     // Both roles must be known for the split bar to mean anything: while unpaired there is only
     // one parent on record, and a 100% bar would be decoration pretending to be data.
-    val splitKnown = roleByUid.values.toSet().containsAll(setOf("mom", "dad"))
+    val splitKnown = bothSlotsKnown(roleByUid)
 
     return ExpenseBalance(
         momPaid = momPaid,
@@ -114,8 +127,7 @@ fun calculateExpenseBalance(
 private fun shareOf(expense: Expense, uid: String, roleByUid: Map<String, String>): Double {
     val ratio = SplitRatio.fromStored(expense.splitBasisPoints)
     val slot = roleByUid[uid]
-    val slotsKnown = roleByUid.values.toSet().containsAll(setOf("mom", "dad"))
-    return if (ratio != null && slot != null && slotsKnown) {
+    return if (ratio != null && slot != null && bothSlotsKnown(roleByUid)) {
         ratio.shareFor(slot)
     } else {
         1.0 / expense.splitBetween.size

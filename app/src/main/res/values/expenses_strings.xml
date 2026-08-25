@@ -50,6 +50,7 @@
     <string name="expenses_row_subtitle">%1$s · %2$s paid · %3$s</string>
     <string name="expenses_row_subtitle_unknown_payer">%1$s · %2$s</string>
     <string name="expenses_split_even">split 50/50</string>
+    <string name="expenses_split_ratio">split %1$d/%2$d</string>
     <string name="expenses_split_n_ways">split 1/%1$d</string>
     <string name="expenses_split_none">not split</string>
     <string name="expenses_delete">Delete expense</string>
@@ -100,6 +101,7 @@
     <string name="expenses_split_proposal_confirm">Confirm</string>
     <string name="expenses_split_proposal_decline">Decline</string>
     <string name="expenses_split_proposal_later">Later</string>
+    <string name="expenses_split_answer_failed">Could not answer the split. Check your connection and try again.</string>
     <string name="expense_split_shared">Share with your co-parent</string>
     <string name="expense_split_not_shared_hint">Counts towards your spending, but neither of you owes the other for it.</string>
     <string name="expense_split_ratio">Split %1$d / %2$d</string>

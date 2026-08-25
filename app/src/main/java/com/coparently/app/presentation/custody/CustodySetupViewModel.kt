@@ -71,10 +71,14 @@ class CustodySetupViewModel @Inject constructor(
             startDate = model.startDate,
             momFirst = when (model.modelType) {
                 CustodyModelType.WEEK_ON_WEEK_OFF -> model.momDayIndices.contains(0)
-                // Day 0 is a resident day for whoever the child lives with, and the contact
-                // parent's set is only the two weekend days — so "does slot 1 hold day 0" is
-                // still the right question, and still answers "is slot 1 the resident parent".
-                CustodyModelType.EVERY_OTHER_WEEKEND -> model.momDayIndices.contains(0)
+                // By majority, not by day 0. This is the one preset that is not a 50/50 split:
+                // the resident holds ten to twelve days of the fortnight and the contact parent
+                // two to four, so the larger set is the resident's whatever those days are.
+                // "Does slot 1 hold day 0" was true only while the contact set was the two
+                // weekend days — a midweek contact on a **Monday**, every week, puts index 0
+                // with the contact parent and flipped which parent the form reopened as
+                // resident, silently offering to save the schedule the other way round.
+                CustodyModelType.EVERY_OTHER_WEEKEND -> model.isResidentSlotOne()
                 CustodyModelType.TWO_TWO_THREE -> model.momDayIndices.contains(0)
                 CustodyModelType.THREE_FOUR_FOUR_THREE -> model.momDayIndices.contains(0)
                 CustodyModelType.CUSTOM -> true
@@ -100,7 +104,7 @@ class CustodySetupViewModel @Inject constructor(
      * would turn "save" into "remove the midweek day".
      */
     private fun CustodySetupUiState.withMidweekFrom(model: CustodyModel): CustodySetupUiState {
-        val residentIsSlotOne = model.momDayIndices.contains(0)
+        val residentIsSlotOne = model.isResidentSlotOne()
         val contactDays = if (residentIsSlotOne) {
             (0 until model.patternDays).toSet() - model.momDayIndices
         } else {
@@ -115,6 +119,17 @@ class CustodySetupViewModel @Inject constructor(
             midweekEveryWeek = midweekIndices.size > 1
         )
     }
+
+    /**
+     * Whether slot 1 is the parent the child lives with, for a resident/contact pattern.
+     *
+     * By share of the fortnight, which is the definition, rather than by any particular index:
+     * every index the contact parent holds is negotiable — the two weekend days plus an optional
+     * midweek day that may itself be a Monday — while "holds most of the cycle" is exactly what
+     * makes a parent the resident one. Only meaningful for a pattern that is not a 50/50 split.
+     */
+    private fun CustodyModel.isResidentSlotOne(): Boolean =
+        momDayIndices.size * 2 > patternDays
 
     /**
      * Selects a model type.

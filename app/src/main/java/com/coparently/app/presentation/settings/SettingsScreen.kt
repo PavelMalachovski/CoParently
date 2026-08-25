@@ -159,6 +159,10 @@ fun SettingsScreen(
 
     val settingsUiState by settingsViewModel.settingsState.collectAsState()
     val caresFor by settingsViewModel.caresFor.collectAsState()
+    // The dialog edits this parent's own answer; `caresFor` above is the union of both and is
+    // what decides which rows below are drawn. Seeding the dialog from the union made a box the
+    // co-parent ticked look like this parent's own.
+    val myCaresFor by settingsViewModel.myCaresFor.collectAsState()
     val agreedRatio by settingsViewModel.agreedRatio.collectAsState()
     var showFamilyKindPicker by rememberSaveable { mutableStateOf(false) }
     var showSplitPicker by rememberSaveable { mutableStateOf(false) }
@@ -176,7 +180,7 @@ fun SettingsScreen(
 
     if (showFamilyKindPicker) {
         FamilyKindDialog(
-            selected = caresFor,
+            selected = myCaresFor,
             onConfirm = { kinds ->
                 settingsViewModel.setCaresFor(kinds)
                 showFamilyKindPicker = false

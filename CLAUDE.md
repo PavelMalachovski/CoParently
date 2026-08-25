@@ -347,6 +347,19 @@ Data flow: UI → ViewModel → UseCase → Repository → Room (source of truth
     exclude private rows **in the statement**, because a row with the flag cleared is a row
     queued for upload. Rows whose `createdByFirebaseUid` is null are deliberately not matched —
     nothing distinguishes this user's un-stamped event from anybody else's.
+17. **A save path never reads a `WhileSubscribed` StateFlow's `.value`.** Every ViewModel shares
+    `ParentsSource`/`FamilyKindSource` with `SharingStarted.WhileSubscribed`, so in a ViewModel
+    instance no screen has collected — which is exactly what a **form-only route** is — `.value`
+    is still the initial value and always will be. `ExpenseViewModel.sharedWith` read
+    `parents.value` to decide who a shared expense divides between, and the Add Expense screen
+    collects `agreedRatio` but not `parents`: every expense was written naming only the payer, so
+    the payer's month looked right and the co-parent's showed nothing owed at all. The cheap
+    facts have suspend accessors for this — `ParentsSource.signedInSlot()` and
+    `ParentsSource.coParentUid()`, both one Room row — and a save path must use those. The
+    stream is for what the screen *renders*. Same reason a Settings dialog seeds from
+    `FamilyKindSource.observeMine()` and not `observe()`: the union of both parents' answers is
+    what the app *shows*, while the dialog *writes* this parent's row alone, so seeding it with
+    the union made every checkbox a lie.
 
 ## Known issues / do not "fix" silently
 

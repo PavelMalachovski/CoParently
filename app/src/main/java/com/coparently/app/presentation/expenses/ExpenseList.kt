@@ -40,6 +40,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.coparently.app.R
+import com.coparently.app.domain.expenses.SplitRatio
+import com.coparently.app.domain.expenses.bothSlotsKnown
 import com.coparently.app.domain.model.Expense
 import com.coparently.app.presentation.common.FullScreenImageDialog
 import com.coparently.app.presentation.common.ParentNames
@@ -91,6 +93,12 @@ fun ExpenseList(
     // Receipt being viewed full-screen; transient UI state, deliberately local.
     var viewedReceiptUrl by remember { mutableStateOf<String?>(null) }
 
+    // Whether the two parents can be told apart, which is what decides whether a row may print a
+    // ratio at all — the same fact `calculateExpenseBalance` keys the share it charges on. While
+    // both parents still read one slot the balance divides evenly, so a row claiming 70/30 would
+    // contradict the summary directly above it.
+    val splitKnown = remember(roleByUid) { bothSlotsKnown(roleByUid) }
+
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(horizontal = 14.dp, vertical = 4.dp),
@@ -103,6 +111,7 @@ fun ExpenseList(
                     expense = expense,
                     payerRole = roleByUid[expense.paidBy],
                     parentNames = parentNames,
+                    splitKnown = splitKnown,
                     onClick = onExpenseClick?.takeIf { modifiable }?.let { { it(expense) } },
                     onReceiptClick = { url -> viewedReceiptUrl = url }
                 )
@@ -140,6 +149,9 @@ fun ExpenseList(
  * @param expense Expense to render
  * @param parentNames Resolves a slot to that parent's name
  * @param payerRole The payer's slot, or null when the payer is not a known parent
+ * @param splitKnown Whether both parent slots are known. Defaults to false — the honest answer
+ *   for a caller that has not established it — which prints the even label rather than a ratio
+ *   the balance would not charge.
  * @param onClick Opens the expense editor; null leaves the row inert
  * @param onReceiptClick Opens the full-screen receipt viewer
  */
@@ -148,6 +160,7 @@ fun ExpenseItem(
     expense: Expense,
     parentNames: ParentNames,
     payerRole: String? = null,
+    splitKnown: Boolean = false,
     onClick: (() -> Unit)? = null,
     onReceiptClick: (String) -> Unit = {}
 ) {
@@ -176,8 +189,16 @@ fun ExpenseItem(
         )
     }
 
+    // The ratio the expense was recorded under, not the family's current agreement: an expense
+    // is priced once and a later renegotiation must not re-label a settled month. Null — a row
+    // from before the agreement existed — divides evenly, which is what it was.
+    val ratio = remember(expense.splitBasisPoints, splitKnown) {
+        SplitRatio.fromStored(expense.splitBasisPoints)?.takeIf { splitKnown }
+    }
     val splitLabel = when {
-        expense.splitBetween.size >= 2 && expense.splitBetween.size == 2 ->
+        expense.splitBetween.size == 2 && ratio != null ->
+            stringResource(R.string.expenses_split_ratio, ratio.momPercent, ratio.dadPercent)
+        expense.splitBetween.size == 2 ->
             stringResource(R.string.expenses_split_even)
         expense.splitBetween.size > 2 ->
             stringResource(R.string.expenses_split_n_ways, expense.splitBetween.size)

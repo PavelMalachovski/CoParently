@@ -7,6 +7,7 @@ import com.coparently.app.domain.repository.UserRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -39,7 +40,30 @@ class FamilyKindSource @Inject constructor(
      * Cold and cheap on its own — it adds no Firestore listener of its own, riding the pairing
      * state that `ParentsSource` already keeps warm — so a ViewModel may collect it directly.
      */
-    fun observe(): Flow<Set<FamilyKind>> = combine(
+    fun observe(): Flow<Set<FamilyKind>> = answers()
+        .map { (mine, theirs) -> FamilyKind.effective(mine, theirs) }
+        .distinctUntilChanged()
+
+    /**
+     * **This parent's own answer**, which is the only one they can change.
+     *
+     * Separate from [observe] because the two are asked by different questions. "Which sections
+     * does this app show" is the union, and rightly so — one parent saying "children" must be
+     * enough for both phones. "Which boxes does the Settings dialog open with" is not: that
+     * dialog writes to `users/{uid}.caresFor`, this parent's row alone, so seeding it with the
+     * union made every checkbox a lie. Saving without touching anything copied the co-parent's
+     * answer into yours, and a box you unticked came straight back because they still held it.
+     *
+     * A parent who has never answered is offered the union rather than an empty dialog: it is
+     * what the app is already showing them, so confirming it is a real answer rather than a
+     * reset.
+     */
+    fun observeMine(): Flow<Set<FamilyKind>> = answers()
+        .map { (mine, theirs) -> mine.ifEmpty { FamilyKind.effective(mine, theirs) } }
+        .distinctUntilChanged()
+
+    /** The two raw answers, before either question is asked of them. */
+    private fun answers(): Flow<Pair<Set<FamilyKind>, Set<FamilyKind>>> = combine(
         userRepository.observeCurrentUserId(),
         userRepository.getAllUsers(),
         pairingRepository.observePairingState()
@@ -49,6 +73,6 @@ class FamilyKindSource @Inject constructor(
         // stranger. The same rule `ParentsSource` documents at length.
         val mine = users.firstOrNull { it.id == uid }?.caresFor.orEmpty()
         val theirs = (pairing as? PairingState.Paired)?.partner?.caresFor.orEmpty()
-        FamilyKind.effective(mine, theirs)
-    }.distinctUntilChanged()
+        mine to theirs
+    }
 }

@@ -266,7 +266,19 @@ class ChangeRequestViewModel @Inject constructor(
                 ?: userRepository.getCurrentUserId()
                 ?: return@launch
             val now = LocalDateTime.now().toString()
-            val dates = group.dates
+            // Only the days still waiting on *this* parent. `applyDayOverridesForDates` writes
+            // one day per call, so `decideGroup` sees a one-element list and its own rule — a
+            // day already decided is skipped, not refused, so a part-answered group can still be
+            // finished — cannot apply: with nothing else in the list, an already-decided day
+            // makes `answerable` empty and fails the whole run at that day. Filtering here is
+            // what restores the rule the transition documents.
+            val dates = group.swaps
+                .filter { DaySwapInbox.awaitsAnswerFrom(it, uid) }
+                .map { it.date.toString() }
+            if (dates.isEmpty()) {
+                _errorMessage.value = "Nothing in this offer is waiting on you"
+                return@launch
+            }
             custodyModelRepository.applyDayOverridesForDates(dates) { current, date ->
                 DayOverrideTransition.decideGroup(current, listOf(date), uid, now, accept)
             }.onFailure { e ->

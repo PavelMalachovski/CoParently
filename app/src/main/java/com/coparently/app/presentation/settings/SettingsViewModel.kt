@@ -73,6 +73,21 @@ class SettingsViewModel @Inject constructor(
         )
 
     /**
+     * This parent's **own** answer, which is what the Settings dialog edits.
+     *
+     * Not [caresFor]. That is the union of both parents' answers and decides which rows the app
+     * draws; [setCaresFor] writes to this parent's row alone. Seeding the dialog with the union
+     * meant a box ticked only by the co-parent looked like yours: saving without touching
+     * anything copied their answer onto your record, and unticking one put it straight back.
+     */
+    val myCaresFor: StateFlow<Set<FamilyKind>> = familyKindSource.observeMine()
+        .stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(ACCOUNT_STOP_TIMEOUT_MS),
+            FamilyKind.ALL
+        )
+
+    /**
      * Records a new answer onto this parent's own record.
      *
      * Refuses an empty set: with neither kind selected the app would have nothing to offer, and
