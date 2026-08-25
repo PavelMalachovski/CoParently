@@ -198,8 +198,14 @@ class FriendViewModel @Inject constructor(
         bloodGroup: String?,
         photoUrl: String?
     ) {
-        val grant = myGrant.value
         viewModelScope.launch {
+            // Read on the save path, not from `myGrant.value` — invariant 17. `myGrant` is a
+            // `WhileSubscribed` StateFlow and `FriendProfileScreen` is its own route that never
+            // collects it, so `.value` was the initial `null` for every save this instance made
+            // and the profile went out with an empty `familyParents` — the very gate the parents
+            // read it through. `myProfile` stays a fallback: the screen does collect it, and on a
+            // re-save it already holds the gate the first write established.
+            val grant = friendRepository.myGrant()
             friendRepository.saveMyProfile(
                 FriendProfile(
                     uid = "",
@@ -208,7 +214,12 @@ class FriendViewModel @Inject constructor(
                     phones = phones.map { it.trim() }.filter { it.isNotEmpty() },
                     bloodGroup = bloodGroup?.trim()?.takeIf { it.isNotEmpty() },
                     photoUrl = photoUrl,
-                    familyParents = grant?.familyParents ?: myProfile.value?.familyParents.orEmpty()
+                    // The **stored** gate first, then the grant. `friend_profiles`' update rule
+                    // requires `familyParents` to equal what the document already holds, so
+                    // preferring a live grant that has since changed gets the write refused; the
+                    // grant is for the create, where there is no stored profile to match.
+                    familyParents = myProfile.value?.familyParents?.takeIf { it.isNotEmpty() }
+                        ?: grant?.familyParents.orEmpty()
                 )
             ).onFailure { e -> _saveError.value = errorRes(e) }
         }

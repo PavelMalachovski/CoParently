@@ -1,6 +1,7 @@
 package com.coparently.app.domain.contacts
 
 import com.coparently.app.domain.model.ChildInfo
+import com.coparently.app.domain.model.Pet
 
 /**
  * One person in the contacts list.
@@ -65,7 +66,48 @@ object ContactDirectory {
      *
      * @param children Every child on record.
      */
-    fun of(children: List<ChildInfo>): List<ContactGroup> = children
+    fun of(children: List<ChildInfo>, pets: List<Pet> = emptyList()): List<ContactGroup> =
+        childGroups(children) + petGroups(pets)
+
+    /**
+     * A group per pet that has a vet on record.
+     *
+     * The vet is an emergency number by any reading, and for a pets-only family it is the *only*
+     * one the app holds — before this, that family's Contacts screen, deliberately the first row
+     * on Home because "the moment it is needed is the moment nobody scrolls", was permanently
+     * empty while the number sat on the pet's record two taps away.
+     *
+     * The key is prefixed so a pet and a child sharing an id could never collide in a list key.
+     */
+    private fun petGroups(pets: List<Pet>): List<ContactGroup> = pets
+        .mapNotNull { pet ->
+            val phone = pet.vetPhone?.trim()?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+            ContactGroup(
+                childId = "pet:${pet.id}",
+                childName = pet.name,
+                contacts = listOf(
+                    DirectoryContact(
+                        // A practice with no name recorded still dials; naming it after the pet
+                        // would be a guess, and an empty name is what the row already handles.
+                        name = pet.vetName?.trim().orEmpty(),
+                        relationship = VET_RELATIONSHIP,
+                        numbers = listOf(phone),
+                        key = "pet:${pet.id}#vet"
+                    )
+                )
+            )
+        }
+
+    /**
+     * Marks a vet row so the screen can label it in the reader's language.
+     *
+     * A sentinel rather than a translated word: this is domain code with no `Context`, and a
+     * relationship typed by a parent must never be mistaken for it — which is why it is not a
+     * plausible free-text value.
+     */
+    const val VET_RELATIONSHIP = "__vet__"
+
+    private fun childGroups(children: List<ChildInfo>): List<ContactGroup> = children
         .map { child ->
             ContactGroup(
                 childId = child.id,

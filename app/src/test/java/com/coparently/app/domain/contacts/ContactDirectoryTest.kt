@@ -2,10 +2,12 @@ package com.coparently.app.domain.contacts
 
 import com.coparently.app.domain.model.ChildInfo
 import com.coparently.app.domain.model.EmergencyContact
+import com.coparently.app.domain.model.Pet
 import org.junit.Test
 import java.time.LocalDateTime
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 /**
  * The contacts list is a screen someone opens in a hurry, so the two things that must not be
@@ -118,5 +120,39 @@ class ContactDirectoryTest {
         emergencyContacts = contacts.toList(),
         createdAt = LocalDateTime.of(2026, 8, 1, 9, 0),
         updatedAt = LocalDateTime.of(2026, 8, 1, 9, 0)
+    )
+
+    @Test
+    fun `a pet's vet is a contact, so a pets-only family's emergency screen is not empty`() {
+        val groups = ContactDirectory.of(
+            children = emptyList(),
+            pets = listOf(pet(vetName = "Dr Novak", vetPhone = "+420 111"))
+        )
+
+        assertEquals(1, groups.size)
+        assertEquals("Rex", groups.single().childName)
+        val contact = groups.single().contacts.single()
+        assertEquals("Dr Novak", contact.name)
+        assertEquals(ContactDirectory.VET_RELATIONSHIP, contact.relationship)
+        assertEquals("+420 111", contact.dialable)
+    }
+
+    @Test
+    fun `a pet with no vet number is left out, like a child with no contacts`() {
+        val groups = ContactDirectory.of(
+            children = emptyList(),
+            pets = listOf(pet(vetName = "Dr Novak", vetPhone = null))
+        )
+
+        assertTrue(groups.isEmpty())
+    }
+
+    private fun pet(vetName: String?, vetPhone: String?) = Pet(
+        id = "p1",
+        name = "Rex",
+        vetName = vetName,
+        vetPhone = vetPhone,
+        createdAt = LocalDateTime.parse("2026-01-01T09:00:00"),
+        updatedAt = LocalDateTime.parse("2026-01-01T09:00:00")
     )
 }

@@ -64,4 +64,8 @@
     <string name="home_dialog_requests_message">Your co-parent has requests waiting for your answer.</string>
     <string name="home_dialog_later">Later</string>
     <string name="home_dialog_review">Review</string>
+    <plurals name="home_dialog_swap_message_days">
+        <item quantity="one">%2$s proposes changing who has the child on %1$d day, %3$s.</item>
+        <item quantity="other">%2$s proposes changing who has the child on %1$d days, %3$s to %4$s.</item>
+    </plurals>
 </resources>

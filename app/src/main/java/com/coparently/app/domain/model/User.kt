@@ -22,6 +22,8 @@ import java.time.LocalDate
  * @property medicalProfile The parent's own emergency medical profile
  * @property onboardingCompletedAt ISO date-time at which this parent finished (or skipped
  * through) first-run onboarding; null while the wizard has not been completed
+ * @property caresFor Whether this family is co-parenting children, pets, or both; empty until
+ * the question is answered
  */
 data class User(
     val id: String,
@@ -43,6 +45,14 @@ data class User(
      * Null means the wizard has not been completed. A string rather than a converted type
      * because that is how every date crosses this Firestore schema.
      */
-    val onboardingCompletedAt: String? = null
+    val onboardingCompletedAt: String? = null,
+    /**
+     * Whether this family is co-parenting children, pets, or both.
+     *
+     * Empty means the question has not been answered — every account that predates it — and is
+     * read as "show everything" by [FamilyKind.effective], so an upgrade never hides a section
+     * somebody was already using.
+     */
+    val caresFor: Set<FamilyKind> = emptySet()
 )
 

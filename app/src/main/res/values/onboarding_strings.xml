@@ -26,4 +26,15 @@
     <string name="onboarding_coparent_title">Invite your co-parent</string>
     <string name="onboarding_coparent_body">Send them a link or a code. Once they join, they will see everything you have filled in here and can add to it.</string>
     <string name="onboarding_coparent_open">Send an invitation</string>
+    <string name="onboarding_family_title">Who are you co-parenting?</string>
+    <string name="onboarding_family_body">Pick both if that is your family. You can change this later in Settings.</string>
+    <string name="onboarding_family_children">Children</string>
+    <string name="onboarding_family_children_hint">Child records, contacts and school details</string>
+    <string name="onboarding_family_pets">Pets</string>
+    <string name="onboarding_family_pets_hint">Pet records, vaccinations and the vet\'s number</string>
+    <string name="onboarding_pet_title">Your pet</string>
+    <string name="onboarding_pet_body">Just a name and what kind. Vaccinations, feeding notes and the vet come later, on the pet\'s own screen.</string>
+    <string name="onboarding_split_title">How will you split costs?</string>
+    <string name="onboarding_split_body">Half each unless you agree otherwise. Once your co-parent is linked, changing this becomes something they confirm — and expenses already recorded keep the split they were entered under.</string>
+    <string name="onboarding_split_value">You %1$d / Co-parent %2$d</string>
 </resources>

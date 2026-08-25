@@ -159,6 +159,7 @@ fun MessagesList(
     onRefresh: (() -> Unit)? = null,
     onEventLinkClick: ((String) -> Unit)? = null,
     onOpenInbox: (() -> Unit)? = null,
+    onRetryFailed: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val listState = rememberLazyListState()
@@ -239,7 +240,8 @@ fun MessagesList(
                             startsGroup = entry.startsGroup,
                             endsGroup = entry.endsGroup,
                             onEventLinkClick = onEventLinkClick,
-                            onOpenInbox = onOpenInbox
+                            onOpenInbox = onOpenInbox,
+                            onRetryFailed = onRetryFailed
                         )
                     }
                 }
@@ -290,6 +292,8 @@ private fun DaySeparator(date: LocalDate) {
  *   or null to render such cards inert
  * @param onOpenInbox Opens the change-request inbox with nothing highlighted — the tap target
  *   for a day-swap card, whose entity is a date and not an event id, or null to render it inert
+ * @param onRetryFailed Re-sends everything still queued, from a tap on a failed message, or null
+ *   to leave the failure notice inert
  */
 @Composable
 // Already over detekt's LongMethod threshold before this task added the clickable chevron (the
@@ -302,7 +306,8 @@ fun MessageItem(
     startsGroup: Boolean = true,
     endsGroup: Boolean = true,
     onEventLinkClick: ((String) -> Unit)? = null,
-    onOpenInbox: (() -> Unit)? = null
+    onOpenInbox: (() -> Unit)? = null,
+    onRetryFailed: (() -> Unit)? = null
 ) {
     // A change-request card is the one bubble that goes somewhere. It carries the event id in
     // `attachments`; the inbox resolves that to the request itself.
@@ -401,8 +406,19 @@ fun MessageItem(
         // primary background is the contrast pairing that fails, so a failed send says so
         // on the surface below instead.
         if (isCurrentUser && message.status == MessageSendStatus.ERROR) {
+            // Tappable, because until the outbox existed this notice was a dead end: nothing in
+            // the app ever retried a message whose write had failed, so it stayed undelivered
+            // forever while the thread looked normal on this device.
             Row(
-                modifier = Modifier.padding(top = 2.dp, start = 4.dp, end = 4.dp),
+                modifier = Modifier
+                    .padding(top = 2.dp, start = 4.dp, end = 4.dp)
+                    .then(
+                        if (onRetryFailed == null) {
+                            Modifier
+                        } else {
+                            Modifier.clickable(onClick = onRetryFailed)
+                        }
+                    ),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(3.dp)
             ) {
@@ -413,7 +429,11 @@ fun MessageItem(
                     tint = MaterialTheme.colorScheme.error
                 )
                 Text(
-                    text = stringResource(R.string.chat_failed_to_send),
+                    text = if (onRetryFailed == null) {
+                        stringResource(R.string.chat_failed_to_send)
+                    } else {
+                        stringResource(R.string.chat_failed_to_send_retry)
+                    },
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.error
                 )

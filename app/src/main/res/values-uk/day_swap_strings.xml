@@ -10,6 +10,7 @@
     <string name="day_swap_needs_coparent">Спершу з\'єднайтеся з другим із батьків — обмін ви узгоджуєте вдвох.</string>
     <string name="day_swap_error_refused">Не вдалося запропонувати обмін</string>
     <string name="day_swap_error_not_ready">Ще з\'ясовуємо, хто другий з батьків, — спробуйте за мить</string>
+    <string name="day_swap_error_partial">Надіслано %1$d із %2$d днів — ці вже чекають відповіді другого з батьків; решту запропонуйте ще раз</string>
     <string name="day_swap_inbox_section">Обмін днями</string>
     <string name="day_swap_inbox_offered_by_you">Ви запропонували цей день: %1$s</string>
     <string name="day_swap_inbox_offered_to_you">%1$s пропонує вам цей день</string>
@@ -18,4 +19,38 @@
     <string name="day_swap_inbox_waiting">Чекає на відповідь</string>
     <string name="day_swap_accept">Прийняти</string>
     <string name="day_swap_decline">Відхилити</string>
+    <string name="day_swap_range">%1$s – %2$s</string>
+    <string name="day_swap_sheet_title_range">Обміняти ці дні</string>
+    <string name="day_swap_select_hint">Натискайте інші дні, щоб розширити обмін</string>
+    <string name="day_swap_selection_cancel">Скасувати вибір</string>
+    <plurals name="day_swap_day_count">
+        <item quantity="one">%1$d день</item>
+        <item quantity="few">%1$d дні</item>
+        <item quantity="many">%1$d днів</item>
+        <item quantity="other">%1$d днів</item>
+    </plurals>
+    <plurals name="day_swap_direction">
+        <item quantity="one">%1$d день переходить від %2$s до %3$s</item>
+        <item quantity="few">%1$d дні переходять від %2$s до %3$s</item>
+        <item quantity="many">%1$d днів переходять від %2$s до %3$s</item>
+        <item quantity="other">%1$d днів переходять від %2$s до %3$s</item>
+    </plurals>
+    <plurals name="day_swap_skipped_days">
+        <item quantity="one">Для %1$d вибраного дня опіку не задано — він не увійде в обмін.</item>
+        <item quantity="few">Для %1$d вибраних днів опіку не задано — вони не увійдуть в обмін.</item>
+        <item quantity="many">Для %1$d вибраних днів опіку не задано — вони не увійдуть в обмін.</item>
+        <item quantity="other">Для %1$d вибраних днів опіку не задано — вони не увійдуть в обмін.</item>
+    </plurals>
+    <plurals name="day_swap_inbox_offered_by_you_days">
+        <item quantity="one">Ви запропонували %2$s %1$d день</item>
+        <item quantity="few">Ви запропонували %2$s %1$d дні</item>
+        <item quantity="many">Ви запропонували %2$s %1$d днів</item>
+        <item quantity="other">Ви запропонували %2$s %1$d днів</item>
+    </plurals>
+    <plurals name="day_swap_inbox_offered_to_you_days">
+        <item quantity="one">%2$s пропонує вам %1$d день</item>
+        <item quantity="few">%2$s пропонує вам %1$d дні</item>
+        <item quantity="many">%2$s пропонує вам %1$d днів</item>
+        <item quantity="other">%2$s пропонує вам %1$d днів</item>
+    </plurals>
 </resources>

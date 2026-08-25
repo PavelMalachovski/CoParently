@@ -1,5 +1,6 @@
 package com.coparently.app.presentation.pets
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.coparently.app.data.analytics.AnalyticsManager
@@ -10,8 +11,11 @@ import com.coparently.app.domain.repository.PetPhotoStorage
 import com.coparently.app.domain.repository.PetRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.util.UUID
@@ -33,6 +37,24 @@ enum class PetPhotoError {
      * reference anyway would leave an image in the bucket nobody can see or delete.
      */
     DELETE_FAILED
+}
+
+/**
+ * How a save ended, for the editor to act on.
+ *
+ * A one-shot signal rather than a state flag, because the editor's response is navigation —
+ * something that must happen exactly once. The screen used to decide this for itself with a
+ * `saveCompleted`/`isSaving` pair, and nothing ever cleared `isSaving`, so the guard
+ * `saveCompleted && !isSaving` was false forever: the form froze, disabled and spinning, and
+ * the only way out was the back arrow. The write itself had already landed in Room, which is
+ * why backing out and re-entering showed the change — the reported "saving takes very long".
+ */
+enum class PetSaveOutcome {
+    /** The pet is in Room. Photographs may still have failed; [PetPhotoError] reports that. */
+    SAVED,
+
+    /** Nothing was written. The editor keeps its contents so the user can try again. */
+    FAILED
 }
 
 /**
@@ -68,6 +90,16 @@ class PetsViewModel @Inject constructor(
     fun clearPhotoError() {
         _photoError.value = null
     }
+
+    /**
+     * Emitted once per completed save.
+     *
+     * `extraBufferCapacity = 1` so an emission is never dropped when the editor is between
+     * recompositions; a `MutableStateFlow` would instead re-deliver the last outcome to a
+     * re-entering editor and navigate it straight back out.
+     */
+    private val _saveOutcome = MutableSharedFlow<PetSaveOutcome>(extraBufferCapacity = 1)
+    val saveOutcome: SharedFlow<PetSaveOutcome> = _saveOutcome.asSharedFlow()
 
     init {
         loadPets()
@@ -116,37 +148,50 @@ class PetsViewModel @Inject constructor(
      */
     fun upsertPet(pet: Pet, isNewPet: Boolean) {
         viewModelScope.launch {
-            try {
-                val currentUser = firebaseAuthService.getCurrentUser()
-                    ?: throw IllegalStateException("User not authenticated")
+            _saveOutcome.emit(if (persist(pet, isNewPet)) PetSaveOutcome.SAVED else PetSaveOutcome.FAILED)
+        }
+    }
 
-                val finalPet = pet.copy(
-                    createdByFirebaseUid = pet.createdByFirebaseUid ?: currentUser.uid,
-                    lastModifiedBy = currentUser.uid,
-                    syncedToFirestore = false
-                )
+    /**
+     * Writes the pet, reporting whether it landed.
+     *
+     * @return true when Room holds the pet. A `false` means nothing was written at all — a
+     *   failed Firestore upload does not count, because `PetRepositoryImpl` writes Room first
+     *   and leaves the row in the unsynced outbox for the next sync.
+     */
+    private suspend fun persist(pet: Pet, isNewPet: Boolean): Boolean {
+        return try {
+            val currentUser = firebaseAuthService.getCurrentUser()
+                ?: throw IllegalStateException("User not authenticated")
 
-                petRepository.upsertPet(finalPet)
+            val finalPet = pet.copy(
+                createdByFirebaseUid = pet.createdByFirebaseUid ?: currentUser.uid,
+                lastModifiedBy = currentUser.uid,
+                syncedToFirestore = false
+            )
 
-                if (isNewPet) {
-                    analyticsManager.logPetAdded()
-                } else {
-                    analyticsManager.logPetUpdated()
-                }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (
-                @Suppress("TooGenericExceptionCaught") e: Exception
-            ) {
-                crashlyticsManager.recordExceptionWithContext(
-                    e,
-                    // The id rather than the name, matching `ChildInfoViewModel`: custom keys are
-                    // uploaded and persist across the Crashlytics session, so nothing a family
-                    // typed belongs in one.
-                    mapOf("action" to "upsert_pet", "pet_id" to pet.id)
-                )
-                _uiState.value = PetsUiState.Error(e.message ?: "Failed to save pet")
+            petRepository.upsertPet(finalPet)
+
+            if (isNewPet) {
+                analyticsManager.logPetAdded()
+            } else {
+                analyticsManager.logPetUpdated()
             }
+            true
+        } catch (e: CancellationException) {
+            throw e
+        } catch (
+            @Suppress("TooGenericExceptionCaught") e: Exception
+        ) {
+            crashlyticsManager.recordExceptionWithContext(
+                e,
+                // The id rather than the name, matching `ChildInfoViewModel`: custom keys are
+                // uploaded and persist across the Crashlytics session, so nothing a family
+                // typed belongs in one.
+                mapOf("action" to "upsert_pet", "pet_id" to pet.id)
+            )
+            Log.e(TAG, "Saving pet ${pet.id} failed", e)
+            false
         }
     }
 
@@ -174,7 +219,8 @@ class PetsViewModel @Inject constructor(
                 url !in removedPhotoUrls || !deletePhoto(url)
             }
             val added = newPhotoUris.mapNotNull { uri -> uploadPhoto(pet.id, uri) }
-            upsertPet(pet.copy(photos = kept + added), isNewPet)
+            val saved = persist(pet.copy(photos = kept + added), isNewPet)
+            _saveOutcome.emit(if (saved) PetSaveOutcome.SAVED else PetSaveOutcome.FAILED)
         }
     }
 
@@ -192,6 +238,7 @@ class PetsViewModel @Inject constructor(
         @Suppress("TooGenericExceptionCaught") e: Exception
     ) {
         crashlyticsManager.recordExceptionWithContext(e, mapOf("action" to "delete_pet_photo"))
+        Log.e(TAG, "Deleting a pet photo failed", e)
         _photoError.value = PetPhotoError.DELETE_FAILED
         false
     }
@@ -217,6 +264,10 @@ class PetsViewModel @Inject constructor(
             e,
             mapOf("action" to "upload_pet_photo", "pet_id" to petId)
         )
+        // Crashlytics writes nothing to logcat, so without this line an upload failure on a
+        // device in front of you is undiagnosable — which is how the `pet_photos` Storage rule
+        // gap stayed invisible. `Log.e` survives the R8 strip.
+        Log.e(TAG, "Uploading a pet photo to pet_photos/$petId failed", e)
         _photoError.value = PetPhotoError.UPLOAD_FAILED
         null
     }
@@ -258,6 +309,10 @@ class PetsViewModel @Inject constructor(
                 _uiState.value = PetsUiState.Error(e.message ?: "Failed to sync pets")
             }
         }
+    }
+
+    private companion object {
+        const val TAG = "PetsViewModel"
     }
 }
 

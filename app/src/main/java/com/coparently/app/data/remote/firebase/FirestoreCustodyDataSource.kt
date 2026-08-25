@@ -152,6 +152,9 @@ class FirestoreCustodyDataSource @Inject constructor(
         decidedBy?.let { put("decidedBy", it) }
         decidedAt?.let { put("decidedAt", it) }
         note?.let { put("note", it) }
+        // Omitted when absent, like every other optional key here. A co-parent on an older build
+        // simply does not see it and reads each day as its own offer, which is what it was.
+        groupId?.let { put("groupId", it) }
     }
 
     /** The proposal as a sub-map; `momDayIndices` is a real array, like the pattern's. */
@@ -255,7 +258,8 @@ class FirestoreCustodyDataSource @Inject constructor(
             status = status,
             decidedBy = (this["decidedBy"] as? String)?.takeIf { it.isNotBlank() },
             decidedAt = (this["decidedAt"] as? String)?.takeIf { it.isNotBlank() },
-            note = (this["note"] as? String)?.takeIf { it.isNotBlank() }
+            note = (this["note"] as? String)?.takeIf { it.isNotBlank() },
+            groupId = (this["groupId"] as? String)?.takeIf { it.isNotBlank() }
         )
     }
 

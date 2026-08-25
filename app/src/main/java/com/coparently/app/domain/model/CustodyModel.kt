@@ -1,5 +1,6 @@
 package com.coparently.app.domain.model
 
+import java.time.DayOfWeek
 import java.time.LocalDate
 
 /**
@@ -133,34 +134,62 @@ data class CustodyModel(
          * anchor validation here because there is none for the other patterns either — the
          * preview card is what shows a parent they picked the wrong day.
          *
-         * **Whole days only, and that is a real limitation rather than a simplification.** Most
-         * such orders also give the other parent a midweek afternoon, and this model assigns a
-         * day to exactly one parent — there is no half-day to give. Folding the afternoon into a
-         * whole Wednesday would hand over an overnight nobody agreed to, which is the sort of
-         * quiet wrongness this schedule must never produce, so the preset leaves it out and says
-         * so. A parent who needs it can still describe the fortnight in `CUSTOM`.
+         * **A midweek day is a whole day here, and the screen has to say so.** Many such orders
+         * give the other parent a midweek *afternoon*, and this model assigns a day to exactly
+         * one parent — there is no half-day to give, so [midweek] hands over the overnight too.
+         * That was the reason the preset shipped without it; it is offered now because the
+         * arrangement is what Czech orders overwhelmingly say, and a parent who needs the
+         * afternoon-only shape can still describe the fortnight in `CUSTOM`. What must not
+         * happen is the app quietly assuming an overnight nobody agreed to, so the option is
+         * off by default and the setup screen names the consequence.
          *
          * @param momIsResident True when slot 1 is the parent the child lives with; false when
          *   slot 1 is the parent with the alternate weekends.
+         * @param midweek The midweek contact day, or null for weekends only.
          */
         fun everyOtherWeekend(
             id: String,
             startDate: LocalDate,
-            momIsResident: Boolean = true
+            momIsResident: Boolean = true,
+            midweek: MidweekContact? = null
         ): CustodyModel {
-            val contactWeekend = setOf(5, 6)
+            val contactDays = setOf(CONTACT_SATURDAY, CONTACT_SUNDAY) + midweekIndices(midweek)
             val momDays = if (momIsResident) {
-                (0..13).toSet() - contactWeekend
+                (0 until FORTNIGHT).toSet() - contactDays
             } else {
-                contactWeekend
+                contactDays
             }
             return CustodyModel(
                 id = id,
                 modelType = CustodyModelType.EVERY_OTHER_WEEKEND,
-                patternDays = 14,
+                patternDays = FORTNIGHT,
                 momDayIndices = momDays,
                 startDate = startDate
             )
+        }
+
+        /**
+         * The fortnight indices [midweek] occupies.
+         *
+         * Day 0 of the fortnight is the Monday the cycle opens on, so a weekday's index inside
+         * week 1 is its `DayOfWeek` ordinal and inside week 2 that plus seven. The contact
+         * weekend is in week 1, so "only the week without the weekend" means week 2 alone —
+         * which is the shape a court order takes when it spaces contact out evenly rather than
+         * stacking a midweek day onto the weekend the child is already away.
+         *
+         * A midweek day that lands on the contact weekend itself is not excluded here: the
+         * caller unions the sets, so Saturday or Sunday named as "midweek" simply changes
+         * nothing. [MidweekContact] refuses those at construction so the picker cannot offer a
+         * choice that does nothing.
+         */
+        private fun midweekIndices(midweek: MidweekContact?): Set<Int> {
+            if (midweek == null) return emptySet()
+            val inSecondWeek = DAYS_IN_WEEK + midweek.dayOfWeek.ordinal
+            return if (midweek.everyWeek) {
+                setOf(midweek.dayOfWeek.ordinal, inSecondWeek)
+            } else {
+                setOf(inSecondWeek)
+            }
         }
 
         /**
@@ -288,6 +317,39 @@ enum class CustodyModelType(val displayName: String) {
  * can only have arrived unvalidated, from a Firestore document synced from the other device.
  */
 private const val MAX_SANE_PATTERN_DAYS = 366
+
+/** Days in the fortnight every preset here is built on. */
+private const val FORTNIGHT = 14
+
+/** Days in a week, for turning a `DayOfWeek` ordinal into a fortnight index. */
+private const val DAYS_IN_WEEK = 7
+
+/** Index of the contact Saturday: day 0 is Monday, so Saturday is 5. */
+private const val CONTACT_SATURDAY = 5
+
+/** Index of the contact Sunday. */
+private const val CONTACT_SUNDAY = 6
+
+/**
+ * A midweek contact day inside `výhradní péče se stykem`.
+ *
+ * A value type rather than two parameters so a caller cannot pass the flag for the day, and so
+ * the "not a weekend" rule has one home. Whole days: see [CustodyModel.Companion.everyOtherWeekend].
+ *
+ * @property dayOfWeek Which weekday the contact falls on. Monday to Friday only.
+ * @property everyWeek True for a midweek day in both weeks of the fortnight; false for one only
+ *   in the week that has no contact weekend.
+ */
+data class MidweekContact(
+    val dayOfWeek: DayOfWeek,
+    val everyWeek: Boolean = true
+) {
+    init {
+        require(dayOfWeek != DayOfWeek.SATURDAY && dayOfWeek != DayOfWeek.SUNDAY) {
+            "A midweek contact day is Monday to Friday; $dayOfWeek is already a contact weekend"
+        }
+    }
+}
 
 /**
  * Least common multiple, for sizing the comparison window in [CustodyModel.isEquivalentTo].

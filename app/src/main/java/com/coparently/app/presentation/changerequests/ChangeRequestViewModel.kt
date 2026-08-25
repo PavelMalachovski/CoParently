@@ -3,10 +3,11 @@ package com.coparently.app.presentation.changerequests
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.coparently.app.data.repository.CustodyModelRepository
+import com.coparently.app.domain.custody.CustodyPatternDiff
 import com.coparently.app.domain.custody.CustodyProposal
-import com.coparently.app.domain.custody.DayOverride
 import com.coparently.app.domain.custody.DayOverrideTransition
 import com.coparently.app.domain.custody.DaySwap
+import com.coparently.app.domain.custody.DaySwapGroup
 import com.coparently.app.domain.custody.DaySwapInbox
 import com.coparently.app.domain.events.EventAcceptanceTransition
 import com.coparently.app.domain.model.ChangeRequest
@@ -24,10 +25,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -121,6 +122,21 @@ class ChangeRequestViewModel @Inject constructor(
         )
 
     /**
+     * The same swaps, folded into the offers they were made as.
+     *
+     * A run of days offered together is one agreement and gets one card. Before grouping, a week
+     * of swapped days produced seven cards asking the same question seven times — and seven modal
+     * dialogs on Home behind them.
+     */
+    val daySwapGroups: StateFlow<List<DaySwapGroup>> = custodyModelRepository.observeDayOverrides()
+        .map { overrides -> DaySwapInbox.groups(overrides, LocalDate.now()) }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
+    /**
      * Events the co-parent created for this parent that are still waiting on an answer.
      *
      * Read from `getAllEvents`, which is deliberately **not** acceptance-filtered — the calendar
@@ -167,7 +183,7 @@ class ChangeRequestViewModel @Inject constructor(
     fun accept(requestId: String) {
         viewModelScope.launch {
             val request = changeRequestRepository.getChangeRequestById(requestId) ?: return@launch
-            val event = eventRepository.getEventById(request.eventId)
+            val event = resolveEvent(request.eventId)
             if (event == null) {
                 _errorMessage.value = "The event for this request no longer exists"
                 return@launch
@@ -192,6 +208,19 @@ class ChangeRequestViewModel @Inject constructor(
         }
     }
 
+    /**
+     * The event a request is about, fetched from the server when this device has not synced it.
+     *
+     * `change_requests` is mirrored in realtime and `events` is not, so a proposal routinely
+     * arrives before the event it refers to. Accepting then failed with "the event for this
+     * request no longer exists" — the message the reporter read as "I have not synced with her"
+     * — until the next fifteen-minute worker tick happened to run.
+     *
+     * @param eventId The event the request names.
+     */
+    private suspend fun resolveEvent(eventId: String) =
+        eventRepository.getEventById(eventId) ?: eventRepository.fetchRemoteEvent(eventId)
+
     /** Declines an incoming request; the event stays unchanged. */
     fun decline(requestId: String) {
         viewModelScope.launch {
@@ -207,41 +236,49 @@ class ChangeRequestViewModel @Inject constructor(
     }
 
     /**
-     * Takes up the co-parent's offer of [date]. From then on the calendar reads the swap instead
-     * of the pattern — nothing folds it back into the agreed schedule, which is what keeps it
-     * one-off.
-     */
-    fun acceptSwap(date: LocalDate) = decideSwap(date) { current, uid, now ->
-        DayOverrideTransition.accept(current, date.toString(), uid, now)
-    }
-
-    /** Turns the co-parent's offer of [date] down. Whose day it is does not change. */
-    fun declineSwap(date: LocalDate) = decideSwap(date) { current, uid, now ->
-        DayOverrideTransition.decline(current, date.toString(), uid, now)
-    }
-
-    /**
-     * Applies a decision to the shared document.
+     * Answers a whole offer at once — every day of it, one way.
      *
-     * The transition runs against whatever the document holds *now*, not against the list this
-     * screen last collected: both parents write to one document, and a held snapshot would
-     * silently drop whatever the other one did in between.
+     * All or nothing, which is what a single card asking about "5 days" honestly means. A partial
+     * answer would need a per-day list inside the card, and the owner chose the simpler
+     * agreement: one notification, one decision.
+     *
+     * **The decision is taken against the document, not against the list this screen collected.**
+     * Both parents write to one document; a held snapshot would silently drop whatever the other
+     * one did in between, and the mirror this screen reads can only be behind. So the skip that
+     * lets a part-answered group finish lives in the transform, where `writeSwap` has just read
+     * the live map — not in a filter over `group.swaps`, which was the first shape of this fix
+     * and is stale exactly when it is needed, on the retry after a partial run.
+     *
+     * `group.dates` is still filtered once up front, but only to decide whether there is anything
+     * to say — never to decide what to write.
      *
      * A refusal is surfaced, not swallowed. `DayOverrideTransition` refuses a parent deciding
      * their own offer and `firestore.rules` refuses it again; either way the parent has to be
      * told, because a button that looks like it worked is worse than one that says it did not.
+     *
+     * @param group The offer being answered.
+     * @param accept True to take the days, false to turn them down.
      */
-    private fun decideSwap(
-        date: LocalDate,
-        transition: (Map<String, DayOverride>, String, String) -> Result<Map<String, DayOverride>>
-    ) {
+    fun decideSwapGroup(group: DaySwapGroup, accept: Boolean) {
         viewModelScope.launch {
             val uid = _currentUserId.value.takeIf { it.isNotEmpty() }
                 ?: userRepository.getCurrentUserId()
                 ?: return@launch
             val now = LocalDateTime.now().toString()
-            custodyModelRepository.applyDayOverrides(date.toString()) { current ->
-                transition(current, uid, now)
+            if (!group.awaitsAnswerFrom(uid)) {
+                _errorMessage.value = "This offer has already been answered"
+                return@launch
+            }
+            custodyModelRepository.applyDayOverridesForDates(group.dates) { current, date ->
+                if (DayOverrideTransition.awaitsAnswerFrom(current, date, uid)) {
+                    DayOverrideTransition.decideGroup(current, listOf(date), uid, now, accept)
+                } else {
+                    // Already decided, or this parent's own offer: leave it exactly as it is.
+                    // `decideGroup` would refuse a one-element list it cannot answer and abort
+                    // the run at that day, which is what stopped a part-answered group from ever
+                    // being finished.
+                    Result.success(current)
+                }
             }.onFailure { e ->
                 _errorMessage.value = e.message ?: "The swap could not be answered"
             }
@@ -260,6 +297,33 @@ class ChangeRequestViewModel @Inject constructor(
         _currentUserId
     ) { shared, uid ->
         shared?.proposal?.takeIf { uid.isNotEmpty() && it.proposedBy != uid }
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = null
+    )
+
+    /**
+     * What the pending proposal would actually change, or null when there is nothing to answer.
+     *
+     * A second flow rather than a wider [pendingProposal] type: three screens read that one and
+     * only two of them want the diff. Both come off the same `observeShared()` document, which
+     * carries the agreed pattern and the proposed one side by side — the diff needs no history
+     * and no extra read.
+     *
+     * Anchored on today, so the sentence describes the fortnight the parent is looking at.
+     */
+    val pendingProposalDiff: StateFlow<CustodyPatternDiff?> = combine(
+        custodyModelRepository.observeShared(),
+        _currentUserId
+    ) { shared, uid ->
+        val proposal = shared?.proposal?.takeIf { uid.isNotEmpty() && it.proposedBy != uid }
+            ?: return@combine null
+        CustodyPatternDiff.of(
+            agreed = shared.model,
+            proposed = proposal.model,
+            from = LocalDate.now()
+        )
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
@@ -306,7 +370,14 @@ class ChangeRequestViewModel @Inject constructor(
      */
     private fun decideEvent(eventId: String, accept: Boolean) {
         viewModelScope.launch {
-            val fresh = eventRepository.getEventById(eventId) ?: return@launch
+            // A bare `?: return@launch` here made the button do nothing at all when the event
+            // had not been synced yet — silent, which is worse than the error message the sibling
+            // path at least printed.
+            val fresh = resolveEvent(eventId)
+            if (fresh == null) {
+                _errorMessage.value = "The event for this request no longer exists"
+                return@launch
+            }
             val uid = _currentUserId.value.takeIf { it.isNotEmpty() }
                 ?: userRepository.getCurrentUserId()
                 ?: return@launch

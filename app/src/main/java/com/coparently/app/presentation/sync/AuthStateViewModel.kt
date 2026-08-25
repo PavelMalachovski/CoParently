@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.coparently.app.data.remote.firebase.FirebaseAuthService
 import com.coparently.app.domain.onboarding.OnboardingState
 import com.coparently.app.domain.repository.ChildInfoRepository
+import com.coparently.app.domain.repository.PetRepository
 import com.coparently.app.domain.repository.UserRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
@@ -28,7 +29,8 @@ import javax.inject.Inject
 class AuthStateViewModel @Inject constructor(
     private val firebaseAuthService: FirebaseAuthService,
     private val userRepository: UserRepository,
-    private val childInfoRepository: ChildInfoRepository
+    private val childInfoRepository: ChildInfoRepository,
+    private val petRepository: PetRepository
 ) : ViewModel() {
 
     private val _isAuthenticated = MutableStateFlow<Boolean?>(null)
@@ -87,7 +89,10 @@ class AuthStateViewModel @Inject constructor(
         withTimeoutOrNull(ONBOARDING_LOAD_TIMEOUT_MILLIS) {
             val account = userRepository.observeUserById(uid).first { it != null }
             val hasChildInfo = childInfoRepository.getAllChildInfo().first().isNotEmpty()
-            OnboardingState.isNeeded(account, hasChildInfo)
+            // A pet counts as evidence too. Counting children alone handed the questionnaire to
+            // a pets-only family on every launch.
+            val hasPets = petRepository.getAllPets().first().isNotEmpty()
+            OnboardingState.isNeeded(account, hasChildInfo, hasPets)
         } ?: false
     } catch (e: CancellationException) {
         throw e

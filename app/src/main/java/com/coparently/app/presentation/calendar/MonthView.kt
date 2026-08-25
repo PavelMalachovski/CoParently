@@ -1,7 +1,8 @@
 package com.coparently.app.presentation.calendar
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.layout.Arrangement
@@ -34,13 +35,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -49,8 +50,8 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Velocity
+import androidx.compose.ui.unit.dp
 import com.coparently.app.R
 import com.coparently.app.domain.holidays.Holiday
 import com.coparently.app.domain.model.Event
@@ -131,7 +132,8 @@ fun MonthView(
     holidays: Map<LocalDate, Holiday> = emptyMap(),
     pendingSwapDates: Set<LocalDate> = emptySet(),
     swappedDates: Set<LocalDate> = emptySet(),
-    onDayLongClick: ((LocalDate) -> Unit)? = null
+    onDayLongClick: ((LocalDate) -> Unit)? = null,
+    swapSelection: Set<LocalDate> = emptySet()
 ) {
     val firstDayOfWeek = remember { DayOfWeek.MONDAY }
 
@@ -252,13 +254,20 @@ fun MonthView(
                         isSwapPending = day.date in pendingSwapDates,
                         isSwapped = day.date in swappedDates,
                         previousSwapped = day.date.minusDays(1) in swappedDates,
-                        onDayLongClick = onDayLongClick
+                        onDayLongClick = onDayLongClick,
+                        isInSwapSelection = day.date in swapSelection,
+                        // In selection mode a tap extends the run instead of opening Day view.
+                        // Outside it, tap keeps doing what the August design decided it does.
+                        selectingSwap = swapSelection.isNotEmpty()
                     )
                 }
             )
         }
     }
 }
+
+/** Outline width on a day picked for a multi-day swap. */
+private val SWAP_SELECTION_BORDER = 2.dp
 
 /**
  * Weekday header row (Mon, Tue, Wed, etc.)
@@ -339,7 +348,9 @@ private fun DayCell(
     isSwapPending: Boolean = false,
     isSwapped: Boolean = false,
     previousSwapped: Boolean = false,
-    onDayLongClick: ((LocalDate) -> Unit)? = null
+    onDayLongClick: ((LocalDate) -> Unit)? = null,
+    isInSwapSelection: Boolean = false,
+    selectingSwap: Boolean = false
 ) {
     val dims = dimensions()
     val date = day.date
@@ -519,6 +530,21 @@ private fun DayCell(
             // second lays yesterday's parent over it at the same custody alpha. The weekend base
             // still shows through both halves, so this file's invariant survives.
             .clip(RoundedCornerShape(dims.cornerRadius / 2))
+            // A day picked for a multi-day swap gets an outline, not a fill. The cell already
+            // stacks a weekend base, a custody overlay, a handover diagonal, a proposal preview
+            // and a today circle; a sixth fill would fight all of them, and the one thing the
+            // custody wash must never lose is which parent the day belongs to.
+            .then(
+                if (isInSwapSelection) {
+                    Modifier.border(
+                        width = SWAP_SELECTION_BORDER,
+                        color = MaterialTheme.colorScheme.primary,
+                        shape = RoundedCornerShape(dims.cornerRadius / 2)
+                    )
+                } else {
+                    Modifier
+                }
+            )
             .drawBehind {
                 handoverColor?.let { color ->
                     val triangle = Path().apply {
@@ -539,8 +565,17 @@ private fun DayCell(
             // excluded for the same reason it takes no overlay: it is shown for context, not to
             // be acted on, and its dimmed number already says so.
             .combinedClickable(
-                onClick = { onDayClick(date) },
-                onClickLabel = clickLabel,
+                // While a swap selection is open, a tap extends it — the same gesture that
+                // opened it. Outside selection mode the tap is untouched: it selects the day and
+                // opens Day view, which is the only route to creating an event on a chosen day.
+                onClick = {
+                    if (selectingSwap && isCurrentMonth) {
+                        onDayLongClick?.invoke(date)
+                    } else {
+                        onDayClick(date)
+                    }
+                },
+                onClickLabel = if (selectingSwap) swapClickLabel else clickLabel,
                 onLongClick = onDayLongClick
                     ?.takeIf { isCurrentMonth }
                     ?.let { offer -> { offer(date) } },

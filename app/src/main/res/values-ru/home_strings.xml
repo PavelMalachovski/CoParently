@@ -55,4 +55,10 @@
     <string name="home_dialog_requests_message">Второй родитель ждёт вашего ответа на запросы.</string>
     <string name="home_dialog_later">Позже</string>
     <string name="home_dialog_review">Посмотреть</string>
+    <plurals name="home_dialog_swap_message_days">
+        <item quantity="one">%2$s предлагает изменить, у кого ребёнок, на %1$d день, с %3$s по %4$s.</item>
+        <item quantity="few">%2$s предлагает изменить, у кого ребёнок, на %1$d дня, с %3$s по %4$s.</item>
+        <item quantity="many">%2$s предлагает изменить, у кого ребёнок, на %1$d дней, с %3$s по %4$s.</item>
+        <item quantity="other">%2$s предлагает изменить, у кого ребёнок, на %1$d дней, с %3$s по %4$s.</item>
+    </plurals>
 </resources>

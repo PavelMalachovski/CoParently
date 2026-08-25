@@ -7,15 +7,16 @@ import com.coparently.app.data.local.entity.CustodyScheduleEntity
 import com.coparently.app.data.local.preferences.EncryptedPreferences
 import com.coparently.app.data.local.preferences.PreferenceKeys
 import com.coparently.app.data.repository.CustodyModelRepository
+import com.coparently.app.data.repository.PartialSwapRun
 import com.coparently.app.domain.custody.CustodyChangeAnnouncement
 import com.coparently.app.domain.custody.CustodyProposal
-import com.coparently.app.domain.friends.CalendarFriendGrant
-import com.coparently.app.domain.repository.FriendRepository
 import com.coparently.app.domain.custody.CustodyResolver
 import com.coparently.app.domain.custody.DayOverride
 import com.coparently.app.domain.custody.DayOverrideTransition
 import com.coparently.app.domain.custody.SharedCustody
+import com.coparently.app.domain.friends.CalendarFriendGrant
 import com.coparently.app.domain.model.CustodyModel
+import com.coparently.app.domain.repository.FriendRepository
 import com.coparently.app.presentation.common.Parents
 import com.coparently.app.presentation.common.ParentsSource
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -30,6 +31,7 @@ import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.YearMonth
+import java.util.UUID
 import javax.inject.Inject
 
 /** Keeps the shared flows warm across brief unsubscriptions (config changes). */
@@ -43,12 +45,25 @@ private const val HANDOVER_STOP_TIMEOUT_MS = 5_000L
  * localization follow-up list rather than being "fixed" with an injected `Context`. The screen
  * resolves it to a string in composable scope.
  */
-enum class SwapError {
+sealed interface SwapError {
     /** No co-parent, or this device does not know who it is yet. Nobody could accept. */
-    NOT_READY,
+    data object NotReady : SwapError
 
     /** The write was refused — by the transition's own rules, or by `firestore.rules`. */
-    REFUSED
+    data object Refused : SwapError
+
+    /**
+     * Some of the run reached the document and the rest did not.
+     *
+     * Its own case rather than [Refused], because the two call for opposite actions: the days
+     * that landed are already pending on the co-parent's phone and have already been announced,
+     * so a parent told "refused" would offer the whole run again and the co-parent would be asked
+     * twice about days they already hold.
+     *
+     * @property written Days that reached the document.
+     * @property total Days the run set out to write.
+     */
+    data class Partial(val written: Int, val total: Int) : SwapError
 }
 
 /**
@@ -269,7 +284,7 @@ class CalendarViewModel @Inject constructor(
         viewModelScope.launch {
             val myUid = parents.value.me?.uid
             if (myUid == null) {
-                _swapError.value = SwapError.NOT_READY
+                _swapError.value = SwapError.NotReady
                 return@launch
             }
             val iso = date.toString()
@@ -282,7 +297,62 @@ class CalendarViewModel @Inject constructor(
                     atIso = LocalDateTime.now().toString(),
                     note = note
                 )
-            }.onFailure { _swapError.value = SwapError.REFUSED }
+            }.onFailure { _swapError.value = SwapError.Refused }
+        }
+    }
+
+    /**
+     * Offers a whole run of days as one agreement.
+     *
+     * The reporter's ask: pick consecutive days by long-pressing and dragging out a range, and
+     * have the co-parent receive **one** notification naming the total, not one per day. Every
+     * day still becomes its own override entry — the map's one-override-per-date rule is what
+     * makes a swap unambiguous — but they share a group id, and the repository announces once.
+     *
+     * Each day flips to its own complement, exactly as the single-day sheet does, so a range that
+     * spans a handover exchanges in both directions rather than handing the whole run to one
+     * parent. A day whose custody the app cannot resolve is dropped rather than guessed at.
+     *
+     * @param dates The selected days, in any order; duplicates collapse.
+     * @param toParentFor Resolves the slot a given day would move to, or null when unknown.
+     * @param note Optional free text, applied to every day of the group.
+     */
+    fun offerDaySwapForDates(
+        dates: Collection<LocalDate>,
+        toParentFor: (LocalDate) -> String?,
+        note: String? = null
+    ) {
+        viewModelScope.launch {
+            val myUid = parents.value.me?.uid
+            if (myUid == null) {
+                _swapError.value = SwapError.NotReady
+                return@launch
+            }
+            val targets = dates.distinct().sorted()
+                .mapNotNull { date -> toParentFor(date)?.let { date.toString() to it } }
+                .toMap()
+            if (targets.isEmpty()) {
+                _swapError.value = SwapError.Refused
+                return@launch
+            }
+            val groupId = UUID.randomUUID().toString()
+            val atIso = LocalDateTime.now().toString()
+            custodyModelRepository.applyDayOverridesForDates(targets.keys.toList()) { current, date ->
+                DayOverrideTransition.offerAll(
+                    current = current,
+                    toParentByDate = mapOf(date to targets.getValue(date)),
+                    byUid = myUid,
+                    atIso = atIso,
+                    groupId = groupId,
+                    note = note
+                )
+            }.onFailure { cause ->
+                _swapError.value = if (cause is PartialSwapRun) {
+                    SwapError.Partial(cause.written, cause.total)
+                } else {
+                    SwapError.Refused
+                }
+            }
         }
     }
 

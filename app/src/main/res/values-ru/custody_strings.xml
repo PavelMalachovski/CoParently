@@ -64,4 +64,18 @@
     <string name="custody_preview_every_other_weekend">Все остальные дни: %1$s. Каждые вторые сб–вс: %2$s.</string>
     <string name="custody_who_is_resident">С кем живёт ребёнок?</string>
     <string name="custody_is_resident">Живёт с: %1$s</string>
+    <string name="custody_midweek_title">Контакт в середине недели</string>
+    <string name="custody_midweek_enable">Добавить день в середине недели</string>
+    <string name="custody_midweek_overnight_warning">Этот график распределяет целые дни, поэтому день в середине недели включает и ночь. Если в вашем решении указан только вечер, соберите двухнедельный цикл в разделе «Свой график».</string>
+    <string name="custody_midweek_every_week">Каждую неделю</string>
+    <string name="custody_midweek_off_week_only">Только в неделю без выходных</string>
+    <string name="custody_preview_every_other_weekend_midweek">Каждый день: %1$s. Каждые вторые сб–вс и %3$s: %2$s.</string>
+    <string name="custody_preview_every_other_weekend_midweek_off_week">Каждый день: %1$s. Каждые вторые сб–вс, а также %3$s на неделе между ними: %2$s.</string>
+    <plurals name="custody_diff_days_move">
+        <item quantity="one">В ближайшие недели изменится %1$d день.</item>
+        <item quantity="few">В ближайшие недели изменятся %1$d дня.</item>
+        <item quantity="many">В ближайшие недели изменится %1$d дней.</item>
+        <item quantity="other">В ближайшие недели изменится %1$d дней.</item>
+    </plurals>
+    <string name="custody_diff_none">В календаре ничего не изменится.</string>
 </resources>

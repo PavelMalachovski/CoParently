@@ -1,15 +1,17 @@
 package com.coparently.app.presentation.onboarding
 
+import com.coparently.app.data.repository.FamilySettingsRepository
+import com.coparently.app.domain.expenses.SplitRatio
 import com.coparently.app.domain.model.ChildInfo
 import com.coparently.app.domain.model.EmergencyContact
 import com.coparently.app.domain.model.User
 import com.coparently.app.domain.repository.ChildInfoRepository
+import com.coparently.app.domain.repository.PetRepository
 import com.coparently.app.domain.repository.UserRepository
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
-import io.mockk.slot
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.flowOf
@@ -41,6 +43,8 @@ class OnboardingViewModelTest {
     private val dispatcher = StandardTestDispatcher()
     private lateinit var userRepository: UserRepository
     private lateinit var childInfoRepository: ChildInfoRepository
+    private lateinit var petRepository: PetRepository
+    private lateinit var familySettingsRepository: FamilySettingsRepository
     private lateinit var viewModel: OnboardingViewModel
 
     private val storedUser = User(
@@ -62,7 +66,18 @@ class OnboardingViewModelTest {
         childInfoRepository = mockk(relaxed = true) {
             every { getAllChildInfo() } returns flowOf(emptyList())
         }
-        viewModel = OnboardingViewModel(userRepository, childInfoRepository)
+        petRepository = mockk(relaxed = true) {
+            every { getAllPets() } returns flowOf(emptyList())
+        }
+        familySettingsRepository = mockk(relaxed = true) {
+            every { agreedRatioOrDefault() } returns SplitRatio.EVEN
+        }
+        viewModel = OnboardingViewModel(
+            userRepository,
+            childInfoRepository,
+            petRepository,
+            familySettingsRepository
+        )
     }
 
     @After
@@ -84,6 +99,8 @@ class OnboardingViewModelTest {
 
     @Test
     fun `a blank name is the only thing that blocks progress`() = runTest(dispatcher) {
+        // Intro, then the family question, then the profile.
+        viewModel.next()
         viewModel.next()
         advanceUntilIdle()
         assertEquals(OnboardingStep.Profile, viewModel.uiState.value.step)
@@ -99,6 +116,7 @@ class OnboardingViewModelTest {
 
     @Test
     fun `nothing medical is ever required`() = runTest(dispatcher) {
+        viewModel.next()
         viewModel.next()
         viewModel.updateName("Olya")
         advanceUntilIdle()
@@ -116,6 +134,7 @@ class OnboardingViewModelTest {
         listOf(
             OnboardingStep.Child,
             OnboardingStep.Relatives,
+            OnboardingStep.Split,
             OnboardingStep.Custody,
             OnboardingStep.CoParent
         ).forEach { expected ->
@@ -164,15 +183,21 @@ class OnboardingViewModelTest {
             // is about.
             coEvery { userRepository.getCurrentUser() } returns storedUser.copy(partnerId = null)
 
+            // Intro, then Family, then Profile: the name is entered on the step that asks for
+            // it, and the two Nexts before it are the two steps that now precede it.
+            viewModel.next()
             viewModel.next()
             viewModel.updateName("Olya")
             viewModel.next()
             advanceUntilIdle()
 
-            val saved = slot<User>()
+            // A list, not a `slot`: the Family step writes first and MockK refuses a slot
+            // capture across more than one matched call rather than silently keeping the last.
+            val saved = mutableListOf<User>()
             coVerify { userRepository.updateUser(capture(saved)) }
-            assertEquals("Olya", saved.captured.name)
-            assertNull(saved.captured.partnerId, "a held snapshot would have put the pairing back")
+            val profileWrite = saved.last()
+            assertEquals("Olya", profileWrite.name)
+            assertNull(profileWrite.partnerId, "a held snapshot would have put the pairing back")
         }
 
     @Test
@@ -190,7 +215,12 @@ class OnboardingViewModelTest {
                 )
             )
         )
-        viewModel = OnboardingViewModel(userRepository, childInfoRepository)
+        viewModel = OnboardingViewModel(
+            userRepository,
+            childInfoRepository,
+            petRepository,
+            familySettingsRepository
+        )
         advanceUntilIdle()
 
         walkTo(OnboardingStep.Child)
@@ -267,6 +297,7 @@ class OnboardingViewModelTest {
             coEvery { userRepository.updateUser(any()) } answers { stored = firstArg() }
 
             viewModel.next()
+            viewModel.next()
             viewModel.updateName("Olya")
             viewModel.next()
             viewModel.finish()
@@ -294,7 +325,12 @@ class OnboardingViewModelTest {
                 )
             )
         )
-        viewModel = OnboardingViewModel(userRepository, childInfoRepository)
+        viewModel = OnboardingViewModel(
+            userRepository,
+            childInfoRepository,
+            petRepository,
+            familySettingsRepository
+        )
         advanceUntilIdle()
 
         val state = viewModel.uiState.value

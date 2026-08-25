@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Спільний повноекранний перегляд зображень (чеки, фото подій, медичні фото та фото улюбленців). -->
+<resources>
+    <string name="image_viewer_close">Закрити</string>
+    <string name="image_viewer_open">Відкрити на весь екран</string>
+</resources>

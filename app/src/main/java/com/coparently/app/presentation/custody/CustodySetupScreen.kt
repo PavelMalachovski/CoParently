@@ -9,6 +9,7 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -40,6 +41,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -80,11 +82,14 @@ import com.coparently.app.presentation.common.rememberParentNames
 import com.coparently.app.presentation.theme.CoPlanlyColors
 import com.coparently.app.presentation.theme.ParentColors
 import com.coparently.app.presentation.theme.dimensions
+import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
+import java.time.format.TextStyle
+import java.util.Locale
 
 /**
  * Screen for setting up custody model/pattern.
@@ -287,6 +292,20 @@ fun CustodySetupScreen(
                 }
 
                 Spacer(modifier = Modifier.height(dims.paddingMedium))
+            }
+
+            // Midweek contact — only `výhradní péče se stykem` has one.
+            AnimatedVisibility(
+                visible = uiState.selectedModelType == CustodyModelType.EVERY_OTHER_WEEKEND,
+                enter = fadeIn() + slideInVertically(),
+                exit = fadeOut() + slideOutVertically()
+            ) {
+                MidweekContactSection(
+                    uiState = uiState,
+                    onEnabledChange = viewModel::setMidweekEnabled,
+                    onDayChange = viewModel::setMidweekDay,
+                    onEveryWeekChange = viewModel::setMidweekEveryWeek
+                )
             }
 
             // Custom pattern editor
@@ -639,6 +658,123 @@ private fun ModelTypeCard(
  * `displayName` is left on the enum for logs and debugging, where an English constant is what
  * you want; it must not reach the UI.
  */
+/**
+ * The midweek-contact controls of `výhradní péče se stykem`.
+ *
+ * Three decisions, in the order a parent makes them: is there one, which weekday, and is it
+ * every week or only the week without the contact weekend.
+ *
+ * The overnight warning is not decoration. This model assigns a date to exactly one parent, so
+ * a midweek "afternoon" — what most Czech orders actually say — becomes a whole day here,
+ * handover to handover. Saying it plainly is what keeps the schedule from quietly claiming an
+ * overnight the court did not give.
+ *
+ * @param uiState The current form state
+ * @param onEnabledChange Turns the midweek day on or off
+ * @param onDayChange Picks the weekday
+ * @param onEveryWeekChange Every week, or only the week without the contact weekend
+ */
+@Composable
+private fun MidweekContactSection(
+    uiState: CustodySetupUiState,
+    onEnabledChange: (Boolean) -> Unit,
+    onDayChange: (DayOfWeek) -> Unit,
+    onEveryWeekChange: (Boolean) -> Unit
+) {
+    val dims = dimensions()
+    Column {
+        Text(
+            text = stringResource(R.string.custody_midweek_title),
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(vertical = dims.paddingSmall)
+        )
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = dims.paddingSmall),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                text = stringResource(R.string.custody_midweek_enable),
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.weight(1f)
+            )
+            Switch(
+                checked = uiState.midweekEnabled,
+                onCheckedChange = onEnabledChange
+            )
+        }
+
+        Text(
+            text = stringResource(R.string.custody_midweek_overnight_warning),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
+        if (uiState.midweekEnabled) {
+            Spacer(modifier = Modifier.height(dims.paddingSmall))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(dims.paddingSmall)
+            ) {
+                WEEKDAYS.forEach { day ->
+                    FilterChip(
+                        selected = uiState.midweekDay == day,
+                        onClick = { onDayChange(day) },
+                        label = {
+                            Text(
+                                // The device (or app) language decides the name, never a
+                                // hardcoded array — the Localization rule in CLAUDE.md.
+                                day.getDisplayName(TextStyle.SHORT, Locale.getDefault())
+                            )
+                        }
+                    )
+                }
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = dims.paddingSmall),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = stringResource(
+                        if (uiState.midweekEveryWeek) {
+                            R.string.custody_midweek_every_week
+                        } else {
+                            R.string.custody_midweek_off_week_only
+                        }
+                    ),
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.weight(1f)
+                )
+                Switch(
+                    checked = uiState.midweekEveryWeek,
+                    onCheckedChange = onEveryWeekChange
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(dims.paddingMedium))
+    }
+}
+
+/** Monday to Friday, the only days a midweek contact may fall on. */
+private val WEEKDAYS = listOf(
+    DayOfWeek.MONDAY,
+    DayOfWeek.TUESDAY,
+    DayOfWeek.WEDNESDAY,
+    DayOfWeek.THURSDAY,
+    DayOfWeek.FRIDAY
+)
+
 @Composable
 private fun modelTypeLabel(modelType: CustodyModelType): String = stringResource(
     when (modelType) {
@@ -705,7 +841,8 @@ private fun createTempModel(state: CustodySetupUiState): com.coparently.app.doma
             com.coparently.app.domain.model.CustodyModel.everyOtherWeekend(
                 id = "preview",
                 startDate = state.startDate,
-                momIsResident = state.momFirst
+                momIsResident = state.momFirst,
+                midweek = state.midweek
             )
         CustodyModelType.TWO_TWO_THREE ->
             com.coparently.app.domain.model.CustodyModel.twoTwoThree(
@@ -748,8 +885,23 @@ private fun custodyPreviewText(uiState: CustodySetupUiState, parentNames: Parent
     return when (uiState.selectedModelType) {
         CustodyModelType.WEEK_ON_WEEK_OFF ->
             stringResource(R.string.custody_preview_week_on_week_off, first)
-        CustodyModelType.EVERY_OTHER_WEEKEND ->
-            stringResource(R.string.custody_preview_every_other_weekend, first, second)
+        CustodyModelType.EVERY_OTHER_WEEKEND -> {
+            val midweek = uiState.midweek
+            if (midweek == null) {
+                stringResource(R.string.custody_preview_every_other_weekend, first, second)
+            } else {
+                stringResource(
+                    if (midweek.everyWeek) {
+                        R.string.custody_preview_every_other_weekend_midweek
+                    } else {
+                        R.string.custody_preview_every_other_weekend_midweek_off_week
+                    },
+                    first,
+                    second,
+                    midweek.dayOfWeek.getDisplayName(TextStyle.FULL, Locale.getDefault())
+                )
+            }
+        }
         CustodyModelType.TWO_TWO_THREE ->
             stringResource(R.string.custody_preview_two_two_three, first, second)
         CustodyModelType.THREE_FOUR_FOUR_THREE ->

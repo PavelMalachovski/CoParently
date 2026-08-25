@@ -55,4 +55,10 @@
     <string name="home_dialog_requests_message">Другий з батьків чекає на вашу відповідь на запити.</string>
     <string name="home_dialog_later">Пізніше</string>
     <string name="home_dialog_review">Переглянути</string>
+    <plurals name="home_dialog_swap_message_days">
+        <item quantity="one">%2$s пропонує змінити, у кого дитина, на %1$d день, з %3$s по %4$s.</item>
+        <item quantity="few">%2$s пропонує змінити, у кого дитина, на %1$d дні, з %3$s по %4$s.</item>
+        <item quantity="many">%2$s пропонує змінити, у кого дитина, на %1$d днів, з %3$s по %4$s.</item>
+        <item quantity="other">%2$s пропонує змінити, у кого дитина, на %1$d днів, з %3$s по %4$s.</item>
+    </plurals>
 </resources>

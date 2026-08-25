@@ -39,9 +39,9 @@ import com.coparently.app.presentation.common.animations.*
 import com.coparently.app.presentation.event.AddEditEventScreen
 import com.coparently.app.presentation.event.EventListScreen
 import com.coparently.app.presentation.onboarding.OnboardingScreen
+import com.coparently.app.presentation.pairing.PairingScreen
 import com.coparently.app.presentation.pets.AddEditPetScreen
 import com.coparently.app.presentation.pets.PetsScreen
-import com.coparently.app.presentation.pairing.PairingScreen
 import com.coparently.app.presentation.settings.SettingsScreen
 import com.coparently.app.presentation.sync.AuthStateViewModel
 import com.coparently.app.presentation.sync.SyncViewModel
@@ -445,8 +445,38 @@ fun NavGraph(
                     onNavigateBack = {
                         navController.popBackStack()
                     },
-                    onEditClick = { childInfoId ->
-                        navController.navigate(Screen.EditChildInfo.createRoute(childInfoId))
+                    onOpenChild = { childInfoId ->
+                        navController.navigate(Screen.ChildDetail.createRoute(childInfoId))
+                    },
+                    onAddChild = {
+                        navController.navigate(Screen.EditChildInfo.createRoute("new"))
+                    }
+                )
+            }
+
+            // The child's own record. A third level rather than the two Pets uses: the summary
+            // here carries medical photos, the medical profile and the guest-access group, none
+            // of which belong in a form.
+            composable(
+                route = Screen.ChildDetail.route,
+                arguments = listOf(
+                    navArgument(Screen.ChildDetail.ARG_CHILD_INFO_ID) {
+                        type = NavType.StringType
+                    }
+                ),
+                enterTransition = { slideInFromRight() },
+                exitTransition = { slideOutToLeft() },
+                popEnterTransition = { slideInFromLeft() },
+                popExitTransition = { slideOutToRight() }
+            ) { backStackEntry ->
+                val childInfoId = backStackEntry.arguments
+                    ?.getString(Screen.ChildDetail.ARG_CHILD_INFO_ID)
+                    .orEmpty()
+                com.coparently.app.presentation.childinfo.ChildDetailScreen(
+                    childInfoId = childInfoId,
+                    onNavigateBack = { navController.popBackStack() },
+                    onEditClick = { id ->
+                        navController.navigate(Screen.EditChildInfo.createRoute(id))
                     }
                 )
             }
@@ -1164,6 +1194,15 @@ sealed class Screen(val route: String) {
 
         fun createRoute(childInfoId: String): String {
             return "edit_child_info/$childInfoId"
+        }
+    }
+
+    /** One child's read-only record, between the children list and the editor. */
+    data object ChildDetail : Screen("child_detail/{childInfoId}") {
+        const val ARG_CHILD_INFO_ID = "childInfoId"
+
+        fun createRoute(childInfoId: String): String {
+            return "child_detail/$childInfoId"
         }
     }
 

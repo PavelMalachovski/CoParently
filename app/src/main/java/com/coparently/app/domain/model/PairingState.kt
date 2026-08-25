@@ -21,7 +21,13 @@ data class PartnerSummary(
     val email: String,
     val pairedSinceMillis: Long?,
     val photoUrl: String? = null,
-    val role: String? = null
+    val role: String? = null,
+    /**
+     * What the co-parent's device says the family co-parents, or empty when their build has
+     * never written it. Unioned with this parent's answer so one side saying "children" is
+     * enough for the child records to appear on both.
+     */
+    val caresFor: Set<FamilyKind> = emptySet()
 )
 
 /**

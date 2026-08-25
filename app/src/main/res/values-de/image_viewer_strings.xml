@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Der gemeinsame Vollbild-Bildbetrachter (Belege, Ereignisfotos, medizinische und Haustierfotos). -->
+<resources>
+    <string name="image_viewer_close">Schließen</string>
+    <string name="image_viewer_open">Im Vollbild öffnen</string>
+</resources>

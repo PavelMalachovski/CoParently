@@ -39,4 +39,14 @@ interface ChangeRequestDao {
 
     @Query("DELETE FROM change_requests WHERE id = :id")
     suspend fun deleteChangeRequest(id: String)
+
+    /**
+     * Requests written locally whose Firestore write never landed.
+     *
+     * The outbox `syncedToFirestore` was always written for and nothing ever read: a request
+     * created offline, or one whose write was refused, stayed on the sender's phone with no
+     * path off it and no sign on screen that anything was wrong.
+     */
+    @Query("SELECT * FROM change_requests WHERE syncedToFirestore = 0 ORDER BY createdAt ASC")
+    suspend fun getUnsyncedChangeRequests(): List<ChangeRequestEntity>
 }

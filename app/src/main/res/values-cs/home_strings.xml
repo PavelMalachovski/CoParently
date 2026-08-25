@@ -55,4 +55,10 @@
     <string name="home_dialog_requests_message">Druhý rodič čeká na vaši odpověď na žádosti.</string>
     <string name="home_dialog_later">Později</string>
     <string name="home_dialog_review">Zobrazit</string>
+    <plurals name="home_dialog_swap_message_days">
+        <item quantity="one">%2$s navrhuje změnit, kdo má dítě, na %1$d den, %3$s až %4$s.</item>
+        <item quantity="few">%2$s navrhuje změnit, kdo má dítě, na %1$d dny, %3$s až %4$s.</item>
+        <item quantity="many">%2$s navrhuje změnit, kdo má dítě, na %1$d dne, %3$s až %4$s.</item>
+        <item quantity="other">%2$s navrhuje změnit, kdo má dítě, na %1$d dní, %3$s až %4$s.</item>
+    </plurals>
 </resources>

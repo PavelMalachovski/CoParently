@@ -6,6 +6,7 @@ import com.coparently.app.data.remote.firebase.FcmService
 import com.coparently.app.data.remote.firebase.FirebaseAuthService
 import com.coparently.app.data.remote.firebase.FirestoreUserDataSource
 import com.coparently.app.data.session.ProfileIdentity
+import com.coparently.app.domain.model.FamilyKind
 import com.coparently.app.domain.model.MedicalProfile
 import com.coparently.app.domain.model.User
 import com.coparently.app.domain.repository.UserRepository
@@ -365,7 +366,13 @@ class UserRepositoryImpl @Inject constructor(
             medicalProfileJson = (remote?.get("medicalProfile") as? Map<*, *>)
                 ?.let { gson.toJson(it) }
                 ?: DEFAULT_MEDICAL_PROFILE_JSON,
-            onboardingCompletedAt = remote?.string("onboardingCompletedAt")
+            onboardingCompletedAt = remote?.string("onboardingCompletedAt"),
+            // No `?: local?.caresForKinds`: this whole constructor is the right-hand side of
+            // `local?.copy(…) ?:`, so it runs only when `local` is null and the fallback could
+            // never fire. The protection it was reaching for is already there — the `copy`
+            // branch does not touch `caresForKinds` at all, so a co-parent's build that never
+            // writes the field cannot clear the answer this device holds.
+            caresForKinds = remote?.string("caresFor")
         )
         if (updated != local) userDao.insertUser(updated)
     }
@@ -419,7 +426,10 @@ class UserRepositoryImpl @Inject constructor(
                     "medicalProfile" to gson.fromJson(
                         gson.toJson(user.medicalProfile), Map::class.java
                     ),
-                    "onboardingCompletedAt" to (user.onboardingCompletedAt ?: "")
+                    "onboardingCompletedAt" to (user.onboardingCompletedAt ?: ""),
+                    // A string of constant names, not a list: the co-parent reads it to decide
+                    // whether to show child records, and the two halves must agree on one shape.
+                    "caresFor" to (FamilyKind.toStored(user.caresFor) ?: "")
                 )
                 firestoreUserDataSource.updateUser(firebaseUser.uid, userData).getOrThrow()
             } catch (e: Exception) {
@@ -501,7 +511,8 @@ class UserRepositoryImpl @Inject constructor(
             medicalProfile = (
                 gson.fromJson(medicalProfileJson, MedicalProfile::class.java) ?: MedicalProfile()
                 ).withSanitizedVaccinationNames(),
-            onboardingCompletedAt = onboardingCompletedAt
+            onboardingCompletedAt = onboardingCompletedAt,
+            caresFor = FamilyKind.fromStored(caresForKinds)
         )
     }
 
@@ -524,7 +535,8 @@ class UserRepositoryImpl @Inject constructor(
             phone = phone,
             allergiesJson = gson.toJson(allergies),
             medicalProfileJson = gson.toJson(medicalProfile),
-            onboardingCompletedAt = onboardingCompletedAt
+            onboardingCompletedAt = onboardingCompletedAt,
+            caresForKinds = FamilyKind.toStored(caresFor)
         )
     }
 
@@ -551,7 +563,8 @@ class UserRepositoryImpl @Inject constructor(
                     gson.fromJson(gson.toJson(it), MedicalProfile::class.java)
                 } ?: MedicalProfile()
                 ).withSanitizedVaccinationNames(),
-            onboardingCompletedAt = (this["onboardingCompletedAt"] as? String)?.takeIf { it.isNotBlank() }
+            onboardingCompletedAt = (this["onboardingCompletedAt"] as? String)?.takeIf { it.isNotBlank() },
+            caresFor = FamilyKind.fromStored(this["caresFor"] as? String)
         )
     }
 

@@ -95,26 +95,34 @@ class FirestoreMessageDataSource @Inject constructor(
     }
 
     /**
-     * Writes a message and advances its conversation's ordering timestamp.
+     * Writes one message document, and nothing else.
      *
-     * Only `lastMessageAt` is written back onto the conversation. The previous version
-     * copied the whole message map into a `lastMessage` field, which doubled every write,
-     * duplicated content the `messages` collection already holds, and gave the security
-     * rules a second place to police the same data. The domain object still exposes
-     * `lastMessage`; it is derived locally from the newest message in the thread.
+     * Nothing about the conversation is touched here — [bumpLastMessageAt] does that, and the
+     * split is deliberate; see its KDoc. Nor is the message copied into a `lastMessage` field
+     * on the conversation, as an older version did: that doubled every write, duplicated what
+     * the `messages` collection already holds, and gave the security rules a second place to
+     * police the same data. The domain object still exposes `lastMessage`; it is derived
+     * locally from the newest message in the thread.
      *
      * @param messageId Document id of the message.
      * @param messageData The message document.
-     * @param lastMessageAtMillis The message's timestamp as epoch millis, for ordering.
      */
-    suspend fun sendMessage(
-        messageId: String,
-        messageData: Map<String, Any>,
-        lastMessageAtMillis: Long
-    ) {
+    suspend fun sendMessage(messageId: String, messageData: Map<String, Any>) {
         messagesCollection.document(messageId).set(messageData).await()
+    }
 
-        val conversationId = messageData["conversationId"] as String
+    /**
+     * Advances a conversation's ordering timestamp.
+     *
+     * Separate from [sendMessage] on purpose. The two used to be one awaited pair, so a
+     * successful message write followed by a failed `lastMessageAt` bump threw, and the caller
+     * marked a message the co-parent had already received as failed to send. The message is the
+     * payload; this is metadata, and it must not be able to condemn the payload.
+     *
+     * @param conversationId The thread to bump.
+     * @param lastMessageAtMillis The newest message's timestamp as epoch millis.
+     */
+    suspend fun bumpLastMessageAt(conversationId: String, lastMessageAtMillis: Long) {
         conversationsCollection.document(conversationId)
             .update("lastMessageAt", lastMessageAtMillis)
             .await()

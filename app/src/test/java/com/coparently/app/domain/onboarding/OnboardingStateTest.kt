@@ -71,4 +71,17 @@ class OnboardingStateTest {
         // strand the app on a screen with no account behind it.
         assertFalse(OnboardingState.isNeeded(null, hasChildInfo = false))
     }
+
+    @Test
+    fun `a pet counts as evidence, so a pets-only family is not asked again`() {
+        // Counting children alone handed the questionnaire to a pets-only family on every
+        // launch — and permanently, if the marker write ever failed, because such an account
+        // can never satisfy "named and has a child".
+        assertFalse(OnboardingState.isNeeded(user(), hasChildInfo = false, hasPets = true))
+    }
+
+    @Test
+    fun `neither a child nor a pet still means the wizard runs`() {
+        assertTrue(OnboardingState.isNeeded(user(), hasChildInfo = false, hasPets = false))
+    }
 }

@@ -39,5 +39,13 @@ data class ExpenseEntity(
      * rule admits only the creator, so a co-parent's delete lost the local row and left the
      * document standing, and the next sync restored it.
      */
-    val deletedAtMillis: Long? = null
+    val deletedAtMillis: Long? = null,
+    /**
+     * Slot 1's agreed share of this expense when it was recorded, in basis points.
+     *
+     * Null on every row that predates the agreement, and the balance math reads that as an even
+     * split — which is what those rows were priced at. Snapshotted rather than looked up live so
+     * a renegotiated split cannot re-price a settled month.
+     */
+    val splitBasisPoints: Int? = null
 )

@@ -23,6 +23,8 @@ import java.time.LocalDateTime
  * @property createdByFirebaseUid Who created this expense — the uid edits are gated on. Null on
  *   rows recorded before the field existed, which read as "editable by both", exactly what they
  *   were.
+ * @property splitBasisPoints Slot 1's agreed share of this expense when it was recorded, in
+ *   basis points; null for a row that predates the agreement.
  */
 data class Expense(
     val id: String,
@@ -38,7 +40,17 @@ data class Expense(
     val notes: String? = null,
     val createdAt: LocalDateTime = LocalDateTime.now(),
     val syncedToFirestore: Boolean = false,
-    val createdByFirebaseUid: String? = null
+    val createdByFirebaseUid: String? = null,
+    /**
+     * Slot 1's agreed share of this expense, in basis points, **as it stood when the expense was
+     * recorded**.
+     *
+     * Snapshotted rather than read live from the family's current agreement, and that is the
+     * whole design decision: a renegotiated split must not silently re-price a month the two
+     * parents had already settled and argued about. Null means an expense recorded before the
+     * agreement existed, which the balance math reads as an even split — what it was.
+     */
+    val splitBasisPoints: Int? = null
 )
 
 /**

@@ -48,4 +48,18 @@
     <string name="settings_account_delete_cancel">Залишити акаунт</string>
     <string name="settings_account_delete_progress">Видаляємо ваш акаунт…</string>
     <string name="settings_account_delete_failed">Акаунт не видалено. Спробуйте ще раз.</string>
+    <string name="settings_family_kind_title">Кого ви виховуєте разом</string>
+    <string name="settings_family_kind_both">%1$s і %2$s</string>
+    <string name="settings_family_kind_save">Зберегти</string>
+    <string name="settings_family_kind_cancel">Скасувати</string>
+    <string name="settings_family_kind_kept_by_co_parent">Збережено. Розділ, який ви прибрали, залишається видимим, бо його зберігає другий з батьків.</string>
+    <string name="settings_family_kind_records_kept">Прибрано. Записи залишаються на пристрої — увімкніть розділ тут знову, щоб їх побачити.</string>
+    <string name="settings_family_kind_not_saved">Не вдалося зберегти — профіль ще не завантажився. Спробуйте за мить.</string>
+    <string name="settings_split_ratio_title">Поділ витрат</string>
+    <string name="settings_split_ratio_value">%1$d / %2$d</string>
+    <string name="settings_split_ratio_value_named">%1$s %2$d / %3$s %4$d</string>
+    <string name="settings_split_ratio_hint">Діє для витрат, внесених із цього моменту. Уже внесені збережуть свій поділ.</string>
+    <string name="settings_split_ratio_applied">Поділ збережено</string>
+    <string name="settings_split_ratio_proposed">Надіслано другому з батьків на підтвердження</string>
+    <string name="settings_split_ratio_refused">Не вдалося запропонувати цей поділ</string>
 </resources>
