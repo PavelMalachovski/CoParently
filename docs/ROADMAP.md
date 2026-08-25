@@ -59,7 +59,6 @@ invocation is yours.
 
 | Id | What | Pri | Size |
 | --- | --- | --- | --- |
-| **M-6** | Calendar friends are still granted per *person*, not per family — a friend of family 1 can read family 2's calendar | P1 | M |
 | **M-5** | Multi-family cleanup: delete `partnerId`, `User.role`, `Event.sharedWith`, `isPartnerOf` — **after** the ops steps in REL-3 | P2 | M |
 | **M-8** | M-4's leftovers: badges that count across families, `familyId` on pushes, a switcher chip in the top bar | P2 | M |
 | **SEC-1 §2** | OAuth token exchange moves to a Cloud Function — the client secret stops shipping in the APK | P0 | M |
@@ -965,27 +964,35 @@ Delete `partnerId`, `User.role`, `Event.sharedWith`, `isPartnerOf`. Each is writ
 co-parent on an older build keeps working; each is a second source of truth until it goes. Do not
 start this while any device might still be on a pre-#76 build.
 
-### M-6 · P1 · M · A calendar friend is granted per person, not per family
-
-**Where:** ☁️ cloud — rules, the callable, and a backfill. 💻 the deploy.
+### M-6 · **DONE** · A calendar friend was granted per person, not per family
 
 The defect PR #76 existed to close, in the one collection it did not reach.
-`calendar_friends/{friendUid}` stores `familyParents: [uidA, uidB]`, and `isCalendarFriendOf(owner)`
-asks only whether `owner` is in that array. The `events` read rule reaches it with the event's
-**creator**. So a grandmother admitted by Alice-and-Bob can read every event **Alice** created —
+`calendar_friends/{friendUid}` stored `familyParents: [uidA, uidB]`, and `isCalendarFriendOf(owner)`
+asked only whether `owner` was in that array — while the `events` read rule reached it with the
+event's **creator**. So a grandmother admitted by Alice-and-Bob read every event **Alice** created,
 including the ones belonging to Alice's family with Carol, whom she has never met. Same shape as the
-expenses leak: the rule asks "am I a friend of this author", never "is this record mine to see".
+expenses leak: the rule asked "am I a friend of this author", never "is this record mine to see".
 
-The fix has a convenient property. Stamp `familyId` on the grant (in
-`acceptCalendarFriendInvitation`, which runs as admin — no client may write a grant at all) and
-require it to match the event's own `familyId` in that last disjunct. Because the friend branch only
-ever *widens* access, adding the condition can only narrow it: it cannot deny the app's own writes
-the way pinning `familyId` on a create rule would (see M-2's reasoning in the design doc). An
-unstamped event simply stops being visible to a friend until `backfillRecordFamilyIds` has run —
-degraded, never wrong.
+The grant now carries the `familyId` it was issued for, and the rule requires the record's own
+`familyId` to match **and** its creator to be one of that family's two parents. Four things worth
+keeping:
 
-Cover it in `firestore-tests/` the way `family-isolation.test.js` covers the rest: ask from the
-friend's side, for an event in the family that did not admit them.
+- **The second check is not redundant.** An event's `familyId` is client-written and the create
+  rule does not pin it (M-2), so without `ownerUid in familyParents` any account could stamp a
+  foreign family's id onto its own event and have it appear in that family's friend view.
+- **Narrowing a widening disjunct is safe to deploy early.** The friend branch only ever *adds*
+  access, so the condition can deny a friend but can never deny the app its own writes — unlike
+  pinning `familyId` on a create rule. An unstamped record is simply invisible to a friend until
+  `backfillRecordFamilyIds` has run, which now stamps the grants too (one pass, no fifth ops step).
+- **The client query shape changed, and the old one is now rejected outright** rather than
+  serving a subset — measured in the emulator, not reasoned. `whereIn("createdByFirebaseUid",
+  [a, b])` cannot satisfy a rule keyed on the record's own family; `whereEqualTo("familyId", …)`
+  plus the creator clause can. Nothing in the app issues either yet — the friend's calendar view
+  is still unbuilt — so this cost nothing today and is pinned by a test for whoever builds it.
+- **The family is chosen when the code is generated, not when it is redeemed.** Those can be days
+  apart, and a parent with two families may be looking at the other one by then. The callable
+  never trusts the id it is sent: it checks it against the inviter's live co-parents and falls
+  back to the family they are showing, which is also what an invitation from an older build gets.
 
 ### M-7 · P3 · S · Which family does an imported calendar belong to
 

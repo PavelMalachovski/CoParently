@@ -230,6 +230,97 @@ describe('acceptCalendarFriendInvitation', () => {
   });
 });
 
+describe('the grant is scoped to one family (M-6)', () => {
+  let myFunctions;
+
+  before(() => {
+    myFunctions = require('../index');
+  });
+
+  const ref = {code: null, invitationId: 'inv1'};
+
+  /** Alice co-parents with Bob *and* with Carol; Bob's family is the one on her screen. */
+  const twoFamilies = {
+    alice: {id: 'alice', name: 'Alice', role: 'mom', partnerId: 'bob',
+      partnerIds: ['bob', 'carol']},
+    bob: {id: 'bob', name: 'Bob', role: 'dad', partnerId: 'alice', partnerIds: ['alice']},
+    carol: {id: 'carol', name: 'Carol', role: 'dad', partnerId: 'alice', partnerIds: ['alice']},
+    nina: {id: 'nina', name: 'Nina'},
+  };
+
+  it('stamps the family id the events read rule keys on', async () => {
+    const db = seeded();
+
+    await myFunctions.acceptCalendarFriendInvitationImpl(db, 'nina', 'nina@example.com', ref);
+
+    assert.strictEqual(db._docs.calendar_friends.nina.familyId, 'alice__bob');
+  });
+
+  it('honours the family the invitation was generated in', async () => {
+    // Alice was looking at her family with Carol when she made the code. Without this the grant
+    // would land in whichever family she happens to be showing when the friend redeems it —
+    // days later, and invisibly.
+    const db = seeded({familyId: 'alice__carol'}, twoFamilies);
+
+    const result = await myFunctions.acceptCalendarFriendInvitationImpl(
+        db, 'nina', 'nina@example.com', ref);
+
+    assert.strictEqual(db._docs.calendar_friends.nina.familyId, 'alice__carol');
+    assert.deepStrictEqual(result.familyParents, ['alice', 'carol']);
+  });
+
+  it('ignores a family the inviter is no longer part of', async () => {
+    // The relationship ended between generating the code and redeeming it. The id is a claim,
+    // not proof: it is checked against the inviter's live co-parents and falls back to the
+    // family they are actually showing.
+    const db = seeded({familyId: 'alice__dave'}, twoFamilies);
+
+    await myFunctions.acceptCalendarFriendInvitationImpl(db, 'nina', 'nina@example.com', ref);
+
+    assert.strictEqual(db._docs.calendar_friends.nina.familyId, 'alice__bob');
+  });
+
+  it('ignores a family the inviter is not even named in', async () => {
+    const db = seeded({familyId: 'bob__carol'}, twoFamilies);
+
+    await myFunctions.acceptCalendarFriendInvitationImpl(db, 'nina', 'nina@example.com', ref);
+
+    assert.strictEqual(db._docs.calendar_friends.nina.familyId, 'alice__bob');
+  });
+
+  it('falls back for an invitation made by a build that predates M-6', async () => {
+    const db = seeded({}, twoFamilies);
+
+    await myFunctions.acceptCalendarFriendInvitationImpl(db, 'nina', 'nina@example.com', ref);
+
+    assert.strictEqual(db._docs.calendar_friends.nina.familyId, 'alice__bob');
+  });
+});
+
+describe('partnerFromFamilyId', () => {
+  let myFunctions;
+
+  before(() => {
+    myFunctions = require('../index');
+  });
+
+  it('names the other member, from either side', () => {
+    assert.strictEqual(myFunctions.partnerFromFamilyId('alice__bob', 'alice'), 'bob');
+    assert.strictEqual(myFunctions.partnerFromFamilyId('alice__bob', 'bob'), 'alice');
+  });
+
+  it('refuses an id that does not name the caller', () => {
+    assert.strictEqual(myFunctions.partnerFromFamilyId('bob__carol', 'alice'), '');
+  });
+
+  it('refuses anything malformed rather than throwing', () => {
+    // It is fed a value straight off an invitation document, which anyone may write.
+    ['', 'alice', 'a__b__c', 'alice__alice', null, undefined, 42, {}].forEach((value) => {
+      assert.strictEqual(myFunctions.partnerFromFamilyId(value, 'alice'), '');
+    });
+  });
+});
+
 describe('acceptPairingInvitation refuses a friend invitation', () => {
   let myFunctions;
 

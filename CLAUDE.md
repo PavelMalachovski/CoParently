@@ -213,8 +213,18 @@ cd firestore-tests && npm test              # firestore.rules against the local 
   **central** grant, `calendar_friends/{friendUid}` — never by being fanned out into every
   event's `sharedWith`, so admitting or revoking one is a single write and no event document is
   rewritten. The `events` read rule consults it in a **last** disjunct (a parent's own read
-  short-circuits before the `get()`), with expiry compared against `request.time`; the friend
-  reads by `whereIn("createdByFirebaseUid", [a, b])`, the shape `expenses`/`budgets` use.
+  short-circuits before the `get()`), with expiry compared against `request.time`.
+  **The grant names one family, not one person** (M-6, Aug 2026): it carries the `familyId` it
+  was issued for, and `isCalendarFriendOf` requires the event's own `familyId` to match *and* its
+  creator to be one of that family's two parents. Keying on the creator alone is what leaked —
+  a grandmother admitted by Alice-and-Bob matched every event **Alice** created, including the
+  ones in Alice's family with Carol. Two consequences for anything built on top: a friend's list
+  query must filter `whereEqualTo("familyId", …)` — the old
+  `whereIn("createdByFirebaseUid", [a, b])` shape is now rejected outright, pinned by a test that
+  says so — and a grant or an event with no `familyId` admits nothing until
+  `backfillRecordFamilyIds` has run. Do **not** soften that with a fallback to `familyParents`
+  alone: it restores exactly the check M-6 removed, which is how the same leak survived once
+  already in `expenses`.
   `acceptCalendarFriendInvitation` is a **third** callable beside pairing and guest and
   `acceptPairingInvitation` refuses its `kind` outright — redeeming a friend code there would
   run `assignSlots` and hand a friend a permanent parent slot. `Event.friendParticipates`

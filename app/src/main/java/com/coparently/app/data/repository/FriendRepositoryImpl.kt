@@ -1,6 +1,7 @@
 package com.coparently.app.data.repository
 
 import android.util.Log
+import com.coparently.app.data.family.SelectedFamilySource
 import com.coparently.app.data.remote.firebase.AcceptCalendarFriendResult
 import com.coparently.app.data.remote.firebase.FirebaseAuthService
 import com.coparently.app.data.remote.firebase.PairingException
@@ -40,7 +41,8 @@ import javax.inject.Singleton
 class FriendRepositoryImpl @Inject constructor(
     private val firestore: FirebaseFirestore,
     private val authService: FirebaseAuthService,
-    private val pairingFunctions: PairingFunctions
+    private val pairingFunctions: PairingFunctions,
+    private val selectedFamilySource: SelectedFamilySource
 ) : FriendRepository {
 
     override suspend fun inviteFriend(grantExpiresAtMillis: Long): Result<GuestInvite> {
@@ -78,7 +80,18 @@ class FriendRepositoryImpl @Inject constructor(
                     "expiresAt" to invite.inviteExpiresAtMillis,
                     "acceptedBy" to null,
                     "kind" to KIND_FRIEND,
-                    "friendExpiresAt" to invite.grantExpiresAtMillis
+                    "friendExpiresAt" to invite.grantExpiresAtMillis,
+                    // **Which family the friend is being admitted to (M-6).** Recorded when the
+                    // code is generated rather than when it is redeemed, because the two can be
+                    // days apart and a parent with two families may well be looking at the other
+                    // one by then — and a friend admitted to the wrong household is precisely
+                    // the failure this item exists to end.
+                    //
+                    // The callable never trusts it: it checks the id against the inviter's live
+                    // co-parents and falls back to the family they are showing. So a blank here
+                    // (no family selected — an unpaired parent, whom the callable refuses
+                    // anyway) costs nothing.
+                    "familyId" to (selectedFamilySource.selected()?.familyId.orEmpty())
                 )
             ).await()
             invite

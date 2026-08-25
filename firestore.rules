@@ -83,22 +83,47 @@ service cloud.firestore {
       return str is string && str.size() >= minLen && str.size() <= maxLen;
     }
 
-    // True when the caller is a *live* calendar friend of the family whose events were created by
-    // [ownerUid] — a trusted third person (item 16) let in to read the calendar, never a parent.
+    // True when the caller is a *live* calendar friend of the family the record at [familyId]
+    // belongs to, and [ownerUid] is one of that family's two parents — a trusted third person
+    // (item 16) let in to read the calendar, never a parent.
     //
     // The grant lives centrally at `calendar_friends/{friendUid}` rather than being fanned out
     // into every event's `sharedWith`, so admitting or removing a friend never rewrites an event
-    // document. This helper is only ever reached on the *third* disjunct of the events read rule,
+    // document. This helper is only ever reached on the *last* disjunct of the events read rule,
     // after the creator and shared-partner checks have already failed — so a parent reading their
-    // own events never triggers the `get()` (Firestore short-circuits `||`). The two `get()`s
+    // own events never triggers the `get()` (Firestore short-circuits `||`). The three `get()`s
     // resolve to one billed read (Firestore caches identical gets within a request).
+    //
+    // **[familyId] is the M-6 fix, and it is the whole point of the helper now.** The grant used
+    // to be checked against the event's *creator* alone: `ownerUid in familyParents`. Once a
+    // person can co-parent with two other adults (M-4), that question has the wrong shape — a
+    // grandmother admitted by Alice-and-Bob names Alice among her two parents, so every event
+    // **Alice** created passed, including the ones belonging to Alice's family with Carol, whom
+    // the grandmother has never met. Exactly the leak M-4 closed in `expenses` and `budgets`,
+    // in the one collection it did not reach. The grant now carries the `familyId` it was issued
+    // for and the record must name the same one.
+    //
+    // Both checks stay, and the second is not redundant: an event's `familyId` is written by the
+    // client and is not pinned by the create rule (see docs/DESIGN-multi-family.md, M-2), so
+    // without `ownerUid in familyParents` any account could stamp a foreign family's id onto
+    // their own event and have it appear in that family's friend view.
+    //
+    // A record with no `familyId` — everything written before M-2, until
+    // `backfillRecordFamilyIds` has run — is simply not visible to a friend. That direction is
+    // safe: this disjunct only ever *widens* access, so narrowing it can deny a friend but can
+    // never deny the app its own writes, which is why it may be deployed before the backfill
+    // finishes rather than after.
     //
     // `exists()` guards the missing-grant case the way `isPartnerOf` does — a bare `get()` on a
     // document that is not there is an evaluation error, not null. Expiry is enforced here against
     // `request.time`, so access ends the instant the grant lapses, with no sweep in the path.
-    function isCalendarFriendOf(ownerUid) {
+    function isCalendarFriendOf(ownerUid, familyId) {
       return isAuthenticated() &&
+             familyId is string &&
+             familyId.size() > 0 &&
              exists(/databases/$(database)/documents/calendar_friends/$(request.auth.uid)) &&
+             get(/databases/$(database)/documents/calendar_friends/$(request.auth.uid))
+               .data.get('familyId', '') == familyId &&
              ownerUid in get(/databases/$(database)/documents/calendar_friends/$(request.auth.uid))
                           .data.get('familyParents', []) &&
              request.time.toMillis() <
@@ -327,8 +352,10 @@ service cloud.firestore {
     // uid so `isCalendarFriendOf` reads it in one `get()`. Written by a parent of the family
     // (`grantedBy` must be one of `familyParents`, and the caller) — a friend can never grant
     // themselves access — and read by the friend (to learn which family they may query) or by
-    // either parent. `familyParents` and `expiresAtMillis` are the two fields the events read
-    // rule depends on.
+    // either parent. `familyId`, `familyParents` and `expiresAtMillis` are the three fields the
+    // events read rule depends on; `familyId` is `FamilyKey.of(familyParents)` and is what scopes
+    // the grant to **one** of the inviter's families (M-6). A grant written before M-6 carries no
+    // `familyId` and admits nothing until `backfillRecordFamilyIds` stamps it.
     match /calendar_friends/{friendUid} {
       allow read: if isAuthenticated() && (
         request.auth.uid == friendUid ||
@@ -379,7 +406,8 @@ service cloud.firestore {
       allow read: if isAuthenticated() && (
         resource.data.createdByFirebaseUid == request.auth.uid ||
         request.auth.uid in resource.data.get('sharedWith', []) ||
-        isCalendarFriendOf(resource.data.createdByFirebaseUid)
+        isCalendarFriendOf(resource.data.createdByFirebaseUid,
+                           resource.data.get('familyId', ''))
       );
 
       // Presence-based validation only — the real document carries the full

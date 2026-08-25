@@ -138,6 +138,17 @@ function fakeDb(seed, options) {
     throw new Error(`fakeDb: unsupported query operator ${op}`);
   }
 
+  /**
+   * A query snapshot for one stored document, keyed the way Firestore keys it.
+   *
+   * @param {string} collection Collection name.
+   * @param {string} id Document id — the map key.
+   * @return {!Object} The snapshot.
+   */
+  function snapshotOf(collection, id) {
+    return {id, data: () => docs[collection][id], ref: docRef(collection, id)};
+  }
+
   return {
     _docs: docs,
     _added: added,
@@ -159,15 +170,14 @@ function fakeDb(seed, options) {
         },
         // An unfiltered scan of the whole collection — what `backfillFamilyDocuments` does
         // over `users`, the way `backfillParentSlots` scans `invitations` with a filter.
+        //
+        // The id comes from the **map key**, not from an `id` field inside the document. Real
+        // documents often have no such field — a `calendar_friends` grant carries none — and
+        // taking it from the data handed the writer a reference to `undefined`, so the update
+        // landed on a document nobody was looking at and the test failed as if the production
+        // code had done nothing.
         async get() {
-          const all = Object.values(docs[name] || {});
-          return {
-            docs: all.map((doc) => ({
-              id: doc.id,
-              data: () => doc,
-              ref: docRef(name, doc.id),
-            })),
-          };
+          return {docs: Object.keys(docs[name] || {}).map((id) => snapshotOf(name, id))};
         },
         where(field, op, value) {
           return {
@@ -175,15 +185,9 @@ function fakeDb(seed, options) {
               if (opts.failSweepFor && opts.failSweepFor === value) {
                 throw new Error('simulated sweep failure');
               }
-              const matched = Object.values(docs[name] || {})
-                  .filter((doc) => matchesClause(doc[field], op, value));
-              return {
-                docs: matched.map((doc) => ({
-                  id: doc.id,
-                  data: () => doc,
-                  ref: docRef(name, doc.id),
-                })),
-              };
+              const matched = Object.keys(docs[name] || {})
+                  .filter((id) => matchesClause(docs[name][id][field], op, value));
+              return {docs: matched.map((id) => snapshotOf(name, id))};
             },
           };
         },
@@ -1033,6 +1037,28 @@ describe('backfillRecordFamilyIdsImpl', () => {
     assert.strictEqual(db._docs.child_info.ch1.familyId, 'alice__bob');
     assert.strictEqual(db._docs.pets.pe1.familyId, 'alice__bob');
     assert.strictEqual(db._docs.change_requests.cr1.familyId, 'alice__bob');
+  });
+
+  it('stamps the calendar-friend grants, which need no pairing lookup at all', async () => {
+    // M-6. The grant already holds `familyParents`, so the family id is those two uids sorted —
+    // no live pairing is consulted, which is what makes a grant issued by a pair who have since
+    // separated stamp with the family it was actually issued for.
+    const db = pairedDb({
+      calendar_friends: {
+        nina: {familyParents: ['alice', 'bob'], expiresAtMillis: 1},
+        olga: {familyParents: ['bob', 'carol'], expiresAtMillis: 1, familyId: 'bob__carol'},
+        broken: {familyParents: ['alice'], expiresAtMillis: 1},
+      },
+    });
+
+    const summary = await backfillRecordFamilyIdsImpl(db);
+
+    assert.strictEqual(db._docs.calendar_friends.nina.familyId, 'alice__bob');
+    assert.deepStrictEqual(
+        summary.calendarFriends, {stamped: 1, skipped: 1, alreadyStamped: 1});
+    // A grant with no pair to name is left as it is: inventing a family for it would *grant*
+    // access, and the direction this whole item moves in is withholding it.
+    assert.strictEqual(db._docs.calendar_friends.broken.familyId, undefined);
   });
 
   it('leaves a document that already names a family alone', async () => {
