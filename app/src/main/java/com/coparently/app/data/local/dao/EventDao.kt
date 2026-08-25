@@ -275,4 +275,19 @@ interface EventDao {
             "WHERE id = :id AND deletedAtMillis IS NULL"
     )
     suspend fun markDeleted(id: String, deletedAtMillis: Long): Int
+
+    /**
+     * Stamps [familyId] on every events row that names no family yet.
+     *
+     * The backfill half of docs/DESIGN-multi-family.md M-2: rows written before the column
+     * existed, and rows written before this parent paired, both read as null. A device knows of
+     * exactly one co-parenting relationship, so an unstamped row can only belong to that one.
+     *
+     * Null rows only. A row that already names a family keeps it — re-deriving the stamp is what
+     * would let a re-pairing silently move a record into a different household.
+     *
+     * @return How many rows were stamped.
+     */
+    @Query("UPDATE events SET familyId = :familyId WHERE familyId IS NULL")
+    suspend fun stampFamilyId(familyId: String): Int
 }

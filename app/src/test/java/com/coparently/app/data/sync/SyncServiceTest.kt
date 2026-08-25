@@ -134,6 +134,9 @@ class SyncServiceTest {
             mockk(relaxed = true),
             mockk(relaxed = true),
             mockk(relaxed = true),
+            // The family-id backfill. Relaxed rather than real: it stamps a column no assertion
+            // here reads, and a real one would need four more DAOs wired up to do nothing.
+            mockk(relaxed = true),
             accountSwitchGuard
         )
     }

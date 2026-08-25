@@ -57,6 +57,7 @@ class SyncService @Inject constructor(
     private val messageRepository: MessageRepository,
     private val changeRequestRepository: ChangeRequestRepository,
     private val familySettingsRepository: FamilySettingsRepository,
+    private val familyIdBackfill: FamilyIdBackfill,
     private val accountSwitchGuard: AccountSwitchGuard
 ) {
     // `LocalDate::class.java` needs the same adapter `ChildInfoRepositoryImpl` and
@@ -91,20 +92,31 @@ class SyncService @Inject constructor(
             _syncStatus.value = SyncStatus.Syncing(10, 100)
             syncUserData(currentUser.uid)
 
-            // Step 2: Sync events
+            // Step 2: Name the family on rows written before there was one to name. After
+            // `syncUserData`, which is what brings a freshly accepted `partnerId` down, and
+            // before every upload below, so a row stamped here goes up carrying its family
+            // rather than waiting for the sync after next.
+            familyIdBackfill.run(
+                userId = currentUser.uid,
+                partnerId = userDao.getUserById(currentUser.uid)?.partnerId?.takeIf {
+                    it.isNotBlank()
+                }
+            )
+
+            // Step 3: Sync events
             _syncStatus.value = SyncStatus.Syncing(40, 100)
             syncEvents(currentUser.uid)
 
-            // Step 3: Sync child info
+            // Step 4: Sync child info
             _syncStatus.value = SyncStatus.Syncing(70, 100)
             syncChildInfo(currentUser.uid)
 
-            // Step 4: Sync pets. The repository handles upload, download and audience repair
+            // Step 5: Sync pets. The repository handles upload, download and audience repair
             // itself (mirroring child info), so there is nothing to duplicate here.
             _syncStatus.value = SyncStatus.Syncing(80, 100)
             petRepository.pullOnce()
 
-            // Step 5: Drain the outboxes that a live listener cannot drain for you. Chat and
+            // Step 6: Drain the outboxes that a live listener cannot drain for you. Chat and
             // change requests are mirrored *down* in realtime, but a write of either that was
             // refused or interrupted had nothing retrying it — a chat message stayed ERROR for
             // good, and a change request created offline never left the sender's phone.
@@ -118,7 +130,7 @@ class SyncService @Inject constructor(
             // only when the pair has no agreement yet, so a tick can never overwrite one.
             familySettingsRepository.publishCachedRatioIfMissing()
 
-            // Step 6: Complete
+            // Step 7: Complete
             _syncStatus.value = SyncStatus.Success(LocalDateTime.now())
             Result.success(Unit)
         } catch (e: Exception) {
