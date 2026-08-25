@@ -17,6 +17,8 @@ import com.coparently.app.domain.repository.PreferencesRepository
 import com.coparently.app.domain.repository.UserRepository
 import com.coparently.app.presentation.common.FamilyKindSource
 import com.coparently.app.presentation.common.Parents
+import com.coparently.app.data.family.FamilyOption
+import com.coparently.app.data.family.SelectedFamilySource
 import com.coparently.app.presentation.common.ParentsSource
 import com.coparently.app.presentation.common.UiError
 import com.coparently.app.presentation.common.UiState
@@ -49,6 +51,7 @@ class SettingsViewModel @Inject constructor(
     signedInAccountSource: SignedInAccountSource,
     private val familyKindSource: FamilyKindSource,
     parentsSource: ParentsSource,
+    private val selectedFamilySource: SelectedFamilySource,
     private val familySettingsRepository: FamilySettingsRepository
 ) : ViewModel() {
 
@@ -154,6 +157,42 @@ class SettingsViewModel @Inject constructor(
      * "that one is taken" refusal would need the two phones to agree on an order they have no
      * way to establish, and would make one parent's setting depend on the other's.
      */
+    /**
+     * The families this parent is in, each with the co-parent named, and which is on screen.
+     *
+     * Refreshed on demand rather than observed: it costs one Firestore read per relationship
+     * (see [SelectedFamilySource.namedFamilies]) and the set changes only on a pairing
+     * transition, so a listener would pay that price on every unrelated row this screen
+     * redraws.
+     */
+    private val _families = MutableStateFlow<List<FamilyOption>>(emptyList())
+    val families: StateFlow<List<FamilyOption>> = _families.asStateFlow()
+
+    private val _selectedFamilyId = MutableStateFlow<String?>(null)
+    val selectedFamilyId: StateFlow<String?> = _selectedFamilyId.asStateFlow()
+
+    /** Reloads the family list. Called when Settings opens and after a switch. */
+    fun refreshFamilies() {
+        viewModelScope.launch {
+            _families.value = selectedFamilySource.namedFamilies()
+            _selectedFamilyId.value = selectedFamilySource.selected()?.familyId
+        }
+    }
+
+    /**
+     * Points this device at another family.
+     *
+     * Everything downstream — the calendar's audience, the chat thread, the custody pair, the
+     * expense query — follows from the one row `SelectedFamilySource` re-points, so there is
+     * nothing else to notify here.
+     */
+    fun selectFamily(familyId: String) {
+        viewModelScope.launch {
+            selectedFamilySource.select(familyId)
+            _selectedFamilyId.value = selectedFamilySource.selected()?.familyId
+        }
+    }
+
     fun setParentColor(choice: ParentColorChoice) {
         viewModelScope.launch {
             val fresh = userRepository.getCurrentUser() ?: return@launch

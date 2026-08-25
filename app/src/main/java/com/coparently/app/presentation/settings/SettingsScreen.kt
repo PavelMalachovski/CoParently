@@ -35,6 +35,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PersonOutline
@@ -92,6 +93,7 @@ import com.coparently.app.presentation.common.SectionGroup
 import com.coparently.app.presentation.common.SectionRow
 import com.coparently.app.presentation.common.SignedInAsRow
 import com.coparently.app.presentation.common.rememberParentNames
+import com.coparently.app.data.family.FamilyOption
 import com.coparently.app.presentation.sync.GoogleCalendarSyncState
 import com.coparently.app.presentation.theme.ParentColorChoice
 import com.coparently.app.presentation.sync.SyncViewModel
@@ -172,6 +174,12 @@ fun SettingsScreen(
     val splitParentNames = rememberParentNames(parents)
     var showFamilyKindPicker by rememberSaveable { mutableStateOf(false) }
     var showColorPicker by rememberSaveable { mutableStateOf(false) }
+    var showFamilySwitcher by rememberSaveable { mutableStateOf(false) }
+    val families by settingsViewModel.families.collectAsState()
+    val selectedFamilyId by settingsViewModel.selectedFamilyId.collectAsState()
+    // On entry, and again after a switch. The set changes only on a pairing transition, so a
+    // listener would pay a Firestore read per relationship on every unrelated redraw.
+    LaunchedEffect(Unit) { settingsViewModel.refreshFamilies() }
     var showSplitPicker by rememberSaveable { mutableStateOf(false) }
 
     if (showSplitPicker) {
@@ -194,6 +202,17 @@ fun SettingsScreen(
                 showFamilyKindPicker = false
             },
             onDismiss = { showFamilyKindPicker = false }
+        )
+    }
+    if (showFamilySwitcher) {
+        FamilySwitcherDialog(
+            families = families,
+            selectedFamilyId = selectedFamilyId,
+            onSelect = { familyId ->
+                settingsViewModel.selectFamily(familyId)
+                showFamilySwitcher = false
+            },
+            onDismiss = { showFamilySwitcher = false }
         )
     }
     if (showColorPicker) {
@@ -348,6 +367,26 @@ fun SettingsScreen(
                         trailing = { Chevron() }
                     )
                     Divider()
+                    // **At two, not at one.** A parent with a single co-parent sees the screen
+                    // they always saw; a picker for a set of one is design item 8 in miniature.
+                    // The same rule the child filter follows.
+                    if (families.size > 1) {
+                        SectionRow(
+                            icon = Icons.Default.SwapHoriz,
+                            title = stringResource(R.string.settings_family_shown),
+                            supporting = families
+                                .firstOrNull { it.familyId == selectedFamilyId }
+                                ?.partnerName
+                                ?.takeIf { it.isNotBlank() }
+                                ?: stringResource(R.string.settings_family_unnamed),
+                            onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                showFamilySwitcher = true
+                            },
+                            trailing = { Chevron() }
+                        )
+                        Divider()
+                    }
                     // The parent's own colour. In the Family group rather than under App
                     // preferences because it is how this person is identified to the other one —
                     // the same kind of fact as their name, not a device setting like the theme.
@@ -1100,6 +1139,54 @@ private fun caresForSummary(kinds: Set<FamilyKind>): String {
  * @param onConfirm Called with the new set; only this parent's own record is written.
  * @param onDismiss Closes without changing anything.
  */
+/**
+ * Which family this device is showing.
+ *
+ * Named by the co-parent, because that is what a parent recognises — the family id is a pair of
+ * uids and means nothing to anyone. A relationship whose profile could not be read shows as
+ * unnamed rather than being dropped: a switcher missing a row is worse than one with a row the
+ * parent can still recognise by position.
+ */
+@Composable
+private fun FamilySwitcherDialog(
+    families: List<FamilyOption>,
+    selectedFamilyId: String?,
+    onSelect: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.settings_family_switch)) },
+        text = {
+            Column {
+                families.forEach { family ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onSelect(family.familyId) }
+                            .padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = family.familyId == selectedFamilyId,
+                            onClick = { onSelect(family.familyId) }
+                        )
+                        Text(
+                            family.partnerName.takeIf { it.isNotBlank() }
+                                ?: stringResource(R.string.settings_family_unnamed)
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.settings_family_kind_cancel))
+            }
+        }
+    )
+}
+
 @Composable
 private fun ParentColorDialog(
     selected: ParentColorChoice?,

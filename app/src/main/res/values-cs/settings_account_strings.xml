@@ -72,4 +72,7 @@
     <!-- Disclosure chevron content descriptions (UX-11). -->
     <string name="settings_expand">Zobrazit možnosti</string>
     <string name="settings_collapse">Skrýt možnosti</string>
+    <string name="settings_family_shown">Zobrazená rodina</string>
+    <string name="settings_family_switch">Přepnout rodinu</string>
+    <string name="settings_family_unnamed">Zatím bez jména</string>
 </resources>

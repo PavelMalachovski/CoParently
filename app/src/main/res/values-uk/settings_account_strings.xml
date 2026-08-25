@@ -72,4 +72,7 @@
     <!-- Disclosure chevron content descriptions (UX-11). -->
     <string name="settings_expand">Показати налаштування</string>
     <string name="settings_collapse">Сховати налаштування</string>
+    <string name="settings_family_shown">Показана сім\'я</string>
+    <string name="settings_family_switch">Перемкнути сім\'ю</string>
+    <string name="settings_family_unnamed">Поки без імені</string>
 </resources>

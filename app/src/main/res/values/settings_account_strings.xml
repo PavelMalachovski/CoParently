@@ -75,4 +75,7 @@
          announced a switch and never said the row expands. -->
     <string name="settings_expand">Show options</string>
     <string name="settings_collapse">Hide options</string>
+    <string name="settings_family_shown">Family shown</string>
+    <string name="settings_family_switch">Switch family</string>
+    <string name="settings_family_unnamed">Not named yet</string>
 </resources>

@@ -5,6 +5,7 @@ import com.coparently.app.data.local.entity.UserEntity
 import com.coparently.app.data.local.preferences.EncryptedPreferences
 import com.coparently.app.data.local.preferences.PreferenceKeys
 import com.coparently.app.data.remote.firebase.FirebaseAuthService
+import com.coparently.app.data.remote.firebase.FirestoreUserDataSource
 import com.google.firebase.auth.FirebaseUser
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -33,6 +34,7 @@ class SelectedFamilySourceTest {
     private lateinit var userDao: UserDao
     private lateinit var authService: FirebaseAuthService
     private lateinit var preferences: EncryptedPreferences
+    private lateinit var firestoreUserDataSource: FirestoreUserDataSource
     private lateinit var source: SelectedFamilySource
 
     private val key = "${PreferenceKeys.SELECTED_FAMILY_PREFIX}$ALICE"
@@ -44,7 +46,10 @@ class SelectedFamilySourceTest {
         preferences = mockk(relaxed = true)
         every { authService.getCurrentUser() } returns
             mockk<FirebaseUser> { every { uid } returns ALICE }
-        source = SelectedFamilySource(userDao, authService, preferences)
+        firestoreUserDataSource = mockk(relaxed = true)
+        source = SelectedFamilySource(
+            userDao, authService, firestoreUserDataSource, preferences
+        )
     }
 
     @Test
@@ -135,6 +140,27 @@ class SelectedFamilySourceTest {
         source.reconcile()
 
         coVerify(exactly = 0) { userDao.updateUser(any()) }
+    }
+
+    @Test
+    fun `the switcher names each co-parent`() = runTest {
+        rowIs(partnerIds = listOf(BOB, CAROL))
+        coEvery { firestoreUserDataSource.getUserById(BOB) } returns mapOf("name" to "Bob")
+        coEvery { firestoreUserDataSource.getUserById(CAROL) } returns mapOf("name" to "Carol")
+
+        assertEquals(listOf("Bob", "Carol"), source.namedFamilies().map { it.partnerName })
+    }
+
+    @Test
+    fun `an unreadable profile leaves one row unnamed rather than losing the list`() = runTest {
+        // A switcher that disappears because one profile could not be read is worse than one
+        // with an unnamed row in it — the parent can still count the families and recognise
+        // them by position.
+        rowIs(partnerIds = listOf(BOB, CAROL))
+        coEvery { firestoreUserDataSource.getUserById(BOB) } throws IllegalStateException("offline")
+        coEvery { firestoreUserDataSource.getUserById(CAROL) } returns mapOf("name" to "Carol")
+
+        assertEquals(listOf("", "Carol"), source.namedFamilies().map { it.partnerName })
     }
 
     @Test

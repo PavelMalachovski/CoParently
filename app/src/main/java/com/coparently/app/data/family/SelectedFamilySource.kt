@@ -5,6 +5,7 @@ import com.coparently.app.data.local.dao.UserDao
 import com.coparently.app.data.local.preferences.EncryptedPreferences
 import com.coparently.app.data.local.preferences.PreferenceKeys
 import com.coparently.app.data.remote.firebase.FirebaseAuthService
+import com.coparently.app.data.remote.firebase.FirestoreUserDataSource
 import com.coparently.app.domain.family.FamilyKey
 import com.google.gson.Gson
 import kotlinx.coroutines.flow.Flow
@@ -18,10 +19,15 @@ import javax.inject.Singleton
  *
  * @property familyId `FamilyKey.of(myUid, partnerUid)` — the id every shared record carries.
  * @property partnerUid The other adult in it.
+ * @property partnerName What to call them, or blank when their profile could not be read or
+ *   carries no name. Blank rather than the uid: a switcher offering "family with
+ *   `x7Kq2mB...`" is worse than one offering an unnamed row the parent can still count and
+ *   recognise by position — and `ParentLabels` already refuses to invent a name.
  */
 data class FamilyOption(
     val familyId: String,
-    val partnerUid: String
+    val partnerUid: String,
+    val partnerName: String = ""
 )
 
 /**
@@ -58,6 +64,7 @@ data class FamilyOption(
 class SelectedFamilySource @Inject constructor(
     private val userDao: UserDao,
     private val firebaseAuthService: FirebaseAuthService,
+    private val firestoreUserDataSource: FirestoreUserDataSource,
     private val encryptedPreferences: EncryptedPreferences
 ) {
 
@@ -154,6 +161,22 @@ class SelectedFamilySource @Inject constructor(
                 FamilyKey.orNull(uid, partnerUid)?.let { FamilyOption(it, partnerUid.orEmpty()) }
             }
             .distinctUntilChanged()
+
+    /**
+     * The families this parent is in, each with the co-parent's name resolved.
+     *
+     * A separate method from [families] because it costs one Firestore read per relationship
+     * and only the switcher needs it — every other caller wants the ids, which come off the
+     * local row for free. A read that fails leaves the name blank rather than failing the
+     * list: a switcher that disappears because one profile was unreachable is worse than one
+     * with an unnamed row in it.
+     */
+    suspend fun namedFamilies(): List<FamilyOption> = families().map { option ->
+        val name = runCatching {
+            firestoreUserDataSource.getUserById(option.partnerUid)?.get("name") as? String
+        }.getOrNull().orEmpty()
+        option.copy(partnerName = name)
+    }
 
     /** Writes the selection onto the local row, and nowhere else. */
     private suspend fun applyProjection(uid: String, target: FamilyOption?) {
