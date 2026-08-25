@@ -33,12 +33,25 @@ service cloud.firestore {
     // collection's partner branch resolves to, so it has to be false for "myself" even if a
     // document written before that rule existed still carries `partnerId == own uid`. Nobody is
     // ever their own co-parent, so nothing legitimate is lost.
+    // A person may co-parent with more than one other adult, so the stored answer is
+    // `partnerIds`, an array (docs/DESIGN-multi-family.md, M-4). Both shapes are read: the
+    // singular `partnerId` is still written for a co-parent on an older build, and a document
+    // mid-migration may carry a value the array has not caught up with. M-5 drops the fallback.
+    //
+    // **An array does not widen what this admits, and that is the finding that made it safe.**
+    // Every rule still resolving to this helper asks a *pairwise* question — may this person
+    // read that profile, may they address a change request to that uid — and both of somebody's
+    // co-parents may legitimately answer yes. The one place `isPartnerOf` was standing in for
+    // "in the same family" was `expenses` and `budgets`, which have moved to `isFamilyMember`;
+    // an array here without that move would have shown each co-parent the other's money.
     function isPartnerOf(userId) {
       return isAuthenticated() &&
              userId != request.auth.uid &&
              exists(/databases/$(database)/documents/users/$(userId)) &&
-             get(/databases/$(database)/documents/users/$(userId))
-               .data.get('partnerId', '') == request.auth.uid;
+             (request.auth.uid in get(/databases/$(database)/documents/users/$(userId))
+                .data.get('partnerIds', []) ||
+              get(/databases/$(database)/documents/users/$(userId))
+                .data.get('partnerId', '') == request.auth.uid);
     }
 
     // True when [familyId] names a co-parenting relationship the caller is one of the two

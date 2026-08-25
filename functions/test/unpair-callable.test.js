@@ -1118,3 +1118,105 @@ describe('backfillRecordFamilyIdsImpl', () => {
     assert.strictEqual(summary.failed, 0);
   });
 });
+
+describe('unpairing one family out of several', () => {
+  let unpairCoParentImpl;
+
+  before(() => {
+    unpairCoParentImpl = require('../index').unpairCoParentImpl;
+  });
+
+  /**
+   * Alice co-parents with both Bob and Carol.
+   *
+   * @return {!Object} The fake Firestore.
+   */
+  function twoFamilies() {
+    return fakeDb({
+      users: {
+        alice: {
+          id: 'alice', name: 'Alice',
+          partnerIds: ['bob', 'carol'], partnerId: 'bob', pairedAt: 1,
+        },
+        bob: {id: 'bob', name: 'Bob', partnerIds: ['alice'], partnerId: 'alice', pairedAt: 1},
+        carol: {
+          id: 'carol', name: 'Carol', partnerIds: ['alice'], partnerId: 'alice', pairedAt: 2,
+        },
+      },
+      families: {
+        alice__bob: {id: 'alice__bob', members: ['alice', 'bob']},
+        alice__carol: {id: 'alice__carol', members: ['alice', 'carol']},
+      },
+    });
+  }
+
+  it('ends the named relationship and leaves the other standing', async () => {
+    const db = twoFamilies();
+
+    const result = await unpairCoParentImpl(db, 'alice', 'carol');
+
+    assert.strictEqual(result.unpairedFrom, 'carol');
+    assert.deepStrictEqual(db._docs.users.alice.partnerIds, ['bob']);
+    assert.deepStrictEqual(db._docs.users.carol.partnerIds, []);
+    // Bob's family survives; Carol's is gone, and the family document going *is* the
+    // revocation — a membership left behind would let her back into everything.
+    assert.ok(db._docs.families['alice__bob']);
+    assert.strictEqual(db._docs.families['alice__carol'], undefined);
+  });
+
+  it('keeps pairedAt while any relationship remains, and clears it with the last', async () => {
+    const db = twoFamilies();
+
+    await unpairCoParentImpl(db, 'alice', 'carol');
+    assert.strictEqual(db._docs.users.alice.pairedAt, 1, 'still a co-parent, of Bob');
+
+    await unpairCoParentImpl(db, 'alice', 'bob');
+    assert.strictEqual(db._docs.users.alice.pairedAt, null, 'no relationships left');
+  });
+
+  it('re-points the singular field at whichever relationship survives', async () => {
+    // `partnerId` is what a build that predates the array reads. Left naming the ex-partner,
+    // that build would keep showing a family the account is no longer in.
+    const db = twoFamilies();
+
+    await unpairCoParentImpl(db, 'alice', 'bob');
+
+    assert.strictEqual(db._docs.users.alice.partnerId, 'carol');
+  });
+
+  it('refuses to guess when several relationships exist and none was named', async () => {
+    // Ending the wrong one deletes that pair's custody schedule and money agreement, and
+    // there is no undo.
+    const db = twoFamilies();
+
+    await assert.rejects(
+        () => unpairCoParentImpl(db, 'alice', null),
+        (err) => err.details && err.details.reason === 'ambiguous-partner');
+    assert.deepStrictEqual(db._docs.users.alice.partnerIds, ['bob', 'carol']);
+  });
+
+  it('accepts an unnamed target when there is exactly one relationship', async () => {
+    // What a build that predates multiple families sends.
+    const db = fakeDb({
+      users: {
+        alice: {id: 'alice', name: 'Alice', partnerIds: ['bob'], partnerId: 'bob', pairedAt: 1},
+        bob: {id: 'bob', name: 'Bob', partnerIds: ['alice'], partnerId: 'alice', pairedAt: 1},
+      },
+      families: {alice__bob: {id: 'alice__bob', members: ['alice', 'bob']}},
+    });
+
+    const result = await unpairCoParentImpl(db, 'alice', null);
+
+    assert.strictEqual(result.unpairedFrom, 'bob');
+    assert.strictEqual(db._docs.users.alice.partnerId, '');
+  });
+
+  it('ends nothing when the named person is not a co-parent', async () => {
+    const db = twoFamilies();
+
+    const result = await unpairCoParentImpl(db, 'alice', 'stranger');
+
+    assert.strictEqual(result.unpairedFrom, null);
+    assert.deepStrictEqual(db._docs.users.alice.partnerIds, ['bob', 'carol']);
+  });
+});

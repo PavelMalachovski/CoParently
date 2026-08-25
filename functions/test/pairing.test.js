@@ -17,6 +17,50 @@ function fakeDb(seed) {
   const docs = JSON.parse(JSON.stringify(seed));
 
   /**
+   * Applies one field value, interpreting the `arrayUnion`/`arrayRemove` sentinels the real
+   * Admin SDK resolves server-side.
+   *
+   * Without this the fake stored the sentinel object itself, and a test asserting on
+   * `partnerIds` compared an `ArrayUnionTransform` against a list — which is a fake that
+   * quietly disagrees with production about the one field multi-family pairing turns on.
+   *
+   * @param {*} current The value the field holds now.
+   * @param {*} incoming The value the code under test wrote.
+   * @return {*} The value to store.
+   */
+  function resolveValue(current, incoming) {
+    if (!(incoming instanceof admin.firestore.FieldValue)) {
+      return incoming;
+    }
+    const existing = Array.isArray(current) ? current : [];
+    const elements = incoming.elements || [];
+    // `_methodName` is how the SDK labels a sentinel; both spellings have shipped.
+    const name = incoming._methodName || incoming.methodName || '';
+    if (name.indexOf('arrayRemove') >= 0) {
+      return existing.filter((v) => !elements.includes(v));
+    }
+    if (name.indexOf('arrayUnion') >= 0) {
+      return existing.concat(elements.filter((v) => !existing.includes(v)));
+    }
+    return incoming;
+  }
+
+  /**
+   * Merges an update map onto a stored document, resolving sentinels.
+   *
+   * @param {?Object} stored The document as it stands.
+   * @param {!Object} update The update map.
+   * @return {!Object} The merged document.
+   */
+  function merge(stored, update) {
+    const next = Object.assign({}, stored);
+    Object.keys(update).forEach((key) => {
+      next[key] = resolveValue(next[key], update[key]);
+    });
+    return next;
+  }
+
+  /**
    * Builds a document reference.
    *
    * @param {string} collection Collection name.
@@ -33,7 +77,7 @@ function fakeDb(seed) {
       },
       async update(update) {
         docs[collection] = docs[collection] || {};
-        docs[collection][id] = Object.assign({}, docs[collection][id], update);
+        docs[collection][id] = merge(docs[collection][id], update);
       },
     };
   }
@@ -61,7 +105,7 @@ function fakeDb(seed) {
         docs[ref.collection] = docs[ref.collection] || {};
         docs[ref.collection][ref.id] = value !== undefined ?
           value :
-          Object.assign({}, docs[ref.collection][ref.id], update);
+          merge(docs[ref.collection][ref.id], update);
       });
       return result;
     },
@@ -255,5 +299,95 @@ describe('acceptPairingInvitation', () => {
         db, 'bob', 'bob@example.com', {code: null, invitationId: 'inv1'});
 
     assert.deepStrictEqual(db._docs.families['alice__bob'].caresFor, {alice: '', bob: ''});
+  });
+});
+
+describe('pairing with more than one co-parent', () => {
+  let myFunctions;
+
+  before(() => {
+    myFunctions = require('../index');
+  });
+
+  it('lets an already-paired account take a second co-parent', async () => {
+    // The refusal used to be "one of the accounts is already paired". A person may co-parent
+    // with more than one other adult, and this is where the second relationship is created.
+    const db = fakeDb({
+      invitations: {
+        inv2: {id: 'inv2', status: 'pending', fromUserId: 'alice', toEmail: 'carol@example.com'},
+      },
+      users: {
+        alice: {id: 'alice', name: 'Alice', role: 'mom', partnerIds: ['bob'], partnerId: 'bob'},
+        carol: {id: 'carol', name: 'Carol'},
+      },
+    });
+
+    const result = await myFunctions.acceptPairingInvitationImpl(
+        db, 'carol', 'carol@example.com', {code: null, invitationId: 'inv2'});
+
+    assert.strictEqual(result.partnerId, 'alice');
+    assert.deepStrictEqual(db._docs.families['alice__carol'].members, ['alice', 'carol']);
+  });
+
+  it('accumulates co-parents rather than replacing the first', async () => {
+    const db = fakeDb({
+      invitations: {
+        inv2: {id: 'inv2', status: 'pending', fromUserId: 'alice', toEmail: 'carol@example.com'},
+      },
+      users: {
+        alice: {id: 'alice', name: 'Alice', role: 'mom', partnerIds: ['bob'], partnerId: 'bob'},
+        carol: {id: 'carol', name: 'Carol'},
+      },
+    });
+
+    await myFunctions.acceptPairingInvitationImpl(
+        db, 'carol', 'carol@example.com', {code: null, invitationId: 'inv2'});
+
+    assert.deepStrictEqual(db._docs.users.alice.partnerIds, ['bob', 'carol']);
+    // The singular field stays pinned to the first. A build that predates the array can only
+    // cope with one relationship, so it should keep showing the one it already knew rather
+    // than being silently moved to a family it has never heard of.
+    assert.strictEqual(db._docs.users.alice.partnerId, 'bob');
+    // And the newcomer, who had none, gets it as their first.
+    assert.strictEqual(db._docs.users.carol.partnerId, 'alice');
+  });
+
+  it('still refuses a repeat of the same pair', async () => {
+    // Two people are one family, and a second `families/{id}` between them is the same
+    // document — accepting again would re-run `assignSlots` and could flip the slots their
+    // whole history is stamped with.
+    const db = fakeDb({
+      invitations: {
+        inv2: {id: 'inv2', status: 'pending', fromUserId: 'alice', toEmail: 'bob@example.com'},
+      },
+      users: {
+        alice: {id: 'alice', name: 'Alice', role: 'mom', partnerIds: ['bob'], partnerId: 'bob'},
+        bob: {id: 'bob', name: 'Bob', role: 'dad', partnerIds: ['alice'], partnerId: 'alice'},
+      },
+    });
+
+    await assert.rejects(
+        () => myFunctions.acceptPairingInvitationImpl(
+            db, 'bob', 'bob@example.com', {code: null, invitationId: 'inv2'}),
+        (err) => err.details && err.details.reason === 'already-paired');
+  });
+
+  it('reads a document that carries only the old singular field', async () => {
+    // Mid-migration: the array has not been written yet, but the account is paired. The two
+    // shapes are unioned rather than one winning, so the existing relationship is still seen.
+    const db = fakeDb({
+      invitations: {
+        inv2: {id: 'inv2', status: 'pending', fromUserId: 'alice', toEmail: 'bob@example.com'},
+      },
+      users: {
+        alice: {id: 'alice', name: 'Alice', role: 'mom', partnerId: 'bob'},
+        bob: {id: 'bob', name: 'Bob', role: 'dad', partnerId: 'alice'},
+      },
+    });
+
+    await assert.rejects(
+        () => myFunctions.acceptPairingInvitationImpl(
+            db, 'bob', 'bob@example.com', {code: null, invitationId: 'inv2'}),
+        (err) => err.details && err.details.reason === 'already-paired');
   });
 });
