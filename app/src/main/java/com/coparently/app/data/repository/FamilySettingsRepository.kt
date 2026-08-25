@@ -103,8 +103,9 @@ class FamilySettingsRepository @Inject constructor(
     suspend fun submitRatio(ratio: SplitRatio): Result<RatioSubmission> {
         val pair = currentPair()
         if (pair == null) {
-            // Nobody to agree with. Cache it so the expense screen prices by it immediately; the
-            // first write after pairing publishes it.
+            // Nobody to agree with, and no document to write it to. Cached so the expense screen
+            // prices by it immediately; [publishCachedRatioIfMissing] is what carries it across
+            // to the pair, and it runs on the next sync after pairing.
             cacheAgreedRatio(ratio)
             return Result.success(RatioSubmission.APPLIED)
         }
@@ -130,6 +131,41 @@ class FamilySettingsRepository @Inject constructor(
             notifyPartner(pair, PushPayload.SPLIT_RATIO_PROPOSED)
             RatioSubmission.PROPOSED
         }
+    }
+
+    /**
+     * Carries a ratio agreed while unpaired across to the pair, once there is one.
+     *
+     * The unpaired branch of [submitRatio] can only cache: there is no pair document to write and
+     * nobody to ask. Nothing then published it — the comment there used to claim "the first write
+     * after pairing publishes it" and no such write existed — so a parent who set 70/30 in the
+     * wizard paired, saw 70/30 in Settings, and had both phones go on splitting every expense
+     * evenly. The onboarding step's own wording promised the co-parent would confirm it; they
+     * never saw it at all.
+     *
+     * Writes **only when the pair has no agreement yet**, which is what makes it safe to run on
+     * every sync: it can never overwrite one the two of them have since made, nor the co-parent's
+     * own cached ratio if theirs published first. Whoever's tick lands first sets the pair's
+     * opening figure, and the other's next change is a proposal like any other.
+     *
+     * Silent about an unset cache: `null` means this parent never chose a ratio, and publishing
+     * an even split on their behalf would be inventing an agreement.
+     */
+    suspend fun publishCachedRatioIfMissing() {
+        val cached = SplitRatio.fromStored(preferences.getSplitRatioBasisPoints()) ?: return
+        val pair = currentPair() ?: return
+        if (read(pair.documentId) != null) return
+
+        Log.i(TAG, "Publishing the ratio agreed before pairing to ${pair.documentId}")
+        write(
+            pair,
+            FamilySettings(
+                ratio = cached,
+                participants = pair.participants,
+                lastModifiedBy = pair.myUid,
+                lastModifiedAtMillis = System.currentTimeMillis()
+            )
+        )
     }
 
     /** Agrees to the co-parent's proposal; the proposed ratio becomes the agreed one. */

@@ -241,11 +241,13 @@ fun SettingsScreen(
     // is the union of the two answers — silence there reads as a control that does not work.
     val familyKeptByCoParent = stringResource(R.string.settings_family_kind_kept_by_co_parent)
     val familyNotSaved = stringResource(R.string.settings_family_kind_not_saved)
+    val familyRecordsKept = stringResource(R.string.settings_family_kind_records_kept)
     LaunchedEffect(Unit) {
         settingsViewModel.caresForOutcome.collect { outcome ->
             snackbarHostState.showSnackbar(
                 when (outcome) {
                     SettingsViewModel.CaresForOutcome.KEPT_BY_CO_PARENT -> familyKeptByCoParent
+                    SettingsViewModel.CaresForOutcome.RECORDS_KEPT -> familyRecordsKept
                     SettingsViewModel.CaresForOutcome.NOT_SAVED -> familyNotSaved
                 }
             )

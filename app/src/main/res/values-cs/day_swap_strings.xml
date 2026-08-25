@@ -10,6 +10,7 @@
     <string name="day_swap_needs_coparent">Nejdřív se propojte s druhým rodičem — na výměně se domlouváte spolu.</string>
     <string name="day_swap_error_refused">Výměnu se nepodařilo nabídnout</string>
     <string name="day_swap_error_not_ready">Ještě zjišťujeme, kdo je druhý rodič — zkuste to za chvíli</string>
+    <string name="day_swap_error_partial">Nabídnuto jen %1$d z %2$d dnů — ty už druhý rodič má; zbytek nabídněte znovu</string>
     <string name="day_swap_inbox_section">Výměny dnů</string>
     <string name="day_swap_inbox_offered_by_you">Tento den jste nabídli: %1$s</string>
     <string name="day_swap_inbox_offered_to_you">%1$s vám nabízí tento den</string>

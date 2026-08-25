@@ -363,6 +363,40 @@ Data flow: UI → ViewModel → UseCase → Repository → Room (source of truth
 
 ## Known issues / do not "fix" silently
 
+- **Deleting a child or a pet removes the Firestore document outright, which item 14 forbids.**
+  `ChildInfoRepositoryImpl.deleteChildInfo` and `PetRepositoryImpl.deletePet` both call the data
+  source's `.delete()` and both discard the `Result`. Two consequences, and they are the ones the
+  tombstone rule exists to prevent: the co-parent's phone never learns of the deletion — nothing
+  reconciles by absence, correctly — so the record stays on their device forever; and a refused or
+  offline remote delete leaves the local row gone and the document alive, so the next download
+  re-inserts it. Pre-existing and systemic across both record types, not something the multi-child
+  work introduced — the August 2026 branch only made the child half *reachable*, by putting a
+  Delete action on the editor where before there was none. The fix is the treatment
+  `data/sync/Tombstone.kt` already defines for events and expenses: `update()` with
+  `deletedAtMillis`/`deletedBy`, hide tombstoned rows from the read queries, hard-delete locally
+  only once the remote write lands. It wants a Room column and a migration on both tables, which
+  is why it is recorded here rather than folded into a bug-fix branch. Do not "fix" it by removing
+  the Delete action — parity with pets is what was asked for.
+
+- **A change request says "Sent" whether or not it left the phone.**
+  `ChangeRequestRepositoryImpl.publish` catches everything and returns, leaving
+  `syncedToFirestore = false`, and `RequestChangeViewModel` sets `Sent` unconditionally before
+  the screen pops. `ChangeRequest.syncedToFirestore` reaches the domain model and **no** screen
+  reads it, so there is no queued badge and no way to tell a request the co-parent has from one
+  sitting in Room. The August 2026 outbox (`flushOutbox`, drained on every sync) means it does
+  eventually go — this is a wording and visibility gap, not a loss — but "sent" is still a claim
+  the app cannot make. `MessagesList` already renders the honest version for a message; a request
+  should say "queued" the same way, with a string in all five locales.
+
+- **A proposed split ratio cannot be withdrawn, and the proposer is told nothing.**
+  `SplitRatioTransition.withdraw` exists and is unit-tested; nothing calls it.
+  `FamilySettingsRepository` exposes `submitRatio`/`acceptProposal`/`declineProposal` only, and
+  Settings renders the agreed ratio with no sign that a proposal of your own is pending — the
+  banner is the *co-parent's* view. The sibling feature wires the whole shape
+  (`CustodyModelRepository.withdrawProposal`, plus a Withdraw button on the inbox card); the split
+  ratio wants the same. Until then do not delete `withdraw`: the gap is the missing UI, not the
+  transition.
+
 - **`storage.rules` has never been deployed past its July 2026 state, and that is why attaching a
   photo to a pet fails.** The file in this repo covers `receipts/`, `event_images/`,
   `medical_photos/` and `pet_photos/`; the live bucket, on the evidence, still covers only the

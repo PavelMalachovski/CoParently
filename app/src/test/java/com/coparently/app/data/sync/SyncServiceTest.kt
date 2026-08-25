@@ -133,6 +133,7 @@ class SyncServiceTest {
             petRepository,
             mockk(relaxed = true),
             mockk(relaxed = true),
+            mockk(relaxed = true),
             accountSwitchGuard
         )
     }

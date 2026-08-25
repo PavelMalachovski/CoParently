@@ -7,6 +7,7 @@ import com.coparently.app.data.local.entity.CustodyScheduleEntity
 import com.coparently.app.data.local.preferences.EncryptedPreferences
 import com.coparently.app.data.local.preferences.PreferenceKeys
 import com.coparently.app.data.repository.CustodyModelRepository
+import com.coparently.app.data.repository.PartialSwapRun
 import com.coparently.app.domain.custody.CustodyChangeAnnouncement
 import com.coparently.app.domain.custody.CustodyProposal
 import com.coparently.app.domain.custody.CustodyResolver
@@ -44,12 +45,25 @@ private const val HANDOVER_STOP_TIMEOUT_MS = 5_000L
  * localization follow-up list rather than being "fixed" with an injected `Context`. The screen
  * resolves it to a string in composable scope.
  */
-enum class SwapError {
+sealed interface SwapError {
     /** No co-parent, or this device does not know who it is yet. Nobody could accept. */
-    NOT_READY,
+    data object NotReady : SwapError
 
     /** The write was refused — by the transition's own rules, or by `firestore.rules`. */
-    REFUSED
+    data object Refused : SwapError
+
+    /**
+     * Some of the run reached the document and the rest did not.
+     *
+     * Its own case rather than [Refused], because the two call for opposite actions: the days
+     * that landed are already pending on the co-parent's phone and have already been announced,
+     * so a parent told "refused" would offer the whole run again and the co-parent would be asked
+     * twice about days they already hold.
+     *
+     * @property written Days that reached the document.
+     * @property total Days the run set out to write.
+     */
+    data class Partial(val written: Int, val total: Int) : SwapError
 }
 
 /**
@@ -270,7 +284,7 @@ class CalendarViewModel @Inject constructor(
         viewModelScope.launch {
             val myUid = parents.value.me?.uid
             if (myUid == null) {
-                _swapError.value = SwapError.NOT_READY
+                _swapError.value = SwapError.NotReady
                 return@launch
             }
             val iso = date.toString()
@@ -283,7 +297,7 @@ class CalendarViewModel @Inject constructor(
                     atIso = LocalDateTime.now().toString(),
                     note = note
                 )
-            }.onFailure { _swapError.value = SwapError.REFUSED }
+            }.onFailure { _swapError.value = SwapError.Refused }
         }
     }
 
@@ -311,14 +325,14 @@ class CalendarViewModel @Inject constructor(
         viewModelScope.launch {
             val myUid = parents.value.me?.uid
             if (myUid == null) {
-                _swapError.value = SwapError.NOT_READY
+                _swapError.value = SwapError.NotReady
                 return@launch
             }
             val targets = dates.distinct().sorted()
                 .mapNotNull { date -> toParentFor(date)?.let { date.toString() to it } }
                 .toMap()
             if (targets.isEmpty()) {
-                _swapError.value = SwapError.REFUSED
+                _swapError.value = SwapError.Refused
                 return@launch
             }
             val groupId = UUID.randomUUID().toString()
@@ -332,7 +346,13 @@ class CalendarViewModel @Inject constructor(
                     groupId = groupId,
                     note = note
                 )
-            }.onFailure { _swapError.value = SwapError.REFUSED }
+            }.onFailure { cause ->
+                _swapError.value = if (cause is PartialSwapRun) {
+                    SwapError.Partial(cause.written, cause.total)
+                } else {
+                    SwapError.Refused
+                }
+            }
         }
     }
 

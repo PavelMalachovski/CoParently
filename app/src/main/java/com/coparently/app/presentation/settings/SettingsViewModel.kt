@@ -98,6 +98,13 @@ class SettingsViewModel @Inject constructor(
          */
         KEPT_BY_CO_PARENT,
 
+        /**
+         * Saved, and a kind this parent removed is now hidden — along with every route to the
+         * records under it, which keep existing, keep syncing, and keep holding guest grants.
+         * The switch is reversible; saying nothing would make it look like a deletion.
+         */
+        RECORDS_KEPT,
+
         /** Not saved at all: this account has no local profile row to write onto. */
         NOT_SAVED
     }
@@ -132,13 +139,19 @@ class SettingsViewModel @Inject constructor(
                 _caresForOutcome.trySend(CaresForOutcome.NOT_SAVED)
                 return@launch
             }
+            val dropped = fresh.caresFor - kinds
             userRepository.updateUser(fresh.copy(caresFor = kinds))
             // Read at save time, off the shared upstream, rather than from a `WhileSubscribed`
             // `.value` — invariant 17. `first()` is one emission of a flow that already has a
             // subscriber on this screen, so it costs no listener.
             val theirs = familyKindSource.observeTheirs().first()
-            if ((theirs - kinds).isNotEmpty()) {
-                _caresForOutcome.trySend(CaresForOutcome.KEPT_BY_CO_PARENT)
+            when {
+                // The co-parent's answer wins the union, so the section is still there. That is
+                // the more useful thing to say, and it is why this comes first.
+                (theirs - kinds).isNotEmpty() ->
+                    _caresForOutcome.trySend(CaresForOutcome.KEPT_BY_CO_PARENT)
+                dropped.isNotEmpty() -> _caresForOutcome.trySend(CaresForOutcome.RECORDS_KEPT)
+                else -> Unit
             }
         }
     }

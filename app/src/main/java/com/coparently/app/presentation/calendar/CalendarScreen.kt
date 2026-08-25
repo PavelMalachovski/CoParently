@@ -892,8 +892,17 @@ fun CalendarScreen(
         swapError?.let { error ->
             snackbarHostState.showSnackbar(
                 when (error) {
-                    SwapError.NOT_READY -> swapNotReadyMessage
-                    SwapError.REFUSED -> swapRefusedMessage
+                    SwapError.NotReady -> swapNotReadyMessage
+                    SwapError.Refused -> swapRefusedMessage
+                    // "Refused" would be a lie here and an expensive one: the days that landed
+                    // are already pending on the co-parent's phone and already announced, so a
+                    // parent told the run failed would offer it again and they would be asked
+                    // twice about the same days.
+                    is SwapError.Partial -> context.getString(
+                        R.string.day_swap_error_partial,
+                        error.written,
+                        error.total
+                    )
                 }
             )
             calendarViewModel.clearSwapError()

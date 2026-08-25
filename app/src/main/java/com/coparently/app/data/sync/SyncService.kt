@@ -11,6 +11,7 @@ import com.coparently.app.data.remote.firebase.FirebaseAuthService
 import com.coparently.app.data.remote.firebase.FirestoreChildInfoDataSource
 import com.coparently.app.data.remote.firebase.FirestoreEventDataSource
 import com.coparently.app.data.remote.firebase.FirestoreUserDataSource
+import com.coparently.app.data.repository.FamilySettingsRepository
 import com.coparently.app.data.repository.LocalDateJsonAdapter
 import com.coparently.app.data.repository.ParentSlotMigrator
 import com.coparently.app.data.session.AccountSwitchGuard
@@ -55,6 +56,7 @@ class SyncService @Inject constructor(
     private val petRepository: PetRepository,
     private val messageRepository: MessageRepository,
     private val changeRequestRepository: ChangeRequestRepository,
+    private val familySettingsRepository: FamilySettingsRepository,
     private val accountSwitchGuard: AccountSwitchGuard
 ) {
     // `LocalDate::class.java` needs the same adapter `ChildInfoRepositoryImpl` and
@@ -109,6 +111,12 @@ class SyncService @Inject constructor(
             _syncStatus.value = SyncStatus.Syncing(90, 100)
             messageRepository.flushOutbox()
             changeRequestRepository.flushOutbox()
+            // The same shape, for the one number the wizard collects before there is anybody to
+            // agree it with: an unpaired account can only cache the split ratio, and until this
+            // ran nothing ever carried it across. A parent who set 70/30 during onboarding paired
+            // and both phones went on dividing evenly, while Settings showed them 70/30. Writes
+            // only when the pair has no agreement yet, so a tick can never overwrite one.
+            familySettingsRepository.publishCachedRatioIfMissing()
 
             // Step 6: Complete
             _syncStatus.value = SyncStatus.Success(LocalDateTime.now())

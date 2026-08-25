@@ -53,6 +53,7 @@
     <string name="settings_family_kind_save">Speichern</string>
     <string name="settings_family_kind_cancel">Abbrechen</string>
     <string name="settings_family_kind_kept_by_co_parent">Gespeichert. Ein von Ihnen entfernter Bereich bleibt sichtbar, weil der andere Elternteil ihn weiterhin führt.</string>
+    <string name="settings_family_kind_records_kept">Entfernt. Die Einträge bleiben auf deinem Gerät — schalte den Bereich hier wieder ein, um sie zu sehen.</string>
     <string name="settings_family_kind_not_saved">Konnte nicht gespeichert werden – Ihr Profil ist noch nicht geladen. Versuchen Sie es gleich noch einmal.</string>
     <string name="settings_split_ratio_title">Kostenaufteilung</string>
     <string name="settings_split_ratio_value">%1$d / %2$d</string>

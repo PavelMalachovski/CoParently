@@ -10,6 +10,7 @@
     <string name="day_swap_needs_coparent">Спершу з\'єднайтеся з другим із батьків — обмін ви узгоджуєте вдвох.</string>
     <string name="day_swap_error_refused">Не вдалося запропонувати обмін</string>
     <string name="day_swap_error_not_ready">Ще з\'ясовуємо, хто другий з батьків, — спробуйте за мить</string>
+    <string name="day_swap_error_partial">Надіслано %1$d із %2$d днів — ці у другого з батьків уже є; решту запропонуйте ще раз</string>
     <string name="day_swap_inbox_section">Обмін днями</string>
     <string name="day_swap_inbox_offered_by_you">Ви запропонували цей день: %1$s</string>
     <string name="day_swap_inbox_offered_to_you">%1$s пропонує вам цей день</string>

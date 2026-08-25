@@ -69,6 +69,23 @@ import javax.inject.Singleton
  */
 enum class PatternSubmission { ACTIVATED, PROPOSED }
 
+/**
+ * A run of days that was only partly written.
+ *
+ * A type rather than a message, because the screen has to *say which part*: the days that landed
+ * are already pending on the co-parent's phone and have already been announced, so telling the
+ * offering parent "refused" is worse than telling them nothing — they would offer the same run
+ * again and the co-parent would be asked twice about days they already have.
+ *
+ * @property written Days that actually reached the document.
+ * @property total Days the run set out to write.
+ */
+class PartialSwapRun(
+    val written: Int,
+    val total: Int,
+    cause: Throwable
+) : IllegalStateException("Only $written of $total days could be offered", cause)
+
 @Singleton
 @Suppress("TooManyFunctions")
 class CustodyModelRepository(
@@ -751,12 +768,7 @@ class CustodyModelRepository(
                 return if (changed.isEmpty()) {
                     Result.failure(cause)
                 } else {
-                    Result.failure(
-                        IllegalStateException(
-                            "Only ${changed.size} of ${dates.size} days could be offered",
-                            cause
-                        )
-                    )
+                    Result.failure(PartialSwapRun(changed.size, dates.size, cause))
                 }
             }
             latest = applied.overrides
