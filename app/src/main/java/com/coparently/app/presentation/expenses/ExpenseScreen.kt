@@ -1,6 +1,7 @@
 package com.coparently.app.presentation.expenses
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -71,6 +72,33 @@ import java.util.Locale
  * a little air on top of that.
  */
 private val FAB_CLEARANCE = 88.dp
+
+/**
+ * Gives the month its own vertical scroll — but only where what it holds can be measured without
+ * a bounded height.
+ *
+ * **The analytics view scrolls as a page, the list does not.** `ExpenseList` is a `LazyColumn`,
+ * and the empty-month branch is a `weight(1f)` placeholder; measuring either with an infinite
+ * maximum height is a crash, not a layout quirk. So the page scrolls on the analytics branch of a
+ * month that has expenses, and nowhere else.
+ *
+ * Without it, `ExpenseAnalytics` scrolled inside whatever was left under the banners, one summary
+ * card per currency and the switcher — on a month holding two currencies, a couple of hundred dp
+ * for a pie, a table and a ledger, with the figures under the arc unreachable.
+ *
+ * It is a named extension rather than a conditional at the call site because the two halves belong
+ * together: whoever changes what either branch renders has to find this rule, and it is one `if`
+ * standing between a working screen and a crash.
+ *
+ * @param showAnalytics Whether the analytics view is the one showing
+ * @param hasExpenses Whether this month has anything to draw
+ * @param state Scroll state for the page
+ */
+private fun Modifier.scrollsAsPage(
+    showAnalytics: Boolean,
+    hasExpenses: Boolean,
+    state: ScrollState
+): Modifier = if (showAnalytics && hasExpenses) verticalScroll(state) else this
 
 /**
  * Expense list screen — a top-level bottom-navigation destination.
@@ -251,18 +279,6 @@ fun ExpenseScreen(
                     modifier = Modifier.weight(1f)
                 ) { shownMonth ->
                     val monthExpenses = shownMonth.expenses
-                    // **The analytics view scrolls as a page, the list does not.** The list is a
-                    // `LazyColumn` that must be given the remaining height — nesting it in a
-                    // scrolling parent is the "measured with infinite maximum height" crash — so
-                    // only the analytics branch takes the scroll, and only when there is a month
-                    // to draw. The empty-month branch below keeps a `weight(1f)` placeholder,
-                    // which is the other thing a scrolling column cannot hold.
-                    //
-                    // Without it the summary cards and the switcher were pinned and the whole
-                    // breakdown lived in whatever was left: on a month with two currencies that
-                    // is a couple of hundred dp for a pie, a table and a ledger, and the figures
-                    // under the arc could not be reached at all.
-                    val pageScrolls = showAnalytics && monthExpenses.isNotEmpty()
                     // Remembered inside the month's own content slot, so paging to another
                     // month opens at the top rather than at this one's offset, while
                     // switching List/Analytics within a month comes back where it was.
@@ -270,9 +286,7 @@ fun ExpenseScreen(
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
-                            .then(
-                                if (pageScrolls) Modifier.verticalScroll(pageScroll) else Modifier
-                            )
+                            .scrollsAsPage(showAnalytics, monthExpenses.isNotEmpty(), pageScroll)
                     ) {
                         val balancesByCurrency = shownMonth.balances
                         val monthNavigation = MonthNavigation(
