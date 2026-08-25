@@ -27,15 +27,15 @@ import com.coparently.app.presentation.common.ParentsSource
 import com.coparently.app.presentation.common.stateInLoadable
 import com.coparently.app.presentation.common.valueOrNull
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -150,11 +150,18 @@ class ExpenseViewModel @Inject constructor(
      * Raised when answering the co-parent's proposal was refused.
      *
      * A one-shot signal rather than state: the screen turns it into a snackbar, and a value that
-     * stayed set would re-raise it on the next recomposition. `extraBufferCapacity = 1` so
-     * `tryEmit` from a non-suspending failure branch cannot drop it.
+     * stayed set would re-raise it on the next recomposition.
+     *
+     * A **conflated `Channel`**, not a `MutableSharedFlow`. A shared flow with `replay = 0`
+     * discards a `tryEmit` outright when nothing is collecting, and returns `true` while doing
+     * it — `extraBufferCapacity` does not save it. The collector here lives only as long as the
+     * screen is composed, so a refusal that landed a moment after the parent navigated away was
+     * dropped silently, which is the failure this signal exists to remove. A conflated channel
+     * holds the last signal until somebody attaches, and collapses a burst into one snackbar
+     * rather than queueing them behind a suspended `showSnackbar`.
      */
-    private val _ratioAnswerFailed = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
-    val ratioAnswerFailed: SharedFlow<Unit> = _ratioAnswerFailed.asSharedFlow()
+    private val _ratioAnswerFailed = Channel<Unit>(Channel.CONFLATED)
+    val ratioAnswerFailed: Flow<Unit> = _ratioAnswerFailed.receiveAsFlow()
 
     /**
      * Answers the co-parent's proposed split.
@@ -178,7 +185,7 @@ class ExpenseViewModel @Inject constructor(
                 // banner sitting there as if the tap had done nothing. A silent refusal is the
                 // exact outcome this whole family of features exists to remove.
                 Log.w(TAG, "The split proposal could not be answered", e)
-                _ratioAnswerFailed.tryEmit(Unit)
+                _ratioAnswerFailed.trySend(Unit)
             }
         }
     }

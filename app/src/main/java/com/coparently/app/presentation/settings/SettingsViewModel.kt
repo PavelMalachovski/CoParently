@@ -18,15 +18,15 @@ import com.coparently.app.presentation.common.FamilyKindSource
 import com.coparently.app.presentation.common.UiError
 import com.coparently.app.presentation.common.UiState
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.io.IOException
@@ -102,10 +102,16 @@ class SettingsViewModel @Inject constructor(
         NOT_SAVED
     }
 
-    private val _caresForOutcome = MutableSharedFlow<CaresForOutcome>(extraBufferCapacity = 1)
+    /**
+     * A **conflated `Channel`**, not a `MutableSharedFlow`: a shared flow with `replay = 0`
+     * discards a `tryEmit` outright when nothing is collecting — and returns `true` while doing
+     * it — so a signal raised a moment after the parent left Settings would vanish. The channel
+     * holds the last one until a collector attaches.
+     */
+    private val _caresForOutcome = Channel<CaresForOutcome>(Channel.CONFLATED)
 
     /** Raised when a family answer needs a word said about it. See [CaresForOutcome]. */
-    val caresForOutcome: SharedFlow<CaresForOutcome> = _caresForOutcome.asSharedFlow()
+    val caresForOutcome: Flow<CaresForOutcome> = _caresForOutcome.receiveAsFlow()
 
     /**
      * Records a new answer onto this parent's own record.
@@ -123,7 +129,7 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             val fresh = userRepository.getCurrentUser()
             if (fresh == null) {
-                _caresForOutcome.tryEmit(CaresForOutcome.NOT_SAVED)
+                _caresForOutcome.trySend(CaresForOutcome.NOT_SAVED)
                 return@launch
             }
             userRepository.updateUser(fresh.copy(caresFor = kinds))
@@ -132,7 +138,7 @@ class SettingsViewModel @Inject constructor(
             // subscriber on this screen, so it costs no listener.
             val theirs = familyKindSource.observeTheirs().first()
             if ((theirs - kinds).isNotEmpty()) {
-                _caresForOutcome.tryEmit(CaresForOutcome.KEPT_BY_CO_PARENT)
+                _caresForOutcome.trySend(CaresForOutcome.KEPT_BY_CO_PARENT)
             }
         }
     }
@@ -154,9 +160,15 @@ class SettingsViewModel @Inject constructor(
             SplitRatio.EVEN
         )
 
-    /** How the last submitted ratio landed, for the screen to report once. */
-    private val _ratioSubmission = MutableSharedFlow<RatioSubmission?>(extraBufferCapacity = 1)
-    val ratioSubmission: SharedFlow<RatioSubmission?> = _ratioSubmission.asSharedFlow()
+    /**
+     * How the last submitted ratio landed, for the screen to report once.
+     *
+     * Conflated channel for the reason [caresForOutcome] gives: a `MutableSharedFlow` with
+     * `replay = 0` drops an emission when nothing is collecting, and the round trip to Firestore
+     * easily outlives a parent closing Settings.
+     */
+    private val _ratioSubmission = Channel<RatioSubmission?>(Channel.CONFLATED)
+    val ratioSubmission: Flow<RatioSubmission?> = _ratioSubmission.receiveAsFlow()
 
     /**
      * Puts a new split to the co-parent, or applies it when there is nobody to ask.
@@ -167,7 +179,7 @@ class SettingsViewModel @Inject constructor(
      */
     fun submitRatio(ratio: SplitRatio) {
         viewModelScope.launch {
-            _ratioSubmission.emit(familySettingsRepository.submitRatio(ratio).getOrNull())
+            _ratioSubmission.send(familySettingsRepository.submitRatio(ratio).getOrNull())
         }
     }
 

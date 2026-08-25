@@ -109,6 +109,20 @@ object DayOverrideTransition {
     }
 
     /**
+     * Whether [date] in [current] is an offer [byUid] may still answer.
+     *
+     * The predicate [decideGroup] filters on, exposed because a caller that writes a group one
+     * day at a time has to make the same judgement before it calls in — and has to make it
+     * against the map the write just read, never against a mirror that can be behind.
+     *
+     * @param current The overrides as the document holds them.
+     * @param date ISO date to test.
+     * @param byUid The parent who would be answering.
+     */
+    fun awaitsAnswerFrom(current: Map<String, DayOverride>, date: String, byUid: String): Boolean =
+        current[date]?.let { it.isPending && it.requestedBy != byUid } == true
+
+    /**
      * Answers every still-pending day of one group at once.
      *
      * All or nothing was the owner's decision: one notification, one answer. A day of the group
@@ -124,9 +138,7 @@ object DayOverrideTransition {
         atIso: String,
         accept: Boolean
     ): Result<Map<String, DayOverride>> {
-        val answerable = dates.filter { date ->
-            current[date]?.let { it.isPending && it.requestedBy != byUid } == true
-        }
+        val answerable = dates.filter { awaitsAnswerFrom(current, it, byUid) }
         if (answerable.isEmpty()) {
             return Result.failure(IllegalStateException("Nothing in this group is waiting on you"))
         }

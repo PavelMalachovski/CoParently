@@ -38,6 +38,20 @@ data class CurrencyBalance(
 )
 
 /**
+ * Whether [this] is a split between exactly the two parents.
+ *
+ * The companion condition to [bothSlotsKnown], and it is here for the same reason: a slot-keyed
+ * ratio describes two people, so the balance may only apply one to a row that names two — and the
+ * expense row's label has to agree with the figure above it. Written once because the two drifted
+ * apart the first time they were not: `shareOf` charged a ratio on an expense recorded while
+ * unpaired, whose `splitBetween` names the payer alone, while the row printed "not split".
+ */
+fun Expense.isTwoWaySplit(): Boolean = splitBetween.size == PAIR_SIZE
+
+/** A slot-keyed ratio only describes two people; anything else divides evenly. */
+private const val PAIR_SIZE = 2
+
+/**
  * Whether the two parents can actually be told apart — both slots present in [roleByUid].
  *
  * One definition, because three answers have to agree: [ExpenseBalance.splitKnown], the share
@@ -132,13 +146,10 @@ fun calculateExpenseBalance(
  * exactly this expense, has to mean.
  */
 private fun shareOf(expense: Expense, uid: String, roleByUid: Map<String, String>): Double {
-    val slot = roleByUid[uid]?.takeIf { expense.splitBetween.size == PAIR_SIZE && bothSlotsKnown(roleByUid) }
+    val slot = roleByUid[uid]?.takeIf { expense.isTwoWaySplit() && bothSlotsKnown(roleByUid) }
     val ratio = slot?.let { SplitRatio.fromStored(expense.splitBasisPoints) }
     return ratio?.shareFor(slot) ?: (1.0 / expense.splitBetween.size)
 }
-
-/** A slot-keyed ratio only describes two people; anything else divides evenly. */
-private const val PAIR_SIZE = 2
 
 /**
  * Splits [expenses] by currency and computes a separate [ExpenseBalance] for each.

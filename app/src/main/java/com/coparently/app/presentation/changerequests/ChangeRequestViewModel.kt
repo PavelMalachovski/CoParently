@@ -5,7 +5,6 @@ import androidx.lifecycle.viewModelScope
 import com.coparently.app.data.repository.CustodyModelRepository
 import com.coparently.app.domain.custody.CustodyPatternDiff
 import com.coparently.app.domain.custody.CustodyProposal
-import com.coparently.app.domain.custody.DayOverride
 import com.coparently.app.domain.custody.DayOverrideTransition
 import com.coparently.app.domain.custody.DaySwap
 import com.coparently.app.domain.custody.DaySwapGroup
@@ -237,25 +236,25 @@ class ChangeRequestViewModel @Inject constructor(
     }
 
     /**
-     * Takes up the co-parent's offer of [date]. From then on the calendar reads the swap instead
-     * of the pattern — nothing folds it back into the agreed schedule, which is what keeps it
-     * one-off.
-     */
-    fun acceptSwap(date: LocalDate) = decideSwap(date) { current, uid, now ->
-        DayOverrideTransition.accept(current, date.toString(), uid, now)
-    }
-
-    /** Turns the co-parent's offer of [date] down. Whose day it is does not change. */
-    fun declineSwap(date: LocalDate) = decideSwap(date) { current, uid, now ->
-        DayOverrideTransition.decline(current, date.toString(), uid, now)
-    }
-
-    /**
      * Answers a whole offer at once — every day of it, one way.
      *
      * All or nothing, which is what a single card asking about "5 days" honestly means. A partial
      * answer would need a per-day list inside the card, and the owner chose the simpler
      * agreement: one notification, one decision.
+     *
+     * **The decision is taken against the document, not against the list this screen collected.**
+     * Both parents write to one document; a held snapshot would silently drop whatever the other
+     * one did in between, and the mirror this screen reads can only be behind. So the skip that
+     * lets a part-answered group finish lives in the transform, where `writeSwap` has just read
+     * the live map — not in a filter over `group.swaps`, which was the first shape of this fix
+     * and is stale exactly when it is needed, on the retry after a partial run.
+     *
+     * `group.dates` is still filtered once up front, but only to decide whether there is anything
+     * to say — never to decide what to write.
+     *
+     * A refusal is surfaced, not swallowed. `DayOverrideTransition` refuses a parent deciding
+     * their own offer and `firestore.rules` refuses it again; either way the parent has to be
+     * told, because a button that looks like it worked is worse than one that says it did not.
      *
      * @param group The offer being answered.
      * @param accept True to take the days, false to turn them down.
@@ -266,49 +265,20 @@ class ChangeRequestViewModel @Inject constructor(
                 ?: userRepository.getCurrentUserId()
                 ?: return@launch
             val now = LocalDateTime.now().toString()
-            // Only the days still waiting on *this* parent. `applyDayOverridesForDates` writes
-            // one day per call, so `decideGroup` sees a one-element list and its own rule — a
-            // day already decided is skipped, not refused, so a part-answered group can still be
-            // finished — cannot apply: with nothing else in the list, an already-decided day
-            // makes `answerable` empty and fails the whole run at that day. Filtering here is
-            // what restores the rule the transition documents.
-            val dates = group.swaps
-                .filter { DaySwapInbox.awaitsAnswerFrom(it, uid) }
-                .map { it.date.toString() }
-            if (dates.isEmpty()) {
-                _errorMessage.value = "Nothing in this offer is waiting on you"
+            if (!group.awaitsAnswerFrom(uid)) {
+                _errorMessage.value = "This offer has already been answered"
                 return@launch
             }
-            custodyModelRepository.applyDayOverridesForDates(dates) { current, date ->
-                DayOverrideTransition.decideGroup(current, listOf(date), uid, now, accept)
-            }.onFailure { e ->
-                _errorMessage.value = e.message ?: "The swap could not be answered"
-            }
-        }
-    }
-
-    /**
-     * Applies a decision to the shared document.
-     *
-     * The transition runs against whatever the document holds *now*, not against the list this
-     * screen last collected: both parents write to one document, and a held snapshot would
-     * silently drop whatever the other one did in between.
-     *
-     * A refusal is surfaced, not swallowed. `DayOverrideTransition` refuses a parent deciding
-     * their own offer and `firestore.rules` refuses it again; either way the parent has to be
-     * told, because a button that looks like it worked is worse than one that says it did not.
-     */
-    private fun decideSwap(
-        date: LocalDate,
-        transition: (Map<String, DayOverride>, String, String) -> Result<Map<String, DayOverride>>
-    ) {
-        viewModelScope.launch {
-            val uid = _currentUserId.value.takeIf { it.isNotEmpty() }
-                ?: userRepository.getCurrentUserId()
-                ?: return@launch
-            val now = LocalDateTime.now().toString()
-            custodyModelRepository.applyDayOverrides(date.toString()) { current ->
-                transition(current, uid, now)
+            custodyModelRepository.applyDayOverridesForDates(group.dates) { current, date ->
+                if (DayOverrideTransition.awaitsAnswerFrom(current, date, uid)) {
+                    DayOverrideTransition.decideGroup(current, listOf(date), uid, now, accept)
+                } else {
+                    // Already decided, or this parent's own offer: leave it exactly as it is.
+                    // `decideGroup` would refuse a one-element list it cannot answer and abort
+                    // the run at that day, which is what stopped a part-answered group from ever
+                    // being finished.
+                    Result.success(current)
+                }
             }.onFailure { e ->
                 _errorMessage.value = e.message ?: "The swap could not be answered"
             }

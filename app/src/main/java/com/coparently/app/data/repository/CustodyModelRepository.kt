@@ -697,7 +697,7 @@ class CustodyModelRepository(
     ): Result<Map<String, DayOverride>> {
         val pair = currentPair()
             ?: return Result.failure(IllegalStateException("No co-parent to agree a swap with"))
-        val next = writeSwap(pair, date, transform).getOrElse { return Result.failure(it) }
+        val next = writeSwap(pair, date, transform).getOrElse { return Result.failure(it) }.overrides
 
         // Package C left this gap on purpose rather than adding a bespoke card the way the
         // change-request path once had: there must be exactly one way a change reaches the
@@ -740,33 +740,51 @@ class CustodyModelRepository(
             ?: return Result.failure(IllegalStateException("No co-parent to agree a swap with"))
 
         var latest: Map<String, DayOverride>? = null
-        var written = 0
+        val changed = mutableListOf<String>()
         for (date in dates) {
             val result = writeSwap(pair, date) { current -> transform(current, date) }
             val applied = result.getOrElse { cause ->
-                return if (written == 0) {
+                // Announce whatever *did* land before reporting the failure. Returning straight
+                // out left the days already written with no chat card and no push at all: the
+                // co-parent's schedule had moved and nothing had told them.
+                announceRun(pair, latest, changed)
+                return if (changed.isEmpty()) {
                     Result.failure(cause)
                 } else {
                     Result.failure(
                         IllegalStateException(
-                            "Only $written of ${dates.size} days could be offered",
+                            "Only ${changed.size} of ${dates.size} days could be offered",
                             cause
                         )
                     )
                 }
             }
-            latest = applied
-            written++
+            latest = applied.overrides
+            if (applied.changed) changed += date
         }
 
         val map = latest ?: return Result.failure(IllegalStateException("Nothing was written"))
-        // One announcement and one push for the whole run — the half of this the reporter asked
-        // for. The status of the first day speaks for the group: `decideGroup` and `offerAll`
-        // both give every day of a group the same status.
-        map[dates.first()]?.let { entry ->
-            announceSwap(pair, dates.first(), entry.status, dayCount = dates.size)
-        }
+        announceRun(pair, map, changed)
         return Result.success(map)
+    }
+
+    /**
+     * One chat card and one push for the days a run actually moved.
+     *
+     * Counts [changed] rather than the dates asked for: a group being finished skips the days
+     * already answered, and telling the co-parent "5 days" when two moved is the same kind of
+     * wrong as telling them nothing. The status of the first changed day speaks for the run —
+     * `decideGroup` and `offerAll` both give every day of a group the same status.
+     */
+    private suspend fun announceRun(
+        pair: CustodyPair,
+        map: Map<String, DayOverride>?,
+        changed: List<String>
+    ) {
+        val first = changed.firstOrNull() ?: return
+        map?.get(first)?.let { entry ->
+            announceSwap(pair, first, entry.status, dayCount = changed.size)
+        }
     }
 
     /**
@@ -779,11 +797,18 @@ class CustodyModelRepository(
         pair: CustodyPair,
         date: String,
         transform: (Map<String, DayOverride>) -> Result<Map<String, DayOverride>>
-    ): Result<Map<String, DayOverride>> {
+    ): Result<SwapWrite> {
         val existing = firestoreCustodyDataSource.getCustody(pair.documentId)
             ?: return Result.failure(IllegalStateException("The pair has no shared schedule yet"))
 
         val next = transform(existing.dayOverrides).getOrElse { return Result.failure(it) }
+        if (next == existing.dayOverrides) {
+            // The transform left this day alone — an already-answered day of a group being
+            // finished. Writing it anyway would cost a document write and re-stamp
+            // `lastModifiedBy`, which `CustodyChangeAnnouncement` reads to decide whether to
+            // tell the other parent their schedule moved.
+            return Result.success(SwapWrite(existing.dayOverrides, changed = false))
+        }
         val written = guarded("swap", pair.documentId) {
             firestoreCustodyDataSource.setCustody(
                 documentId = pair.documentId,
@@ -799,9 +824,21 @@ class CustodyModelRepository(
         return if (written == null) {
             Result.failure(IllegalStateException("The swap could not be written"))
         } else {
-            Result.success(next)
+            Result.success(SwapWrite(next, changed = true))
         }
     }
+
+    /**
+     * One day's write, and whether it moved anything.
+     *
+     * @property overrides The map as it now stands.
+     * @property changed False when the transform left the day exactly as it found it, so the
+     *   caller can count and announce the days that really landed rather than the days it tried.
+     */
+    private data class SwapWrite(
+        val overrides: Map<String, DayOverride>,
+        val changed: Boolean
+    )
 
     /**
      * One chat card and one push for a swap, however many days it covers.

@@ -2,6 +2,7 @@ package com.coparently.app.domain.custody
 
 import org.junit.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
@@ -66,6 +67,22 @@ class DayOverrideTransitionTest {
     @Test
     fun `deciding a date with no override fails rather than inventing one`() {
         assertTrue(DayOverrideTransition.accept(emptyMap(), date, dad, now).isFailure)
+    }
+
+    @Test
+    fun `awaitsAnswerFrom is true only for the other parent's still-pending offer`() {
+        // The predicate a caller writing a group one day at a time has to apply itself, against
+        // the map the write just read. Getting it from a Room mirror instead is what made a
+        // part-answered group unfinishable: the mirror can only be behind, and it is behind
+        // exactly on the retry after a partial run.
+        val offered = DayOverrideTransition.offer(emptyMap(), date, "dad", mom, now).getOrThrow()
+
+        assertTrue(DayOverrideTransition.awaitsAnswerFrom(offered, date, dad))
+        assertFalse(DayOverrideTransition.awaitsAnswerFrom(offered, date, mom), "your own offer")
+        assertFalse(DayOverrideTransition.awaitsAnswerFrom(offered, "2026-09-12", dad), "no entry")
+
+        val answered = DayOverrideTransition.accept(offered, date, dad, now).getOrThrow()
+        assertFalse(DayOverrideTransition.awaitsAnswerFrom(answered, date, dad), "already decided")
     }
 
     @Test
