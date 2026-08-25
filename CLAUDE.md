@@ -11,16 +11,21 @@ Firebase (Auth/Firestore/FCM) for sync between the two parents, Google Calendar 
 no navigation graph, with the API key shipping in every APK. If AI returns it goes behind the
 Cloud Function proxy (SEC-1), never with a key in the client. See `docs/AUDIT-2026-08.md` §6.
 
-**The authoritative roadmap is `docs/CoPlanly/MVP_phases.md`** (not `.cursor/roadmap.md`,
-which is the historical original plan). MVP 1 is complete, and **MVP 2 appears to be complete
-too** — receipts with on-device OCR, change requests, the Home dashboard, structured change
-requests from chat and event images are all shipped; this line said "MVP 2 is next" for longer
-than it was true. Re-baseline against `MVP_phases.md` before planning MVP 3.
+**The plan of record is `docs/ROADMAP.md`** — one document, merged on 2026-08-25 from
+`docs/BACKLOG.md` and `docs/CoPlanly/MVP_phases.md`, both now deleted (`.cursor/roadmap.md` is the
+historical original plan). MVP 1 **and** MVP 2 are complete: §2 re-baselines all three phases
+against the code rather than against memory, which is what this line failed to do for months while
+it said "MVP 2 is next". Two things to read before planning anything: **§1**, which says for every
+open item whether a cloud session, a CI job, or a machine with an Android SDK and a phone can do
+it, and **§10**, the dependency order.
 
 **The latest full audit lives in `docs/AUDIT-2026-08.md`** (`AUDIT-2026-07.md` is the previous
-one). Read §5 before planning anything: the app has no privacy policy, no in-app account
-deletion and no signing config, so it cannot be published yet, and the `applicationId`
-(`com.coparently.app`, against a product called CoPlanly) becomes permanent at first upload.
+one); `docs/ROADMAP.md` §3 is the live version of its §5. The app still cannot be published: no
+hosted privacy policy, no signing config, no Play listing. Two claims that paragraph used to make
+are **no longer true** and were corrected here rather than left to mislead — in-app account
+deletion ships (server-side teardown plus a local wipe, PR #68), and the `applicationId` is now
+`app.coplanly`, decided while it still could be. What is still permanent at first upload is that
+id, so REL-1's console half has to be finished before anything is uploaded.
 
 ## Design refresh (August 2026) — implemented, keep consistent
 
@@ -163,7 +168,7 @@ cd firestore-tests && npm test              # firestore.rules against the local 
   R8 runs) — plus Cloud Functions and the Firestore rules suite against the emulator. They
   run **in parallel**; the Android three were one sequential job until the August 2026 CI
   pass, which is why a run took 13:22 for about 7 minutes of critical path. Two caveats, both
-  deliberate and both tracked in `docs/BACKLOG.md` (**CQ-12**, **CQ-1**): **detekt reports but does not gate**
+  deliberate and both tracked in `docs/ROADMAP.md` (**CQ-12**, **CQ-1**): **detekt reports but does not gate**
   (`continue-on-error`) until its baseline is regenerated locally, and there is **no
   instrumented migration job**, because `app/schemas/` stops at v14 while the database is at
   v30. Still run the build locally before pushing — CI is a backstop, not a substitute.
@@ -552,7 +557,7 @@ whatever you were doing; a stale "known issue" costs more than a missing one.
   That covers the case seen in production: on the first launch after install both listeners were
   denied ~0.5 s before `ensureConversation` created the conversation document, and the whole
   session then ran on local data while looking entirely healthy. **What is still open (CQ-8 in
-  `docs/BACKLOG.md`):** an outage longer than the backoff still ends in that degraded state, and
+  `docs/ROADMAP.md`):** an outage longer than the backoff still ends in that degraded state, and
   still lasts until the process restarts. `catch` *completes* the mirror flow, so
   `merge(mirror, local)` runs on Room alone afterwards, and `SharingStarted.WhileSubscribed`
   cannot restart it — `rememberChatUnreadCount()` in `NavGraph` holds an Activity-scoped

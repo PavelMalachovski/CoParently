@@ -45,7 +45,7 @@ Firebase sync between the two households.
 > and what to build if AI returns, is in `docs/AUDIT-2026-08.md` §6 — and if it returns it goes
 > behind the Cloud Function proxy (**SEC-1**), never with a key in the client.
 >
-> See `docs/BACKLOG.md` for everything left to build, fix or decide — release blockers,
+> See `docs/ROADMAP.md` for everything left to build, fix or decide — release blockers,
 > security, code quality, UI/UX and monetisation, each item with a stable id and a priority.
 
 ---
@@ -132,7 +132,7 @@ app/src/main/java/com/coparently/app/
 
 | Document | Purpose |
 |---|---|
-| [Roadmap (MVP phases)](docs/CoPlanly/MVP_phases.md) | **Authoritative roadmap** — MVP 1 done, MVP 2 next |
+| [Roadmap and backlog](docs/ROADMAP.md) | **The plan of record** — the MVP phases re-baselined against the code, every open item with an id, a priority and where it can be done |
 | [Project audit (July 2026)](docs/AUDIT-2026-07.md) | Full architecture/security/quality audit |
 | [CLAUDE.md](CLAUDE.md) | Guide for AI-assisted development in this repo |
 | [Firebase setup](docs/firebase-setup.md) · [quick start](docs/firebase-quick-start.md) | Backend configuration |
@@ -181,7 +181,8 @@ Based on a full design review of the live app:
 Bakaláři/Edupage import, payments, CSV/PDF exports, intelligent suggestions,
 minute-precision drag resizing.
 
-See [MVP_phases.md](docs/CoPlanly/MVP_phases.md) for the full feature matrix.
+See [ROADMAP.md](docs/ROADMAP.md) §2 for the full feature matrix and what each line
+actually resolved to in the code.
 
 ---
 

@@ -9,7 +9,7 @@
 # with no pull request open is therefore **not** built — open the pull request to get it
 # checked. The instrumented migration job is deliberately absent: `app/schemas/` stops at
 # v14 while the database is at v25, so it would be red from its first run for a reason
-# unrelated to any change. Add it once the schemas are restored (see docs/BACKLOG.md, CQ-1).
+# unrelated to any change. Add it once the schemas are restored (see docs/ROADMAP.md, CQ-1).
 #
 # ## Why the Android work is three jobs and not one
 #
@@ -175,11 +175,11 @@ jobs:
       # needs the Android SDK, which the environment that wrote this workflow did not have.
       #
       # So: run it, print it, do not fail on it. Regenerate the baseline locally and delete
-      # `continue-on-error` — one line here, and CQ-12 in docs/BACKLOG.md.
+      # `continue-on-error` — one line here, and CQ-12 in docs/ROADMAP.md.
       # Until then this step is a report, not a gate, and should not be mistaken for one.
       #
       # `if: always()` so one push reports lint *and* detekt rather than the first of them.
-      - name: detekt (reporting only — see docs/BACKLOG.md)
+      - name: detekt (reporting only — see docs/ROADMAP.md)
         if: always()
         continue-on-error: true
         run: ./gradlew detekt

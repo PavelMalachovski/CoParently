@@ -113,7 +113,7 @@ android {
         // rather than satisfy anything. Password sign-in itself works without it: the
         // credential is then scoped to this package and signing certificate alone.
         // Re-enable this check together with the App Links work, when a domain exists
-        // (docs/BACKLOG.md, CQ-16).
+        // (docs/ROADMAP.md, CQ-16).
         disable += "CredManMissingDal"
     }
 
