@@ -554,12 +554,14 @@ object DatabaseMigrations {
      * zero callers. Every row production has ever written holds null. The `CASE` below is here
      * because a conversion that costs four lines is cheaper than finding out we were wrong.
      *
-     * **`childId` is not dropped.** Removing a column from SQLite means rebuilding the table,
-     * and this file has no rebuild in it: every migration since v5 is `ALTER TABLE ADD COLUMN`.
-     * With `app/schemas/` stopping at v14 (CQ-1) and no instrumented migration job in CI, a
-     * blind rebuild of the expenses table would be the riskiest statement in the file and the
-     * least verifiable. The column stays declared on the entity, dead and documented, until
-     * CQ-1 gives it something to be checked against.
+     * **`childId` is not dropped.** Removing a column from SQLite means rebuilding the table.
+     * [MIGRATION_12_13] does exactly that and is the shape to copy — but note *why* it could be:
+     * `app/schemas/12.json` exists, so `MigrationTestHelper` can build a v12 database and
+     * `CoPlanlyDatabaseMigrationTest` proves the rebuild row by row. `app/schemas/` stops at v14
+     * (CQ-1), so no such test can be written for a v26 database: the rebuild would be the
+     * riskiest statement in this file and the only one with no way to check it. The column stays
+     * declared on the entity, dead and documented, until CQ-1 gives it something to be checked
+     * against.
      */
     val MIGRATION_26_27 = object : Migration(26, 27) {
         override fun migrate(database: SupportSQLiteDatabase) {

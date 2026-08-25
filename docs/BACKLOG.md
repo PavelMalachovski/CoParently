@@ -945,6 +945,12 @@ child-only field never could. Then: the picker on `AddExpenseScreen` and `Budget
 filter on the expenses screen, and per-member balances. Room v26 → v27; no data is lost because
 there is none.
 
+The `childId` columns stay on `ExpenseEntity`/`BudgetEntity`, dead and documented. Dropping a
+SQLite column needs a table rebuild, and `MIGRATION_12_13` is one — proved row by row by
+`CoPlanlyDatabaseMigrationTest`, but *only* because `app/schemas/12.json` exists for
+`MigrationTestHelper` to build a v12 database from. `app/schemas/` stops at v14 (CQ-1), so no
+such test can be written for a v26 database. Delete the columns when CQ-1 lands.
+
 Two rules came out of building it, and both have an obvious wrong answer one keystroke away:
 
 * **Naming nobody is not naming everybody.** An untagged expense appears in the unfiltered month

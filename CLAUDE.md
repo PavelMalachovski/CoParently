@@ -264,8 +264,10 @@ cd firestore-tests && npm test              # firestore.rules against the local 
   name, never a colour**: pink and blue are the parent slots, teal is a calendar friend, neutral
   grey is the weekend, and a fifth colour channel breaks what `DayCellFills.kt` protects. The
   `childId` columns survive on `ExpenseEntity`/`BudgetEntity`, dead and documented: dropping a
-  SQLite column needs a table rebuild, this migration file has never contained one, and with
-  `app/schemas/` stopping at v14 (**CQ-1**) there is nothing to check a rebuild against.
+  SQLite column needs a table rebuild, and while `MIGRATION_12_13` is one — proved row by row by
+  `CoPlanlyDatabaseMigrationTest`, *because* `app/schemas/12.json` exists for
+  `MigrationTestHelper` to build from — `app/schemas/` stops at v14 (**CQ-1**), so no such test
+  can be written for a v26 database.
   `Event.forMembers` joined them in FAM-3 (schema 28) and adds one rule of its own: **it is not
   `parentOwner`.** That stays a custody slot — whose *day* an event falls on does not change
   because it is one child's dentist appointment and not the other's — and the two must never be
