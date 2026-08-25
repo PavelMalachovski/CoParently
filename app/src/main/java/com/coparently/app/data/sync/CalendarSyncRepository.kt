@@ -57,11 +57,9 @@ class CalendarSyncRepository @Inject constructor(
             val owner = userRepository.getUserById(ownerUid)
                 ?: throw IllegalStateException("Not signed in. Please sign in to CoPlanly.")
             val ownerSlot = owner.role
-            // Which relationship an imported event belongs to. Unambiguous while a person
-            // co-parents with one other adult, which is what this stamp assumes; once a person
-            // can have several, the import needs to be told which family it is for, because a
-            // Google Calendar carries no answer to that question. Tracked in
-            // `docs/DESIGN-multi-family.md` as the one open question in M-4.
+            // The family this import belongs to — still stamped, though nothing shares it.
+            // See `toEventEntity` for why an import is private, and why that makes the
+            // "which family" question stop needing an answer.
             val ownerFamilyId = FamilyKey.orNull(ownerUid, owner.partnerId)
 
             emit(SyncResult.Progress("Fetching events from Google Calendar..."))
@@ -239,7 +237,10 @@ class CalendarSyncRepository @Inject constructor(
      *   `createdByFirebaseUid == auth.uid`, and a null here made every import a doomed write
      *   that `getUnsyncedEvents()` retried on every sync forever.
      * @param ownerFamilyId The importing parent's family, or null while they are unpaired -
-     *   resolved once per sync at the call site for the same reason [ownerSlot] is.
+     *   resolved once per sync at the call site for the same reason [ownerSlot] is. Stamped
+     *   even though a private event never syncs, for the reason `EventRepositoryImpl` stamps
+     *   `createdByFirebaseUid` on one: a field written only on the sync path stays null forever
+     *   on exactly the rows that never take it.
      */
     private fun GoogleEvent.toEventEntity(
         ownerSlot: String,
@@ -270,7 +271,25 @@ class CalendarSyncRepository @Inject constructor(
             createdAt = LocalDateTime.now(),
             updatedAt = LocalDateTime.now(),
             createdByFirebaseUid = ownerUid,
-            familyId = ownerFamilyId
+            familyId = ownerFamilyId,
+            // An import is **private**: it stays on the device that pulled it and never
+            // reaches a co-parent (owner decision, Aug 2026).
+            //
+            // A Google Calendar is a personal calendar. Publishing everything on it to the
+            // person you separated from is not what "sync my calendar" asks for, and the
+            // events it carries — a work meeting, a doctor, a date — are exactly the ones a
+            // co-parenting app has no business forwarding. What a parent wants shared, they
+            // create in the app.
+            //
+            // It also dissolves a question rather than answering it: with several families,
+            // "which one does an imported event belong to" has no answer a Google Calendar
+            // could give. A private event belongs to nobody but its creator, so there is
+            // nothing to get wrong.
+            //
+            // This is a behaviour change — imports used to sync — and `EventRepositoryImpl`
+            // already removes a remote copy when an event turns private, so an event imported
+            // by an older build leaves Firestore the first time it is edited here.
+            isPrivate = true
         )
     }
 

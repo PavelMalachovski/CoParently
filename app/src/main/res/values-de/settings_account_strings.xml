@@ -6,6 +6,7 @@
     <string name="settings_sync">Synchronisieren</string>
     <string name="settings_google_sync">Google Kalender-Synchronisierung</string>
     <string name="settings_gcal_enable_sync">Synchronisierung aktivieren</string>
+    <string name="settings_gcal_private_note">Importierte Termine bleiben auf diesem Gerät. Dein Google Kalender ist privat, es wird also nichts davon mit dem anderen Elternteil geteilt.</string>
     <string name="settings_signed_in_as">Angemeldet als: %1$s</string>
     <string name="settings_gcal_not_signed_in">Nicht angemeldet</string>
     <string name="settings_unknown">Unbekannt</string>

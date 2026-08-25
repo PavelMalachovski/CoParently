@@ -78,6 +78,14 @@ class CalendarSyncRepositoryTest {
 
             assertTrue(results.last() is SyncResult.Success)
             assertEquals("dad", inserted.captured.single().parentOwner)
+            // And private: a Google Calendar is a personal calendar, so an import stays on the
+            // device that pulled it rather than being published to a co-parent. It is also
+            // what makes "which family does this import belong to" a question with no need of
+            // an answer once a person has several. Owner decision, Aug 2026.
+            assertTrue(
+                inserted.captured.single().isPrivate,
+                "a Google Calendar import must never reach the co-parent"
+            )
         }
 
     @Test

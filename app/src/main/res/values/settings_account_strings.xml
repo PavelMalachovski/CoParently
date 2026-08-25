@@ -7,6 +7,7 @@
     <string name="settings_sync">Sync</string>
     <string name="settings_google_sync">Google Calendar Sync</string>
     <string name="settings_gcal_enable_sync">Enable Sync</string>
+    <string name="settings_gcal_private_note">Imported events stay on this device. Your Google Calendar is personal, so nothing from it is shared with your co-parent.</string>
     <string name="settings_signed_in_as">Signed in as: %1$s</string>
     <string name="settings_gcal_not_signed_in">Not signed in</string>
     <string name="settings_unknown">Unknown</string>

@@ -6,6 +6,7 @@
     <string name="settings_sync">Синхронізувати</string>
     <string name="settings_google_sync">Синхронізація з Google Календарем</string>
     <string name="settings_gcal_enable_sync">Увімкнути синхронізацію</string>
+    <string name="settings_gcal_private_note">Імпортовані події залишаються на цьому пристрої. Google Календар — особистий, тому співбатькові з нього нічого не передається.</string>
     <string name="settings_signed_in_as">Ви ввійшли як: %1$s</string>
     <string name="settings_gcal_not_signed_in">Вхід не виконано</string>
     <string name="settings_unknown">Невідомо</string>

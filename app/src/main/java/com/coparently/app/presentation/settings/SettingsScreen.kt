@@ -810,6 +810,16 @@ private fun GoogleCalendarActions(
             )
         }
 
+        // What the toggle actually does, said out loud. An import is private — it stays on the
+        // device that pulled it and never reaches the co-parent — and a sync control that did
+        // not say so would be read as "publish my calendar to them", which is the opposite.
+        // Design item 8: no affordance may leave the user guessing what it promises.
+        Text(
+            text = stringResource(R.string.settings_gcal_private_note),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
         when (syncState) {
             is GoogleCalendarSyncState.Syncing -> StatusLine(
                 text = syncState.message,
