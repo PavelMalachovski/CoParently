@@ -40,7 +40,14 @@ object CustodyTimestamp {
 
     private val formatter: DateTimeFormatter = DateTimeFormatter.ISO_LOCAL_DATE_TIME
 
-    /** What a write of [millis] puts in the document. */
+    /**
+     * What a write of [millis] puts in the document.
+     *
+     * The same shape the previous code wrote: `ISO_LOCAL_DATE_TIME` always formats seconds on
+     * output — unlike `LocalDateTime.toString()`, which omits them at zero — so a co-parent on
+     * an older build is handed text of exactly the form they have always parsed. Fractions are
+     * printed only when non-zero, with trailing zeros trimmed.
+     */
     fun toWire(millis: Long): String =
         Instant.ofEpochMilli(millis).atZone(ZoneOffset.UTC).toLocalDateTime().format(formatter)
 

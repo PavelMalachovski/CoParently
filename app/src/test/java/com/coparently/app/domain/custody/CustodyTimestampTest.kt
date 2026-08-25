@@ -18,9 +18,13 @@ import kotlin.test.assertNotEquals
 class CustodyTimestampTest {
 
     @Test
-    fun `an instant survives a round trip through the document`() {
+    fun `an instant survives a round trip through the document, byte for byte`() {
+        // The written text is the same shape the old build wrote — `ISO_LOCAL_DATE_TIME` always
+        // formats seconds, unlike `LocalDateTime.toString()`, which omits them at zero. That
+        // matters here: a co-parent on an older build parses this field, and giving them a shape
+        // they have never seen is a risk taken for nothing.
         val millis = CustodyTimestamp.fromWire("2026-08-04T18:30:00")
-        assertEquals("2026-08-04T18:30", CustodyTimestamp.toWire(millis))
+        assertEquals("2026-08-04T18:30:00", CustodyTimestamp.toWire(millis))
     }
 
     @Test
@@ -72,7 +76,9 @@ class CustodyTimestampTest {
     fun `sub-second precision survives, because two writes can share a second`() {
         val millis = CustodyTimestamp.fromWire("2026-08-04T18:30:00.250")
         assertNotEquals(CustodyTimestamp.fromWire("2026-08-04T18:30:00"), millis)
-        assertEquals("2026-08-04T18:30:00.250", CustodyTimestamp.toWire(millis))
+        // `.25`, not `.250`: the formatter trims trailing zeros from the fraction. The instant
+        // is what has to survive, and it does — the text is only how it travels.
+        assertEquals("2026-08-04T18:30:00.25", CustodyTimestamp.toWire(millis))
     }
 
     /** Runs [block] with the JVM default zone set to [zone], restoring it afterwards. */

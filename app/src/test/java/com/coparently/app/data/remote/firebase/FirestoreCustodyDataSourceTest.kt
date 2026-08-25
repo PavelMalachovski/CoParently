@@ -261,7 +261,7 @@ class FirestoreCustodyDataSourceTest {
             custody().copy(lastModifiedAtMillis = CustodyTimestamp.fromWire("2026-08-04T18:30:00"))
         )
 
-        assertEquals("2026-08-04T18:30", written["lastModifiedAt"])
+        assertEquals("2026-08-04T18:30:00", written["lastModifiedAt"])
     }
 
     @Test
