@@ -40,7 +40,7 @@ class BudgetViewModel @Inject constructor(
         viewModelScope.launch {
             userRepository.getCurrentUser()?.let { user ->
                 _currentUserId.value = user.id
-                budgetRepository.syncWithFirestore()
+                budgetRepository.observeRemote()
             }
         }
     }

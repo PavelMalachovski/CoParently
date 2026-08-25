@@ -70,6 +70,17 @@ object CoPlanlyColors {
     // read as either would undo the one colour rule this app has held throughout. It is also
     // NOT the theme's `secondary` slot, which stays a neutral indigo for generic Material
     // selected states; a person is not a control.
+    // Budget warning — "close to the limit", the state Material 3 has no role for. `tertiary`
+    // says nothing is wrong and `error` says something is, and a budget at 85% is neither.
+    //
+    // A **pair**, for the same reason the parent colours are one: no single amber clears the
+    // 3:1 WCAG 1.4.11 asks of a graphical indicator against *both* surfaces. The single
+    // `0xFFF5C05B` this replaces managed 1.67:1 on white — a status marker a sighted user could
+    // not reliably see, on a screen where it was the only channel carrying the status at all.
+    // Light theme reads the Dark member, dark theme reads the Light one, exactly as above.
+    val BudgetWarningLight = Color(0xFFFFB300) // Amber 600 - 1.79:1 on white / 9.55:1 on DarkSurface
+    val BudgetWarningDark = Color(0xFFEF6C00) // Orange 800 - 3.08:1 on white / 5.56:1 on DarkSurface
+
     val FriendTeal = Color(0xFF00796B) // Teal 700 - 4.77:1 on white / 3.36:1 on DarkSurface
     val FriendTealLight = Color(0xFF80CBC4) // Teal 200 - 1.86:1 on white / 9.21:1 on DarkSurface
     val FriendTealDark = Color(0xFF004D40) // Teal 900 - 9.65:1 on white / 1.78:1 on DarkSurface

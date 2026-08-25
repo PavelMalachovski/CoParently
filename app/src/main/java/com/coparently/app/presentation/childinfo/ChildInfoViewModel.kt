@@ -462,7 +462,7 @@ class ChildInfoViewModel @Inject constructor(
     fun syncChildInfo() {
         viewModelScope.launch {
             try {
-                childInfoRepository.syncWithFirestore()
+                childInfoRepository.pullOnce()
             } catch (e: Exception) {
                 _uiState.value = ChildInfoUiState.Error(e.message ?: "Failed to sync child info")
             }

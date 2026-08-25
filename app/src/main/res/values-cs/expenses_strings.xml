@@ -99,4 +99,8 @@
     <string name="expense_split_not_shared_hint">Započítá se do vašich výdajů, ale nikdo nikomu za něj nic nedluží.</string>
     <string name="expense_split_ratio">Rozdělení %1$d / %2$d</string>
     <string name="expense_split_override_hint">Jiné rozdělení jen pro tento výdaj. Dohodnuté rozdělení rodiny se nemění.</string>
+    <!-- Budget status in words (UX-10). -->
+    <string name="budget_status_near">Blízko limitu</string>
+    <string name="budget_status_over">Nad limitem</string>
+    <string name="expenses_budget_chip_status">%1$s · %2$s</string>
 </resources>

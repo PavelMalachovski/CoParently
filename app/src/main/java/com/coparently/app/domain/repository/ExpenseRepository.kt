@@ -59,5 +59,15 @@ interface ExpenseRepository {
     /**
      * Syncs expenses with Firestore.
      */
-    suspend fun syncWithFirestore()
+    /**
+     * Mirrors the remote side into Room and **never returns** — it collects a snapshot
+     * listener for as long as its caller's scope lives.
+     *
+     * Named for the shape rather than for the subject (CQ-10). It was `syncWithFirestore()`,
+     * the same name the one-shot repositories use, which made it look safe to await from
+     * `SyncService.performFullSync()`. It is not: that call would hang, `SyncWorker` would be
+     * killed at WorkManager's ten-minute ceiling, and sync would stop entirely with no
+     * exception and no log. Call it from a scope that is allowed to run forever.
+     */
+    suspend fun observeRemote()
 }

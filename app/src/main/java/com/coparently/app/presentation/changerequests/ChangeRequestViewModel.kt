@@ -171,7 +171,7 @@ class ChangeRequestViewModel @Inject constructor(
         }
         // Mirrors remote requests into Room while this ViewModel is alive.
         viewModelScope.launch {
-            changeRequestRepository.syncWithFirestore()
+            changeRequestRepository.observeRemote()
         }
     }
 

@@ -16,7 +16,7 @@ import javax.inject.Singleton
  *   Taken from there rather than from `Parents.me.slot`, and that is not belt-and-braces:
  *   `UserRepositoryImpl` only stamps a role when it *creates* a Room row and preserves it on
  *   every later write, so an accepter's local row still reads the slot they held before pairing
- *   until the periodic `syncWithFirestore` catches up — up to fifteen minutes, and this screen
+ *   until the periodic `SyncWorker` pass catches up — up to fifteen minutes, and this screen
  *   opens seconds after the accept. Colouring the two preview grids from that stale slot would
  *   put the accepter's name against the co-parent's colour on the one screen whose entire job is
  *   "which of these days are mine". Naming, separately, goes by uid — the ruling this branch

@@ -97,4 +97,8 @@
     <string name="expense_split_not_shared_hint">Зараховується у ваші витрати, але ніхто нікому за нього не винен.</string>
     <string name="expense_split_ratio">Поділ %1$d / %2$d</string>
     <string name="expense_split_override_hint">Інший поділ лише для цієї витрати. Погоджений поділ сім\'ї не змінюється.</string>
+    <!-- Budget status in words (UX-10). -->
+    <string name="budget_status_near">Близько до ліміту</string>
+    <string name="budget_status_over">Перевищено</string>
+    <string name="expenses_budget_chip_status">%1$s · %2$s</string>
 </resources>

@@ -20,7 +20,7 @@ import javax.inject.Singleton
  * Firebase Auth creates an account, not a `users/{uid}` document. Nothing else in the app
  * writes the user's own `name` and `email` there: the FCM registration writes `fcmToken`
  * with a merge (so the document exists, carrying that one key), the pairing Cloud Function
- * adds `partnerId`/`pairedAt`, and `UserRepositoryImpl.syncWithFirestore` only reads. The
+ * adds `partnerId`/`pairedAt`, and `UserRepositoryImpl.pullOnce` only reads. The
  * co-parent's pairing card reads `name`/`email` from that same document, so the gap
  * surfaced on the other phone as "Unknown"/"Email unavailable".
  *

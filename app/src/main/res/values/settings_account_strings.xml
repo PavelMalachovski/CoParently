@@ -63,4 +63,9 @@
     <string name="settings_split_ratio_applied">Split saved</string>
     <string name="settings_split_ratio_proposed">Sent to your co-parent to confirm</string>
     <string name="settings_split_ratio_refused">That split could not be proposed</string>
+    <!-- Content descriptions for the disclosure chevron on the Google Calendar row (UX-11).
+         The row's trailing slot used to hold a switch and an unnamed chevron, so TalkBack
+         announced a switch and never said the row expands. -->
+    <string name="settings_expand">Show options</string>
+    <string name="settings_collapse">Hide options</string>
 </resources>

@@ -106,4 +106,13 @@
     <string name="expense_split_not_shared_hint">Counts towards your spending, but neither of you owes the other for it.</string>
     <string name="expense_split_ratio">Split %1$d / %2$d</string>
     <string name="expense_split_override_hint">Different split for this expense only. The family\'s agreed split does not change.</string>
+    <!-- Budget status in words (UX-10). Colour used to be the only channel: a 6dp dot in
+         green/amber/red with no semantics, so a screen reader was handed "School 800 / 1000"
+         and no status, and a colour-blind reader saw a dot they could not name. The numbers do
+         not answer it either — "near" is measured against each budget's own alert threshold,
+         which is not on screen. expenses_budget_chip_status joins the amounts to the status on
+         a chip; it is a separator, so it is the same in every locale. -->
+    <string name="budget_status_near">Near limit</string>
+    <string name="budget_status_over">Over limit</string>
+    <string name="expenses_budget_chip_status">%1$s · %2$s</string>
 </resources>

@@ -181,7 +181,7 @@ class UserRepositoryImpl @Inject constructor(
      *
      * So the skip is narrowed from "write nothing" to "write everything except the name":
      * the email address and the avatar are real data the co-parent's pairing card renders,
-     * and `id`/`firebaseUid` are what keep [syncWithFirestore] from minting a random local
+     * and `id`/`firebaseUid` are what keep [pullOnce] from minting a random local
      * id later. Discarding them because one *other* field is unknown helped nobody.
      *
      * A null [remote] is deliberately treated as "do not write remotely". It means either
@@ -290,7 +290,7 @@ class UserRepositoryImpl @Inject constructor(
      * Merges the identity keys that are missing or stale into `users/{uid}`.
      *
      * `id` and `firebaseUid` are only added when the document does not carry them:
-     * [syncWithFirestore] reads `id` back and would otherwise mint a random UUID for the
+     * [pullOnce] reads `id` back and would otherwise mint a random UUID for the
      * local row, and the `users` rules require `firebaseUid`, when present, to equal the
      * caller's UID.
      *
@@ -443,7 +443,7 @@ class UserRepositoryImpl @Inject constructor(
         userDao.deleteUserById(id)
     }
 
-    override suspend fun syncWithFirestore() {
+    override suspend fun pullOnce() {
         val firebaseUser = firebaseAuthService.getCurrentUser() ?: return
 
         try {

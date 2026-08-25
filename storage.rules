@@ -6,9 +6,30 @@ rules_version = '2';
 // authentication; download URLs embedded in Firestore documents carry an access
 // token and keep working for the paired parent regardless of these read rules.
 //
-// None of these blocks can tell one signed-in user from another: Storage rules cannot read
-// Firestore, so none of them knows who a parent of what is. See the medical_photos block, which
-// says at length what that costs and why it was accepted there.
+// None of these blocks can tell one signed-in user from another: none of them knows who a parent
+// of what is. See the medical_photos block, which says at length what that costs and why it was
+// accepted there.
+//
+// **The reason given for that used to be wrong.** This file said "Storage rules cannot read
+// Firestore", and so did SEC-1 in the backlog. They can: cross-service Security Rules
+// (announced September 2022) give Storage rules `firestore.get()` and `firestore.exists()`,
+// capped at two document reads per evaluation. So the fix here is a rules change keyed on the
+// same Firestore state `firestore.rules` already gates on — not the Cloud Function proxy this
+// file has been pointing at, which would mean routing image bytes through a function.
+//
+// Two things a future implementer needs, both found the hard way:
+//
+// 1. **A receipt is uploaded before its expense document exists.** `ExpenseViewModel.addExpense`
+//    mints a UUID, uploads to `receipts/{uuid}.jpg`, and only then writes the expense. A rule
+//    requiring the Firestore document would reject every first upload. The write that actually
+//    needs gating is the one against an object that is *already there* — overwrite and delete
+//    are the harm this file describes; a create at a fresh UUID path is an orphan blob.
+// 2. **The Storage emulator does not resolve cross-service calls.** Verified here: with both
+//    emulators running and the document confirmed present, `firestore.exists()` in a Storage
+//    rule still denies (firebase-js-sdk#6803, firebase-tools#5251). So the rule cannot be
+//    covered by `firestore-tests/` the way every rule in `firestore.rules` is — and this project
+//    has already shipped one broken delete rule by testing a rule any other way. **Find a way to
+//    verify it before deploying it**; do not write it from the description above and push.
 //
 // ---------------------------------------------------------------------------------------
 // WRITE IS THE WORSE HALF, AND IT WAS UNDOCUMENTED UNTIL THE AUGUST 2026 AUDIT.
@@ -33,9 +54,10 @@ rules_version = '2';
 // about objects already in the bucket that carry no such stamp, and a check against the guest
 // and friend read paths — a change of its own size.
 //
-// The fix the medical_photos block already names is the fix for this too: a Cloud Function
-// proxy that resolves the caller against Firestore and is the only writer with credentials.
-// Until then, treat every block below as: authenticated == may read, overwrite and delete.
+// The fix is the cross-service rule described at the top of this file, gating overwrite and
+// delete on the same Firestore state that already decides who may edit the entity. Until it is
+// written *and verified*, treat every block below as: authenticated == may read, overwrite and
+// delete.
 // ---------------------------------------------------------------------------------------
 service firebase.storage {
   match /b/{bucket}/o {
@@ -66,15 +88,14 @@ service firebase.storage {
     // acceptable. A photograph of a child's medical record is not the same thing, and
     // "any signed-in CoPlanly user" is not an audience it should have.
     //
-    // Storage rules cannot read Firestore, so they cannot ask whether the caller is a parent of
-    // this child. The two honest options were an unguessable path plus the download URL's access
-    // token, or a Cloud Function proxy. This takes the first, and {photoId} is a UUID for that
-    // reason rather than for uniqueness.
+    // This was written believing Storage rules could not ask whether the caller is a parent of
+    // this child. They can — see the correction at the top of this file — so the unguessable
+    // path below is no longer the best available answer, only the one that is currently here.
+    // {photoId} is a UUID for that reason rather than for uniqueness.
     //
     // That is obscurity, not access control. It is written here so a future reader does not
     // mistake it for a boundary: anyone signed in who learns a path can read the object, and the
-    // only thing stopping them learning it is that they cannot guess a UUID. The real fix is the
-    // proxy.
+    // only thing stopping them learning it is that they cannot guess a UUID.
     match /medical_photos/{childInfoId}/{fileName} {
       allow read: if request.auth != null;
       // Same constraints as the blocks above: deletes have request.resource == null; uploads

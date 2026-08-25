@@ -216,7 +216,7 @@ class ExpenseRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun syncWithFirestore() {
+    override suspend fun observeRemote() {
         val firebaseUser = firebaseAuthService.getCurrentUser() ?: return
         val partnerId = userDao.getUserById(firebaseUser.uid)?.partnerId
         val creatorUids = listOfNotNull(firebaseUser.uid, partnerId)

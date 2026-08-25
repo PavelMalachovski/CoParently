@@ -84,7 +84,7 @@ class ChildInfoRepositoryImpl @Inject constructor(
     /**
      * The signed-in user's current co-parent, or null when unpaired.
      *
-     * Shared by [upsertChildInfo] and [syncWithFirestore] so both writers ask the same
+     * Shared by [upsertChildInfo] and [pullOnce] so both writers ask the same
      * question the same way before handing the answer to [ChildInfoAudience.entitled].
      */
     private suspend fun currentPartnerId(userId: String): String? =
@@ -100,7 +100,7 @@ class ChildInfoRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun syncWithFirestore() {
+    override suspend fun pullOnce() {
         val firebaseUser = firebaseAuthService.getCurrentUser() ?: return
         val partnerId = currentPartnerId(firebaseUser.uid)
 
@@ -206,7 +206,7 @@ class ChildInfoRepositoryImpl @Inject constructor(
      *
      * @param audience The `sharedWith` UIDs this write should publish to, from
      *   [ChildInfoAudience.entitled]. Taken as a parameter rather than derived in here so
-     *   both callers ([upsertChildInfo] and [syncWithFirestore]) go through the single
+     *   both callers ([upsertChildInfo] and [pullOnce]) go through the single
      *   policy instead of each computing their own.
      */
     private fun ChildInfo.toFirestoreMap(audience: List<String>): Map<String, Any?> {

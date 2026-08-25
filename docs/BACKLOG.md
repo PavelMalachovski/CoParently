@@ -160,15 +160,36 @@ The single highest-value piece of infrastructure left. Audit §3.1, §3.2, §6.2
    before touching it. Not patched with an owner check on purpose: **both** parents
    legitimately manage the same files, so a uid check would deny the co-parent a deletion the
    app itself offers them.
+
+   **This part does not need the proxy, and the reason it was thought to was a factual error.**
+   Both this item and `storage.rules` asserted that Storage rules cannot read Firestore. They
+   can: cross-service Security Rules (September 2022) give Storage rules `firestore.get()` and
+   `firestore.exists()`, two document reads per evaluation. So the fix is a rules change keyed
+   on the state `firestore.rules` already gates on — **S, not L** — rather than routing image
+   bytes through a Cloud Function.
+
+   Two traps, both found by looking rather than by reasoning:
+   - A receipt is **uploaded before its expense document exists** (`ExpenseViewModel.addExpense`
+     mints a UUID, uploads, then writes the expense). A rule requiring the document would reject
+     every first upload. Gate *overwrite and delete*, which is the harm; a create at a fresh
+     UUID path is an orphan blob.
+   - **The Storage emulator does not resolve cross-service calls.** Verified here with both
+     emulators running and the document confirmed present (firebase-js-sdk#6803,
+     firebase-tools#5251). So this rule cannot be covered by `firestore-tests/` the way every
+     rule in `firestore.rules` is, and this project has already shipped one broken delete rule
+     by testing a rule some other way. **Settle how it will be verified before writing it** —
+     a staging bucket against a real project is the likely answer.
 2. **OAuth token exchange** — the Google client secret ships in every APK, with no PKCE.
    Carried over unfixed from the July 2026 audit.
 3. **Model calls, if AI ever returns.** The Gemini key used to ship in the APK too; the
    subsystem and the key are gone (**MON-7**), so this is now a precondition rather than a live
    hole — nothing goes to a model again without the proxy in front of it.
 
-One proxy, resolving the caller against Firestore, answers all three. It also makes per-user rate
-limits possible at all, and turns prompts and the model version into server-side config instead
-of an app release.
+So this is **two independent pieces, not one**: a cross-service rules change for §1 (small, but
+needing a verification story), and a callable for §2's token exchange (which is what the proxy
+was really for). §3 is a precondition with nothing to build until AI returns. The proxy still
+buys per-user rate limits and server-side model config — but not for §1, and pricing §1 as part
+of an L-sized proxy is what has kept a P0 hole open.
 
 ### SEC-2 · P1 · M · Room is not encrypted at rest
 
@@ -373,15 +394,23 @@ included. Fix: observe the one child being edited by id (`ChildInfoDao.observeCh
 already wired through the repository), not the head of a list the editor does not own.
 `CLAUDE.md` documents this in full, including why widening the `isNewChild` guard does not help.
 
-### CQ-10 · P2 · S · `syncWithFirestore()` means two incompatible things — a trap
+### CQ-10 · **DONE** · `syncWithFirestore()` means two incompatible things — a trap
 
 Implemented as a one-shot in `PetRepositoryImpl`/`EventRepositoryImpl` and as an **endless**
 `callbackFlow` listener in `ExpenseRepositoryImpl`, `BudgetRepositoryImpl` and
 `ChangeRequestRepositoryImpl`. `SyncService.performFullSync()` already calls the pet one;
 adding the expense one beside it by analogy would make `performFullSync()` **never return**,
 `SyncWorker` would be killed at WorkManager's ten-minute ceiling, and sync would stop entirely
-— with no exception and no log. Rename to `pullOnce()` / `observeRemote()`. Cheap, five files,
-prevents a silent outage. Audit §8.11.
+— with no exception and no log. Audit §8.11.
+
+Renamed by shape: `pullOnce()` on `Pet`, `Event`, `ChildInfo` and `User`; `observeRemote()` on
+`Expense`, `Budget` and `ChangeRequest`. **Seven repositories, not five** — the item counted the
+three endless ones and two of the four one-shots. Each name now carries a doc saying which shape
+it is and what awaiting the wrong one costs, because the name alone is what failed here: the
+danger was never in any single implementation, it was that the two had one word between them.
+
+The classification was checked against the data sources rather than taken from the item: a
+`flow { get() }` returns, a `callbackFlow { addSnapshotListener }` does not.
 
 ### CQ-11 · **PARTLY DONE** · P3 · S · Error handling is declared but not wired
 
@@ -430,17 +459,34 @@ device, which has a `Context` and all five translations, so no resource-provider
 involved. Worth remembering when the next item claims to be blocked behind this one — the
 question to ask is which side of the wire the string is finally read on.
 
-### CQ-15 · P3 · S · Dead code
+### CQ-15 · **PARTLY DONE** · P3 · S · Dead code
 
-Unreachable today: `utils/ComposeOptimizations.kt`, `ErrorDisplay`, `ErrorDialog`,
-`CoPlanlySnackbarHost`, `LoadingButton`, `SyncStatusIndicator`, `LottieAnimations` (the *only*
-consumer of the `lottie-compose` dependency), `AdaptiveDimensions`, `CalendarNavigation`,
-`AccessibilityUtils`, `SensitiveMedicalData`, five `EventDao` methods including the project's
-only pagination — plus the whole AI subsystem (**MON-7**).
+**Most of the original list was wrong, and it was measured rather than re-read.** Reachability
+was checked per symbol against the tree; three entries had consumers all along and two more had
+since been wired:
 
-Note the overlap with §4: several of these are components the design section is asking for.
-Delete what is genuinely dead; **wire** `SkeletonLoading`, `ErrorDisplay` and
-`CoPlanlySnackbarHost` rather than deleting them (UX-2, UX-3).
+- `AdaptiveDimensions` — **wired** by UX-6; `adaptiveDimensions()` has four call sites.
+- `SkeletonLoading` — **wired** by UX-2.
+- `SensitiveMedicalData` — five references. Never dead.
+- `LottieAnimations` was **not** "the only consumer of `lottie-compose`":
+  `common/animations/AnimatedEmptyState.kt` uses it on five screens, so the dependency and
+  `res/raw/empty_state_animation.json` stay. Only the four unused composables went.
+
+**Deleted** (0 references outside their own file, verified): `utils/ComposeOptimizations.kt`,
+`utils/AccessibilityUtils.kt`, `common/ErrorDialog.kt`, `common/LoadingButton.kt`,
+`sync/SyncStatusIndicator.kt`, `components/LottieAnimations.kt`,
+`calendar/navigation/CalendarNavigation.kt` — 1,264 lines.
+
+**Deliberately kept**: `ErrorDisplay` and `CoPlanlySnackbarHost`, which this item itself asks to
+be *wired* rather than deleted. They are still unreferenced. Whether they should be wired is now
+a live question rather than an assumption — UX-2 decided a failed list read stays a loaded empty
+value rather than an error surface, so the case for `ErrorDisplay` is weaker than it was when
+this was written. Decide it before either wiring or deleting.
+
+**Not checked**: the five `EventDao` methods, including the project's only pagination. Room
+generates an implementation for every `@Dao` method whether or not anything calls it, so these
+cost build output rather than APK behaviour; `getEventsForParentPaginated` is also the thing
+CQ-5's Home-screen half would use, so deleting it now would be deleting the answer.
 
 ### CQ-16 · P3 · S · No Digital Asset Links
 
@@ -567,13 +613,23 @@ Fixed: the calendar header's three controls, the month title included — which 
 Month/Week/Day switcher and was a bare `clickable`, so TalkBack did not announce it as a control
 either.
 
-### UX-8 · P2 · S · The answer to "whose day is it" is the smallest, greyest text on screen
+### UX-8 · **PARTLY DONE** · P3 · S · The answer to "whose day is it" is the smallest, greyest text
 
-`CalendarBanners:239` renders it as `labelMedium` (12sp) in `onSurfaceVariant` with no parent
-colour, while `HomeScreen:673` gives the *next* handover 26sp bold. The hierarchy is inverted:
-the future event is louder than the present fact the app is opened for. The two surfaces also
-colour from different sources (`event.parentOwner` versus `entry.dayParent ?: event.parentOwner`),
-so one visual channel carries two meanings on adjacent cards. Audit §9.11.
+`CalendarBanners` rendered it as a **suffix on the date**, `labelMedium` (12sp) in
+`onSurfaceVariant` with no parent colour, while `HomeScreen` gives the *next* handover 26sp bold.
+The hierarchy was inverted: the future event shouted over the present fact the app is opened to
+answer. Audit §9.11.
+
+Now its own line at `titleMedium`, in that parent's colour through `ParentColors.text` — the
+text-grade member of the pair, never the raw fill. The date stays small and muted, because the
+date is the context and the answer is the answer. Deliberately not raised to compete with the
+26sp handover: a measured step, not a shouting match.
+
+**Left open — the second half of the item.** The two surfaces still colour from different
+sources: `event.parentOwner` on one and `entry.dayParent ?: event.parentOwner` on the other, so
+one visual channel carries two meanings on adjacent cards. That is a question about what a chip's
+colour *means* — the event's owner, or whose day it falls on — and it wants an owner's answer
+before either call site changes. Dropped to P3 because the loud half is fixed.
 
 ### UX-9 · P2 · M · Five different empty-state anatomies
 
@@ -587,18 +643,45 @@ sentences and no action. Separately, `AnimatedEmptyState` takes no `modifier` an
 top bar in `ConversationsScreen` and `BudgetScreen`; it also does not scroll, so it clips at
 large font scales. Audit §9.12.
 
-### UX-10 · P2 · S · Budget status is carried by colour alone
+### UX-10 · **DONE** · Budget status is carried by colour alone
 
-Under / near / over is a 6dp dot in green/amber/red, decorative (no semantics), and the amber
-`CoPlanlyBudgetWarning` is theme-independent — about 1.9:1 on a light background. A screen reader
-gets "School 800/1000" and no status at all. WCAG 1.4.1. Audit §9.13.
+Under / near / over was a 6dp dot in green/amber/red, decorative (no semantics), and the amber
+`CoPlanlyBudgetWarning` was theme-independent — 1.67:1 on a light background, measured. A screen
+reader got "School 800/1000" and no status at all. WCAG 1.4.1. Audit §9.13.
 
-### UX-11 · P2 · S · The Google Calendar row breaks the one-trailing-control rule
+`BudgetStatus` is now a value, and colour is the **third** channel behind a word and a shape:
+a chip past its threshold says so in words and carries a warning triangle, one past its limit
+carries an error circle. A circle and a triangle rather than two tints of one shape, because the
+point is to survive the colour being discarded. `UNDER` deliberately gets neither — marking every
+budget in hand would bury the two that matter.
 
-`SettingsScreen:313` puts a `Switch` **and** a chevron in the trailing slot of a row that is
-itself clickable — three interaction models in one row, against `DesignSystem.kt:143`. The
-chevron has `contentDescription = null`, so TalkBack announces a switch and never mentions that
-the row expands. Audit §9.14.
+Two things fell out of it that were not in the item:
+
+- **The two screens disagreed.** `BudgetItem` decided the same three states in a *third* palette
+  (`Color.Red` / `0xFFFFC107` / `0xFF4CAF50`), so one budget could read as a different amber
+  depending on which screen you were on. Both now go through `BudgetStatus`.
+- **The percentage was painted in the status colour**, which put the amber state at ~1.7:1 as
+  *text*. It is `onSurface` now; the colour is left to the progress bar, where it is a graphical
+  indicator rather than something to read.
+
+`CoPlanlyColors.BudgetWarningLight`/`Dark` is a pair for the reason the parent colours are: no
+single amber clears 3:1 (WCAG 1.4.11) against both surfaces. Measured, not guessed — Orange 800
+is 3.08:1 on white, Amber 600 is 9.55:1 on `DarkSurface`.
+
+### UX-11 · **DONE** · The Google Calendar row breaks the one-trailing-control rule
+
+`SettingsScreen` put a `Switch` **and** a chevron in the trailing slot of a row that is itself
+clickable — three interaction models in one row, against `SectionRow`'s stated anatomy. The
+chevron had `contentDescription = null`, so TalkBack announced a switch and never mentioned that
+the row expands, which made the sign-in and sync-now actions behind it unreachable without
+sight. Audit §9.14.
+
+The **switch** moved into the expanded block, not the chevron out of the row: expanding is what
+this row *is* — the August 2026 refresh replaced a card of stacked buttons with exactly that —
+and the toggle belongs beside the sign-in that decides whether it can be used at all. It costs
+one extra tap on a control a parent sets once, and it reads as a labelled row there instead of
+an unexplained switch in a trailing slot. `DisclosureChevron` carries the row's state aloud,
+which a plain navigation `Chevron` deliberately does not.
 
 ### UX-12 · P2 · S · Clerical English success messages
 
@@ -851,9 +934,8 @@ Not a wish-list ordering — a dependency ordering. Each block assumes the one a
 8. ~~**CQ-3** — deletions that replicate.~~ **Done.** Tombstones, an outbox that retries, and a
    daily server-side sweep. See the item for the three decisions it rests on.
 9. ~~**UX-1 → UX-7** — the P1 usability set.~~ **Done.** What remains in `UX` is P2 and below:
-   the empty-state anatomies (**UX-9**), budget status carried by colour alone (**UX-10**), the
-   Settings row with three interaction models (**UX-11**), and the English success strings
-   (**UX-12**, blocked on **CQ-14**).
+   the empty-state anatomies (**UX-9**) and the English success strings (**UX-12**, blocked on
+   **CQ-14**). **UX-10** and **UX-11** are done.
 
 **Then, the product bets, in descending confidence**
 

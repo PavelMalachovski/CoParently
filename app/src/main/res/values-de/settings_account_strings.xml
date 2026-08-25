@@ -62,4 +62,7 @@
     <string name="settings_split_ratio_applied">Aufteilung gespeichert</string>
     <string name="settings_split_ratio_proposed">Zur Bestätigung an dein Co-Elternteil gesendet</string>
     <string name="settings_split_ratio_refused">Diese Aufteilung konnte nicht vorgeschlagen werden</string>
+    <!-- Disclosure chevron content descriptions (UX-11). -->
+    <string name="settings_expand">Optionen anzeigen</string>
+    <string name="settings_collapse">Optionen ausblenden</string>
 </resources>

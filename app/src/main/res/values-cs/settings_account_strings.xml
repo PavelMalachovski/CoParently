@@ -62,4 +62,7 @@
     <string name="settings_split_ratio_applied">Rozdělení uloženo</string>
     <string name="settings_split_ratio_proposed">Odesláno druhému rodiči k potvrzení</string>
     <string name="settings_split_ratio_refused">Toto rozdělení se nepodařilo navrhnout</string>
+    <!-- Disclosure chevron content descriptions (UX-11). -->
+    <string name="settings_expand">Zobrazit možnosti</string>
+    <string name="settings_collapse">Skrýt možnosti</string>
 </resources>

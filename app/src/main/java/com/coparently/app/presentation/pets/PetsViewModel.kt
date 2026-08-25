@@ -300,7 +300,7 @@ class PetsViewModel @Inject constructor(
     fun syncPets() {
         viewModelScope.launch {
             try {
-                petRepository.syncWithFirestore()
+                petRepository.pullOnce()
             } catch (e: CancellationException) {
                 throw e
             } catch (

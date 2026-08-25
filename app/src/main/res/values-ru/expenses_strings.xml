@@ -97,4 +97,8 @@
     <string name="expense_split_not_shared_hint">Учитывается в ваших тратах, но никто никому за него не должен.</string>
     <string name="expense_split_ratio">Деление %1$d / %2$d</string>
     <string name="expense_split_override_hint">Другое деление только для этого расхода. Согласованное деление семьи не меняется.</string>
+    <!-- Budget status in words (UX-10). -->
+    <string name="budget_status_near">Близко к лимиту</string>
+    <string name="budget_status_over">Превышен</string>
+    <string name="expenses_budget_chip_status">%1$s · %2$s</string>
 </resources>

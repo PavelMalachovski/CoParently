@@ -98,4 +98,8 @@
     <string name="expense_split_not_shared_hint">Zählt zu deinen Ausgaben, aber niemand schuldet dem anderen etwas dafür.</string>
     <string name="expense_split_ratio">Aufteilung %1$d / %2$d</string>
     <string name="expense_split_override_hint">Abweichende Aufteilung nur für diese Ausgabe. Die vereinbarte Aufteilung ändert sich nicht.</string>
+    <!-- Budget status in words (UX-10). -->
+    <string name="budget_status_near">Nahe am Limit</string>
+    <string name="budget_status_over">Über dem Limit</string>
+    <string name="expenses_budget_chip_status">%1$s · %2$s</string>
 </resources>

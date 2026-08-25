@@ -5,11 +5,31 @@
 # Two of them had already shipped — a release-only Gson corruption of a child's medical
 # profile, and a functions test that had been failing on `main`.
 #
-# Three jobs run on every pull request, and on every push to `main`. A push to a feature
-# branch with no pull request open is therefore **not** built — open the pull request to get
-# it checked. The instrumented migration job is deliberately absent: `app/schemas/` stops at
+# Jobs run on every pull request, and on every push to `main`. A push to a feature branch
+# with no pull request open is therefore **not** built — open the pull request to get it
+# checked. The instrumented migration job is deliberately absent: `app/schemas/` stops at
 # v14 while the database is at v25, so it would be red from its first run for a reason
 # unrelated to any change. Add it once the schemas are restored (see docs/BACKLOG.md, CQ-1).
+#
+# ## Why the Android work is three jobs and not one
+#
+# It used to be one job running five Gradle invocations in sequence, and the measured cost
+# was 13:22 wall clock: assembleDebug 2:23, unit tests 1:21, lint 2:19, detekt 0:39,
+# assembleRelease 6:40. Four of those five have no dependency on each other — only the
+# release build genuinely needs its own full compile — so the sequence was pure waiting.
+# Split three ways the critical path is the release build alone, ~7 minutes, and the
+# repository is public so the extra runners cost nothing.
+#
+# Two things to know before editing this:
+#
+#  * **The release build stays on pull requests.** R8 is the only thing that rewrites field
+#    names, and an R8 rewrite of a Gson model shipped to devices once already. Moving it to
+#    a nightly or to `main`-only would put that class of defect back one merge away from a
+#    release. It is the longest job on purpose.
+#  * **A skipped job counts as a passing one** for branch protection, which is what makes
+#    the `changes` gate below safe today — nothing is a *required* check yet. If any Android
+#    job is ever marked required, a docs-only pull request would still merge (skipped reads
+#    as success), but make that decision knowingly rather than discovering it.
 
 name: CI
 
@@ -23,10 +43,76 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  android:
-    name: Android — build, unit tests, static analysis
+  # Decides whether the Android jobs have anything to do. A pull request that only touches
+  # docs, Cloud Functions, the rules suite or the security rules themselves does not need a
+  # 7-minute R8 build to prove it, and those three are the changes this project makes most
+  # often between Android changes.
+  #
+  # Anything not on the ignore list runs the full Android set — including `.github/workflows`,
+  # because editing this file is exactly when you want to see the build it describes actually
+  # run. A push to `main` always runs everything: `github.event.before` is unreliable across
+  # force-pushes and first pushes, and main is rare enough that guessing is not worth it.
+  changes:
+    name: What changed
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 5
+    outputs:
+      android: ${{ steps.filter.outputs.android }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Decide whether Android needs building
+        id: filter
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -u
+          # Anything outside this list means "build Android". Keep it conservative: a path
+          # wrongly listed here silently stops building real changes, which is worse than a
+          # path wrongly absent, which merely costs a few runner minutes.
+          NON_ANDROID='^(docs/|functions/|firestore-tests/|\.cursor/|[^/]*\.md$|.*\.rules(\.simple)?$|firestore\.indexes\.json$|firebase\.json$|\.gitignore$|LICENSE$)'
+
+          if [ "$EVENT_NAME" != "pull_request" ]; then
+            echo "Not a pull request — building everything."
+            echo "android=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if ! changed=$(git diff --name-only "$BASE_SHA"...HEAD 2>/dev/null) || [ -z "$changed" ]; then
+            echo "Could not determine the changed files — building everything."
+            echo "android=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "Changed files:"
+          echo "$changed" | sed 's/^/  /'
+
+          if echo "$changed" | grep -qvE "$NON_ANDROID"; then
+            echo "android=true" >> "$GITHUB_OUTPUT"
+            echo "→ Android jobs will run."
+          else
+            echo "android=false" >> "$GITHUB_OUTPUT"
+            echo "→ Nothing outside docs/functions/rules changed; skipping the Android jobs."
+          fi
+
+  # `google-services.json` is gitignored, and `app/build.gradle.kts` applies the Google
+  # Services and Crashlytics plugins only when it is present — so a fresh clone builds
+  # without it. The secrets below are read through `project.findProperty(...)`, which falls
+  # back to an empty string; nothing here exercises Google sign-in.
+  #
+  # None of the Gradle steps in this file pass `--no-daemon`. `gradle/actions/setup-gradle`
+  # asks you not to: it manages the daemon's lifetime itself, and without one every
+  # invocation pays JVM and Kotlin-compiler startup again. The jobs that run two invocations
+  # (this one, and static analysis) are the ones that notice.
+  build-test:
+    name: Android — build & unit tests
+    needs: changes
+    if: needs.changes.outputs.android == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
@@ -39,21 +125,43 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      # `google-services.json` is gitignored, and `app/build.gradle.kts` applies the Google
-      # Services and Crashlytics plugins only when it is present — so a fresh clone builds
-      # without it. The secrets below are read through `project.findProperty(...)`, which
-      # falls back to an empty string; nothing here exercises Google sign-in or Gemini.
-      - name: Assemble debug
-        run: ./gradlew --no-daemon assembleDebug
+      # One invocation, not two: `testDebugUnitTest` compiles the same debug sources
+      # `assembleDebug` does, so running them together shares a configuration phase and a
+      # Kotlin compile instead of repeating both.
+      - name: Assemble debug and run unit tests
+        run: ./gradlew assembleDebug testDebugUnitTest
 
-      - name: Unit tests
-        run: ./gradlew --no-daemon testDebugUnitTest
-
-      # Runs even when the tests fail, so one push reports every problem rather than the
-      # first one.
-      - name: Android lint
+      - name: Upload reports
         if: always()
-        run: ./gradlew --no-daemon lint
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-reports-build-test
+          path: |
+            app/build/reports/
+            app/build/test-results/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  static:
+    name: Android — static analysis
+    needs: changes
+    if: needs.changes.outputs.android == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: temurin
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Android lint
+        run: ./gradlew lint
 
       # detekt reports but does not gate, **for now**. Its first run against this repository
       # found 194 weighted issues, essentially all of them pre-existing: `AddEditEventScreen`
@@ -69,26 +177,53 @@ jobs:
       # So: run it, print it, do not fail on it. Regenerate the baseline locally and delete
       # `continue-on-error` — one line here, and CQ-12 in docs/BACKLOG.md.
       # Until then this step is a report, not a gate, and should not be mistaken for one.
+      #
+      # `if: always()` so one push reports lint *and* detekt rather than the first of them.
       - name: detekt (reporting only — see docs/BACKLOG.md)
         if: always()
         continue-on-error: true
-        run: ./gradlew --no-daemon detekt
+        run: ./gradlew detekt
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-reports-static
+          path: app/build/reports/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  release:
+    name: Android — release build (R8)
+    needs: changes
+    if: needs.changes.outputs.android == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: temurin
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
 
       # A release build is the only place R8 runs, and R8 is what silently rewrote the field
       # names Gson depends on. Building it here is what stops that class of defect from
       # reaching a device again. No signing config exists yet, so this produces an unsigned
       # bundle — which is exactly the part worth checking.
       - name: Assemble release (R8)
-        run: ./gradlew --no-daemon assembleRelease
+        run: ./gradlew assembleRelease
 
       - name: Upload reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: android-reports
-          path: |
-            app/build/reports/
-            app/build/test-results/
+          name: android-reports-release
+          path: app/build/reports/
           if-no-files-found: ignore
           retention-days: 14
 

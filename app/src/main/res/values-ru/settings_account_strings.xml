@@ -62,4 +62,7 @@
     <string name="settings_split_ratio_applied">Деление сохранено</string>
     <string name="settings_split_ratio_proposed">Отправлено второму родителю на подтверждение</string>
     <string name="settings_split_ratio_refused">Не удалось предложить это деление</string>
+    <!-- Disclosure chevron content descriptions (UX-11). -->
+    <string name="settings_expand">Показать настройки</string>
+    <string name="settings_collapse">Скрыть настройки</string>
 </resources>

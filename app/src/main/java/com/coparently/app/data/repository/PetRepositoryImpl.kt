@@ -88,7 +88,7 @@ class PetRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun syncWithFirestore() {
+    override suspend fun pullOnce() {
         val firebaseUser = firebaseAuthService.getCurrentUser() ?: return
         val partnerId = currentPartnerId(firebaseUser.uid)
 

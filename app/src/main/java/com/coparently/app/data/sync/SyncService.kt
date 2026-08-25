@@ -102,7 +102,7 @@ class SyncService @Inject constructor(
             // Step 4: Sync pets. The repository handles upload, download and audience repair
             // itself (mirroring child info), so there is nothing to duplicate here.
             _syncStatus.value = SyncStatus.Syncing(80, 100)
-            petRepository.syncWithFirestore()
+            petRepository.pullOnce()
 
             // Step 5: Drain the outboxes that a live listener cannot drain for you. Chat and
             // change requests are mirrored *down* in realtime, but a write of either that was
@@ -550,7 +550,7 @@ class SyncService @Inject constructor(
      *
      * `role` is refreshed here, alongside the fields this already downloaded, because this is
      * the only path in the app that periodically re-reads the signed-in user's own document —
-     * `UserRepositoryImpl.syncWithFirestore()` would also refresh it, but nothing calls that
+     * `UserRepositoryImpl.pullOnce()` would also refresh it, but nothing calls that
      * method. Before this, a slot flipped server-side (a `backfillParentSlots` run for a pair
      * that accepted long ago — see `functions/index.js`) was never noticed by a running app:
      * this device would keep stamping new records with the slot it already had, while Firestore

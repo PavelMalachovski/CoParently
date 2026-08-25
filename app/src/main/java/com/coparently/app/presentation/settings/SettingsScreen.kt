@@ -455,32 +455,29 @@ fun SettingsScreen(
                             stringResource(R.string.settings_gcal_not_signed_in)
                         },
                         onClick = { googleExpanded = !googleExpanded },
-                        trailing = {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Switch(
-                                    checked = isSyncEnabled,
-                                    onCheckedChange = { enabled ->
-                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                        syncViewModel.toggleSync(enabled)
-                                    },
-                                    enabled = isSignedIn || !isSyncEnabled
-                                )
-                                Icon(
-                                    imageVector = if (googleExpanded) {
-                                        Icons.Default.ExpandLess
-                                    } else {
-                                        Icons.Default.ExpandMore
-                                    },
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
+                        // One trailing control, and it is the disclosure (UX-11). The switch
+                        // used to sit here beside the chevron, on a row that is itself
+                        // clickable — three interaction models in one row, against the anatomy
+                        // `SectionRow` exists to enforce. TalkBack announced a switch and never
+                        // mentioned that the row expands, so the actions behind it were
+                        // unreachable without sight.
+                        //
+                        // The toggle moved into the expanded block rather than the chevron
+                        // being dropped, because expanding is what this row *is* — the August
+                        // 2026 refresh replaced a card of stacked buttons with exactly that —
+                        // and because the toggle belongs with the sign-in and sync actions that
+                        // govern whether it can be used at all. It costs one extra tap on a
+                        // control a parent sets once.
+                        trailing = { DisclosureChevron(expanded = googleExpanded) }
                     )
                     AnimatedVisibility(visible = googleExpanded) {
                         GoogleCalendarActions(
                             isSignedIn = isSignedIn,
                             isSyncEnabled = isSyncEnabled,
+                            onToggleSync = { enabled ->
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                syncViewModel.toggleSync(enabled)
+                            },
                             syncState = googleSyncState,
                             onSignIn = {
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -726,7 +723,22 @@ fun SettingsScreen(
     }
 }
 
-/** The trailing chevron on a row that opens another screen. */
+/** The trailing chevron on a row that expands in place, showing which way it is now. */
+@Composable
+private fun DisclosureChevron(expanded: Boolean) {
+    Icon(
+        imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+        // Named, unlike [Chevron]. A navigation chevron repeats what the row already
+        // announces; this one carries the row's *state*, which nothing else says aloud.
+        contentDescription = stringResource(
+            if (expanded) R.string.settings_collapse else R.string.settings_expand
+        ),
+        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.size(20.dp)
+    )
+}
+
+/** The trailing chevron on a row that navigates elsewhere. */
 @Composable
 private fun Chevron() {
     Icon(
@@ -765,6 +777,7 @@ private fun ValueLabel(
 private fun GoogleCalendarActions(
     isSignedIn: Boolean,
     isSyncEnabled: Boolean,
+    onToggleSync: (Boolean) -> Unit,
     syncState: GoogleCalendarSyncState,
     onSignIn: () -> Unit,
     onSyncNow: () -> Unit,
@@ -777,6 +790,26 @@ private fun GoogleCalendarActions(
             .padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
+        // The toggle, moved off the row above (UX-11). It reads as a labelled control here
+        // rather than an unexplained switch in a trailing slot, and it sits with the sign-in
+        // that decides whether it can be turned on at all — `enabled` says so directly, where
+        // in the trailing slot the same condition looked like an inert switch.
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = stringResource(R.string.settings_gcal_enable_sync),
+                style = MaterialTheme.typography.bodyLarge
+            )
+            Switch(
+                checked = isSyncEnabled,
+                onCheckedChange = onToggleSync,
+                enabled = isSignedIn || !isSyncEnabled
+            )
+        }
+
         when (syncState) {
             is GoogleCalendarSyncState.Syncing -> StatusLine(
                 text = syncState.message,
