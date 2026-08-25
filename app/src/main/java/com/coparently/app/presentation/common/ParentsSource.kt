@@ -2,6 +2,7 @@ package com.coparently.app.presentation.common
 
 import android.util.Log
 import com.coparently.app.domain.model.PairingState
+import com.coparently.app.presentation.theme.ParentPalette
 import com.coparently.app.domain.repository.PairingRepository
 import com.coparently.app.domain.repository.UserRepository
 import kotlinx.coroutines.CoroutineScope
@@ -65,6 +66,23 @@ data class Parents(
      */
     val roleByUid: Map<String, String>
         get() = listOfNotNull(me, coParent).associate { it.uid to it.slot }
+
+    /**
+     * The two colours this family's calendar, chips and split bars should be drawn in.
+     *
+     * Derived here rather than at nineteen call sites: every one of them already holds a slot
+     * — an event's `parentOwner`, a custody day, an expense's payer — so resolving
+     * uid → choice once and handing down a slot-keyed palette keeps `ParentColors` a lookup.
+     *
+     * Falls back to pink and blue whenever a parent has not chosen, which is what the app
+     * looked like before anyone could, and resolves the case where both picked the same —
+     * see [ParentPalette.of], because two parents drawn identically defeats the whole point.
+     */
+    val palette: ParentPalette
+        get() = ParentPalette.of(
+            slot1Code = listOfNotNull(me, coParent).firstOrNull { it.slot != "dad" }?.colorCode,
+            slot2Code = listOfNotNull(me, coParent).firstOrNull { it.slot == "dad" }?.colorCode
+        )
 }
 
 /**

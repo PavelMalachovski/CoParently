@@ -6,6 +6,7 @@ import com.coparently.app.data.local.dao.UserDao
 import com.coparently.app.data.local.entity.BudgetEntity
 import com.coparently.app.data.remote.firebase.FirebaseAuthService
 import com.coparently.app.data.remote.firebase.FirestoreBudgetDataSource
+import com.coparently.app.domain.family.FamilyKey
 import com.coparently.app.domain.family.FamilyMemberRef
 import com.coparently.app.domain.model.Budget
 import com.coparently.app.domain.model.BudgetAlert
@@ -107,15 +108,21 @@ class BudgetRepositoryImpl @Inject constructor(
     }
 
     override suspend fun addBudget(budget: Budget) {
-        val entity = budget.toEntity()
-        budgetDao.insertBudget(entity)
+        // Which relationship this belongs to, and therefore who may see it. Null while the
+        // account is unpaired — see `ExpenseRepositoryImpl.addExpense`.
+        val uid = firebaseAuthService.getCurrentUser()?.uid
+        val owned = budget.copy(
+            familyId = budget.familyId
+                ?: FamilyKey.orNull(uid, userDao.getUserById(uid.orEmpty())?.partnerId)
+        )
+        budgetDao.insertBudget(owned.toEntity())
 
         val firebaseUser = firebaseAuthService.getCurrentUser() ?: return
         // A rejected/failed sync must never crash the app — the budget is already
         // saved locally and will re-sync later (same guard as ExpenseRepositoryImpl).
         try {
-            firestoreBudgetDataSource.setBudget(budget.id, budgetToFirestoreMap(budget, firebaseUser.uid))
-            val syncedBudget = budget.copy(syncedToFirestore = true)
+            firestoreBudgetDataSource.setBudget(owned.id, budgetToFirestoreMap(owned, firebaseUser.uid))
+            val syncedBudget = owned.copy(syncedToFirestore = true)
             budgetDao.insertBudget(syncedBudget.toEntity())
         } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             android.util.Log.w("BudgetRepo", "Budget Firestore sync failed; kept locally", e)
@@ -135,12 +142,33 @@ class BudgetRepositoryImpl @Inject constructor(
             // addBudget's stamping is only correct for a brand-new document. Without this,
             // the co-parent editing a budget they didn't create would flip the owner field,
             // Firestore would reject the write, and the edit would silently fail to sync.
-            val existingOwnerUid = firestoreBudgetDataSource.getBudget(budget.id)
-                ?.get("createdByFirebaseUid") as? String
-            val ownerUid = existingOwnerUid ?: firebaseUser.uid
-            firestoreBudgetDataSource.setBudget(budget.id, budgetToFirestoreMap(budget, ownerUid))
-            val syncedBudget = budget.copy(syncedToFirestore = true)
-            budgetDao.insertBudget(syncedBudget.toEntity())
+            val existing = firestoreBudgetDataSource.getBudget(budget.id)
+            val ownerUid = existing?.get("createdByFirebaseUid") as? String ?: firebaseUser.uid
+            // And the family, echoed back verbatim for the same reason and then some. The
+            // budgets update rule pins `familyId` — either parent may edit a budget, so
+            // without the pin one of them could re-point it at a family containing a stranger
+            // — and the *only* value that satisfies a pin is the stored one. Echoing it also
+            // honours the rule that a record's family is never re-derived: a local row whose
+            // backfill has not run yet holds null, and deriving one here would write a family
+            // over whatever the document already says and be refused for it.
+            //
+            // The distinction that matters is *document present*, not *key present*: a
+            // document written before the field existed carries no key, and echoing a local
+            // id over that absence fails the pin exactly as re-deriving one would. `""` is
+            // what an absent key must be written back as. A null document is not an edit at
+            // all — `setBudget` creates it, no pin applies, and the local value stands.
+            val familyId = if (existing != null) {
+                existing["familyId"] as? String ?: ""
+            } else {
+                budget.familyId
+                    ?: FamilyKey.orNull(
+                        firebaseUser.uid,
+                        userDao.getUserById(firebaseUser.uid)?.partnerId
+                    )
+            }
+            val stamped = budget.copy(familyId = familyId, syncedToFirestore = true)
+            firestoreBudgetDataSource.setBudget(budget.id, budgetToFirestoreMap(stamped, ownerUid))
+            budgetDao.insertBudget(stamped.toEntity())
         } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             android.util.Log.w("BudgetRepo", "Budget Firestore sync failed; kept locally", e)
         }
@@ -161,6 +189,7 @@ class BudgetRepositoryImpl @Inject constructor(
     private fun budgetToFirestoreMap(budget: Budget, ownerUid: String): Map<String, Any> = mapOf(
         "id" to budget.id,
         "forMembers" to FamilyMemberRef.store(budget.forMembers),
+        "familyId" to (budget.familyId ?: ""),
         "category" to budget.category.name,
         "monthlyLimit" to budget.monthlyLimit,
         "currency" to budget.currency,
@@ -188,14 +217,16 @@ class BudgetRepositoryImpl @Inject constructor(
     override suspend fun observeRemote() {
         val firebaseUser = firebaseAuthService.getCurrentUser() ?: return
         val partnerId = userDao.getUserById(firebaseUser.uid)?.partnerId
-        val creatorUids = listOfNotNull(firebaseUser.uid, partnerId)
+        // The family, not the two authors — see `ExpenseRepositoryImpl.observeRemote`.
+        val familyId = FamilyKey.orNull(firebaseUser.uid, partnerId)
 
-        firestoreBudgetDataSource.getAllBudgets(creatorUids)
+        firestoreBudgetDataSource.getAllBudgets(familyId)
             .catch { e -> android.util.Log.w("BudgetRepo", "Budget sync failed", e) }
             .collect { budgets ->
                 budgets.forEach { data ->
                     val budget = Budget(
                         id = data["id"] as String,
+                        familyId = (data["familyId"] as? String)?.takeIf { it.isNotEmpty() },
                         forMembers = FamilyMemberRef.parse(data["forMembers"])
                             .ifEmpty { FamilyMemberRef.fromLegacyChildId(data["childId"] as? String) },
                         category = ExpenseCategory.valueOf(data["category"] as String),
@@ -214,6 +245,7 @@ class BudgetRepositoryImpl @Inject constructor(
     private fun BudgetEntity.toDomain(): Budget {
         return Budget(
             id = id,
+            familyId = familyId,
             forMembers = refsFrom(forMembersJson),
             category = ExpenseCategory.valueOf(category),
             monthlyLimit = monthlyLimit,
@@ -228,6 +260,7 @@ class BudgetRepositoryImpl @Inject constructor(
     private fun Budget.toEntity(): BudgetEntity {
         return BudgetEntity(
             id = id,
+            familyId = familyId,
             // `childId` is a dead column and is left null; see BudgetEntity.
             forMembersJson = gson.toJson(FamilyMemberRef.store(forMembers)),
             category = category.name,

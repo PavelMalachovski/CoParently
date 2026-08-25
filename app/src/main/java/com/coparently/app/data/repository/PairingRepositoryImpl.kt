@@ -3,6 +3,7 @@ package com.coparently.app.data.repository
 import android.content.Context
 import android.util.Log
 import com.coparently.app.R
+import com.coparently.app.data.family.SelectedFamilySource
 import com.coparently.app.data.local.dao.UserDao
 import com.coparently.app.data.remote.firebase.FirebaseAuthService
 import com.coparently.app.data.remote.firebase.PairingException
@@ -16,6 +17,7 @@ import com.coparently.app.domain.pairing.InviteCodeGenerator
 import com.coparently.app.domain.repository.PairingRepository
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.gson.Gson
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -48,10 +50,14 @@ class PairingRepositoryImpl @Inject constructor(
     private val pairingFunctions: PairingFunctions,
     private val postPairingConversationSetup: PostPairingConversationSetup,
     private val userDao: UserDao,
+    private val selectedFamilySource: SelectedFamilySource,
     // Application context only, for the localized conversation-title fallback. This is a
     // repository, not a ViewModel, so it is allowed to resolve resources directly.
     @ApplicationContext private val context: Context
 ) : PairingRepository {
+
+    /** For the stored co-parent list, which is a JSON array of plain uid strings. */
+    private val gson = Gson()
 
     /**
      * The `(uid, partnerId)` pair last mirrored into Room by [onPairingStateObserved], so
@@ -93,7 +99,12 @@ class PairingRepositoryImpl @Inject constructor(
                                             email = "",
                                             pairedSinceMillis = pairedAt
                                         )
-                                    }
+                                    },
+                                // Carried into the paired state too, so the screen can offer a
+                                // second co-parent: a person may have more than one, and
+                                // without these the invite has nothing to render.
+                                activeInvite = own.firstOrNull(),
+                                incoming = incoming
                             )
                         }
                     }
@@ -183,12 +194,12 @@ class PairingRepositoryImpl @Inject constructor(
      *
      * Everything outside the pairing screen reads pairing from Room, not from Firestore:
      * `ChatViewModel` decides between "open chat" and "go pair" from it, `ExpenseRepositoryImpl`
-     * and `BudgetRepositoryImpl` build their `creatorUids` filter from it, `SyncService` sizes
-     * the event audience with it, and `HomeViewModel` renders its CTA from it. Before this
-     * hook the only writer was `UserRepositoryImpl.pullOnce()` behind a 15-minute
+     * and `BudgetRepositoryImpl` derive the `familyId` they query on from it, `SyncService`
+     * sizes the event audience with it, and `HomeViewModel` renders its CTA from it. Before
+     * this hook the only writer was `UserRepositoryImpl.pullOnce()` behind a 15-minute
      * `SyncWorker`, so both phones showed "Paired with X" while chat, expenses, budgets and
      * events stayed unpaired for up to a quarter of an hour — and after an unpair, the
-     * ex-partner's UID stayed in `creatorUids` just as long.
+     * ex-partner's records stayed in view just as long.
      *
      * It hangs off the *observed* state rather than off [redeem]/[acceptIncoming] so it fires
      * on both devices: the inviter's phone never calls anything, it learns about the pairing
@@ -215,8 +226,25 @@ class PairingRepositoryImpl @Inject constructor(
 
         try {
             val local = userDao.getUserById(uid)
-            if (local != null && local.partnerId != partnerId) {
-                userDao.updateUser(local.copy(partnerId = partnerId))
+            if (local != null) {
+                // The **list** is what a pairing transition changes. `partnerId` is no longer
+                // "my co-parent" but "the family this device is showing", and only
+                // `SelectedFamilySource` writes it — mirroring the observed partner onto it
+                // here would drag a parent looking at one family into another the moment the
+                // other one's pairing state re-emitted.
+                val partners = (
+                    gson.fromJson(local.partnerIdsJson, Array<String>::class.java)
+                        ?.toList().orEmpty()
+                    ).toMutableList()
+                if (partnerId != null && partnerId !in partners) partners += partnerId
+                val nextJson = gson.toJson(partners)
+                if (nextJson != local.partnerIdsJson) {
+                    userDao.updateUser(local.copy(partnerIdsJson = nextJson))
+                }
+                // Re-point the projection only when what it names has actually gone: an unpair
+                // observed from the other side leaves this device showing an ex-partner
+                // otherwise, and nothing else would notice until the switcher was opened.
+                selectedFamilySource.reconcile()
             }
             if (partnerId != null) ensureConversationWith(partnerId)
         } catch (e: CancellationException) {
@@ -315,7 +343,11 @@ class PairingRepositoryImpl @Inject constructor(
             // Their answer to "children, pets or both". Absent on a build that never wrote it,
             // which reads as "contributes nothing" rather than "everything" — one parent's real
             // answer must not be widened by the other's silence.
-            caresFor = FamilyKind.fromStored(data.getString("caresFor"))
+            caresFor = FamilyKind.fromStored(data.getString("caresFor")),
+            // The colour they chose for themselves. Blank normalizes to null for the same
+            // reason the photo does: the legacy full-profile write stores "" for a missing
+            // value, and "" must read as "has not chosen" rather than as an unknown colour.
+            colorCode = data.getString("colorCode")?.takeIf { it.isNotBlank() }
         )
     }
 

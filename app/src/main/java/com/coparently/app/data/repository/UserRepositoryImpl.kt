@@ -4,8 +4,10 @@ import com.coparently.app.data.local.dao.UserDao
 import com.coparently.app.data.local.entity.UserEntity
 import com.coparently.app.data.remote.firebase.FcmService
 import com.coparently.app.data.remote.firebase.FirebaseAuthService
+import com.coparently.app.data.remote.firebase.FirestoreFamilyDataSource
 import com.coparently.app.data.remote.firebase.FirestoreUserDataSource
 import com.coparently.app.data.session.ProfileIdentity
+import com.coparently.app.domain.family.FamilyKey
 import com.coparently.app.domain.model.FamilyKind
 import com.coparently.app.domain.model.MedicalProfile
 import com.coparently.app.domain.model.User
@@ -38,6 +40,7 @@ class UserRepositoryImpl @Inject constructor(
     private val userDao: UserDao,
     private val firebaseAuthService: FirebaseAuthService,
     private val firestoreUserDataSource: FirestoreUserDataSource,
+    private val firestoreFamilyDataSource: FirestoreFamilyDataSource,
     private val fcmService: FcmService
 ) : UserRepository {
 
@@ -356,6 +359,7 @@ class UserRepositoryImpl @Inject constructor(
             googleCalendarSyncEnabled = remote?.get("googleCalendarSyncEnabled") as? Boolean ?: false,
             googleCalendarId = remote?.string("googleCalendarId"),
             partnerId = remote?.string("partnerId"),
+            partnerIdsJson = gson.toJson(remote?.partnerUids().orEmpty()),
             fcmToken = remote?.string("fcmToken"),
             dateOfBirth = remote?.string("dateOfBirth"),
             phone = remote?.string("phone"),
@@ -407,6 +411,14 @@ class UserRepositoryImpl @Inject constructor(
                 // `momDayIndices` means "the days slot 1 has custody", so a pair in that state
                 // has a custody pattern that distinguishes nobody.
                 //
+                // **`partnerId` is absent for the same reason, and it became load-bearing the
+                // day a person could have two co-parents.** The field is server-managed —
+                // `acceptPairingInvitation` and `unpairCoParent` own it, alongside
+                // `partnerIds` — and locally it no longer even means the same thing: Room's
+                // copy is *which family this device is showing* (`SelectedFamilySource`).
+                // Sending that back would publish a per-device UI choice into a document the
+                // co-parent reads, and would overwrite the server's answer with it.
+                //
                 // This is a `set(..., merge)` (see `FirestoreUserDataSource.updateUser`), so
                 // omitting the key leaves the stored slot untouched rather than clearing it.
                 val userData = mapOf(
@@ -418,7 +430,6 @@ class UserRepositoryImpl @Inject constructor(
                     "profilePhotoUrl" to (user.profilePhotoUrl ?: ""),
                     "googleCalendarSyncEnabled" to user.googleCalendarSyncEnabled,
                     "googleCalendarId" to (user.googleCalendarId ?: ""),
-                    "partnerId" to (user.partnerId ?: ""),
                     "fcmToken" to (user.fcmToken ?: ""),
                     "dateOfBirth" to (user.dateOfBirth?.toString() ?: ""),
                     "phone" to (user.phone ?: ""),
@@ -432,10 +443,46 @@ class UserRepositoryImpl @Inject constructor(
                     "caresFor" to (FamilyKind.toStored(user.caresFor) ?: "")
                 )
                 firestoreUserDataSource.updateUser(firebaseUser.uid, userData).getOrThrow()
+                mirrorCaresForToFamily(firebaseUser.uid, user)
             } catch (e: Exception) {
                 android.util.Log.e("UserRepository", "Failed to sync user update to Firestore", e)
                 // Don't throw here - local update succeeded, Firestore sync failed
             }
+        }
+    }
+
+    /**
+     * Copies this parent's `caresFor` answer onto their family, alongside their profile.
+     *
+     * "Children, pets, or both" stopped being a fact about a person the moment somebody can
+     * co-parent with two others: a man with children by one woman and a dog with another would
+     * otherwise get child sections in the pet family, because the app shows the *union* of the
+     * pair's two answers (docs/DESIGN-multi-family.md, M-3). The family's copy is the one that
+     * will be read; the profile's stays written until M-5 so a co-parent on an older build,
+     * which knows nothing about `families`, still sees the answer change.
+     *
+     * Here rather than in the two screens that collect the answer — Settings and the onboarding
+     * wizard — because this is the single choke point through which a parent's answer changes,
+     * and two call sites is two places that must both remember. The same reasoning
+     * `ParentsSource` exists for.
+     *
+     * A failure is logged and swallowed, matching the profile write above: the local row is
+     * already correct, and the ordinary failure here is not a defect but a pair whose
+     * `families/{id}` does not exist yet — everyone who paired before it was introduced, until
+     * the `backfillFamilyDocuments` pass runs. Nothing reads the family's copy yet, so a miss
+     * costs nothing today; what it must not do is fail the profile write that already landed.
+     */
+    private suspend fun mirrorCaresForToFamily(uid: String, user: User) {
+        val familyId = FamilyKey.orNull(uid, user.partnerId) ?: return
+        runCatching {
+            firestoreFamilyDataSource
+                .setCaresFor(familyId, uid, FamilyKind.toStored(user.caresFor) ?: "")
+        }.onFailure { e ->
+            android.util.Log.w(
+                "UserRepository",
+                "caresFor not mirrored to family $familyId; the profile copy stands",
+                e
+            )
         }
     }
 
@@ -504,6 +551,8 @@ class UserRepositoryImpl @Inject constructor(
             googleCalendarSyncEnabled = googleCalendarSyncEnabled,
             googleCalendarId = googleCalendarId,
             partnerId = partnerId,
+            partnerIds = gson.fromJson(partnerIdsJson, Array<String>::class.java)
+                ?.toList().orEmpty(),
             fcmToken = fcmToken,
             dateOfBirth = parseProfileDate(dateOfBirth),
             phone = phone,
@@ -530,6 +579,7 @@ class UserRepositoryImpl @Inject constructor(
             googleCalendarSyncEnabled = googleCalendarSyncEnabled,
             googleCalendarId = googleCalendarId,
             partnerId = partnerId,
+            partnerIdsJson = gson.toJson(partnerIds),
             fcmToken = fcmToken,
             dateOfBirth = dateOfBirth?.toString(),
             phone = phone,
@@ -538,6 +588,21 @@ class UserRepositoryImpl @Inject constructor(
             onboardingCompletedAt = onboardingCompletedAt,
             caresForKinds = FamilyKind.toStored(caresFor)
         )
+    }
+
+    /**
+     * The co-parents a `users/{uid}` document names, in either shape it may carry.
+     *
+     * `partnerIds` is the answer; the singular `partnerId` is a fallback for a document written
+     * before the array existed, and the two are **unioned** rather than one winning, so a
+     * document caught mid-migration names both. The same rule `functions/index.js` follows in
+     * `partnersOf`, and it has to be the same rule: the client and the callables must not
+     * disagree about who somebody co-parents with.
+     */
+    private fun Map<String, Any?>.partnerUids(): List<String> {
+        val many = (this["partnerIds"] as? List<*>)?.mapNotNull { it as? String }.orEmpty()
+        val one = listOfNotNull(this["partnerId"] as? String)
+        return (many + one).filter { it.isNotBlank() }.distinct()
     }
 
     /**
@@ -554,6 +619,7 @@ class UserRepositoryImpl @Inject constructor(
             googleCalendarSyncEnabled = this["googleCalendarSyncEnabled"] as? Boolean ?: false,
             googleCalendarId = this["googleCalendarId"] as? String,
             partnerId = this["partnerId"] as? String,
+            partnerIds = partnerUids(),
             fcmToken = this["fcmToken"] as? String,
             dateOfBirth = parseProfileDate(this["dateOfBirth"] as? String),
             phone = (this["phone"] as? String)?.takeIf { it.isNotBlank() },

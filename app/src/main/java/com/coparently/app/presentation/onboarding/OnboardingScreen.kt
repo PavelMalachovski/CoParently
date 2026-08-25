@@ -2,8 +2,12 @@ package com.coparently.app.presentation.onboarding
 
 import androidx.activity.compose.BackHandler
 import androidx.annotation.StringRes
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -15,6 +19,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -48,7 +53,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -63,6 +71,7 @@ import com.coparently.app.presentation.common.MedicalProfileEditor
 import com.coparently.app.presentation.common.SectionGroup
 import com.coparently.app.presentation.common.SectionRow
 import com.coparently.app.presentation.common.labelRes
+import com.coparently.app.presentation.theme.ParentColorChoice
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
@@ -210,6 +219,43 @@ private fun IntroStep() {
 }
 
 /** The parent's own details — the only step with a field that blocks progress. */
+/**
+ * The four parent colours as a row of swatches.
+ *
+ * Nothing is pre-selected. A wizard that opened with a colour already ticked would be claiming
+ * an answer nobody gave, and `saveProfile` reads exactly that difference: untouched leaves the
+ * stored colour alone, so a parent who set one in Settings and later re-runs the wizard does not
+ * silently lose it.
+ *
+ * Each swatch carries its colour's name as a content description — a circle of colour is
+ * unusable to anyone who cannot tell two of them apart, and a screen reader has nothing else to
+ * announce.
+ */
+@Composable
+private fun ParentColorSwatches(
+    selected: ParentColorChoice?,
+    onSelect: (ParentColorChoice) -> Unit
+) {
+    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        ParentColorChoice.entries.forEach { choice ->
+            val label = stringResource(choice.labelRes)
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .background(choice.fill)
+                    .border(
+                        width = if (selected == choice) 3.dp else 0.dp,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        shape = CircleShape
+                    )
+                    .clickable(onClickLabel = label) { onSelect(choice) }
+                    .semantics { contentDescription = label }
+            )
+        }
+    }
+}
+
 @Composable
 private fun ProfileStep(state: OnboardingUiState, viewModel: OnboardingViewModel) {
     StepHeading(title = R.string.onboarding_profile_title)
@@ -223,6 +269,15 @@ private fun ProfileStep(state: OnboardingUiState, viewModel: OnboardingViewModel
         supportingText = { Text(stringResource(R.string.onboarding_profile_name_required)) },
         singleLine = true,
         modifier = Modifier.fillMaxWidth()
+    )
+
+    // Beside the name rather than on a step of its own: this is "who you are" — what you are
+    // called and how you are marked — and a whole wizard step for four swatches would be a step
+    // most people tap straight through.
+    SectionHeading(title = R.string.settings_parent_color)
+    ParentColorSwatches(
+        selected = state.parentColor,
+        onSelect = viewModel::updateParentColor
     )
 
     DateOfBirthField(

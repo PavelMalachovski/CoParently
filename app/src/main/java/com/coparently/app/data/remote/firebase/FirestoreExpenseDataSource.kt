@@ -21,25 +21,32 @@ class FirestoreExpenseDataSource @Inject constructor(
     private val expensesCollection = firestore.collection("expenses")
 
     /**
-     * Gets expenses created by any of [creatorUids] (the current user, plus the paired
-     * co-parent when paired) as a Flow.
+     * Gets the expenses of one co-parenting relationship as a Flow.
      *
-     * An unfiltered collection query is rejected outright by `firestore.rules`: Firestore
-     * validates a *query* by checking whether its structure guarantees every possible
-     * result satisfies the security rule, not by inspecting the actual documents returned.
-     * Since the read rule is keyed on `createdByFirebaseUid`, the query must filter on that
-     * same field for Firestore to accept it — the same reasoning that makes
-     * [FirestoreEventDataSource.observeEventsSharedWith] filter on `sharedWith`.
+     * **Filtered on `familyId`, and the shape is load-bearing.** Firestore validates a *query*
+     * by checking whether its structure guarantees every possible result satisfies the security
+     * rule — it does not run the rule over the documents and drop the failures (CLAUDE.md item
+     * 12). The `expenses` read rule is keyed on membership of the record's own family, so this
+     * is the only filter it accepts.
      *
-     * @param creatorUids Firebase UIDs whose expenses to include (1 when unpaired, 2 when paired)
+     * It replaces `whereIn("createdByFirebaseUid", [me, partner])`, which was not merely a
+     * different spelling: a person with two co-parents has two families, and a filter on the
+     * *author* returns both of them in one list. Worse, while any branch of the rule still
+     * mentioned `isPartnerOf(createdByFirebaseUid)`, that query satisfied the rule structurally
+     * and Firestore served it — which is how the leak survived a rule that looked closed.
+     * Proved against the emulator in `firestore-tests/rules/family-isolation.test.js`.
+     *
+     * @param familyId `FamilyKey.of(myUid, partnerUid)` for the family being read. Empty or
+     *   null closes the flow without a query: an unpaired account has no shared expenses to
+     *   fetch, and an unfiltered read would be denied outright.
      */
-    fun getAllExpenses(creatorUids: List<String>): Flow<List<Map<String, Any>>> = callbackFlow {
-        if (creatorUids.isEmpty()) {
+    fun getAllExpenses(familyId: String?): Flow<List<Map<String, Any>>> = callbackFlow {
+        if (familyId.isNullOrEmpty()) {
             close()
             return@callbackFlow
         }
         val subscription = expensesCollection
-            .whereIn("createdByFirebaseUid", creatorUids)
+            .whereEqualTo("familyId", familyId)
             .orderBy("date", Query.Direction.DESCENDING)
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {

@@ -6,6 +6,13 @@
     <string name="settings_sync">Синхронізувати</string>
     <string name="settings_google_sync">Синхронізація з Google Календарем</string>
     <string name="settings_gcal_enable_sync">Увімкнути синхронізацію</string>
+    <string name="settings_gcal_private_note">Імпортовані події залишаються на цьому пристрої. Google Календар — особистий, тому співбатькові з нього нічого не передається.</string>
+    <string name="settings_parent_color">Мій колір</string>
+    <string name="settings_parent_color_desc">Як позначаються ваші події, дні опіки та витрати. Співбатько обирає свій.</string>
+    <string name="parent_color_pink">Рожевий</string>
+    <string name="parent_color_blue">Синій</string>
+    <string name="parent_color_purple">Фіолетовий</string>
+    <string name="parent_color_orange">Помаранчевий</string>
     <string name="settings_signed_in_as">Ви ввійшли як: %1$s</string>
     <string name="settings_gcal_not_signed_in">Вхід не виконано</string>
     <string name="settings_unknown">Невідомо</string>
@@ -65,4 +72,7 @@
     <!-- Disclosure chevron content descriptions (UX-11). -->
     <string name="settings_expand">Показати налаштування</string>
     <string name="settings_collapse">Сховати налаштування</string>
+    <string name="settings_family_shown">Показана сім\'я</string>
+    <string name="settings_family_switch">Перемкнути сім\'ю</string>
+    <string name="settings_family_unnamed">Поки без імені</string>
 </resources>

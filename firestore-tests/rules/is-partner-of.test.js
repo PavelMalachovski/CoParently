@@ -94,57 +94,68 @@ describe('Part 1b: isPartnerOf against every users-document shape', () => {
     });
   });
 
-  describe('via expenses read (isPartnerOf behind a creator check)', () => {
+  describe('via child_info update (isPartnerOf behind a creator check)', () => {
+    // This block used to probe `expenses` read, which no longer consults `isPartnerOf` at all:
+    // an expense is now gated on membership of its own family, so a second co-parent cannot
+    // see the first one's money (docs/DESIGN-multi-family.md, M-4). The shapes it pins are
+    // still worth pinning, so it moved to a rule that does still ask the question —
+    // `child_info` update, where `isPartnerOf(creator)` sits behind a creator check exactly as
+    // it did there.
+
     /**
-     * Seeds one expense owned by Alice plus the supplied user documents.
+     * Seeds one child record owned by Alice and shared with Bob, plus the supplied users.
      *
      * @param {!Object<string, !Object>} users Documents keyed by `users/{uid}`.
      * @return {!Promise<void>} Resolves when seeded.
      */
-    function seedExpense(users) {
+    function seedChild(users) {
       return seed(env, Object.assign({
-        'expenses/expense-1': {
-          id: 'expense-1', title: 'School trip', amount: 42.5, currency: 'CZK',
-          category: 'EDUCATION', createdByFirebaseUid: ALICE, paidBy: 'MOM',
-          splitBetween: [], date: '2026-08-01', createdAt: '2026-08-01T10:00:00',
+        'child_info/child-1': {
+          id: 'child-1', childName: 'Ema',
+          createdByFirebaseUid: ALICE, sharedWith: [ALICE, BOB],
         },
       }, users));
     }
 
-    it('lets the co-parent read when both documents are linked', async () => {
-      await seedExpense({
+    it('lets the co-parent write when both documents are linked', async () => {
+      await seedChild({
         'users/alice-uid': {name: 'Alice', email: 'a@x.test', partnerId: BOB},
         'users/bob-uid': {name: 'Bob', email: 'b@x.test', partnerId: ALICE},
       });
       const db = env.authenticatedContext(BOB).firestore();
-      await assertSucceeds(db.doc('expenses/expense-1').get());
+      await assertSucceeds(
+          db.doc('child_info/child-1').update({childName: 'Ema N.'}));
     });
 
-    it('still lets the creator read when their own document has no partnerId key', async () => {
-      // The creator disjunct is true; the isPartnerOf disjunct raises an evaluation
-      // error on the missing key. This pins the error-absorption behaviour the
-      // `expenses` delete incident hinged on.
-      await seedExpense({'users/alice-uid': {fcmToken: 'token-alice'}});
+    it('still lets the creator write when their own document has no partnerId key', async () => {
+      // The creator disjunct is true; the isPartnerOf disjunct raises an evaluation error on
+      // the missing key. This pins the error-absorption behaviour the `expenses` delete
+      // incident hinged on — a rule that errors denies, so a disjunction must reach its true
+      // branch first.
+      await seedChild({'users/alice-uid': {fcmToken: 'token-alice'}});
       const db = env.authenticatedContext(ALICE).firestore();
-      await assertSucceeds(db.doc('expenses/expense-1').get());
+      await assertSucceeds(
+          db.doc('child_info/child-1').update({childName: 'Ema N.'}));
     });
 
     it('denies a co-parent when the creator document has no partnerId key', async () => {
-      await seedExpense({
+      await seedChild({
         'users/alice-uid': {fcmToken: 'token-alice'},
         'users/bob-uid': {name: 'Bob', email: 'b@x.test', partnerId: ALICE},
       });
       const db = env.authenticatedContext(BOB).firestore();
-      await assertFails(db.doc('expenses/expense-1').get());
+      await assertFails(
+          db.doc('child_info/child-1').update({childName: 'Ema N.'}));
     });
 
     it('denies a stranger', async () => {
-      await seedExpense({
+      await seedChild({
         'users/alice-uid': {name: 'Alice', email: 'a@x.test', partnerId: BOB},
         'users/carol-uid': {name: 'Carol', email: 'c@x.test', partnerId: ''},
       });
       const db = env.authenticatedContext(CAROL).firestore();
-      await assertFails(db.doc('expenses/expense-1').get());
+      await assertFails(
+          db.doc('child_info/child-1').update({childName: 'Ema N.'}));
     });
   });
 

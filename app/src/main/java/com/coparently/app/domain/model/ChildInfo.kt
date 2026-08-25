@@ -50,7 +50,12 @@ data class ChildInfo(
     val updatedAt: LocalDateTime,
     val createdByFirebaseUid: String? = null,
     val lastModifiedBy: String? = null,
-    val syncedToFirestore: Boolean = false
+    val syncedToFirestore: Boolean = false,
+    /**
+     * The co-parenting relationship this record belongs to, or null while it belongs to nobody
+     * but its creator. See [com.coparently.app.domain.model.Event.familyId].
+     */
+    val familyId: String? = null
 )
 
 /**

@@ -29,7 +29,12 @@ data class Budget(
     val alertThreshold: Double = 0.8,
     val isActive: Boolean = true,
     val createdAt: LocalDateTime = LocalDateTime.now(),
-    val syncedToFirestore: Boolean = false
+    val syncedToFirestore: Boolean = false,
+    /**
+     * The co-parenting relationship this record belongs to, or null while it belongs to nobody
+     * but its creator. See [com.coparently.app.domain.model.Event.familyId].
+     */
+    val familyId: String? = null
 )
 
 /**

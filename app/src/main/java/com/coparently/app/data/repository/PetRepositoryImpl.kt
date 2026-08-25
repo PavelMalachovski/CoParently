@@ -6,6 +6,7 @@ import com.coparently.app.data.local.entity.PetEntity
 import com.coparently.app.data.remote.firebase.FirebaseAuthService
 import com.coparently.app.data.remote.firebase.FirestorePetDataSource
 import com.coparently.app.data.sync.PetAudience
+import com.coparently.app.domain.family.FamilyKey
 import com.coparently.app.domain.model.Medication
 import com.coparently.app.domain.model.Pet
 import com.coparently.app.domain.model.PetSpecies
@@ -59,17 +60,24 @@ class PetRepositoryImpl @Inject constructor(
     }
 
     override suspend fun upsertPet(pet: Pet) {
-        val entity = pet.toEntity()
+        val firebaseUser = firebaseAuthService.getCurrentUser()
+        val partnerId = firebaseUser?.let { currentPartnerId(it.uid) }
+        // Which relationship this pet belongs to — see the same stamp in
+        // [ChildInfoRepositoryImpl.upsertChildInfo]. Null while unpaired, and never
+        // re-derived once set.
+        val owned = pet.copy(
+            familyId = pet.familyId ?: FamilyKey.orNull(firebaseUser?.uid, partnerId)
+        )
+        val entity = owned.toEntity()
         petDao.insertPet(entity)
 
-        val firebaseUser = firebaseAuthService.getCurrentUser()
         if (firebaseUser != null) {
             val audience = PetAudience.entitled(
                 userId = firebaseUser.uid,
-                creatorUid = pet.createdByFirebaseUid,
-                partnerId = currentPartnerId(firebaseUser.uid)
+                creatorUid = owned.createdByFirebaseUid,
+                partnerId = partnerId
             )
-            val result = firestorePetDataSource.upsertPet(pet.id, pet.toFirestoreMap(audience))
+            val result = firestorePetDataSource.upsertPet(owned.id, owned.toFirestoreMap(audience))
 
             // Mark as synced only when the remote write actually succeeded — the same rule
             // ChildInfoRepositoryImpl follows, so a failed write stays in the retry path.
@@ -173,7 +181,8 @@ class PetRepositoryImpl @Inject constructor(
             updatedAt = updatedAt,
             createdByFirebaseUid = createdByFirebaseUid,
             lastModifiedBy = lastModifiedBy,
-            syncedToFirestore = syncedToFirestore
+            syncedToFirestore = syncedToFirestore,
+            familyId = familyId
         )
     }
 
@@ -198,7 +207,8 @@ class PetRepositoryImpl @Inject constructor(
             updatedAt = updatedAt,
             createdByFirebaseUid = createdByFirebaseUid,
             lastModifiedBy = lastModifiedBy,
-            syncedToFirestore = syncedToFirestore
+            syncedToFirestore = syncedToFirestore,
+            familyId = familyId
         )
     }
 
@@ -238,7 +248,8 @@ class PetRepositoryImpl @Inject constructor(
             "updatedAt" to updatedAt.format(formatter),
             "createdByFirebaseUid" to createdByFirebaseUid,
             "lastModifiedBy" to lastModifiedBy,
-            "sharedWith" to audience
+            "sharedWith" to audience,
+            "familyId" to (familyId ?: "")
         )
     }
 
@@ -285,7 +296,8 @@ class PetRepositoryImpl @Inject constructor(
             updatedAt = LocalDateTime.parse(this["updatedAt"] as String, formatter),
             createdByFirebaseUid = this["createdByFirebaseUid"] as? String,
             lastModifiedBy = this["lastModifiedBy"] as? String,
-            syncedToFirestore = true
+            syncedToFirestore = true,
+            familyId = (this["familyId"] as? String)?.takeIf { it.isNotEmpty() }
         )
     }
 }

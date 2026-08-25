@@ -35,6 +35,13 @@ data class User(
     val googleCalendarSyncEnabled: Boolean = false,
     val googleCalendarId: String? = null,
     val partnerId: String? = null,
+    /**
+     * Every co-parent this account has.
+     *
+     * [partnerId] is one of these — whichever family this device is currently showing — and
+     * this is the whole set. See `UserEntity.partnerIdsJson`.
+     */
+    val partnerIds: List<String> = emptyList(),
     val fcmToken: String? = null,
     val dateOfBirth: LocalDate? = null,
     val phone: String? = null,

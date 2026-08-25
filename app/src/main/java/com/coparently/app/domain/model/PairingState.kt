@@ -27,7 +27,13 @@ data class PartnerSummary(
      * never written it. Unioned with this parent's answer so one side saying "children" is
      * enough for the child records to appear on both.
      */
-    val caresFor: Set<FamilyKind> = emptySet()
+    val caresFor: Set<FamilyKind> = emptySet(),
+    /**
+     * The colour the co-parent chose for themselves, or null when their build has never
+     * written one. Null draws the default for their slot, which is what the app looked like
+     * before anyone could choose.
+     */
+    val colorCode: String? = null
 )
 
 /**
@@ -50,6 +56,22 @@ sealed interface PairingState {
         val incoming: List<PairingInvite> = emptyList()
     ) : PairingState
 
-    /** Linked to [partner]. */
-    data class Paired(val partner: PartnerSummary) : PairingState
+    /**
+     * Linked to [partner] — the co-parent of the family this device is showing.
+     *
+     * **Being paired is no longer the end of the pairing screen's job.** A person may
+     * co-parent with more than one other adult (docs/DESIGN-multi-family.md, M-4), so the
+     * outstanding invite and the incoming ones are carried here too, exactly as they are on
+     * [NotPaired]: without them the screen has nothing to render for "invite somebody else",
+     * and the feature is unreachable however willing the server is.
+     *
+     * @property partner The co-parent of the family currently on screen.
+     * @property activeInvite This user's own outstanding invite, if any.
+     * @property incoming Invitations addressed to this user's email.
+     */
+    data class Paired(
+        val partner: PartnerSummary,
+        val activeInvite: PairingInvite? = null,
+        val incoming: List<PairingInvite> = emptyList()
+    ) : PairingState
 }

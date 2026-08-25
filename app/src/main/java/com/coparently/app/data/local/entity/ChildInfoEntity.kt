@@ -57,6 +57,11 @@ data class ChildInfoEntity(
     val updatedAt: LocalDateTime,
     val createdByFirebaseUid: String?,
     val lastModifiedBy: String?,
-    val syncedToFirestore: Boolean
+    val syncedToFirestore: Boolean,
+    /**
+     * The co-parenting relationship this record belongs to, or null while it belongs to nobody
+     * but its creator. See [com.coparently.app.data.local.entity.EventEntity.familyId].
+     */
+    val familyId: String? = null
 )
 

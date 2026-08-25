@@ -6,6 +6,13 @@
     <string name="settings_sync">Synchronisieren</string>
     <string name="settings_google_sync">Google Kalender-Synchronisierung</string>
     <string name="settings_gcal_enable_sync">Synchronisierung aktivieren</string>
+    <string name="settings_gcal_private_note">Importierte Termine bleiben auf diesem Gerät. Dein Google Kalender ist privat, es wird also nichts davon mit dem anderen Elternteil geteilt.</string>
+    <string name="settings_parent_color">Meine Farbe</string>
+    <string name="settings_parent_color_desc">Wie deine Termine, Betreuungstage und Ausgaben markiert werden. Der andere Elternteil wählt seine eigene.</string>
+    <string name="parent_color_pink">Rosa</string>
+    <string name="parent_color_blue">Blau</string>
+    <string name="parent_color_purple">Lila</string>
+    <string name="parent_color_orange">Orange</string>
     <string name="settings_signed_in_as">Angemeldet als: %1$s</string>
     <string name="settings_gcal_not_signed_in">Nicht angemeldet</string>
     <string name="settings_unknown">Unbekannt</string>
@@ -65,4 +72,7 @@
     <!-- Disclosure chevron content descriptions (UX-11). -->
     <string name="settings_expand">Optionen anzeigen</string>
     <string name="settings_collapse">Optionen ausblenden</string>
+    <string name="settings_family_shown">Angezeigte Familie</string>
+    <string name="settings_family_switch">Familie wechseln</string>
+    <string name="settings_family_unnamed">Noch ohne Namen</string>
 </resources>

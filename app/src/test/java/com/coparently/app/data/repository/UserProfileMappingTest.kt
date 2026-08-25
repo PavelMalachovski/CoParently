@@ -116,7 +116,13 @@ class UserProfileMappingTest {
         // Firestore push, which is covered separately by the "role" grep and the tests in
         // UserRepositoryEnsureProfileTest.
         every { authService.getCurrentUser() } returns null
-        val repository = UserRepositoryImpl(userDao, authService, firestoreUserDataSource, fcmService)
+        val repository = UserRepositoryImpl(
+            userDao,
+            authService,
+            firestoreUserDataSource,
+            mockk(relaxed = true),
+            fcmService
+        )
 
         val filled = User(
             id = "user-a",

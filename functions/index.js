@@ -636,17 +636,76 @@ async function acceptPairingInvitationImpl(db, acceptingUserId, acceptingEmail, 
       throw new functions.https.HttpsError(
           'not-found', 'User profile missing', {reason: 'not-found'});
     }
-    if (hasPartner(inviterSnap) || hasPartner(accepterSnap)) {
+    // Being paired is no longer a reason to refuse: a person may co-parent with more than one
+    // other adult, and the second relationship is created exactly here. What is still refused
+    // is a *repeat of this pair* — two people are one family, and a second `families/{id}`
+    // between them is the same document, so accepting again would re-run `assignSlots` and
+    // could flip the slots their whole history is stamped with.
+    if (partnersOf(inviterSnap.data()).includes(acceptingUserId) ||
+        partnersOf(accepterSnap.data()).includes(invite.fromUserId)) {
       throw new functions.https.HttpsError(
-          'failed-precondition', 'One of the accounts is already paired',
+          'failed-precondition', 'You are already co-parenting with this person',
           {reason: 'already-paired'});
     }
     slots = assignSlots(inviterSnap.data().role);
+
+    // The relationship itself, as a document. Its id is `FamilyKey.of` — the same string
+    // `custody_models`, `family_settings` and `conversations` are already keyed by — and its
+    // `members` array is what `firestore.rules` will read to answer "may this person see this
+    // record" once a person can co-parent with more than one other person.
+    //
+    // Written here, as admin, and by no client ever: the membership *is* the grant, so a
+    // create path open to clients would let anyone name themselves a member of any pair. The
+    // same reasoning rules out keeping the list on `users/{uid}`, which its owner may write.
+    tx.set(db.collection('families').doc(
+        custodyModelKey(invite.fromUserId, acceptingUserId)), {
+      members: [invite.fromUserId, acceptingUserId].sort(),
+      // The slots the pair just agreed on, keyed by uid. The same two values written to
+      // `users/{uid}.role` below, in the place they actually belong: a slot says "you are
+      // parent 1 or parent 2 *in this pair*", so a person who co-parents with two others
+      // holds two of them and one field on their profile cannot carry both. Written here as
+      // admin and by no client, ever — a parent who could write their own slot would take the
+      // co-parent's colour and re-point what `parentOwner` means across the whole calendar.
+      slots: {
+        [invite.fromUserId]: slots.inviterRole,
+        [acceptingUserId]: slots.accepterRole,
+      },
+      // Each parent's own answer to "children, pets, or both", carried over from their
+      // profile so the family starts out knowing what the two accounts already said. Unlike
+      // `slots` this one is member-writable afterwards — for the caller's own key only —
+      // because it decides which sections the app draws and nothing about whose records are
+      // whose. An account that has never answered contributes `''`, which is not the same as
+      // answering "neither": `FamilyKind.effective` reads an empty union as everything, so
+      // silence never hides a section somebody was already using.
+      //
+      // The value keeps `users/{uid}.caresFor`'s exact stored form — the constant names
+      // joined by `|`, which `FamilyKind.toStored` writes and `fromStored` reads — rather
+      // than becoming an array here. One spelling of a `FamilyKind` set in the whole system:
+      // a second one would be a second parser to keep in step with the enum.
+      caresFor: {
+        [invite.fromUserId]: storedKinds(inviterSnap.data().caresFor),
+        [acceptingUserId]: storedKinds(accepterSnap.data().caresFor),
+      },
+      createdAt: pairedAt,
+    });
+
+    // `partnerIds` accumulates; `partnerId` is written only while it is still empty.
+    //
+    // Keeping the singular field pinned to the *first* co-parent is deliberate. It is what a
+    // build that predates the array reads, and such a build can only cope with one
+    // relationship — so it should keep showing the one it already knew rather than being
+    // silently moved to a family it has never heard of. M-5 deletes the field.
     tx.update(inviterRef, {
-      partnerId: acceptingUserId, pairedAt, role: slots.inviterRole,
+      partnerIds: admin.firestore.FieldValue.arrayUnion(acceptingUserId),
+      partnerId: partnersOf(inviterSnap.data())[0] || acceptingUserId,
+      pairedAt,
+      role: slots.inviterRole,
     });
     tx.update(accepterRef, {
-      partnerId: invite.fromUserId, pairedAt, role: slots.accepterRole,
+      partnerIds: admin.firestore.FieldValue.arrayUnion(invite.fromUserId),
+      partnerId: partnersOf(accepterSnap.data())[0] || invite.fromUserId,
+      pairedAt,
+      role: slots.accepterRole,
     });
     tx.update(inviteRef, {
       status: 'accepted',
@@ -1500,16 +1559,38 @@ exports.custodyModelKey = custodyModelKey;
  *
  * @param {FirebaseFirestore.Firestore} db Firestore instance.
  * @param {string} callerUid The signed-in caller's UID.
+ * @param {?string} requestedPartnerId Which co-parent to unpair from. Null means "the only
+ *   one", which is what a build that predates multiple families sends; with several, a null
+ *   is refused rather than guessed at.
  * @return {Promise<Object>} `{unpairedFrom, revokedDocuments}`: the former partner's UID
  *   (null when no intact link was torn down) and how many documents the sweep narrowed.
  */
-async function unpairCoParentImpl(db, callerUid) {
+async function unpairCoParentImpl(db, callerUid, requestedPartnerId) {
   const callerRef = db.collection('users').doc(callerUid);
 
   const result = await db.runTransaction(async (tx) => {
     const callerSnap = await tx.get(callerRef);
     const callerData = callerSnap.exists ? callerSnap.data() : {};
-    const partnerId = callerData.partnerId || null;
+    const partners = partnersOf(callerData);
+
+    // **One family, not "the" pairing.** A person may co-parent with more than one other
+    // adult, so the caller names which relationship to end. Naming somebody they do not
+    // co-parent with ends nothing rather than half-clearing the wrong link.
+    //
+    // Omitted is still valid and means "the only one", which is what a build that predates
+    // multiple families sends. With several, an unnamed target is refused instead of guessed
+    // at: ending the wrong relationship deletes that pair's custody schedule and money
+    // agreement, and there is no undo.
+    let partnerId = null;
+    if (requestedPartnerId) {
+      partnerId = partners.includes(requestedPartnerId) ? requestedPartnerId : null;
+    } else if (partners.length === 1) {
+      partnerId = partners[0];
+    } else if (partners.length > 1) {
+      throw new functions.https.HttpsError(
+          'invalid-argument', 'Name which co-parent to unpair from',
+          {reason: 'ambiguous-partner'});
+    }
     // Set by earlier calls whose sweeps did not finish. Resuming them is the only way
     // those documents ever get narrowed: once partnerId is cleared, nothing else
     // remembers who the ex-partner was.
@@ -1535,6 +1616,12 @@ async function unpairCoParentImpl(db, callerUid) {
     // split neither of them remembers agreeing would start pricing their expenses again.
     tx.delete(db.collection('family_settings').doc(custodyModelKey(callerUid, partnerId)));
 
+    // And the relationship itself. This one is not tidiness: `families/{id}.members` is what
+    // grants access to everything the pair shares, so leaving it behind leaves the ex-partner
+    // reading this household after the unpair — the sweep below narrows documents, but a live
+    // membership would let them all back in.
+    tx.delete(db.collection('families').doc(custodyModelKey(callerUid, partnerId)));
+
     // Re-verify the link is still mutually intact before clearing it. If the
     // partner has already unpaired or re-paired with someone else, the link
     // this call was asked to remove is already gone from their side — but the
@@ -1543,19 +1630,19 @@ async function unpairCoParentImpl(db, callerUid) {
     // permanently "paired", with no way out: the unpair button would keep
     // succeeding and keep changing nothing.
     if (!partnerSnap.exists || partnerSnap.data().partnerId !== callerUid) {
-      tx.update(callerRef, {
-        partnerId: '', pairedAt: null, pendingRevocationOf: revokeFrom,
-      });
+      tx.update(callerRef, withPartnerRemoved(callerData, partnerId, {
+        pendingRevocationOf: revokeFrom,
+      }));
       // No notification: there is no intact link, and the other side either does
       // not exist or is already paired with somebody else. The sweep still runs —
       // a half-torn link leaves the shared documents just as exposed.
       return {unpairedFrom: null, revokeFrom: revokeFrom};
     }
 
-    tx.update(callerRef, {
-      partnerId: '', pairedAt: null, pendingRevocationOf: revokeFrom,
-    });
-    tx.update(partnerRef, {partnerId: '', pairedAt: null});
+    tx.update(callerRef, withPartnerRemoved(callerData, partnerId, {
+      pendingRevocationOf: revokeFrom,
+    }));
+    tx.update(partnerRef, withPartnerRemoved(partnerSnap.data(), callerUid, {}));
 
     return {
       unpairedFrom: partnerId,
@@ -1614,7 +1701,11 @@ exports.unpairCoParent = functions.https.onCall(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError('unauthenticated', 'Sign in first');
   }
-  return unpairCoParentImpl(admin.firestore(), context.auth.uid);
+  // Optional, and absent is not an error: a build that predates multiple families sends
+  // nothing and means "the only one". See [unpairCoParentImpl] for what happens when there
+  // is more than one and nobody said which.
+  const partnerId = data && data.partnerId ? String(data.partnerId) : null;
+  return unpairCoParentImpl(admin.firestore(), context.auth.uid, partnerId);
 });
 
 /**
@@ -1677,15 +1768,28 @@ async function findInvitation(db, ref) {
 }
 
 /**
- * Whether a user snapshot already carries a co-parent link.
+ * Every co-parent a user document names, in either shape it may carry.
  *
- * @param {FirebaseFirestore.DocumentSnapshot} snap User document.
- * @return {boolean} True when partnerId is set and non-empty.
+ * A person may co-parent with more than one other adult (docs/DESIGN-multi-family.md, M-4), so
+ * the stored answer is `partnerIds`, an array. `partnerId` — the single field that came before
+ * it — is still written, and still read here, because a co-parent on an older build knows only
+ * that one; it is dropped in M-5.
+ *
+ * The two are unioned rather than one winning, so a document mid-migration, carrying a
+ * `partnerId` the array has not caught up with, names both.
+ *
+ * @param {?Object} data A user document's data, or null/undefined.
+ * @return {!Array<string>} The co-parents' UIDs, de-duplicated, blanks removed.
  */
-function hasPartner(snap) {
-  const partnerId = snap.data().partnerId;
-  return typeof partnerId === 'string' && partnerId.length > 0;
+function partnersOf(data) {
+  const d = data || {};
+  const many = Array.isArray(d.partnerIds) ? d.partnerIds : [];
+  const one = typeof d.partnerId === 'string' && d.partnerId ? [d.partnerId] : [];
+  return Array.from(new Set(many.concat(one).filter(
+      (uid) => typeof uid === 'string' && uid.length > 0)));
 }
+
+exports.partnersOf = partnersOf;
 
 /**
  * The two parent slots after pairing.
@@ -1707,6 +1811,36 @@ function assignSlots(inviterRole) {
   return {inviterRole: inviter, accepterRole: inviter === 'mom' ? 'dad' : 'mom'};
 }
 exports.assignSlots = assignSlots;
+
+/**
+ * The update that removes exactly one co-parent from a user document.
+ *
+ * Three fields move together, and the reason each one does:
+ *
+ * - `partnerIds` loses that uid and keeps the rest, because ending one relationship must not
+ *   end another. `arrayRemove` rather than a rewritten array, so a concurrent accept adding a
+ *   third co-parent is not clobbered by a stale read.
+ * - `partnerId` — the singular field an older build reads — is re-pointed at whichever
+ *   relationship survives, and blanked when none does. Leaving it naming the ex-partner would
+ *   leave that build showing a family the account is no longer in.
+ * - `pairedAt` is cleared only when the last relationship goes. It describes "when this account
+ *   became a co-parent", and it is still true while any remain.
+ *
+ * @param {?Object} data The user document's data before the removal.
+ * @param {string} removedUid The co-parent to drop.
+ * @param {!Object} extra Further fields to set in the same update.
+ * @return {!Object} The update map.
+ */
+function withPartnerRemoved(data, removedUid, extra) {
+  const remaining = partnersOf(data).filter((uid) => uid !== removedUid);
+  return Object.assign({
+    partnerIds: admin.firestore.FieldValue.arrayRemove(removedUid),
+    partnerId: remaining[0] || '',
+    pairedAt: remaining.length > 0 ? (data || {}).pairedAt || null : null,
+  }, extra);
+}
+
+exports.withPartnerRemoved = withPartnerRemoved;
 
 /**
  * The UIDs allowed to invoke `backfillParentSlots`.
@@ -1770,6 +1904,27 @@ function normalizedSlot(role) {
 }
 
 exports.normalizedSlot = normalizedSlot;
+
+/**
+ * A stored `caresFor` value, as a string this can safely write into a family document.
+ *
+ * `users/{uid}.caresFor` is the constant names joined by `|` (`FamilyKind.toStored`), absent on
+ * every account that predates the question and `''` on one that answered and then cleared it.
+ * All three of those mean "has not said", and `FamilyKind.effective` reads an empty union as
+ * everything — so they collapse to `''` here rather than being distinguished.
+ *
+ * Anything that is not a string is discarded rather than coerced: `String(undefined)` is the
+ * four characters `undefined`, which `fromStored` would read as an unknown name and drop, but
+ * only after it had been written into the document and read by both phones.
+ *
+ * @param {*} caresFor The value stored on a user document, whatever shape it is in.
+ * @return {string} The same stored form, or `''`.
+ */
+function storedKinds(caresFor) {
+  return typeof caresFor === 'string' ? caresFor : '';
+}
+
+exports.storedKinds = storedKinds;
 
 /**
  * Body of the `backfillParentSlots` callable — re-slots pairs that were created before
@@ -1879,6 +2034,19 @@ async function backfillParentSlotsImpl(db) {
         const slots = assignSlots(inviterData.role);
         await inviterRef.update({role: slots.inviterRole});
         await accepterRef.update({role: slots.accepterRole});
+        // And the pair's family, if it has one, so the two copies of the slot cannot drift.
+        // `update` on an existing document only: a `set` here would create a family carrying
+        // `slots` and no `members`, and the read rule keys on `members` — a missing key is an
+        // evaluation error in Rules, so that document would be unreadable by either parent
+        // with no way back. Which is also why this is not the function that *creates* a
+        // family; `backfillFamilyDocuments` is, and it reads the slots this just wrote.
+        const familyRef = db.collection('families').doc(
+            custodyModelKey(inviterId, accepterId));
+        if ((await familyRef.get()).exists) {
+          await familyRef.update({
+            slots: {[inviterId]: slots.inviterRole, [accepterId]: slots.accepterRole},
+          });
+        }
         summary.updated++;
       } else {
         summary.skipped++;
@@ -1894,6 +2062,327 @@ async function backfillParentSlotsImpl(db) {
 }
 
 exports.backfillParentSlotsImpl = backfillParentSlotsImpl;
+
+/**
+ * Body of the `backfillFamilyDocuments` callable — gives every pair already in production the
+ * `families/{id}` document that pairing only started writing for pairs formed afterwards.
+ *
+ * `families/{id}.members` is what the security rules read to answer "may this person see this
+ * record", and `slots`/`caresFor` are the two fields that stop being facts about a person the
+ * moment somebody co-parents with two others (docs/DESIGN-multi-family.md, M-3). None of that
+ * reaches a pair whose accept ran before M-1, so without this pass those pairs would sit on the
+ * `users/{uid}` fallback forever and no family-keyed feature could ever be switched on for them.
+ *
+ * **The source is `users`, not `invitations`, and that is the difference from
+ * [backfillParentSlotsImpl].** That one has to know *who accepted* — the two profiles are
+ * symmetric afterwards and only the invitation remembers — so a pair whose invitation was
+ * deleted is beyond its help. A family needs no such fact: any two accounts that name each other
+ * are a family, whatever paperwork survives. Reading the live `partnerId` on both sides is also
+ * what keeps a stale one-sided link from inventing one.
+ *
+ * A pair is seen twice, once from each member, and the second sighting is dropped rather than
+ * counted: `scanned` is pairs examined, not user rows read.
+ *
+ * Skipped, not guessed at, when:
+ * - the named partner's document is gone (a deleted account) — `skippedReasons.missingAccount`;
+ * - the two do not name *each other* — `skippedReasons.notMutual`. A one-sided `partnerId` is
+ *   what an interrupted unpair leaves behind, and turning it into a family would hand somebody
+ *   membership of a relationship the other person has already left;
+ * - the family document already carries all three fields — `skippedReasons.alreadyComplete`. A
+ *   second run must look like the first, and a `caresFor` either parent has edited since must
+ *   not be reset to what their profile happened to say.
+ *
+ * `slots` records what the two profiles hold **right now**, normalized the way `assignSlots`
+ * normalizes: this does not decide who is parent 1: that needs the invitation, and it is
+ * [backfillParentSlotsImpl]'s job. A pair that one has not separated yet lands here with both
+ * members in the same slot, which is faithful and is counted as `sameSlot` so an operator can
+ * see it. **Run `backfillParentSlots` first.** Run in the other order and nothing is lost —
+ * that function updates an existing family's `slots` as it separates a pair — but the operator
+ * then has to run it knowing this one already went.
+ *
+ * A failure on one pair is caught and counted rather than aborting: a migration with no undo
+ * must not discard what it already wrote because a later pair was malformed.
+ *
+ * @param {FirebaseFirestore.Firestore} db Firestore instance.
+ * @return {Promise<{scanned: number, created: number, updated: number, skipped: number,
+ *   failed: number, sameSlot: number, skippedReasons: {missingAccount: number,
+ *   notMutual: number, alreadyComplete: number}}>} What the migration did.
+ */
+async function backfillFamilyDocumentsImpl(db) {
+  const summary = {
+    scanned: 0,
+    created: 0,
+    updated: 0,
+    skipped: 0,
+    failed: 0,
+    sameSlot: 0,
+    skippedReasons: {
+      missingAccount: 0,
+      notMutual: 0,
+      alreadyComplete: 0,
+    },
+  };
+
+  const users = await db.collection('users').get();
+  const seen = new Set();
+
+  for (const doc of users.docs) {
+    const uid = doc.id;
+    const user = doc.data() || {};
+    const partnerId = user.partnerId;
+
+    // Unpaired, or a document that names itself — neither is a relationship, and neither is
+    // an error worth counting.
+    if (typeof partnerId !== 'string' || !partnerId || partnerId === uid) {
+      continue;
+    }
+
+    const familyId = custodyModelKey(uid, partnerId);
+    if (seen.has(familyId)) {
+      continue;
+    }
+    seen.add(familyId);
+    summary.scanned++;
+
+    try {
+      const partnerSnap = await db.collection('users').doc(partnerId).get();
+      if (!partnerSnap.exists) {
+        summary.skipped++;
+        summary.skippedReasons.missingAccount++;
+        continue;
+      }
+      const partner = partnerSnap.data() || {};
+      if (partner.partnerId !== uid) {
+        summary.skipped++;
+        summary.skippedReasons.notMutual++;
+        continue;
+      }
+
+      const familyRef = db.collection('families').doc(familyId);
+      const familySnap = await familyRef.get();
+      const family = familySnap.exists ? (familySnap.data() || {}) : {};
+      if (family.members && family.slots && family.caresFor) {
+        summary.skipped++;
+        summary.skippedReasons.alreadyComplete++;
+        continue;
+      }
+
+      const mySlot = normalizedSlot(user.role);
+      const theirSlot = normalizedSlot(partner.role);
+      if (mySlot === theirSlot) {
+        summary.sameSlot++;
+      }
+
+      // `set` with merge rather than `update`: the document may not exist at all, and where it
+      // does — an M-1 pairing that wrote `members` before `slots` and `caresFor` existed — the
+      // fields it already has must survive. Only the missing ones are supplied, so a `caresFor`
+      // a parent has since edited through the app is never rolled back to their profile's copy.
+      const patch = {};
+      if (!family.members) {
+        patch.members = [uid, partnerId].sort();
+      }
+      if (!family.slots) {
+        patch.slots = {[uid]: mySlot, [partnerId]: theirSlot};
+      }
+      if (!family.caresFor) {
+        patch.caresFor = {
+          [uid]: storedKinds(user.caresFor),
+          [partnerId]: storedKinds(partner.caresFor),
+        };
+      }
+      await familyRef.set(patch, {merge: true});
+
+      if (familySnap.exists) {
+        summary.updated++;
+      } else {
+        summary.created++;
+      }
+    } catch (err) {
+      console.error(`backfillFamilyDocuments failed on ${familyId}`, err);
+      summary.failed++;
+    }
+  }
+
+  return summary;
+}
+
+exports.backfillFamilyDocumentsImpl = backfillFamilyDocumentsImpl;
+
+/**
+ * The six collections a co-parenting pair shares, and the field on each that names its author.
+ *
+ * A change request is the odd one: it names both adults directly, so its "author" field is
+ * `requestedBy` rather than the `createdByFirebaseUid` the other five carry.
+ */
+const FAMILY_SCOPED_COLLECTIONS = [
+  {name: 'events', authorField: 'createdByFirebaseUid'},
+  {name: 'expenses', authorField: 'createdByFirebaseUid'},
+  {name: 'budgets', authorField: 'createdByFirebaseUid'},
+  {name: 'child_info', authorField: 'createdByFirebaseUid'},
+  {name: 'pets', authorField: 'createdByFirebaseUid'},
+  {name: 'change_requests', authorField: 'requestedBy'},
+];
+
+exports.FAMILY_SCOPED_COLLECTIONS = FAMILY_SCOPED_COLLECTIONS;
+
+/** Firestore's hard cap on operations in one batched write. */
+const FAMILY_ID_BATCH_LIMIT = 450;
+
+/**
+ * Body of the `backfillRecordFamilyIds` callable — stamps `familyId` on the documents of every
+ * live pair that predate the field.
+ *
+ * **This must finish before the family-scoped rules are deployed, not after.** `expenses` and
+ * `budgets` are read by membership of the record's own family, with no fallback to "a co-parent
+ * of the author" — deliberately, because such a fallback re-opens the leak it was meant to
+ * soften: Firestore validates a query by its structure, so while any branch mentioned
+ * `isPartnerOf(createdByFirebaseUid)`, the old `whereIn` query satisfied the rule and served a
+ * second family's documents. A document with no `familyId` is therefore readable only by its
+ * author, and a co-parent's whole expense history reads as empty until this has run.
+ *
+ * The client stamps every record it writes from now on (`FamilyIdBackfill` does the same for
+ * Room), so this is a one-time pass over history, not an ongoing repair.
+ *
+ * **A person with more than one family is skipped, not guessed at.** Today that is nobody —
+ * pairing still refuses a second — but the moment it is somebody, "which of their families does
+ * this record belong to" has no answer here, and stamping the wrong one would hand a record to a
+ * co-parent it was never about. `partnerId` is read live and both sides must name each other,
+ * so an interrupted unpair cannot revive a relationship either.
+ *
+ * Documents that already carry a `familyId` are left alone, so a second run is a no-op and a run
+ * interrupted halfway resumes cleanly.
+ *
+ * @param {FirebaseFirestore.Firestore} db Firestore instance.
+ * @return {Promise<{users: number, stamped: number, skipped: number, failed: number,
+ *   perCollection: !Object<string, number>, skippedReasons: {notMutual: number,
+ *   missingAccount: number, unpaired: number}}>} What the migration did.
+ */
+async function backfillRecordFamilyIdsImpl(db) {
+  const summary = {
+    users: 0,
+    stamped: 0,
+    skipped: 0,
+    failed: 0,
+    perCollection: {},
+    skippedReasons: {notMutual: 0, missingAccount: 0, unpaired: 0},
+  };
+  FAMILY_SCOPED_COLLECTIONS.forEach(({name}) => {
+    summary.perCollection[name] = 0;
+  });
+
+  const users = await db.collection('users').get();
+
+  for (const doc of users.docs) {
+    const uid = doc.id;
+    const partnerId = (doc.data() || {}).partnerId;
+
+    if (typeof partnerId !== 'string' || !partnerId || partnerId === uid) {
+      summary.skipped++;
+      summary.skippedReasons.unpaired++;
+      continue;
+    }
+
+    try {
+      const partnerSnap = await db.collection('users').doc(partnerId).get();
+      if (!partnerSnap.exists) {
+        summary.skipped++;
+        summary.skippedReasons.missingAccount++;
+        continue;
+      }
+      if ((partnerSnap.data() || {}).partnerId !== uid) {
+        summary.skipped++;
+        summary.skippedReasons.notMutual++;
+        continue;
+      }
+
+      const familyId = custodyModelKey(uid, partnerId);
+      summary.users++;
+
+      for (const {name, authorField} of FAMILY_SCOPED_COLLECTIONS) {
+        const owned = await db.collection(name).where(authorField, '==', uid).get();
+
+        // Filtered here rather than in the query: "the field is absent" is not something a
+        // Firestore `where` can ask, and a document written by a newer client already carries
+        // the value this would otherwise overwrite.
+        const needing = owned.docs.filter((d) => {
+          const stored = (d.data() || {}).familyId;
+          return typeof stored !== 'string' || stored === '';
+        });
+
+        let batch = db.batch();
+        let pending = 0;
+        for (const d of needing) {
+          batch.update(d.ref, {familyId});
+          pending++;
+          summary.perCollection[name]++;
+          summary.stamped++;
+          if (pending === FAMILY_ID_BATCH_LIMIT) {
+            await batch.commit();
+            batch = db.batch();
+            pending = 0;
+          }
+        }
+        if (pending > 0) {
+          await batch.commit();
+        }
+      }
+    } catch (err) {
+      console.error(`backfillRecordFamilyIds failed for ${uid}`, err);
+      summary.failed++;
+    }
+  }
+
+  return summary;
+}
+
+exports.backfillRecordFamilyIdsImpl = backfillRecordFamilyIdsImpl;
+
+/**
+ * Stamps `familyId` on the records of every live pair that predate the field.
+ *
+ * Operator-only on the same allow-list as the other backfills, and 540 seconds for the same
+ * reason: a one-time pass over a historical, bounded set. Run it **after**
+ * `backfillFamilyDocuments` and **before** deploying the family-scoped rules — see
+ * docs/DESIGN-multi-family.md, M-4, for the ordered steps and what each one costs if skipped.
+ *
+ * @return {Promise<{users: number, stamped: number, skipped: number, failed: number,
+ *   perCollection: !Object<string, number>, skippedReasons: {notMutual: number,
+ *   missingAccount: number, unpaired: number}}>} See [backfillRecordFamilyIdsImpl].
+ */
+exports.backfillRecordFamilyIds = functions.runWith({timeoutSeconds: 540}).https.onCall(
+    async (data, context) => {
+      if (!isBackfillOperator(context)) {
+        throw new functions.https.HttpsError(
+            'permission-denied', 'Operator access only', {reason: 'not-operator'});
+      }
+      return backfillRecordFamilyIdsImpl(admin.firestore());
+    },
+);
+
+/**
+ * Creates the `families/{id}` document for pairs that formed before pairing wrote one.
+ *
+ * Operator-only on the same allow-list as [backfillParentSlots] and for the same reason, only
+ * more so: this writes the document the security rules read to decide who may see a family's
+ * records. A signed-in caller must not be able to run it, whatever it happens to write today.
+ *
+ * 540 seconds, matching its sibling. The scan is one unbounded `.get()` over `users` with no
+ * pagination, plus up to two reads and one write per pair — the same shape, and the same
+ * reasoning: this runs once over a historical, bounded set.
+ *
+ * @return {Promise<{scanned: number, created: number, updated: number, skipped: number,
+ *   failed: number, sameSlot: number, skippedReasons: {missingAccount: number,
+ *   notMutual: number, alreadyComplete: number}}>} See [backfillFamilyDocumentsImpl].
+ */
+exports.backfillFamilyDocuments = functions.runWith({timeoutSeconds: 540}).https.onCall(
+    async (data, context) => {
+      if (!isBackfillOperator(context)) {
+        throw new functions.https.HttpsError(
+            'permission-denied', 'Operator access only', {reason: 'not-operator'});
+      }
+      return backfillFamilyDocumentsImpl(admin.firestore());
+    },
+);
 
 /**
  * Re-slots pairs created before pairing started assigning distinct parent slots.

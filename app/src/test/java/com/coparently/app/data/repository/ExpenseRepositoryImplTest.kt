@@ -59,42 +59,47 @@ class ExpenseRepositoryImplTest {
     }
 
     @Test
-    fun `observeRemote queries both parents' UIDs when paired`() = runTest {
+    fun `observeRemote queries the family, not the two authors`() = runTest {
+        // The shape is the isolation. A filter on the author returns every family that author
+        // is in, and while any branch of the read rule mentioned `isPartnerOf`, Firestore
+        // served that query — see `firestore-tests/rules/family-isolation.test.js`.
         val firebaseUser = mockk<FirebaseUser> { every { uid } returns "uidA" }
         every { firebaseAuthService.getCurrentUser() } returns firebaseUser
         coEvery { userDao.getUserById("uidA") } returns userEntity(id = "uidA", partnerId = "uidB")
-        every { firestoreExpenseDataSource.getAllExpenses(listOf("uidA", "uidB")) } returns emptyFlow()
+        every { firestoreExpenseDataSource.getAllExpenses("uidA__uidB") } returns emptyFlow()
 
         repository.observeRemote()
 
-        coVerify(exactly = 1) { firestoreExpenseDataSource.getAllExpenses(listOf("uidA", "uidB")) }
+        coVerify(exactly = 1) { firestoreExpenseDataSource.getAllExpenses("uidA__uidB") }
     }
 
     @Test
-    fun `observeRemote queries only the current user's UID when unpaired`() = runTest {
+    fun `observeRemote asks for no family when unpaired`() = runTest {
+        // Null rather than a query for this user alone: an unpaired account has nothing shared
+        // to download, and the data source closes without issuing a read that would be denied.
         val firebaseUser = mockk<FirebaseUser> { every { uid } returns "uidA" }
         every { firebaseAuthService.getCurrentUser() } returns firebaseUser
         coEvery { userDao.getUserById("uidA") } returns userEntity(id = "uidA", partnerId = null)
-        every { firestoreExpenseDataSource.getAllExpenses(listOf("uidA")) } returns emptyFlow()
+        every { firestoreExpenseDataSource.getAllExpenses(null) } returns emptyFlow()
 
         repository.observeRemote()
 
-        coVerify(exactly = 1) { firestoreExpenseDataSource.getAllExpenses(listOf("uidA")) }
+        coVerify(exactly = 1) { firestoreExpenseDataSource.getAllExpenses(null) }
     }
 
     @Test
-    fun `observeRemote queries only the current user's UID when there is no local user row yet`() = runTest {
+    fun `observeRemote asks for no family when there is no local user row yet`() = runTest {
         // The Room `users` row (and its partnerId) may not have synced down yet on a fresh
-        // install; observeRemote must still scope to the signed-in UID, not skip the
-        // filter and fall back to an unfiltered (and therefore rejected) query.
+        // install. Without a partner there is no family id to derive, and the honest answer is
+        // null — never an unfiltered read, which the rules reject outright.
         val firebaseUser = mockk<FirebaseUser> { every { uid } returns "uidA" }
         every { firebaseAuthService.getCurrentUser() } returns firebaseUser
         coEvery { userDao.getUserById("uidA") } returns null
-        every { firestoreExpenseDataSource.getAllExpenses(listOf("uidA")) } returns emptyFlow()
+        every { firestoreExpenseDataSource.getAllExpenses(null) } returns emptyFlow()
 
         repository.observeRemote()
 
-        coVerify(exactly = 1) { firestoreExpenseDataSource.getAllExpenses(listOf("uidA")) }
+        coVerify(exactly = 1) { firestoreExpenseDataSource.getAllExpenses(null) }
     }
 
     // ---- ownership on update ------------------------------------------------

@@ -15,6 +15,7 @@ import com.coparently.app.domain.activity.ActivityKind
 import com.coparently.app.domain.events.CalendarVisibility
 import com.coparently.app.domain.events.EventAcceptance
 import com.coparently.app.domain.events.EventAcceptanceTransition
+import com.coparently.app.domain.family.FamilyKey
 import com.coparently.app.domain.family.FamilyMemberRef
 import com.coparently.app.domain.model.Event
 import com.coparently.app.domain.repository.EventRepository
@@ -143,7 +144,20 @@ class EventRepositoryImpl @Inject constructor(
         // pairing moved this device to a different slot — private events were the worst case,
         // since they get no second chance from a later sync to pick up the stamp.
         val stamped = if (firebaseUser != null) {
-            event.copy(createdByFirebaseUid = event.createdByFirebaseUid ?: firebaseUser.uid)
+            event.copy(
+                createdByFirebaseUid = event.createdByFirebaseUid ?: firebaseUser.uid,
+                // Which relationship this event belongs to, and therefore who may see it.
+                // Stamped here for the same reason `createdByFirebaseUid` is: a private event
+                // is never synced, and an offline device leaves `syncedToFirestore` false
+                // indefinitely, so a field only written on the sync path is a field that stays
+                // null forever on exactly the rows that most need it. Null while unpaired —
+                // the event is this parent's alone until there is somebody to share it with.
+                familyId = event.familyId
+                    ?: FamilyKey.orNull(
+                        firebaseUser.uid,
+                        userDao.getUserById(firebaseUser.uid)?.partnerId
+                    )
+            )
         } else {
             event
         }.let { withAcceptance(it, firebaseUser?.uid) }
@@ -396,6 +410,11 @@ class EventRepositoryImpl @Inject constructor(
             "acceptedAt" to (acceptedAt?.format(dateFormatter) ?: ""),
             "isImportant" to isImportant,
             "friendParticipates" to (friendParticipates ?: ""),
+            // The relationship this event belongs to. It will replace `sharedWith` entirely:
+            // the rules read the family's members, so the audience stops being a copy carried
+            // on the document that can go stale (CLAUDE.md item 16). Both are written while the
+            // read rules still consult the old one.
+            "familyId" to (familyId ?: ""),
             // Who the event is about, as prefixed strings. An empty array is "the whole family",
             // never an absent key: the read side distinguishes neither, but a document whose
             // fields are iterated should not have a hole where a schema field belongs.
@@ -445,6 +464,7 @@ class EventRepositoryImpl @Inject constructor(
             acceptedAt = acceptedAt,
             isImportant = isImportant,
             friendParticipates = friendParticipates,
+            familyId = familyId,
             forMembers = FamilyMemberRef.parse(
                 runCatching {
                     gson.fromJson(forMembersJson, Array<String>::class.java)?.toList()
@@ -485,6 +505,7 @@ class EventRepositoryImpl @Inject constructor(
             acceptedAt = acceptedAt,
             isImportant = isImportant,
             friendParticipates = friendParticipates,
+            familyId = familyId,
             forMembersJson = gson.toJson(FamilyMemberRef.store(forMembers))
         )
     }

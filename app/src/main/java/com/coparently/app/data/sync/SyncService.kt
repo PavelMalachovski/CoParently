@@ -1,6 +1,7 @@
 package com.coparently.app.data.sync
 
 import android.util.Log
+import com.coparently.app.data.family.SelectedFamilySource
 import com.coparently.app.data.local.dao.ChildInfoDao
 import com.coparently.app.data.local.dao.EventDao
 import com.coparently.app.data.local.dao.UserDao
@@ -57,6 +58,8 @@ class SyncService @Inject constructor(
     private val messageRepository: MessageRepository,
     private val changeRequestRepository: ChangeRequestRepository,
     private val familySettingsRepository: FamilySettingsRepository,
+    private val familyIdBackfill: FamilyIdBackfill,
+    private val selectedFamilySource: SelectedFamilySource,
     private val accountSwitchGuard: AccountSwitchGuard
 ) {
     // `LocalDate::class.java` needs the same adapter `ChildInfoRepositoryImpl` and
@@ -91,20 +94,31 @@ class SyncService @Inject constructor(
             _syncStatus.value = SyncStatus.Syncing(10, 100)
             syncUserData(currentUser.uid)
 
-            // Step 2: Sync events
+            // Step 2: Name the family on rows written before there was one to name. After
+            // `syncUserData`, which is what brings a freshly accepted `partnerId` down, and
+            // before every upload below, so a row stamped here goes up carrying its family
+            // rather than waiting for the sync after next.
+            familyIdBackfill.run(
+                userId = currentUser.uid,
+                partnerId = userDao.getUserById(currentUser.uid)?.partnerId?.takeIf {
+                    it.isNotBlank()
+                }
+            )
+
+            // Step 3: Sync events
             _syncStatus.value = SyncStatus.Syncing(40, 100)
             syncEvents(currentUser.uid)
 
-            // Step 3: Sync child info
+            // Step 4: Sync child info
             _syncStatus.value = SyncStatus.Syncing(70, 100)
             syncChildInfo(currentUser.uid)
 
-            // Step 4: Sync pets. The repository handles upload, download and audience repair
+            // Step 5: Sync pets. The repository handles upload, download and audience repair
             // itself (mirroring child info), so there is nothing to duplicate here.
             _syncStatus.value = SyncStatus.Syncing(80, 100)
             petRepository.pullOnce()
 
-            // Step 5: Drain the outboxes that a live listener cannot drain for you. Chat and
+            // Step 6: Drain the outboxes that a live listener cannot drain for you. Chat and
             // change requests are mirrored *down* in realtime, but a write of either that was
             // refused or interrupted had nothing retrying it — a chat message stayed ERROR for
             // good, and a change request created offline never left the sender's phone.
@@ -118,7 +132,7 @@ class SyncService @Inject constructor(
             // only when the pair has no agreement yet, so a tick can never overwrite one.
             familySettingsRepository.publishCachedRatioIfMissing()
 
-            // Step 6: Complete
+            // Step 7: Complete
             _syncStatus.value = SyncStatus.Success(LocalDateTime.now())
             Result.success(Unit)
         } catch (e: Exception) {
@@ -198,7 +212,8 @@ class SyncService @Inject constructor(
                 // Through `EventDocument` rather than converted here: that file is the one
                 // definition of the events wire format, and a second copy of this conversion is
                 // one more place for the schema to drift (CLAUDE.md item 5).
-                "forMembers" to EventDocument.storedMembers(entity.forMembersJson)
+                "forMembers" to EventDocument.storedMembers(entity.forMembersJson),
+                "familyId" to (entity.familyId ?: "")
             )
 
             val result = firestoreEventDataSource.insertEvent(entity.id, eventData)
@@ -287,7 +302,8 @@ class SyncService @Inject constructor(
                                 "friendParticipates" to (localEntity.friendParticipates ?: ""),
                                 "reminderMinutes" to localEntity.reminderMinutes,
                                 "forMembers" to
-                                    EventDocument.storedMembers(localEntity.forMembersJson)
+                                    EventDocument.storedMembers(localEntity.forMembersJson),
+                                "familyId" to (localEntity.familyId ?: "")
                             )
                             firestoreEventDataSource.updateEvent(localEntity.id, localData)
                             eventDao.markAsSynced(localEntity.id)
@@ -465,6 +481,7 @@ class SyncService @Inject constructor(
                 "updatedAt" to entity.updatedAt.format(formatter),
                 "createdByFirebaseUid" to entity.createdByFirebaseUid,
                 "lastModifiedBy" to entity.lastModifiedBy,
+                "familyId" to (entity.familyId ?: ""),
                 "sharedWith" to ChildInfoAudience.entitled(
                     userId = userId,
                     creatorUid = entity.createdByFirebaseUid,
@@ -529,7 +546,8 @@ class SyncService @Inject constructor(
                                 "createdAt" to localEntity.createdAt.format(formatter),
                                 "updatedAt" to LocalDateTime.now().format(formatter),
                                 "createdByFirebaseUid" to localEntity.createdByFirebaseUid,
-                                "lastModifiedBy" to userId
+                                "lastModifiedBy" to userId,
+                                "familyId" to (localEntity.familyId ?: "")
                             )
                             firestoreChildInfoDataSource.updateChildInfo(localEntity.id, localData)
                             childInfoDao.markAsSynced(localEntity.id)
@@ -588,7 +606,13 @@ class SyncService @Inject constructor(
         val remoteUserData = firestoreUserDataSource.getUserById(userId)
         if (remoteUserData != null) {
             val updatedUser = localUser.copy(
-                partnerId = remoteUserData["partnerId"] as? String,
+                // **`partnerId` is deliberately not refreshed from the remote document.** It
+                // stopped meaning "my co-parent" and started meaning "the family this device is
+                // showing" (`SelectedFamilySource`), so copying the server's value here would
+                // yank a parent out of the family they are looking at on every sync tick. The
+                // real set arrives as `partnerIds`, below, and the selection is reconciled
+                // against it afterwards.
+                partnerIdsJson = gson.toJson(remotePartnerUids(remoteUserData)),
                 fcmToken = remoteUserData["fcmToken"] as? String,
                 // A document that predates the `role` field, a failed partial read, or one
                 // that (should not, but did) carry a blank string must not blank out a role
@@ -600,6 +624,11 @@ class SyncService @Inject constructor(
                 role = (remoteUserData["role"] as? String)?.takeIf { it.isNotBlank() } ?: localUser.role
             )
             userDao.updateUser(updatedUser)
+
+            // Now that the set is current, make the projection agree with it. This is what
+            // moves a device off a family the parent has been removed from — an unpair
+            // performed on the other phone reaches this one only as a shorter `partnerIds`.
+            selectedFamilySource.reconcile()
 
             // The parent slot as the server actually states it, next to what this device held.
             // Without this the two are indistinguishable in the field: a slot that never got
@@ -689,6 +718,20 @@ class SyncService @Inject constructor(
      * Converts Firestore child info data to ChildInfoEntity.
      */
     @Suppress("UNCHECKED_CAST")
+    /**
+     * The co-parents a remote `users/{uid}` document names, in either shape it may carry.
+     *
+     * `partnerIds` is the answer and the singular `partnerId` is the fallback, unioned rather
+     * than one winning — the same rule `UserRepositoryImpl.partnerUids` and `functions`'
+     * `partnersOf` follow, because three places deciding who somebody co-parents with must
+     * decide it identically.
+     */
+    private fun remotePartnerUids(remote: Map<String, Any?>): List<String> {
+        val many = (remote["partnerIds"] as? List<*>)?.mapNotNull { it as? String }.orEmpty()
+        val one = listOfNotNull(remote["partnerId"] as? String)
+        return (many + one).filter { it.isNotBlank() }.distinct()
+    }
+
     private fun Map<String, Any?>.toChildInfoEntity(): com.coparently.app.data.local.entity.ChildInfoEntity {
         return com.coparently.app.data.local.entity.ChildInfoEntity(
             id = this["id"] as String,
@@ -707,7 +750,8 @@ class SyncService @Inject constructor(
             updatedAt = LocalDateTime.parse(this["updatedAt"] as String, formatter),
             createdByFirebaseUid = this["createdByFirebaseUid"] as? String,
             lastModifiedBy = this["lastModifiedBy"] as? String,
-            syncedToFirestore = true
+            syncedToFirestore = true,
+            familyId = (this["familyId"] as? String)?.takeIf { it.isNotEmpty() }
         )
     }
 

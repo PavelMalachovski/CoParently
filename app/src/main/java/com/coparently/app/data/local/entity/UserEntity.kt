@@ -36,6 +36,20 @@ data class UserEntity(
     val googleCalendarSyncEnabled: Boolean = false,
     val googleCalendarId: String? = null,
     val partnerId: String? = null,
+    /**
+     * Every co-parent this account has, as a JSON array of Firebase UIDs.
+     *
+     * A person may co-parent with more than one other adult, and [partnerId] holds one — so it
+     * stopped being the answer to "who are my co-parents" and became the answer to **"which
+     * family is this device showing"** (see `SelectedFamilySource`). The distinction is why
+     * both fields exist: this one is the account's real state, mirrored from
+     * `users/{uid}.partnerIds`, while [partnerId] is a per-device view of it.
+     *
+     * A JSON array of plain strings and never a Gson-serialised type, for the reason
+     * `FamilyMemberRef` records: R8 rewrote a Gson model's field names once already and it
+     * shipped.
+     */
+    val partnerIdsJson: String = "[]",
     val fcmToken: String? = null,
     /** ISO `LocalDate` string, e.g. `1988-04-17`. Null until the parent records it. */
     val dateOfBirth: String? = null,

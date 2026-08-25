@@ -102,6 +102,16 @@ function fakeDb(seed, options) {
       async update(update) {
         applyUpdate(collection, id, update);
       },
+      // `set(data, {merge: true})` behaves as an update; a bare `set` replaces the document,
+      // which is the distinction `backfillFamilyDocuments` relies on not getting wrong.
+      async set(data, options) {
+        if (options && options.merge) {
+          applyUpdate(collection, id, data);
+        } else {
+          docs[collection] = docs[collection] || {};
+          docs[collection][id] = Object.assign({}, data);
+        }
+      },
       async delete() {
         if (docs[collection]) {
           delete docs[collection][id];
@@ -146,6 +156,18 @@ function fakeDb(seed, options) {
         async add(data) {
           added.push({collection: name, data});
           return {id: `generated-${added.length}`};
+        },
+        // An unfiltered scan of the whole collection — what `backfillFamilyDocuments` does
+        // over `users`, the way `backfillParentSlots` scans `invitations` with a filter.
+        async get() {
+          const all = Object.values(docs[name] || {});
+          return {
+            docs: all.map((doc) => ({
+              id: doc.id,
+              data: () => doc,
+              ref: docRef(name, doc.id),
+            })),
+          };
         },
         where(field, op, value) {
           return {
@@ -419,6 +441,21 @@ describe('unpairCoParentImpl', () => {
 
       assert.ok(!('alice__bob' in (db._docs.custody_models || {})),
           'the shared custody document should be gone');
+    });
+
+    it('deletes the family, because the family is the access', async () => {
+      // Not tidiness. `families/{id}.members` is what the security rules read to decide who
+      // may see the records a pair shares, so a family left behind is an ex-partner still
+      // reading this household — the revocation sweep narrows documents, but a live
+      // membership would let them all back in.
+      const seed = seedWithCustodyModel();
+      seed.families = {[CUSTODY_KEY]: {members: ['alice', 'bob'], createdAt: 1}};
+      const db = fakeDb(seed);
+
+      await unpairCoParentImpl(db, 'alice');
+
+      assert.ok(!('alice__bob' in (db._docs.families || {})),
+          'the family should be gone');
     });
 
     it('leaves the co-parent local copies alone when unpairing', async () => {
@@ -748,5 +785,438 @@ describe('backfillParentSlots operator gate', () => {
   it('is empty when no allow-list is configured', () => {
     delete process.env.BACKFILL_ADMIN_UIDS;
     assert.deepStrictEqual(myFunctions.backfillAdminUids(), []);
+  });
+});
+
+describe('backfillFamilyDocumentsImpl', () => {
+  let backfillFamilyDocumentsImpl;
+
+  before(() => {
+    backfillFamilyDocumentsImpl = require('../index').backfillFamilyDocumentsImpl;
+  });
+
+  it('creates the family a pair formed before pairing wrote one never got', async () => {
+    const db = fakeDb({
+      users: {
+        alice: {id: 'alice', partnerId: 'bob', role: 'mom', caresFor: 'CHILDREN'},
+        bob: {id: 'bob', partnerId: 'alice', role: 'dad', caresFor: 'PETS'},
+      },
+    });
+
+    const summary = await backfillFamilyDocumentsImpl(db);
+
+    assert.strictEqual(summary.scanned, 1, 'a pair is one row of work, not two');
+    assert.strictEqual(summary.created, 1);
+    assert.deepStrictEqual(db._docs.families['alice__bob'], {
+      members: ['alice', 'bob'],
+      slots: {alice: 'mom', bob: 'dad'},
+      caresFor: {alice: 'CHILDREN', bob: 'PETS'},
+    });
+  });
+
+  it('completes an M-1 family that has members but not the two new fields', async () => {
+    // The pairs that accepted between M-1 and M-3. `set` with merge, so `members` — which the
+    // read rule keys on — survives rather than being rewritten from scratch.
+    const db = fakeDb({
+      users: {
+        alice: {id: 'alice', partnerId: 'bob', role: 'mom'},
+        bob: {id: 'bob', partnerId: 'alice', role: 'dad'},
+      },
+      families: {
+        alice__bob: {id: 'alice__bob', members: ['alice', 'bob'], createdAt: 42},
+      },
+    });
+
+    const summary = await backfillFamilyDocumentsImpl(db);
+
+    assert.strictEqual(summary.updated, 1);
+    assert.strictEqual(summary.created, 0);
+    const family = db._docs.families['alice__bob'];
+    assert.strictEqual(family.createdAt, 42, 'merge must not drop what was already there');
+    assert.deepStrictEqual(family.slots, {alice: 'mom', bob: 'dad'});
+  });
+
+  it('leaves a complete family alone, so a second run looks like the first', async () => {
+    // And specifically: a `caresFor` either parent has edited through the app since must not
+    // be rolled back to whatever their profile happens to say.
+    const db = fakeDb({
+      users: {
+        alice: {id: 'alice', partnerId: 'bob', role: 'mom', caresFor: 'CHILDREN'},
+        bob: {id: 'bob', partnerId: 'alice', role: 'dad', caresFor: 'CHILDREN'},
+      },
+      families: {
+        alice__bob: {
+          id: 'alice__bob',
+          members: ['alice', 'bob'],
+          slots: {alice: 'mom', bob: 'dad'},
+          caresFor: {alice: 'PETS', bob: ''},
+        },
+      },
+    });
+
+    const summary = await backfillFamilyDocumentsImpl(db);
+
+    assert.strictEqual(summary.skipped, 1);
+    assert.strictEqual(summary.skippedReasons.alreadyComplete, 1);
+    assert.deepStrictEqual(
+        db._docs.families['alice__bob'].caresFor, {alice: 'PETS', bob: ''});
+  });
+
+  it('refuses a one-sided pairing, which is what an interrupted unpair leaves', async () => {
+    // Bob has moved on; Alice's row still names him. Turning that into a family would hand
+    // Alice membership of a relationship Bob has already left.
+    const db = fakeDb({
+      users: {
+        alice: {id: 'alice', partnerId: 'bob', role: 'mom'},
+        bob: {id: 'bob', partnerId: '', role: 'dad'},
+      },
+    });
+
+    const summary = await backfillFamilyDocumentsImpl(db);
+
+    assert.strictEqual(summary.skippedReasons.notMutual, 1);
+    assert.strictEqual(db._docs.families, undefined);
+  });
+
+  it('reports a deleted account separately from a one-sided link', async () => {
+    const db = fakeDb({
+      users: {
+        alice: {id: 'alice', partnerId: 'ghost', role: 'mom'},
+      },
+    });
+
+    const summary = await backfillFamilyDocumentsImpl(db);
+
+    assert.strictEqual(summary.skippedReasons.missingAccount, 1);
+    assert.strictEqual(summary.skippedReasons.notMutual, 0);
+  });
+
+  it('ignores unpaired accounts and a row that names itself', async () => {
+    const db = fakeDb({
+      users: {
+        alice: {id: 'alice', role: 'mom'},
+        bob: {id: 'bob', partnerId: '', role: 'dad'},
+        carol: {id: 'carol', partnerId: 'carol', role: 'mom'},
+      },
+    });
+
+    const summary = await backfillFamilyDocumentsImpl(db);
+
+    assert.strictEqual(summary.scanned, 0);
+    assert.strictEqual(summary.skipped, 0);
+  });
+
+  it('counts a pair whose two parents still share a slot without inventing one', async () => {
+    // Who is parent 1 needs the invitation, which only `backfillParentSlots` reads. This
+    // records what the profiles actually hold and says how many pairs came out indistinct,
+    // rather than guessing and risking re-stamping the wrong person's events.
+    const db = fakeDb({
+      users: {
+        alice: {id: 'alice', partnerId: 'bob', role: 'mom'},
+        bob: {id: 'bob', partnerId: 'alice', role: 'mom'},
+      },
+    });
+
+    const summary = await backfillFamilyDocumentsImpl(db);
+
+    assert.strictEqual(summary.sameSlot, 1);
+    assert.deepStrictEqual(
+        db._docs.families['alice__bob'].slots, {alice: 'mom', bob: 'mom'});
+  });
+
+  it('reads a missing caresFor as empty, never as the string undefined', async () => {
+    const db = fakeDb({
+      users: {
+        alice: {id: 'alice', partnerId: 'bob', role: 'mom'},
+        bob: {id: 'bob', partnerId: 'alice', role: 'dad'},
+      },
+    });
+
+    await backfillFamilyDocumentsImpl(db);
+
+    assert.deepStrictEqual(
+        db._docs.families['alice__bob'].caresFor, {alice: '', bob: ''});
+  });
+});
+
+describe('backfillParentSlots keeps the family in step', () => {
+  let backfillParentSlotsImpl;
+
+  before(() => {
+    backfillParentSlotsImpl = require('../index').backfillParentSlotsImpl;
+  });
+
+  it('updates an existing family\'s slots when it separates a pair', async () => {
+    const db = fakeDb({
+      invitations: {
+        inv1: {id: 'inv1', status: 'accepted', fromUserId: 'alice', acceptedBy: 'bob'},
+      },
+      users: {
+        alice: {id: 'alice', partnerId: 'bob', role: 'mom'},
+        bob: {id: 'bob', partnerId: 'alice', role: 'mom'},
+      },
+      families: {
+        alice__bob: {
+          id: 'alice__bob',
+          members: ['alice', 'bob'],
+          slots: {alice: 'mom', bob: 'mom'},
+        },
+      },
+    });
+
+    await backfillParentSlotsImpl(db);
+
+    assert.deepStrictEqual(
+        db._docs.families['alice__bob'].slots, {alice: 'mom', bob: 'dad'});
+  });
+
+  it('does not create a family that has none, which would be unreadable', async () => {
+    // A `set` here would write `slots` with no `members`, and the read rule keys on
+    // `members`: a missing key errors in Rules, so neither parent could ever read it again.
+    const db = fakeDb({
+      invitations: {
+        inv1: {id: 'inv1', status: 'accepted', fromUserId: 'alice', acceptedBy: 'bob'},
+      },
+      users: {
+        alice: {id: 'alice', partnerId: 'bob', role: 'mom'},
+        bob: {id: 'bob', partnerId: 'alice', role: 'mom'},
+      },
+    });
+
+    const summary = await backfillParentSlotsImpl(db);
+
+    assert.strictEqual(summary.updated, 1, 'the profiles are still re-slotted');
+    assert.strictEqual(db._docs.families, undefined);
+  });
+});
+
+describe('backfillRecordFamilyIdsImpl', () => {
+  let backfillRecordFamilyIdsImpl;
+
+  before(() => {
+    backfillRecordFamilyIdsImpl = require('../index').backfillRecordFamilyIdsImpl;
+  });
+
+  /**
+   * A live, mutually-linked pair plus one document in each shared collection.
+   *
+   * @param {!Object} overrides Collections to replace wholesale on the default fixture.
+   * @return {!Object} The fake Firestore.
+   */
+  function pairedDb(overrides) {
+    return fakeDb(Object.assign({
+      users: {
+        alice: {id: 'alice', partnerId: 'bob'},
+        bob: {id: 'bob', partnerId: 'alice'},
+      },
+      events: {ev1: {id: 'ev1', createdByFirebaseUid: 'alice'}},
+      expenses: {ex1: {id: 'ex1', createdByFirebaseUid: 'alice'}},
+      budgets: {bu1: {id: 'bu1', createdByFirebaseUid: 'alice'}},
+      child_info: {ch1: {id: 'ch1', createdByFirebaseUid: 'alice'}},
+      pets: {pe1: {id: 'pe1', createdByFirebaseUid: 'alice'}},
+      change_requests: {cr1: {id: 'cr1', requestedBy: 'alice'}},
+    }, overrides));
+  }
+
+  it('stamps every shared collection, reading the author field each one actually uses', async () => {
+    // A change request names both adults directly, so its author field is `requestedBy` and
+    // not the `createdByFirebaseUid` the other five carry. Getting that wrong would leave
+    // change requests unstamped and silently unreadable once the rules key on the family.
+    const db = pairedDb({});
+
+    const summary = await backfillRecordFamilyIdsImpl(db);
+
+    assert.strictEqual(summary.stamped, 6);
+    assert.strictEqual(db._docs.events.ev1.familyId, 'alice__bob');
+    assert.strictEqual(db._docs.expenses.ex1.familyId, 'alice__bob');
+    assert.strictEqual(db._docs.budgets.bu1.familyId, 'alice__bob');
+    assert.strictEqual(db._docs.child_info.ch1.familyId, 'alice__bob');
+    assert.strictEqual(db._docs.pets.pe1.familyId, 'alice__bob');
+    assert.strictEqual(db._docs.change_requests.cr1.familyId, 'alice__bob');
+  });
+
+  it('leaves a document that already names a family alone', async () => {
+    // A second run must be a no-op, and a record a newer client already stamped must not be
+    // overwritten — the family a record belongs to is never re-derived.
+    const db = pairedDb({
+      expenses: {ex1: {id: 'ex1', createdByFirebaseUid: 'alice', familyId: 'someone__else'}},
+    });
+
+    const summary = await backfillRecordFamilyIdsImpl(db);
+
+    assert.strictEqual(db._docs.expenses.ex1.familyId, 'someone__else');
+    assert.strictEqual(summary.perCollection.expenses, 0);
+  });
+
+  it('treats an empty familyId as unstamped', async () => {
+    // `""` is what a null becomes on the wire, so it is the shape an unpaired-at-the-time
+    // record actually carries — not an answer, and this is the pass that gives it one.
+    const db = pairedDb({
+      expenses: {ex1: {id: 'ex1', createdByFirebaseUid: 'alice', familyId: ''}},
+    });
+
+    await backfillRecordFamilyIdsImpl(db);
+
+    assert.strictEqual(db._docs.expenses.ex1.familyId, 'alice__bob');
+  });
+
+  it('refuses a one-sided pairing rather than reviving it', async () => {
+    const db = pairedDb({
+      users: {
+        alice: {id: 'alice', partnerId: 'bob'},
+        bob: {id: 'bob', partnerId: ''},
+      },
+    });
+
+    const summary = await backfillRecordFamilyIdsImpl(db);
+
+    assert.strictEqual(summary.skippedReasons.notMutual, 1);
+    assert.strictEqual(summary.stamped, 0);
+    assert.strictEqual(db._docs.expenses.ex1.familyId, undefined);
+  });
+
+  it('skips an unpaired account without counting it as a failure', async () => {
+    const db = fakeDb({
+      users: {solo: {id: 'solo'}},
+      expenses: {ex1: {id: 'ex1', createdByFirebaseUid: 'solo'}},
+    });
+
+    const summary = await backfillRecordFamilyIdsImpl(db);
+
+    assert.strictEqual(summary.skippedReasons.unpaired, 1);
+    assert.strictEqual(summary.failed, 0);
+    assert.strictEqual(db._docs.expenses.ex1.familyId, undefined);
+  });
+
+  it('never stamps a record belonging to somebody outside the pair', async () => {
+    const db = pairedDb({
+      expenses: {
+        ex1: {id: 'ex1', createdByFirebaseUid: 'alice'},
+        ex2: {id: 'ex2', createdByFirebaseUid: 'stranger'},
+      },
+    });
+
+    await backfillRecordFamilyIdsImpl(db);
+
+    assert.strictEqual(db._docs.expenses.ex1.familyId, 'alice__bob');
+    assert.strictEqual(db._docs.expenses.ex2.familyId, undefined);
+  });
+
+  it('counts a per-user failure without abandoning the rest of the run', async () => {
+    const db = pairedDb({
+      users: {
+        alice: {id: 'alice', partnerId: 'bob'},
+        bob: {id: 'bob', partnerId: 'alice'},
+        broken: {id: 'broken', partnerId: {not: 'a string'}},
+      },
+    });
+
+    const summary = await backfillRecordFamilyIdsImpl(db);
+
+    // The malformed row is not a string, so it is read as unpaired rather than crashing.
+    assert.strictEqual(summary.stamped, 6);
+    assert.strictEqual(summary.failed, 0);
+  });
+});
+
+describe('unpairing one family out of several', () => {
+  let unpairCoParentImpl;
+
+  before(() => {
+    unpairCoParentImpl = require('../index').unpairCoParentImpl;
+  });
+
+  /**
+   * Alice co-parents with both Bob and Carol.
+   *
+   * @return {!Object} The fake Firestore.
+   */
+  function twoFamilies() {
+    return fakeDb({
+      users: {
+        alice: {
+          id: 'alice', name: 'Alice',
+          partnerIds: ['bob', 'carol'], partnerId: 'bob', pairedAt: 1,
+        },
+        bob: {id: 'bob', name: 'Bob', partnerIds: ['alice'], partnerId: 'alice', pairedAt: 1},
+        carol: {
+          id: 'carol', name: 'Carol', partnerIds: ['alice'], partnerId: 'alice', pairedAt: 2,
+        },
+      },
+      families: {
+        alice__bob: {id: 'alice__bob', members: ['alice', 'bob']},
+        alice__carol: {id: 'alice__carol', members: ['alice', 'carol']},
+      },
+    });
+  }
+
+  it('ends the named relationship and leaves the other standing', async () => {
+    const db = twoFamilies();
+
+    const result = await unpairCoParentImpl(db, 'alice', 'carol');
+
+    assert.strictEqual(result.unpairedFrom, 'carol');
+    assert.deepStrictEqual(db._docs.users.alice.partnerIds, ['bob']);
+    assert.deepStrictEqual(db._docs.users.carol.partnerIds, []);
+    // Bob's family survives; Carol's is gone, and the family document going *is* the
+    // revocation — a membership left behind would let her back into everything.
+    assert.ok(db._docs.families['alice__bob']);
+    assert.strictEqual(db._docs.families['alice__carol'], undefined);
+  });
+
+  it('keeps pairedAt while any relationship remains, and clears it with the last', async () => {
+    const db = twoFamilies();
+
+    await unpairCoParentImpl(db, 'alice', 'carol');
+    assert.strictEqual(db._docs.users.alice.pairedAt, 1, 'still a co-parent, of Bob');
+
+    await unpairCoParentImpl(db, 'alice', 'bob');
+    assert.strictEqual(db._docs.users.alice.pairedAt, null, 'no relationships left');
+  });
+
+  it('re-points the singular field at whichever relationship survives', async () => {
+    // `partnerId` is what a build that predates the array reads. Left naming the ex-partner,
+    // that build would keep showing a family the account is no longer in.
+    const db = twoFamilies();
+
+    await unpairCoParentImpl(db, 'alice', 'bob');
+
+    assert.strictEqual(db._docs.users.alice.partnerId, 'carol');
+  });
+
+  it('refuses to guess when several relationships exist and none was named', async () => {
+    // Ending the wrong one deletes that pair's custody schedule and money agreement, and
+    // there is no undo.
+    const db = twoFamilies();
+
+    await assert.rejects(
+        () => unpairCoParentImpl(db, 'alice', null),
+        (err) => err.details && err.details.reason === 'ambiguous-partner');
+    assert.deepStrictEqual(db._docs.users.alice.partnerIds, ['bob', 'carol']);
+  });
+
+  it('accepts an unnamed target when there is exactly one relationship', async () => {
+    // What a build that predates multiple families sends.
+    const db = fakeDb({
+      users: {
+        alice: {id: 'alice', name: 'Alice', partnerIds: ['bob'], partnerId: 'bob', pairedAt: 1},
+        bob: {id: 'bob', name: 'Bob', partnerIds: ['alice'], partnerId: 'alice', pairedAt: 1},
+      },
+      families: {alice__bob: {id: 'alice__bob', members: ['alice', 'bob']}},
+    });
+
+    const result = await unpairCoParentImpl(db, 'alice', null);
+
+    assert.strictEqual(result.unpairedFrom, 'bob');
+    assert.strictEqual(db._docs.users.alice.partnerId, '');
+  });
+
+  it('ends nothing when the named person is not a co-parent', async () => {
+    const db = twoFamilies();
+
+    const result = await unpairCoParentImpl(db, 'alice', 'stranger');
+
+    assert.strictEqual(result.unpairedFrom, null);
+    assert.deepStrictEqual(db._docs.users.alice.partnerIds, ['bob', 'carol']);
   });
 });

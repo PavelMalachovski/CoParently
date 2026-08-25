@@ -136,27 +136,32 @@ class BudgetRepositoryImplTest {
     )
 
     @Test
-    fun `observeRemote queries both parents' UIDs when paired`() = runTest {
+    fun `observeRemote queries the family, not the two authors`() = runTest {
+        // The shape is the isolation. A filter on the author returns every family that author
+        // is in, and while any branch of the read rule mentioned `isPartnerOf`, Firestore
+        // served that query — see `firestore-tests/rules/family-isolation.test.js`.
         val firebaseUser = mockk<FirebaseUser> { every { uid } returns "uidA" }
         every { firebaseAuthService.getCurrentUser() } returns firebaseUser
         coEvery { userDao.getUserById("uidA") } returns userEntity(id = "uidA", partnerId = "uidB")
-        every { firestoreBudgetDataSource.getAllBudgets(listOf("uidA", "uidB")) } returns emptyFlow()
+        every { firestoreBudgetDataSource.getAllBudgets("uidA__uidB") } returns emptyFlow()
 
         repository.observeRemote()
 
-        coVerify(exactly = 1) { firestoreBudgetDataSource.getAllBudgets(listOf("uidA", "uidB")) }
+        coVerify(exactly = 1) { firestoreBudgetDataSource.getAllBudgets("uidA__uidB") }
     }
 
     @Test
-    fun `observeRemote queries only the current user's UID when unpaired`() = runTest {
+    fun `observeRemote asks for no family when unpaired`() = runTest {
+        // Null rather than a query for this user alone: an unpaired account has nothing shared
+        // to download, and the data source closes without issuing a read that would be denied.
         val firebaseUser = mockk<FirebaseUser> { every { uid } returns "uidA" }
         every { firebaseAuthService.getCurrentUser() } returns firebaseUser
         coEvery { userDao.getUserById("uidA") } returns userEntity(id = "uidA", partnerId = null)
-        every { firestoreBudgetDataSource.getAllBudgets(listOf("uidA")) } returns emptyFlow()
+        every { firestoreBudgetDataSource.getAllBudgets(null) } returns emptyFlow()
 
         repository.observeRemote()
 
-        coVerify(exactly = 1) { firestoreBudgetDataSource.getAllBudgets(listOf("uidA")) }
+        coVerify(exactly = 1) { firestoreBudgetDataSource.getAllBudgets(null) }
     }
 
     @Test
@@ -172,6 +177,7 @@ class BudgetRepositoryImplTest {
     fun `addBudget stamps createdByFirebaseUid on the synced document`() = runTest {
         val firebaseUser = mockk<FirebaseUser> { every { uid } returns "uidA" }
         every { firebaseAuthService.getCurrentUser() } returns firebaseUser
+        coEvery { userDao.getUserById("uidA") } returns userEntity(id = "uidA", partnerId = "uidB")
         val dataSlot = io.mockk.slot<Map<String, Any>>()
         coEvery { firestoreBudgetDataSource.setBudget(any(), capture(dataSlot)) } returns Unit
 
@@ -185,6 +191,29 @@ class BudgetRepositoryImplTest {
 
         coVerify(exactly = 1) { firestoreBudgetDataSource.setBudget("b1", any()) }
         org.junit.Assert.assertEquals("uidA", dataSlot.captured["createdByFirebaseUid"])
+        // And the relationship it belongs to, derived from the live pairing at create time.
+        org.junit.Assert.assertEquals("uidA__uidB", dataSlot.captured["familyId"])
+    }
+
+    @Test
+    fun `a budget created while unpaired names no family`() = runTest {
+        // Null, not an invented id for a pair of one — and `""` on the wire, because a Firestore
+        // map value cannot be null. The backfill names it once there is somebody to name.
+        val firebaseUser = mockk<FirebaseUser> { every { uid } returns "uidA" }
+        every { firebaseAuthService.getCurrentUser() } returns firebaseUser
+        coEvery { userDao.getUserById("uidA") } returns userEntity(id = "uidA", partnerId = null)
+        val dataSlot = io.mockk.slot<Map<String, Any>>()
+        coEvery { firestoreBudgetDataSource.setBudget(any(), capture(dataSlot)) } returns Unit
+
+        repository.addBudget(
+            com.coparently.app.domain.model.Budget(
+                id = "b1",
+                category = com.coparently.app.domain.model.ExpenseCategory.OTHER,
+                monthlyLimit = 100.0
+            )
+        )
+
+        org.junit.Assert.assertEquals("", dataSlot.captured["familyId"])
     }
 
     @Test

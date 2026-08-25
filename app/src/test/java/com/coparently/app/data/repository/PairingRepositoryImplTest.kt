@@ -2,6 +2,7 @@ package com.coparently.app.data.repository
 
 import android.content.Context
 import app.cash.turbine.test
+import com.coparently.app.data.family.SelectedFamilySource
 import com.coparently.app.data.local.dao.UserDao
 import com.coparently.app.data.local.entity.UserEntity
 import com.coparently.app.data.remote.firebase.AcceptInvitationResult
@@ -48,6 +49,7 @@ class PairingRepositoryImplTest {
     private lateinit var conversationMigrator: ConversationMigrator
     private lateinit var userDao: UserDao
     private lateinit var context: Context
+    private lateinit var selectedFamilySource: SelectedFamilySource
     private lateinit var repository: PairingRepositoryImpl
 
     private lateinit var usersCollection: CollectionReference
@@ -94,6 +96,9 @@ class PairingRepositoryImplTest {
         userDao = mockk(relaxed = true)
         context = mockk(relaxed = true)
         every { context.getString(any()) } returns "Co-parent"
+        // Relaxed: reconciling the shown family needs Firebase Auth and a real row, and what
+        // these tests pin is that the mirror *delegates* the decision rather than making it.
+        selectedFamilySource = mockk(relaxed = true)
 
         repository = PairingRepositoryImpl(
             firestore = firestore,
@@ -101,6 +106,7 @@ class PairingRepositoryImplTest {
             pairingFunctions = pairingFunctions,
             postPairingConversationSetup = PostPairingConversationSetup(messageRepository, conversationMigrator),
             userDao = userDao,
+            selectedFamilySource = selectedFamilySource,
             context = context
         )
     }
@@ -169,6 +175,11 @@ class PairingRepositoryImplTest {
         // Everything outside the pairing screen (chat, expenses, budgets, event sync) reads
         // the link from Room, so the observed transition — not the redeem() call, which only
         // ever runs on the accepting device — is what has to write it.
+        //
+        // What it writes is the **list**. `partnerId` stopped meaning "my co-parent" and
+        // started meaning "the family this device is showing", and only `SelectedFamilySource`
+        // writes that — mirroring the observed partner onto it here would drag a parent
+        // looking at one family into another the moment the other one's state re-emitted.
         coEvery { userDao.getUserById("user-a") } returns userEntity(partnerId = null)
         val listeners = stubRealtimeListeners()
 
@@ -181,7 +192,9 @@ class PairingRepositoryImplTest {
             cancelAndIgnoreRemainingEvents()
         }
 
-        coVerify { userDao.updateUser(userEntity(partnerId = "u2")) }
+        coVerify {
+            userDao.updateUser(userEntity(partnerId = null).copy(partnerIdsJson = "[\"u2\"]"))
+        }
         // The legacy-conversation merge runs immediately after the canonical conversation is
         // ensured, inside the same guarded block, so a merge failure can never surface as a
         // failed pairing.
@@ -190,7 +203,12 @@ class PairingRepositoryImplTest {
     }
 
     @Test
-    fun `observePairingState clears partnerId in Room when the link ends`() = runTest {
+    fun `observePairingState hands an ended link to the selected-family source`() = runTest {
+        // This used to assert that the mirror cleared `partnerId` directly. It no longer may:
+        // that field is now "the family this device is showing", and with two co-parents an
+        // ending relationship might not be the one on screen — clearing it here would blank a
+        // family the parent is still in. `SelectedFamilySource.reconcile()` is what decides,
+        // because it is the only thing that knows both the full list and the choice.
         coEvery { userDao.getUserById("user-a") } returns userEntity(partnerId = "u2")
         val listeners = stubRealtimeListeners()
 
@@ -203,7 +221,7 @@ class PairingRepositoryImplTest {
             cancelAndIgnoreRemainingEvents()
         }
 
-        coVerify { userDao.updateUser(userEntity(partnerId = null)) }
+        coVerify { selectedFamilySource.reconcile() }
     }
 
     @Test

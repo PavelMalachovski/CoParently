@@ -49,4 +49,19 @@ interface ChangeRequestDao {
      */
     @Query("SELECT * FROM change_requests WHERE syncedToFirestore = 0 ORDER BY createdAt ASC")
     suspend fun getUnsyncedChangeRequests(): List<ChangeRequestEntity>
+
+    /**
+     * Stamps [familyId] on every change_requests row that names no family yet.
+     *
+     * The backfill half of docs/DESIGN-multi-family.md M-2: rows written before the column
+     * existed, and rows written before this parent paired, both read as null. A device knows of
+     * exactly one co-parenting relationship, so an unstamped row can only belong to that one.
+     *
+     * Null rows only. A row that already names a family keeps it — re-deriving the stamp is what
+     * would let a re-pairing silently move a record into a different household.
+     *
+     * @return How many rows were stamped.
+     */
+    @Query("UPDATE change_requests SET familyId = :familyId WHERE familyId IS NULL")
+    suspend fun stampFamilyId(familyId: String): Int
 }

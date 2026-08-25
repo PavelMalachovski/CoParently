@@ -77,4 +77,6 @@
     <!-- Shown after an email invitation is created. Deliberately does not claim the email
          arrived: the app cannot know that, and the code works either way. -->
     <string name="pairing_email_invite_created">Запрошення надіслано. Якщо лист не надійде — передайте код напряму.</string>
+    <string name="pairing_add_another_title">Додати ще одного співбатька</string>
+    <string name="pairing_add_another_description">Поділіться кодом із тим, з ким ви виховуєте дітей окремо. Та сім\'я залишиться відокремленою від цієї.</string>
 </resources>

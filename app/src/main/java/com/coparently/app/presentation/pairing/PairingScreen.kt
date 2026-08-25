@@ -23,6 +23,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.LinkOff
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -134,6 +135,10 @@ fun PairingScreen(
     // Held as MutableState (rather than `by`-delegated vars) so they can be
     // passed by reference into UnpairFlow/DeepLinkFlow below.
     val showUnpairConfirm = rememberSaveable { mutableStateOf(false) }
+    // Whether the paired screen has been expanded to bring in a second co-parent. Collapsed on
+    // every entry: one relationship is the ordinary case, and an invite flow already open would
+    // read as "you are about to be paired with somebody" to a parent who came here to unpair.
+    val addingAnother = rememberSaveable { mutableStateOf(false) }
     val pendingDeepLinkCode = rememberSaveable(prefilledCode) { mutableStateOf(prefilledCode) }
 
     PairingSideEffects(viewModel, state, prefilledCode, onCustodyConflict)
@@ -165,7 +170,15 @@ fun PairingScreen(
                 is PairingState.Loading ->
                     loadingSection(form, viewModel, actions)
                 is PairingState.Paired ->
-                    pairedSection(current.partner) { showUnpairConfirm.value = true }
+                    pairedSection(
+                        current = current,
+                        form = form,
+                        viewModel = viewModel,
+                        actions = actions,
+                        mode = mode,
+                        showEmailInvite = showEmailInvite,
+                        addingAnother = addingAnother
+                    ) { showUnpairConfirm.value = true }
                 is PairingState.NotPaired ->
                     notPairedSection(current, form, viewModel, actions, mode, showEmailInvite)
             }
@@ -375,8 +388,50 @@ private fun LazyListScope.loadingSection(
     item { TrustPanel() }
 }
 
-private fun LazyListScope.pairedSection(partner: PartnerSummary, onUnpairClick: () -> Unit) {
-    item { PairedPartnerCard(partner = partner) }
+@Suppress("LongParameterList") // section state, split out of the screen body for readability
+private fun LazyListScope.pairedSection(
+    current: PairingState.Paired,
+    form: PairingFormState,
+    viewModel: PairingViewModel,
+    actions: NotPairedActions,
+    mode: MutableState<PairingMode>,
+    showEmailInvite: MutableState<Boolean>,
+    addingAnother: MutableState<Boolean>,
+    onUnpairClick: () -> Unit
+) {
+    item { PairedPartnerCard(partner = current.partner) }
+
+    // **Being paired is no longer the end of this screen.** A person may co-parent with more
+    // than one other adult, and this row is the only way in: the server accepts a second
+    // pairing, but until now the screen showed nothing but "manage", so the feature was
+    // unreachable however willing the server was.
+    //
+    // Collapsed by default, and behind a row rather than always open, because a family of one
+    // relationship is the ordinary case — the same "appears when it is wanted, not always"
+    // rule the child filter follows.
+    item {
+        SectionGroup {
+            SectionRow(
+                icon = Icons.Default.PersonAdd,
+                title = stringResource(R.string.pairing_add_another_title),
+                supporting = stringResource(R.string.pairing_add_another_description),
+                onClick = { addingAnother.value = !addingAnother.value }
+            )
+        }
+    }
+
+    if (addingAnother.value) {
+        inviteSection(
+            activeInvite = current.activeInvite,
+            incoming = current.incoming,
+            form = form,
+            viewModel = viewModel,
+            actions = actions,
+            mode = mode,
+            showEmailInvite = showEmailInvite
+        )
+    }
+
     item {
         // Same anatomy as signing out of the app: a destructive action is a red text row that
         // confirms, not a filled error button competing with the partner card above it.
@@ -413,10 +468,46 @@ private fun LazyListScope.notPairedSection(
     mode: MutableState<PairingMode>,
     showEmailInvite: MutableState<Boolean>
 ) {
+    inviteSection(
+        activeInvite = current.activeInvite,
+        incoming = current.incoming,
+        form = form,
+        viewModel = viewModel,
+        actions = actions,
+        mode = mode,
+        showEmailInvite = showEmailInvite
+    )
+}
+
+/**
+ * Everything needed to bring one more co-parent in: share a code, or enter theirs.
+ *
+ * Shared verbatim by both states rather than duplicated, and that is the point — an unpaired
+ * account and a paired one adding a second relationship are doing the *same* job, so a second
+ * copy would be two invite flows to keep in step, and the one behind the "add another" row is
+ * exactly the one nobody would remember to update.
+ *
+ * @param activeInvite This user's own outstanding invite, if any.
+ * @param incoming Invitations addressed to this user's email.
+ * @param form Local form state.
+ * @param viewModel Pairing actions.
+ * @param actions Screen-level side effects the form cannot perform itself.
+ * @param mode Which of the two pairing jobs is showing.
+ * @param showEmailInvite Whether the email-invitation field has been revealed.
+ */
+@Suppress("LongParameterList") // section state, split out of the screen body for readability
+private fun LazyListScope.inviteSection(
+    activeInvite: PairingInvite?,
+    incoming: List<PairingInvite>,
+    form: PairingFormState,
+    viewModel: PairingViewModel,
+    actions: NotPairedActions,
+    mode: MutableState<PairingMode>,
+    showEmailInvite: MutableState<Boolean>
+) {
     // With no invite of their own yet, "share my code" has nothing to show — so the toggle
     // only appears once there is something to switch between.
-    val invite = current.activeInvite
-    if (invite != null) {
+    if (activeInvite != null) {
         item {
             PairingModeToggle(
                 selected = mode.value,
@@ -425,13 +516,13 @@ private fun LazyListScope.notPairedSection(
         }
     }
 
-    if (invite != null && mode.value == PairingMode.SHARE) {
+    if (activeInvite != null && mode.value == PairingMode.SHARE) {
         item {
             InviteCodeCard(
-                invite = invite,
+                invite = activeInvite,
                 qrBitmap = form.qrBitmap,
-                onCopy = { actions.onCopyCode(invite.code) },
-                onShare = { actions.onShareInvite(invite) },
+                onCopy = { actions.onCopyCode(activeInvite.code) },
+                onShare = { actions.onShareInvite(activeInvite) },
                 onEmailInvite = actions.onEmailInvite,
                 onRegenerate = viewModel::regenerateInvite
             )
@@ -445,12 +536,12 @@ private fun LazyListScope.notPairedSection(
 
     item { TrustPanel() }
 
-    if (current.incoming.isNotEmpty()) {
-        items(current.incoming, key = { it.id }) { incoming ->
+    if (incoming.isNotEmpty()) {
+        items(incoming, key = { it.id }) { invite ->
             IncomingInviteCard(
-                invite = incoming,
-                onAccept = { viewModel.acceptIncoming(incoming.id) },
-                onReject = { viewModel.rejectIncoming(incoming.id) }
+                invite = invite,
+                onAccept = { viewModel.acceptIncoming(invite.id) },
+                onReject = { viewModel.rejectIncoming(invite.id) }
             )
         }
     }

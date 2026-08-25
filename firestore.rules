@@ -33,12 +33,49 @@ service cloud.firestore {
     // collection's partner branch resolves to, so it has to be false for "myself" even if a
     // document written before that rule existed still carries `partnerId == own uid`. Nobody is
     // ever their own co-parent, so nothing legitimate is lost.
+    // A person may co-parent with more than one other adult, so the stored answer is
+    // `partnerIds`, an array (docs/DESIGN-multi-family.md, M-4). Both shapes are read: the
+    // singular `partnerId` is still written for a co-parent on an older build, and a document
+    // mid-migration may carry a value the array has not caught up with. M-5 drops the fallback.
+    //
+    // **An array does not widen what this admits, and that is the finding that made it safe.**
+    // Every rule still resolving to this helper asks a *pairwise* question — may this person
+    // read that profile, may they address a change request to that uid — and both of somebody's
+    // co-parents may legitimately answer yes. The one place `isPartnerOf` was standing in for
+    // "in the same family" was `expenses` and `budgets`, which have moved to `isFamilyMember`;
+    // an array here without that move would have shown each co-parent the other's money.
     function isPartnerOf(userId) {
       return isAuthenticated() &&
              userId != request.auth.uid &&
              exists(/databases/$(database)/documents/users/$(userId)) &&
-             get(/databases/$(database)/documents/users/$(userId))
-               .data.get('partnerId', '') == request.auth.uid;
+             (request.auth.uid in get(/databases/$(database)/documents/users/$(userId))
+                .data.get('partnerIds', []) ||
+              get(/databases/$(database)/documents/users/$(userId))
+                .data.get('partnerId', '') == request.auth.uid);
+    }
+
+    // True when [familyId] names a co-parenting relationship the caller is one of the two
+    // adults in.
+    //
+    // **No document read.** The id is `FamilyKey.of(uidA, uidB)` — the two uids sorted and
+    // joined — so membership is the id itself, the same reasoning `custody_models`' `allow get`
+    // already applies to `modelId`. That keeps this cheap enough to sit on a per-document read
+    // rule, and it works for a pair whose `families/{id}` has not been written yet.
+    //
+    // It grants nothing a caller did not already have. A record's `familyId` is written by
+    // whoever writes the record, and the create rules require `createdByFirebaseUid` to be the
+    // caller — so a person can only put their own uid into a family id on a document that is
+    // already theirs. Naming a family they are not in makes the record readable by those two
+    // and not by them, which is sharing, not escalation.
+    //
+    // The empty string is "no family", which is what an unpaired parent's records carry and
+    // what every document written before the field existed reads as. It matches nobody: an
+    // empty id splits to a single empty part, and no uid is blank.
+    function isFamilyMember(familyId) {
+      return isAuthenticated() &&
+             familyId is string &&
+             familyId.size() > 0 &&
+             request.auth.uid in familyId.split('__');
     }
 
     // Validate string field length (inclusive bounds).
@@ -474,17 +511,34 @@ service cloud.firestore {
     }
 
     // ---- Expenses (receipt sync) --------------------------------------
-    // Only the two paired parents involved may read/write. The document schema
-    // (ExpenseRepositoryImpl.addExpense) has no `sharedWith` field — expenses carry
-    // `splitBetween` for cost-splitting math, not visibility — so partner access is
-    // gated the same way as `users`: via the paired `partnerId` relationship, not a
-    // per-document list. An earlier version of this rule referenced `sharedWith` here,
-    // which never exists on an expense document, so the partner branch could never be
-    // true and the co-parent's expenses were unreadable even by document id.
+    // The one collection where "a co-parent of the author" was standing in for "in the same
+    // family", and the only real leak a second co-parent opens (docs/DESIGN-multi-family.md,
+    // M-4). An expense carries no per-document audience — `splitBetween` is cost-splitting
+    // math, not visibility — so the rule asked `isPartnerOf(createdByFirebaseUid)`, which is
+    // true for *every* co-parent of the author. A person with two co-parents therefore showed
+    // each of them everything they had ever spent, in both families.
+    //
+    // The audience is now the record's own family. `sharedWith`-style per-document lists were
+    // considered and rejected here: an expense would need one written on it, and the field
+    // would then have to be pinned against every writer, where `familyId` needs no pinning
+    // because it is only ever written by the creator (update below is creator-only).
+    //
+    // **There is deliberately no `isPartnerOf` fallback for an unstamped document, and the
+    // reason is sharper than tidiness: a fallback re-opens the leak it was added to soften.**
+    // Firestore validates a *query* by its structure, not by running the rule over the results
+    // (CLAUDE.md item 12). While the rule still mentioned `isPartnerOf(createdByFirebaseUid)`
+    // on any branch, the old client query — `whereIn('createdByFirebaseUid', [me, partner])` —
+    // structurally satisfied it, so Firestore accepted the whole query and handed back both
+    // families' expenses. Proved against the emulator: with the branch, that query returned a
+    // second family's document; without it, the query is rejected outright.
+    //
+    // The cost is that a document carrying no `familyId` is readable only by its author. That
+    // is why `backfillRecordFamilyIds` must finish **before** these rules are deployed, not
+    // after — see the ordered steps in docs/DESIGN-multi-family.md, M-4.
     match /expenses/{expenseId} {
       allow read: if isAuthenticated() && (
         resource.data.createdByFirebaseUid == request.auth.uid ||
-        isPartnerOf(resource.data.createdByFirebaseUid)
+        isFamilyMember(resource.data.get('familyId', ''))
       );
 
       allow create: if isAuthenticated() &&
@@ -510,9 +564,12 @@ service cloud.firestore {
     // way as `expenses`: the client now stamps `createdByFirebaseUid` on write and
     // filters its read query on it; the rule gates on that field plus `isPartnerOf`.
     match /budgets/{budgetId} {
+      // Same move as `expenses` above, and read its comment for why: a budget carries no
+      // audience either, so `isPartnerOf(author)` showed both of a person's co-parents every
+      // budget they had ever set.
       allow read: if isAuthenticated() && (
         resource.data.createdByFirebaseUid == request.auth.uid ||
-        isPartnerOf(resource.data.createdByFirebaseUid)
+        isFamilyMember(resource.data.get('familyId', ''))
       );
 
       allow create: if isAuthenticated() &&
@@ -520,10 +577,15 @@ service cloud.firestore {
                       request.resource.data.keys().hasAll(
                         ['category', 'monthlyLimit', 'createdByFirebaseUid']);
 
+      // Either parent of the budget's own family may edit it — budgets are a shared plan,
+      // unlike an expense, which is one parent's record of what they paid. Scoped to the
+      // family for the same reason the read is: `isPartnerOf(author)` would let a co-parent
+      // from another family rewrite this one's limits.
       allow update: if isAuthenticated() && (
         resource.data.createdByFirebaseUid == request.auth.uid ||
-        isPartnerOf(resource.data.createdByFirebaseUid)
-      ) && request.resource.data.createdByFirebaseUid == resource.data.createdByFirebaseUid;
+        isFamilyMember(resource.data.get('familyId', ''))
+      ) && request.resource.data.createdByFirebaseUid == resource.data.createdByFirebaseUid &&
+        request.resource.data.get('familyId', '') == resource.data.get('familyId', '');
 
       allow delete: if isAuthenticated() &&
                       resource.data.createdByFirebaseUid == request.auth.uid;
@@ -772,6 +834,57 @@ service cloud.firestore {
     // `partnerId` clears. `delete` intentionally stays on stored `participants` alone: a
     // document must remain deletable by either named participant even once the pairing behind
     // it is gone, or a stale/orphaned document becomes permanent by a different route.
+    // ---- Families ---------------------------------------------------------
+    // One co-parenting relationship: the two adults, and the id every record they share is
+    // named with. The id is `FamilyKey.of(uidA, uidB)` — the same string `custody_models`,
+    // `family_settings` and `conversations` are already keyed by, which is why those three need
+    // no migration at all.
+    //
+    // **`members` and `slots` are written only by Cloud Functions, never by a client.** The
+    // document is the membership, and the membership is the grant: `acceptPairingInvitation`
+    // and `unpairCoParent` write it as admin, bypassing rules. A create path open to clients
+    // would let anyone name themselves a member of any pair — the same escalation the
+    // `users`-array design would have shipped. `slots` is the same kind of value one level
+    // down: a parent who could set their own would take the co-parent's colour and re-point
+    // what `parentOwner` means across the whole calendar.
+    //
+    // **`caresFor` is the one exception, and the asymmetry is deliberate.** It says whether
+    // this family's app offers child records, pet records or both, per parent, unioned; it
+    // decides which sections are drawn and nothing about whose records are whose. A parent
+    // already has exactly that authority over `users/{uid}.caresFor`, which is where the field
+    // lived before it became a fact about a family rather than about a person
+    // (docs/DESIGN-multi-family.md, M-3).
+    //
+    // Reads are open to the two members. A list is allowed on the same terms, so a client can
+    // ask "which families am I in" with one indexed query rather than being told the answer by
+    // a field it could have forged: Firestore validates a query's *structure*, so a query
+    // filtered on `members array-contains` the caller's own uid is guaranteed to return only
+    // documents that would pass, while an unfiltered one is rejected outright.
+    match /families/{familyId} {
+      allow get: if isAuthenticated() && request.auth.uid in resource.data.members;
+      allow list: if isAuthenticated() && request.auth.uid in resource.data.members;
+
+      // A member may edit their own `caresFor` entry, and nothing else. Two nested `hasOnly`
+      // checks, because either one alone is not enough: the outer keeps the write away from
+      // `members` and `slots`, the inner keeps one parent from answering for the other.
+      //
+      // `.get('caresFor', {})` on **both** sides. A family created before this field existed
+      // carries no such key, and reading a missing key in Rules is an evaluation error, not
+      // null — a rule that errors denies, which would lock exactly those pairs out of the
+      // first write they need to make. The same hazard that has already bitten this file
+      // twice. On the request side it also means a write that removes the key outright diffs
+      // as both members' entries changing, and is refused rather than erroring.
+      allow update: if isAuthenticated() &&
+                      request.auth.uid in resource.data.members &&
+                      request.resource.data.diff(resource.data)
+                        .affectedKeys().hasOnly(['caresFor']) &&
+                      request.resource.data.get('caresFor', {})
+                        .diff(resource.data.get('caresFor', {}))
+                        .affectedKeys().hasOnly([request.auth.uid]);
+
+      allow create, delete: if false;
+    }
+
     match /custody_models/{modelId} {
       // Two cases, and the missing-document one is not a nicety.
       //

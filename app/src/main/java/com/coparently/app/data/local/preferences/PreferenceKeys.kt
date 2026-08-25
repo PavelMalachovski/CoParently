@@ -112,4 +112,33 @@ object PreferenceKeys {
      * again.
      */
     const val CHILD_INFO_AUDIENCE_BACKFILL_PREFIX = "child_info_audience_backfill_"
+
+    /**
+     * Prefix for the per-user key recording which co-parent this device has already stamped
+     * `familyId` for — the actual key is this prefix plus the Firebase UID, and the value is the
+     * partner's UID.
+     *
+     * A third key rather than a reuse of either audience marker, for the reason
+     * [CHILD_INFO_AUDIENCE_BACKFILL_PREFIX] gives: an install that already ran one of those would
+     * read a shared key as "done" and never stamp anything.
+     *
+     * The partner's UID and never a boolean — same rule again. Losing this key to
+     * `EncryptedPreferences.clear()` costs one `UPDATE ... WHERE familyId IS NULL` per table that
+     * matches no rows, so it does not need the slot marker's exemption.
+     */
+    const val FAMILY_ID_BACKFILL_PREFIX = "family_id_backfill_"
+
+    /**
+     * Prefix for the per-user key naming the family this device is currently showing — the
+     * actual key is this prefix plus the Firebase UID, and the value is a `FamilyKey` id.
+     *
+     * Per device and never synced: which family a parent is looking at is a view, not a fact
+     * about the relationship, and their co-parent has no business seeing it. Per user for the
+     * reason [PARENT_SLOT_MARKER_PREFIX] gives — Room rows survive sign-out, so a second
+     * account must not inherit the first one's choice.
+     *
+     * A stored id is validated on every read rather than trusted: it survives an unpair, and a
+     * family the account has left must not select itself.
+     */
+    const val SELECTED_FAMILY_PREFIX = "selected_family_"
 }

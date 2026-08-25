@@ -14,6 +14,16 @@ const ALICE = 'alice-uid';
 const BOB = 'bob-uid';
 const CAROL = 'carol-uid';
 
+/**
+ * The family Alice and Bob share, named the way `FamilyKey.of` names it.
+ *
+ * `budgets` and `expenses` are gated on membership of the record's own family rather than on
+ * "is the reader a co-parent of the author" — the change that stops a second co-parent seeing
+ * the first one's money (docs/DESIGN-multi-family.md, M-4). Every fixture below therefore
+ * carries one, because a document without a family is readable only by its author.
+ */
+const FAMILY = [ALICE, BOB].sort().join('__');
+
 const PAIRED_USERS = {
   'users/alice-uid': {name: 'Alice', email: 'a@x.test', partnerId: BOB},
   'users/bob-uid': {name: 'Bob', email: 'b@x.test', partnerId: ALICE},
@@ -33,6 +43,7 @@ function budgetDoc(overrides) {
     monthlyLimit: 3000,
     currency: 'CZK',
     createdByFirebaseUid: ALICE,
+    familyId: FAMILY,
   }, overrides);
 }
 
@@ -47,7 +58,7 @@ function expenseDoc(overrides) {
     id: 'expense-1', childId: '', title: 'School trip', amount: 42.5, currency: 'CZK',
     category: 'EDUCATION', createdByFirebaseUid: ALICE, paidBy: 'MOM',
     splitBetween: ['MOM', 'DAD'], date: '2026-08-01', receiptUrl: '', notes: '',
-    createdAt: '2026-08-01T10:00:00',
+    createdAt: '2026-08-01T10:00:00', familyId: FAMILY,
   }, overrides);
 }
 
@@ -117,10 +128,16 @@ describe('Part 1d: budgets', () => {
     await assertFails(db.doc('budgets/budget-1').set(doc));
   });
 
-  it('serves the owner-filtered query the client runs', async () => {
+  it('serves the family-filtered query the client runs', async () => {
+    // The query shape changed with the rule. `whereIn('createdByFirebaseUid', [me, partner])`
+    // is the *old* shape and must now be refused: Firestore validates a query by its
+    // structure, so a filter on the author would have been the door back into a second
+    // family's budgets. See family-isolation.test.js.
     await seed(env, {'budgets/budget-1': budgetDoc({})});
     const db = env.authenticatedContext(BOB).firestore();
     await assertSucceeds(db.collection('budgets')
+        .where('familyId', '==', FAMILY).get());
+    await assertFails(db.collection('budgets')
         .where('createdByFirebaseUid', 'in', [ALICE, BOB]).get());
   });
 });
@@ -166,10 +183,12 @@ describe('Part 1d: expenses (read, create, update)', () => {
     await assertFails(db.doc('expenses/expense-1').get());
   });
 
-  it('serves the owner-filtered query the client runs', async () => {
+  it('serves the family-filtered query the client runs', async () => {
     await seed(env, {'expenses/expense-1': expenseDoc({})});
     const db = env.authenticatedContext(BOB).firestore();
     await assertSucceeds(db.collection('expenses')
+        .where('familyId', '==', FAMILY).get());
+    await assertFails(db.collection('expenses')
         .where('createdByFirebaseUid', 'in', [ALICE, BOB]).get());
   });
 });

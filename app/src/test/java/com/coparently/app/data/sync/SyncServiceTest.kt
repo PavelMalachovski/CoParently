@@ -134,6 +134,12 @@ class SyncServiceTest {
             mockk(relaxed = true),
             mockk(relaxed = true),
             mockk(relaxed = true),
+            // The family-id backfill. Relaxed rather than real: it stamps a column no assertion
+            // here reads, and a real one would need four more DAOs wired up to do nothing.
+            mockk(relaxed = true),
+            // The selected-family source. Relaxed for the same reason: `reconcile()` re-points
+            // a column these tests never assert on, and a real one would need Firebase Auth.
+            mockk(relaxed = true),
             accountSwitchGuard
         )
     }

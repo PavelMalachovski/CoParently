@@ -46,6 +46,7 @@ function expenseDoc(ownerUid) {
     currency: 'CZK',
     category: 'EDUCATION',
     createdByFirebaseUid: ownerUid,
+    familyId: [CREATOR, PARTNER].sort().join('__'),
     paidBy: 'MOM',
     splitBetween: ['MOM', 'DAD'],
     date: '2026-08-01',
