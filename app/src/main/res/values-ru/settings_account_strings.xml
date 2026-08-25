@@ -7,6 +7,12 @@
     <string name="settings_google_sync">Синхронизация с Google Календарём</string>
     <string name="settings_gcal_enable_sync">Включить синхронизацию</string>
     <string name="settings_gcal_private_note">Импортированные события остаются на этом устройстве. Google Календарь — личный, поэтому со-родителю из него ничего не передаётся.</string>
+    <string name="settings_parent_color">Мой цвет</string>
+    <string name="settings_parent_color_desc">Как отмечаются ваши события, дни опеки и расходы. Со-родитель выбирает свой.</string>
+    <string name="parent_color_pink">Розовый</string>
+    <string name="parent_color_blue">Синий</string>
+    <string name="parent_color_purple">Фиолетовый</string>
+    <string name="parent_color_orange">Оранжевый</string>
     <string name="settings_signed_in_as">Вы вошли как: %1$s</string>
     <string name="settings_gcal_not_signed_in">Вход не выполнен</string>
     <string name="settings_unknown">Неизвестно</string>

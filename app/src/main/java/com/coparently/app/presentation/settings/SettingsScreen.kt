@@ -93,6 +93,7 @@ import com.coparently.app.presentation.common.SectionRow
 import com.coparently.app.presentation.common.SignedInAsRow
 import com.coparently.app.presentation.common.rememberParentNames
 import com.coparently.app.presentation.sync.GoogleCalendarSyncState
+import com.coparently.app.presentation.theme.ParentColorChoice
 import com.coparently.app.presentation.sync.SyncViewModel
 import kotlinx.coroutines.launch
 import java.time.format.DateTimeFormatter
@@ -167,8 +168,10 @@ fun SettingsScreen(
     val myCaresFor by settingsViewModel.myCaresFor.collectAsState()
     val agreedRatio by settingsViewModel.agreedRatio.collectAsState()
     // The split is two numbers about money; without names they do not say whose is whose.
-    val splitParentNames = rememberParentNames(settingsViewModel.parents.collectAsState().value)
+    val parents by settingsViewModel.parents.collectAsState()
+    val splitParentNames = rememberParentNames(parents)
     var showFamilyKindPicker by rememberSaveable { mutableStateOf(false) }
+    var showColorPicker by rememberSaveable { mutableStateOf(false) }
     var showSplitPicker by rememberSaveable { mutableStateOf(false) }
 
     if (showSplitPicker) {
@@ -191,6 +194,17 @@ fun SettingsScreen(
                 showFamilyKindPicker = false
             },
             onDismiss = { showFamilyKindPicker = false }
+        )
+    }
+    if (showColorPicker) {
+        ParentColorDialog(
+            selected = ParentColorChoice.fromStored(parents.me?.colorCode),
+            fallback = ParentColorChoice.defaultFor(parents.me?.slot.orEmpty()),
+            onConfirm = { choice ->
+                settingsViewModel.setParentColor(choice)
+                showColorPicker = false
+            },
+            onDismiss = { showColorPicker = false }
         )
     }
     val darkTheme by settingsViewModel.darkThemeFlow.collectAsState()
@@ -332,6 +346,36 @@ fun SettingsScreen(
                             showFamilyKindPicker = true
                         },
                         trailing = { Chevron() }
+                    )
+                    Divider()
+                    // The parent's own colour. In the Family group rather than under App
+                    // preferences because it is how this person is identified to the other one —
+                    // the same kind of fact as their name, not a device setting like the theme.
+                    SectionRow(
+                        icon = Icons.Default.Palette,
+                        title = stringResource(R.string.settings_parent_color),
+                        supporting = stringResource(R.string.settings_parent_color_desc),
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            showColorPicker = true
+                        },
+                        trailing = {
+                            // The swatch rather than a chevron: one trailing control, and the
+                            // colour itself says more than an arrow would.
+                            Box(
+                                modifier = Modifier
+                                    .size(24.dp)
+                                    .clip(CircleShape)
+                                    .background(
+                                        (
+                                            ParentColorChoice.fromStored(parents.me?.colorCode)
+                                                ?: ParentColorChoice.defaultFor(
+                                                    parents.me?.slot.orEmpty()
+                                                )
+                                            ).fill
+                                    )
+                            )
+                        }
                     )
                     Divider()
                     // The money agreement lives with the family, not under App preferences: it
@@ -1056,6 +1100,69 @@ private fun caresForSummary(kinds: Set<FamilyKind>): String {
  * @param onConfirm Called with the new set; only this parent's own record is written.
  * @param onDismiss Closes without changing anything.
  */
+@Composable
+private fun ParentColorDialog(
+    selected: ParentColorChoice?,
+    fallback: ParentColorChoice,
+    onConfirm: (ParentColorChoice) -> Unit,
+    onDismiss: () -> Unit
+) {
+    // Seeded from what this parent actually chose, falling back to the colour their slot has
+    // been drawn in all along — never from the co-parent's answer. The same rule the family-kind
+    // dialog follows: a control whose Save writes this parent's own record must not open with
+    // somebody else's words in it.
+    var chosen by rememberSaveable(selected) { mutableStateOf((selected ?: fallback).name) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.settings_parent_color)) },
+        text = {
+            Column {
+                ParentColorChoice.entries.forEach { choice ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { chosen = choice.name }
+                            .padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = chosen == choice.name,
+                            onClick = { chosen = choice.name }
+                        )
+                        Box(
+                            modifier = Modifier
+                                .size(20.dp)
+                                .clip(CircleShape)
+                                .background(choice.fill)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        // Named, not just shown: a swatch alone is unusable to anyone who cannot
+                        // tell two of them apart, and a screen reader has nothing to announce.
+                        Text(stringResource(choice.labelRes))
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    onConfirm(
+                        ParentColorChoice.entries.first { it.name == chosen }
+                    )
+                }
+            ) {
+                Text(stringResource(R.string.settings_family_kind_save))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.settings_family_kind_cancel))
+            }
+        }
+    )
+}
+
 @Composable
 private fun FamilyKindDialog(
     selected: Set<FamilyKind>,

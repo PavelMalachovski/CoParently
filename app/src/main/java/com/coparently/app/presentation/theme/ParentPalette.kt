@@ -1,6 +1,8 @@
 package com.coparently.app.presentation.theme
 
+import androidx.annotation.StringRes
 import androidx.compose.ui.graphics.Color
+import com.coparently.app.R
 
 /**
  * A colour a parent may choose for themselves.
@@ -32,24 +34,47 @@ import androidx.compose.ui.graphics.Color
  * @property fill The hue at full strength, for dots, bars, borders and custody tints.
  * @property light The text-grade tone on a dark surface.
  * @property dark The text-grade tone on a light surface.
+ * @property labelRes What the picker calls it. A name and not a swatch alone, because a colour
+ *   with no label is unusable to anyone who cannot tell two of them apart — and because a
+ *   screen reader has nothing else to announce.
  */
 enum class ParentColorChoice(
     val storedCode: String,
     val fill: Color,
     val light: Color,
-    val dark: Color
+    val dark: Color,
+    @StringRes val labelRes: Int
 ) {
     /** Material Pink. The app's original slot-1 colour, kept so nobody's calendar changes. */
-    PINK("#E91E63", CoPlanlyColors.MomPink, CoPlanlyColors.MomPinkLight, CoPlanlyColors.MomPinkDark),
+    PINK(
+        "#E91E63", CoPlanlyColors.MomPink, CoPlanlyColors.MomPinkLight,
+        CoPlanlyColors.MomPinkDark, R.string.parent_color_pink
+    ),
 
     /** Material Blue. The original slot-2 colour, kept for the same reason. */
-    BLUE("#1976D2", CoPlanlyColors.DadBlue, CoPlanlyColors.DadBlueLight, CoPlanlyColors.DadBlueDark),
+    BLUE(
+        "#1976D2", CoPlanlyColors.DadBlue, CoPlanlyColors.DadBlueLight,
+        CoPlanlyColors.DadBlueDark, R.string.parent_color_blue
+    ),
 
-    /** Material Purple 700 / 200 / 900. */
-    PURPLE("#7B1FA2", Color(0xFF7B1FA2), Color(0xFFCE93D8), Color(0xFF4A148C)),
+    /**
+     * Material Purple 700 / 200 / 900.
+     *
+     * Purple and orange rather than green or teal: teal is the calendar friend's colour and the
+     * school-vacation strip, and green reads as "agreed" wherever this app already uses it. A
+     * fifth and sixth parent hue that collided with either would undo what `DayCellFills`
+     * protects.
+     */
+    PURPLE(
+        "#7B1FA2", Color(0xFF7B1FA2), Color(0xFFCE93D8), Color(0xFF4A148C),
+        R.string.parent_color_purple
+    ),
 
     /** Material Deep Orange 800 / 200 / 900. */
-    ORANGE("#D84315", Color(0xFFD84315), Color(0xFFFFAB91), Color(0xFFBF360C));
+    ORANGE(
+        "#D84315", Color(0xFFD84315), Color(0xFFFFAB91), Color(0xFFBF360C),
+        R.string.parent_color_orange
+    );
 
     companion object {
 

@@ -7,6 +7,12 @@
     <string name="settings_google_sync">Synchronizace s Kalendářem Google</string>
     <string name="settings_gcal_enable_sync">Zapnout synchronizaci</string>
     <string name="settings_gcal_private_note">Importované události zůstanou v tomto zařízení. Váš Google kalendář je osobní, takže se z něj s druhým rodičem nic nesdílí.</string>
+    <string name="settings_parent_color">Moje barva</string>
+    <string name="settings_parent_color_desc">Jak se označují vaše události, dny v péči a výdaje. Druhý rodič si vybírá svou.</string>
+    <string name="parent_color_pink">Růžová</string>
+    <string name="parent_color_blue">Modrá</string>
+    <string name="parent_color_purple">Fialová</string>
+    <string name="parent_color_orange">Oranžová</string>
     <string name="settings_signed_in_as">Přihlášeno jako: %1$s</string>
     <string name="settings_gcal_not_signed_in">Nepřihlášeno</string>
     <string name="settings_unknown">Neznámé</string>
