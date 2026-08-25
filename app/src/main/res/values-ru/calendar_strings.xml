@@ -81,4 +81,5 @@
     <string name="calendar_retry">Повторить</string>
     <!-- UX-8. -->
     <string name="calendar_agenda_custody_day">день родителя %1$s</string>
+    <string name="calendar_filter_members">Показать для</string>
 </resources>

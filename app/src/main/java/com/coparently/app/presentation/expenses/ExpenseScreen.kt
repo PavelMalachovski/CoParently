@@ -49,6 +49,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.coparently.app.R
 import com.coparently.app.domain.expenses.SplitRatioProposal
 import com.coparently.app.domain.model.Expense
+import com.coparently.app.presentation.common.FamilyMemberChips
 import com.coparently.app.presentation.common.ListSkeleton
 import com.coparently.app.presentation.common.Loadable
 import com.coparently.app.presentation.common.animations.AnimatedEmptyState
@@ -106,6 +107,8 @@ fun ExpenseScreen(
     // Flattened: the budget progress bars have nothing to say while budgets load, and the
     // chip strip they sit in is not the surface that answers "do you have budgets".
     val budgets = budgetViewModel.budgets.collectAsState().value.valueOrNull.orEmpty()
+    val familyMembers by viewModel.familyMembers.collectAsState()
+    val memberFilter by viewModel.memberFilter.collectAsState()
     val breakdowns by viewModel.breakdowns.collectAsState()
     val selectedBreakdown by viewModel.selectedBreakdown.collectAsState()
     val analyticsPayers by viewModel.analyticsPayers.collectAsState()
@@ -319,6 +322,17 @@ fun ExpenseScreen(
                                     }
                                     BudgetChips(progress = progress, onOpenBudgets = openBudgets)
                                 }
+
+                                // Renders nothing below two members, so a family with one child
+                                // sees the screen they always saw. Nothing selected is the whole
+                                // month, which is how a parent gets back out.
+                                FamilyMemberChips(
+                                    members = familyMembers,
+                                    selected = memberFilter,
+                                    onToggle = viewModel::toggleMemberFilter,
+                                    label = R.string.expenses_filter_members,
+                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp)
+                                )
 
                                 ExpenseList(
                                     expenses = monthExpenses,

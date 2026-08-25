@@ -2,6 +2,7 @@ package com.coparently.app.presentation.expenses
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.coparently.app.domain.family.FamilyMemberRef
 import com.coparently.app.domain.model.Budget
 import com.coparently.app.domain.model.BudgetAlert
 import com.coparently.app.domain.model.ExpenseCategory
@@ -9,6 +10,8 @@ import com.coparently.app.domain.money.SupportedCurrency
 import com.coparently.app.domain.repository.BudgetRepository
 import com.coparently.app.domain.repository.PreferencesRepository
 import com.coparently.app.domain.repository.UserRepository
+import com.coparently.app.presentation.common.FamilyMember
+import com.coparently.app.presentation.common.FamilyMembersSource
 import com.coparently.app.presentation.common.Loadable
 import com.coparently.app.presentation.common.stateInLoadable
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -22,12 +25,20 @@ import java.time.LocalDateTime
 import java.util.UUID
 import javax.inject.Inject
 
+/** How long a shared stream outlives its last collector, across a rotation. */
+private const val MEMBERS_STOP_TIMEOUT_MS = 5_000L
+
 @HiltViewModel
 class BudgetViewModel @Inject constructor(
     private val budgetRepository: BudgetRepository,
     private val userRepository: UserRepository,
-    private val preferencesRepository: PreferencesRepository
+    private val preferencesRepository: PreferencesRepository,
+    familyMembersSource: FamilyMembersSource
 ) : ViewModel() {
+
+    /** The children and pets a budget can be scoped to. */
+    val familyMembers: StateFlow<List<FamilyMember>> = familyMembersSource.observe()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(MEMBERS_STOP_TIMEOUT_MS), emptyList())
 
     private val _currentUserId = MutableStateFlow<String>("")
 
@@ -65,15 +76,21 @@ class BudgetViewModel @Inject constructor(
         return budgetRepository.getSpentForBudget(budgetId)
     }
 
+    /**
+     * Creates a budget for [category].
+     *
+     * [forMembers] scopes it: empty is the family's budget and every expense in the category
+     * counts against it, while naming members counts only what names them back.
+     */
     fun addBudget(
         category: ExpenseCategory,
         monthlyLimit: Double,
-        childId: String? = null
+        forMembers: List<FamilyMemberRef> = emptyList()
     ) {
         viewModelScope.launch {
             val budget = Budget(
                 id = UUID.randomUUID().toString(),
-                childId = childId,
+                forMembers = forMembers,
                 category = category,
                 monthlyLimit = monthlyLimit,
                 currency = defaultCurrency.value.code,
@@ -91,9 +108,20 @@ class BudgetViewModel @Inject constructor(
      * `createdAt`, `createdByFirebaseUid`, `currency` and the alert threshold are not this
      * screen's to reset, and rebuilding from the two fields the sheet shows would do exactly that.
      */
-    fun updateBudget(budget: Budget, monthlyLimit: Double) {
+    /**
+     * Changes a budget's limit and who it is scoped to.
+     *
+     * A `copy()` of the loaded budget, never a rebuilt one — the same rule event editing follows.
+     */
+    fun updateBudget(
+        budget: Budget,
+        monthlyLimit: Double,
+        forMembers: List<FamilyMemberRef> = budget.forMembers
+    ) {
         viewModelScope.launch {
-            budgetRepository.updateBudget(budget.copy(monthlyLimit = monthlyLimit))
+            budgetRepository.updateBudget(
+                budget.copy(monthlyLimit = monthlyLimit, forMembers = forMembers)
+            )
             refreshAlerts()
         }
     }

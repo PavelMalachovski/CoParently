@@ -12,8 +12,8 @@
     <string name="onboarding_footnote">Uchováváme pro vás a druhého rodiče, pro případ nouze.</string>
     <string name="onboarding_profile_title">O vás</string>
     <string name="onboarding_profile_name_required">Jméno je jediné, co aplikace potřebuje — podepisuje se jím každá událost i každý výdaj.</string>
-    <string name="onboarding_child_title">O dítěti</string>
-    <string name="onboarding_child_body">Léky, kroužky a údaje o škole můžete doplnit později v nastavení.</string>
+    <string name="onboarding_child_title">Vaše děti</string>
+    <string name="onboarding_child_body">Jedno pole pro každé dítě. Léky, kroužky a údaje o škole můžete doplnit později v nastavení.</string>
     <string name="onboarding_relatives_title">Kdo může pomoci</string>
     <string name="onboarding_relatives_body">Babička, dědeček, teta, strýc — kdokoli, kdo může dítě vyzvednout nebo komu se zavolá v nouzi.</string>
     <string name="onboarding_relatives_needs_child">Tyto kontakty se ukládají k dítěti, takže nejdřív přidejte dítě — vraťte se o krok zpět, nebo je doplňte později v nastavení.</string>
@@ -29,9 +29,14 @@
     <string name="onboarding_family_children_hint">Záznamy o dětech, kontakty a údaje o škole</string>
     <string name="onboarding_family_pets">Mazlíčci</string>
     <string name="onboarding_family_pets_hint">Záznamy o mazlíčcích, očkování a číslo na veterináře</string>
-    <string name="onboarding_pet_title">Váš mazlíček</string>
-    <string name="onboarding_pet_body">Stačí jméno a druh. Očkování, poznámky ke krmení a veterinář přijdou později na obrazovce mazlíčka.</string>
+    <string name="onboarding_pet_title">Vaši mazlíčci</string>
+    <string name="onboarding_pet_body">Jedno pole pro každého mazlíčka — stačí jméno a druh. Očkování, poznámky ke krmení a veterinář přijdou později na obrazovce mazlíčka.</string>
     <string name="onboarding_split_title">Jak budete dělit výdaje?</string>
     <string name="onboarding_split_body">Napůl, pokud se nedohodnete jinak. Jakmile připojíte druhého rodiče, změnu bude potvrzovat on — a již zadané výdaje si ponechají své rozdělení.</string>
     <string name="onboarding_split_value">Vy %1$d / Druhý rodič %2$d</string>
+    <string name="onboarding_child_add">Přidat další dítě</string>
+    <string name="onboarding_child_unnamed">Dítě %1$d</string>
+    <string name="onboarding_pet_add">Přidat dalšího mazlíčka</string>
+    <string name="onboarding_pet_unnamed">Mazlíček %1$d</string>
+    <string name="onboarding_relatives_whose">Ke komu tyto kontakty patří?</string>
 </resources>

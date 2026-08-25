@@ -12,8 +12,8 @@
     <string name="onboarding_footnote">Хранится для вас и второго родителя, на случай непредвиденных обстоятельств.</string>
     <string name="onboarding_profile_title">О себе</string>
     <string name="onboarding_profile_name_required">Имя — единственное, что нужно приложению: им подписывается каждое событие и каждый расход.</string>
-    <string name="onboarding_child_title">О ребёнке</string>
-    <string name="onboarding_child_body">Лекарства, занятия и данные об учебном заведении можно добавить позже, в настройках.</string>
+    <string name="onboarding_child_title">Ваши дети</string>
+    <string name="onboarding_child_body">По одному полю на каждого ребёнка. Лекарства, занятия и данные об учебном заведении можно добавить позже, в настройках.</string>
     <string name="onboarding_relatives_title">Кто может помочь</string>
     <string name="onboarding_relatives_body">Бабушка, дедушка, тётя, дядя — любой, кто может забрать ребёнка или кому позвонят в экстренном случае.</string>
     <string name="onboarding_relatives_needs_child">Эти контакты сохраняются вместе с ребёнком, поэтому сначала добавьте ребёнка — вернитесь на шаг назад или добавьте позже в настройках.</string>
@@ -29,9 +29,14 @@
     <string name="onboarding_family_children_hint">Карточки детей, контакты и данные о школе</string>
     <string name="onboarding_family_pets">Питомцы</string>
     <string name="onboarding_family_pets_hint">Карточки питомцев, прививки и телефон ветеринара</string>
-    <string name="onboarding_pet_title">Ваш питомец</string>
-    <string name="onboarding_pet_body">Только имя и вид. Прививки, заметки о кормлении и ветеринар — потом, на странице питомца.</string>
+    <string name="onboarding_pet_title">Ваши питомцы</string>
+    <string name="onboarding_pet_body">По одному полю на каждого питомца — только имя и вид. Прививки, заметки о кормлении и ветеринар — потом, на странице питомца.</string>
     <string name="onboarding_split_title">Как будете делить расходы?</string>
     <string name="onboarding_split_body">Пополам, если не договоритесь иначе. Как только второй родитель будет подключён, изменение придётся подтверждать ему — а уже внесённые расходы сохранят своё деление.</string>
     <string name="onboarding_split_value">Вы %1$d / Второй родитель %2$d</string>
+    <string name="onboarding_child_add">Добавить ещё ребёнка</string>
+    <string name="onboarding_child_unnamed">Ребёнок %1$d</string>
+    <string name="onboarding_pet_add">Добавить ещё питомца</string>
+    <string name="onboarding_pet_unnamed">Питомец %1$d</string>
+    <string name="onboarding_relatives_whose">К кому относятся эти контакты?</string>
 </resources>

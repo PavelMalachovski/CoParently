@@ -99,4 +99,5 @@
     <string name="event_form_save_failed">Failed to save event: %1$s</string>
     <string name="event_form_photo_upload_failed">Photo upload failed — event saved without the new photo</string>
     <string name="event_form_owner_unknown">We can\'t tell whose event this is yet — choose above to save</string>
+    <string name="event_form_for_members">Who is this for?</string>
 </resources>

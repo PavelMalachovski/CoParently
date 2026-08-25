@@ -79,11 +79,14 @@ import coil.compose.AsyncImage
 import com.coparently.app.R
 import com.coparently.app.domain.expenses.SplitRatio
 import com.coparently.app.domain.expenses.WHOLE_PERCENT
+import com.coparently.app.domain.family.FamilyMemberRef
 import com.coparently.app.domain.model.Expense
 import com.coparently.app.domain.model.ExpenseCategory
 import com.coparently.app.domain.money.SupportedCurrency
 import com.coparently.app.domain.receipts.ReceiptScan
+import com.coparently.app.presentation.common.FamilyMemberChips
 import com.coparently.app.presentation.common.FullScreenImageDialog
+import com.coparently.app.presentation.common.toggling
 import com.coparently.app.presentation.theme.CoPlanlyShapes
 import java.io.File
 import java.time.Instant
@@ -116,6 +119,12 @@ fun AddExpenseScreen(
     var currency by remember { mutableStateOf<SupportedCurrency?>(null) }
     val effectiveCurrency = currency ?: defaultCurrency
 
+    val familyMembers by viewModel.familyMembers.collectAsState()
+    // Who the money was for. Empty is "the family", which is what every expense recorded before
+    // this picker existed is, and what a family with fewer than two members keeps being: the
+    // chips do not render at all below two, so nothing can be picked and nothing is claimed.
+    var forMembers by remember { mutableStateOf(emptyList<FamilyMemberRef>()) }
+
     var date by remember { mutableStateOf(LocalDate.now()) }
     var showDatePicker by remember { mutableStateOf(false) }
     var showOtherMonthWarning by remember { mutableStateOf(false) }
@@ -132,6 +141,7 @@ fun AddExpenseScreen(
                 notes = expense.notes.orEmpty()
                 date = expense.date
                 currency = SupportedCurrency.fromCode(expense.currency)
+                forMembers = expense.forMembers
                 expense.receiptUrl?.let { receiptUri = Uri.parse(it) }
             }
         }
@@ -289,6 +299,13 @@ fun AddExpenseScreen(
                     .clickable(enabled = !isSaving) { showDatePicker = true }
             )
 
+            FamilyMemberChips(
+                members = familyMembers,
+                selected = forMembers,
+                onToggle = { forMembers = forMembers.toggling(it) },
+                label = R.string.expense_for_members
+            )
+
             OutlinedTextField(
                 value = notes,
                 onValueChange = { notes = it },
@@ -342,6 +359,7 @@ fun AddExpenseScreen(
                         amount = requireNotNull(amountValue),
                         category = category,
                         currency = effectiveCurrency.code,
+                        forMembers = forMembers,
                         date = date,
                         notes = notes.takeIf { it.isNotBlank() },
                         receiptImageUri = receiptUri?.toString(),
@@ -357,7 +375,8 @@ fun AddExpenseScreen(
                         currency = effectiveCurrency.code,
                         date = date,
                         notes = notes.takeIf { it.isNotBlank() },
-                        receiptImageUri = receiptUri?.toString()
+                        receiptImageUri = receiptUri?.toString(),
+                        forMembers = forMembers
                     )
                 }
             }

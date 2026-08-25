@@ -3,6 +3,8 @@ package com.coparently.app.data.repository
 import com.coparently.app.data.local.dao.BudgetDao
 import com.coparently.app.data.local.dao.ExpenseDao
 import com.coparently.app.data.local.dao.UserDao
+import com.coparently.app.data.local.entity.BudgetEntity
+import com.coparently.app.data.local.entity.ExpenseEntity
 import com.coparently.app.data.local.entity.UserEntity
 import com.coparently.app.data.remote.firebase.FirebaseAuthService
 import com.coparently.app.data.remote.firebase.FirestoreBudgetDataSource
@@ -13,9 +15,13 @@ import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
+import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Test
+import java.time.LocalDate
+import java.time.LocalDateTime
 
 /**
  * Unit tests for [BudgetRepositoryImpl.observeRemote], guarding the fix for the
@@ -46,6 +52,88 @@ class BudgetRepositoryImplTest {
             budgetDao, expenseDao, userDao, firebaseAuthService, firestoreBudgetDataSource
         )
     }
+
+    // ---- what a budget is scoped to -----------------------------------------
+
+    @Test
+    fun `a budget that names nobody is charged everything in its category`() = runTest {
+        // What every budget in production is: the field that could have scoped one was never
+        // written by any screen. An upgrade must not start excluding spending from it.
+        budgetIs(forMembersJson = "[]")
+        categorySpending(
+            expenseOf(20.0, forMembersJson = "[]"),
+            expenseOf(30.0, forMembersJson = """["child:c1"]"""),
+            expenseOf(50.0, forMembersJson = """["pet:p1"]""")
+        )
+
+        assertEquals(100.0, repository.getSpentForBudget("b1"), 0.001)
+    }
+
+    @Test
+    fun `a scoped budget is charged only what names it back`() = runTest {
+        budgetIs(forMembersJson = """["child:c1"]""")
+        categorySpending(
+            expenseOf(20.0, forMembersJson = "[]"),
+            expenseOf(30.0, forMembersJson = """["child:c1"]"""),
+            expenseOf(50.0, forMembersJson = """["child:c2"]""")
+        )
+
+        // 30 only. The untagged 20 is deliberately *not* charged to a child's budget: naming
+        // nobody is not the same as naming everybody, or every child's budget would carry the
+        // family's whole grocery bill. Same rule as the filter chips.
+        assertEquals(30.0, repository.getSpentForBudget("b1"), 0.001)
+    }
+
+    @Test
+    fun `a budget naming a pet is charged the vet, which a childId could not express`() = runTest {
+        budgetIs(forMembersJson = """["pet:p1"]""")
+        categorySpending(
+            expenseOf(80.0, forMembersJson = """["pet:p1"]"""),
+            expenseOf(30.0, forMembersJson = """["child:c1"]""")
+        )
+
+        assertEquals(80.0, repository.getSpentForBudget("b1"), 0.001)
+    }
+
+    @Test
+    fun `spending outside the current month is never charged`() = runTest {
+        budgetIs(forMembersJson = "[]")
+        categorySpending(
+            expenseOf(20.0, forMembersJson = "[]"),
+            expenseOf(999.0, forMembersJson = "[]", on = LocalDate.now().minusMonths(2))
+        )
+
+        assertEquals(20.0, repository.getSpentForBudget("b1"), 0.001)
+    }
+
+    private fun budgetIs(forMembersJson: String) {
+        coEvery { budgetDao.getBudgetById("b1") } returns BudgetEntity(
+            id = "b1",
+            forMembersJson = forMembersJson,
+            category = "OTHER",
+            monthlyLimit = 1000.0,
+            createdAt = LocalDateTime.now()
+        )
+    }
+
+    private fun categorySpending(vararg expenses: ExpenseEntity) {
+        every { expenseDao.getExpensesByCategory("OTHER") } returns flowOf(expenses.toList())
+    }
+
+    private fun expenseOf(
+        amount: Double,
+        forMembersJson: String,
+        on: LocalDate = LocalDate.now()
+    ) = ExpenseEntity(
+        id = "e$amount$forMembersJson",
+        forMembersJson = forMembersJson,
+        title = "spend",
+        amount = amount,
+        category = "OTHER",
+        paidBy = "uidA",
+        date = on,
+        createdAt = LocalDateTime.now()
+    )
 
     @Test
     fun `observeRemote queries both parents' UIDs when paired`() = runTest {

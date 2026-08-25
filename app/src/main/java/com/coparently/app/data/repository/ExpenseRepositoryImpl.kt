@@ -10,6 +10,7 @@ import com.coparently.app.domain.activity.ActivityAnnouncement
 import com.coparently.app.domain.activity.ActivityAnnouncer
 import com.coparently.app.domain.activity.ActivityEntityType
 import com.coparently.app.domain.activity.ActivityKind
+import com.coparently.app.domain.family.FamilyMemberRef
 import com.coparently.app.domain.model.Expense
 import com.coparently.app.domain.model.ExpenseCategory
 import com.coparently.app.domain.model.ExpenseSummary
@@ -41,12 +42,6 @@ class ExpenseRepositoryImpl @Inject constructor(
 
     override fun getAllExpenses(): Flow<List<Expense>> {
         return expenseDao.getAllExpenses().map { entities ->
-            entities.map { it.toDomain() }
-        }
-    }
-
-    override fun getExpensesForChild(childId: String): Flow<List<Expense>> {
-        return expenseDao.getExpensesForChild(childId).map { entities ->
             entities.map { it.toDomain() }
         }
     }
@@ -155,7 +150,9 @@ class ExpenseRepositoryImpl @Inject constructor(
      */
     private fun expenseToFirestoreMap(expense: Expense, ownerUid: String): Map<String, Any> = mapOf(
         "id" to expense.id,
-        "childId" to (expense.childId ?: ""),
+        // Replaces the single `childId`, which is no longer written. Nothing is lost by
+        // dropping it: no client ever set it, so every document in production carries "".
+        "forMembers" to FamilyMemberRef.store(expense.forMembers),
         "title" to expense.title,
         "amount" to expense.amount,
         "currency" to expense.currency,
@@ -246,7 +243,11 @@ class ExpenseRepositoryImpl @Inject constructor(
 
                     val expense = Expense(
                         id = id,
-                        childId = (data["childId"] as? String)?.takeIf { it.isNotEmpty() },
+                        // A co-parent on a build that predates the reference type still writes
+                        // `childId`, so it is read as a fallback. In practice it converts
+                        // nothing — the field was never populated by any client.
+                        forMembers = FamilyMemberRef.parse(data["forMembers"])
+                            .ifEmpty { FamilyMemberRef.fromLegacyChildId(data["childId"] as? String) },
                         title = data["title"] as String,
                         amount = (data["amount"] as Number).toDouble(),
                         currency = data["currency"] as String,
@@ -334,12 +335,13 @@ class ExpenseRepositoryImpl @Inject constructor(
     }
 
     private fun ExpenseEntity.toDomain(): Expense {
-        val splitListType = object : TypeToken<List<String>>() {}.type
-        val splitBetween: List<String> = gson.fromJson(splitBetweenJson, splitListType)
+        val stringListType = object : TypeToken<List<String>>() {}.type
+        val splitBetween: List<String> = gson.fromJson(splitBetweenJson, stringListType)
+        val forMembers: List<String> = gson.fromJson(forMembersJson, stringListType)
 
         return Expense(
             id = id,
-            childId = childId,
+            forMembers = FamilyMemberRef.parse(forMembers),
             title = title,
             amount = amount,
             currency = currency,
@@ -359,7 +361,8 @@ class ExpenseRepositoryImpl @Inject constructor(
     private fun Expense.toEntity(): ExpenseEntity {
         return ExpenseEntity(
             id = id,
-            childId = childId,
+            // `childId` is a dead column and is left null; see ExpenseEntity.
+            forMembersJson = gson.toJson(FamilyMemberRef.store(forMembers)),
             title = title,
             amount = amount,
             currency = currency,

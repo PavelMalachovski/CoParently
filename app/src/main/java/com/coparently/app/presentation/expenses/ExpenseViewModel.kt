@@ -10,6 +10,7 @@ import com.coparently.app.domain.expenses.SplitRatio
 import com.coparently.app.domain.expenses.SplitRatioProposal
 import com.coparently.app.domain.expenses.breakdownByCurrency
 import com.coparently.app.domain.expenses.calculateExpenseBalancesByCurrency
+import com.coparently.app.domain.family.FamilyMemberRef
 import com.coparently.app.domain.model.Expense
 import com.coparently.app.domain.model.ExpenseCategory
 import com.coparently.app.domain.model.ExpenseSummary
@@ -23,8 +24,11 @@ import com.coparently.app.domain.repository.ReceiptStorage
 import com.coparently.app.domain.repository.UserRepository
 import com.coparently.app.presentation.common.Loadable
 import com.coparently.app.presentation.common.Parents
+import com.coparently.app.presentation.common.FamilyMember
+import com.coparently.app.presentation.common.FamilyMembersSource
 import com.coparently.app.presentation.common.ParentsSource
 import com.coparently.app.presentation.common.stateInLoadable
+import com.coparently.app.presentation.common.toggling
 import com.coparently.app.presentation.common.valueOrNull
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.channels.Channel
@@ -37,6 +41,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -87,7 +92,8 @@ class ExpenseViewModel @Inject constructor(
     private val preferencesRepository: PreferencesRepository,
     private val receiptTextRecognizer: ReceiptTextRecognizer,
     private val familySettingsRepository: FamilySettingsRepository,
-    private val parentsSource: ParentsSource
+    private val parentsSource: ParentsSource,
+    familyMembersSource: FamilyMembersSource
 ) : ViewModel() {
 
     /**
@@ -263,6 +269,36 @@ class ExpenseViewModel @Inject constructor(
         _selectedMonth.value = _selectedMonth.value.plusMonths(1)
     }
 
+    /** The children and pets this family cares for, for the filter strip. */
+    val familyMembers: StateFlow<List<FamilyMember>> = familyMembersSource.observe()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), emptyList())
+
+    private val _memberFilter = MutableStateFlow<List<FamilyMemberRef>>(emptyList())
+
+    /**
+     * Who the list is narrowed to. Empty is the whole month, which is what it is until a chip is
+     * tapped.
+     *
+     * Narrowed to members that still exist, and that is the point of deriving it rather than
+     * exposing `_memberFilter` directly: a child removed while their chip was selected would
+     * otherwise leave the screen filtered to somebody with no chip left to tap, and no way back
+     * to the full month.
+     *
+     * Chaining this one off another flow is safe where chaining `_selectedMonth` is not — see
+     * [monthOfExpenses]. The hazard there is two flows derived from the *same* month re-emitting
+     * out of step; this derives from the member list, which no other flow here reads.
+     */
+    val memberFilter: StateFlow<List<FamilyMemberRef>> =
+        combine(_memberFilter, familyMembers) { selected, members ->
+            val known = members.map { it.ref }.toSet()
+            selected.filter { it in known }
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), emptyList())
+
+    /** Adds or removes [ref] from the filter. Deselecting the last chip restores the month. */
+    fun toggleMemberFilter(ref: FamilyMemberRef) {
+        _memberFilter.update { it.toggling(ref) }
+    }
+
     /**
      * The selected month and the figures that belong to **that** month, as one value.
      *
@@ -279,9 +315,14 @@ class ExpenseViewModel @Inject constructor(
         loadedExpenses,
         _selectedMonth,
         _currentUserId,
-        roleByUid
-    ) { all, month, userId, roles ->
+        roleByUid,
+        memberFilter
+    ) { all, month, userId, roles, members ->
         val ofMonth = all.filter { YearMonth.from(it.date) == month }
+            // An untagged expense appears only in the unfiltered month. Reading "names nobody"
+            // as "names everybody" would put the family's whole grocery bill under every child's
+            // chip, and every chip would then show the same list — see `FamilyMemberRef.names`.
+            .filter { expense -> members.isEmpty() || expense.forMembers.any { it in members } }
             .sortedByDescending { it.date }
         MonthOfExpenses(
             month = month,
@@ -423,7 +464,7 @@ class ExpenseViewModel @Inject constructor(
         amount: Double,
         category: ExpenseCategory,
         currency: String,
-        childId: String? = null,
+        forMembers: List<FamilyMemberRef> = emptyList(),
         date: LocalDate = LocalDate.now(),
         notes: String? = null,
         receiptImageUri: String? = null,
@@ -467,7 +508,7 @@ class ExpenseViewModel @Inject constructor(
             val splitBetween = if (shared) sharedWith(userId) else emptyList()
             val expense = Expense(
                 id = expenseId,
-                childId = childId,
+                forMembers = forMembers,
                 title = title,
                 amount = amount,
                 category = category,
@@ -516,7 +557,8 @@ class ExpenseViewModel @Inject constructor(
         currency: String,
         date: LocalDate = original.date,
         notes: String? = null,
-        receiptImageUri: String? = null
+        receiptImageUri: String? = null,
+        forMembers: List<FamilyMemberRef> = original.forMembers
     ) {
         if (_saveState.value is ExpenseSaveState.Saving) return
 
@@ -539,6 +581,7 @@ class ExpenseViewModel @Inject constructor(
             }
 
             val updated = original.copy(
+                forMembers = forMembers,
                 title = title,
                 amount = amount,
                 category = category,

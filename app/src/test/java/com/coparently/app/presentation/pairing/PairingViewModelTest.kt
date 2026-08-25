@@ -9,6 +9,7 @@ import com.coparently.app.data.remote.firebase.QRCodeService
 import com.coparently.app.data.repository.CustodyModelRepository
 import com.coparently.app.data.repository.ParentSlotMigrator
 import com.coparently.app.data.session.SignedInAccountSource
+import com.coparently.app.domain.custody.CustodyTimestamp
 import com.coparently.app.domain.custody.SharedCustody
 import com.coparently.app.domain.custody.SharedCustodyRead
 import com.coparently.app.domain.model.AccountSummary
@@ -725,7 +726,7 @@ class PairingViewModelTest {
         SharedCustody(
             model = model,
             lastModifiedBy = "user-b",
-            lastModifiedAt = "2026-08-01T10:00:00",
+            lastModifiedAtMillis = CustodyTimestamp.fromWire("2026-08-01T10:00:00"),
             createdAt = "2026-08-01T10:00:00"
         )
     )

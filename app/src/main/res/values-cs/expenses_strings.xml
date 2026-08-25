@@ -103,4 +103,7 @@
     <string name="budget_status_near">Blízko limitu</string>
     <string name="budget_status_over">Nad limitem</string>
     <string name="expenses_budget_chip_status">%1$s · %2$s</string>
+    <string name="expense_for_members">Pro koho to je?</string>
+    <string name="expenses_filter_members">Zobrazit pro</string>
+    <string name="budget_for_members">Pro koho je tento rozpočet?</string>
 </resources>

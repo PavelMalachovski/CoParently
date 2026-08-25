@@ -1,6 +1,7 @@
 package com.coparently.app.data.sync
 
 import com.coparently.app.data.local.entity.EventEntity
+import com.coparently.app.domain.family.FamilyMemberRef
 import com.google.gson.Gson
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -65,6 +66,32 @@ internal object EventDocument {
         isImportant = data["isImportant"] as? Boolean ?: false,
         friendParticipates = (data["friendParticipates"] as? String)?.takeIf { it.isNotEmpty() },
         // Firestore returns numbers as Long; null when the document predates the field.
-        reminderMinutes = (data["reminderMinutes"] as? Number)?.toInt()
+        reminderMinutes = (data["reminderMinutes"] as? Number)?.toInt(),
+        // Absent reads as "the whole family", which is what every event written before the
+        // reference type is. A reference this build does not understand is carried through
+        // rather than dropped, so a co-parent on a newer build cannot have their tag erased by
+        // an edit made here — see `FamilyMemberRef.Unknown`.
+        forMembersJson = membersJson(data["forMembers"])
     )
+
+    /**
+     * The JSON a Room row stores, from a document's `forMembers` array.
+     *
+     * Normalised on the way in — blanks dropped, duplicates collapsed — so a row's stored form
+     * does not depend on which build wrote the document.
+     */
+    fun membersJson(raw: Any?): String = gson.toJson(FamilyMemberRef.store(FamilyMemberRef.parse(raw)))
+
+    /**
+     * The `forMembers` array a document carries, from a Room row's JSON column.
+     *
+     * Here rather than in `SyncService` because this file is the one place the events wire
+     * format is defined; a second copy of the conversion is one more place for it to drift.
+     */
+    fun storedMembers(forMembersJson: String): List<String> {
+        val stored = runCatching {
+            gson.fromJson(forMembersJson, Array<String>::class.java)?.toList()
+        }.getOrNull()
+        return FamilyMemberRef.store(FamilyMemberRef.parse(stored))
+    }
 }

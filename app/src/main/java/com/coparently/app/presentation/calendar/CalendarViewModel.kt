@@ -142,13 +142,17 @@ class CalendarViewModel @Inject constructor(
             .stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
 
     /**
-     * The `lastModifiedAt` of the shared-custody change the user last dismissed the banner for,
+     * The instant of the shared-custody change the user last dismissed the banner for,
      * or null if none was ever dismissed. Seeded from [EncryptedPreferences] so an
      * acknowledged change stays acknowledged across process death, and updated in place by
      * [dismissCustodyChange] rather than re-read from disk each time.
      */
     private val dismissedCustodyChangeAt = MutableStateFlow(
-        encryptedPreferences.getString(KEY_DISMISSED_CUSTODY_CHANGE_AT)
+        // Stored as decimal text, because EncryptedPreferences deals in strings. A value written
+        // before schema 29 is an ISO date-time and will not parse — it reads as "nothing
+        // dismissed", so the current change is announced once more and its dismissal is then
+        // stored in the new form. Announcing one change twice is the right way to be wrong here.
+        encryptedPreferences.getString(KEY_DISMISSED_CUSTODY_CHANGE_AT)?.toLongOrNull()
     )
 
     /**
@@ -156,7 +160,7 @@ class CalendarViewModel @Inject constructor(
      *
      * Custody is last-write-wins with no consent step, so this is what keeps that from being
      * *silent*: [CustodyChangeAnnouncement.toAnnounce] excludes this device's own writes (by
-     * uid, from [parents]) and anything already dismissed (by `lastModifiedAt`). It also excludes
+     * uid, from [parents]) and anything already dismissed (by its instant). It also excludes
      * anything at all until [Parents.loaded] is true — [parents] starts from a synthetic
      * "nobody is known yet" on every fresh subscription, and `CustodyModelRepository`'s own pair
      * resolution is Room-only and reliably faster than `Parents` resolving three Firestore
@@ -269,7 +273,7 @@ class CalendarViewModel @Inject constructor(
      * screen last collected: two parents negotiating a day are writing to one document, and a
      * held snapshot would silently drop whatever the other one did in between.
      *
-     * `lastModifiedAt` is deliberately not restamped — see
+     * `lastModifiedAtMillis` is deliberately not restamped — see
      * [com.coparently.app.data.repository.CustodyModelRepository.applyDayOverrides].
      *
      * Failures are surfaced through [swapError] rather than swallowed: refusing a swap is a real
@@ -362,16 +366,19 @@ class CalendarViewModel @Inject constructor(
     }
 
     /**
-     * Dismisses the custody-changed banner for the change stamped with [lastModifiedAt].
+     * Dismisses the custody-changed banner for the change stamped with [lastModifiedAtMillis].
      *
      * Persisted to [EncryptedPreferences] rather than kept only in memory: a change the user has
      * already acknowledged must not reappear just because the app process died. Keying on the
-     * change's own `lastModifiedAt` (instead of, say, a boolean) is what lets the *next* change —
-     * a different `lastModifiedAt` — be announced again without a separate "seen" reset.
+     * change's own instant (instead of, say, a boolean) is what lets the *next* change — a
+     * different instant — be announced again without a separate "seen" reset.
      */
-    fun dismissCustodyChange(lastModifiedAt: String) {
-        dismissedCustodyChangeAt.value = lastModifiedAt
-        encryptedPreferences.putString(KEY_DISMISSED_CUSTODY_CHANGE_AT, lastModifiedAt)
+    fun dismissCustodyChange(lastModifiedAtMillis: Long) {
+        dismissedCustodyChangeAt.value = lastModifiedAtMillis
+        encryptedPreferences.putString(
+            KEY_DISMISSED_CUSTODY_CHANGE_AT,
+            lastModifiedAtMillis.toString()
+        )
     }
 
     /**

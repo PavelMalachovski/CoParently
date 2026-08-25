@@ -97,6 +97,13 @@ data class EventEntity(
      * and deliberately not the reasoning behind [startDateTime], where a naive local time is
      * the right model for when a handover happens.
      */
+    /**
+     * Who this event is about — a JSON array of `FamilyMemberRef` stored strings.
+     *
+     * `[]` means the whole family, which is what every row written before schema 28 holds. Not
+     * the same question as [parentOwner], which is the custody slot whose day it falls on.
+     */
+    val forMembersJson: String = "[]",
     val deletedAtMillis: Long? = null
 )
 

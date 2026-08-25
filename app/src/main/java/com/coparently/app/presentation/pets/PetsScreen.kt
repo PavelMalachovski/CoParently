@@ -45,9 +45,12 @@ import com.coparently.app.presentation.common.SectionRow
 import com.coparently.app.presentation.common.labelRes
 
 /**
- * The pets list. Unlike the child screen — which shows only the first record, a documented
- * limitation — a family can have several pets, so this is a genuine list: one row per pet,
- * tapping opens the editor, the FAB adds a new one.
+ * The pets list: one row per pet, tapping opens the editor, the FAB adds a new one.
+ *
+ * This comment used to say the child screen showed only the first record, "a documented
+ * limitation". That stopped being true when `ChildInfoScreen` became a genuine list, and the
+ * onboarding wizard — the last place in the app that insisted on exactly one of anything — has
+ * since caught up too.
  *
  * @param onNavigateBack Callback for navigation back
  * @param onEditPet Opens the editor for a pet id (or "new")

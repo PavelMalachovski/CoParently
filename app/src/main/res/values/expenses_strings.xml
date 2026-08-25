@@ -115,4 +115,7 @@
     <string name="budget_status_near">Near limit</string>
     <string name="budget_status_over">Over limit</string>
     <string name="expenses_budget_chip_status">%1$s · %2$s</string>
+    <string name="expense_for_members">Who is this for?</string>
+    <string name="expenses_filter_members">Show for</string>
+    <string name="budget_for_members">Who is this budget for?</string>
 </resources>

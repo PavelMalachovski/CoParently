@@ -9,6 +9,7 @@ import com.coparently.app.domain.repository.ExpenseRepository
 import com.coparently.app.domain.repository.PreferencesRepository
 import com.coparently.app.domain.repository.ReceiptStorage
 import com.coparently.app.domain.repository.UserRepository
+import com.coparently.app.presentation.common.testFamilyMembersSource
 import com.coparently.app.presentation.common.testParentsSource
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
@@ -88,7 +89,8 @@ class ExpenseViewModelMonthNavigationTest {
                 every { observeSettings() } returns flowOf(null)
                 every { agreedRatioOrDefault() } returns SplitRatio.EVEN
             },
-            testParentsSource()
+            testParentsSource(),
+            testFamilyMembersSource()
         )
     }
 

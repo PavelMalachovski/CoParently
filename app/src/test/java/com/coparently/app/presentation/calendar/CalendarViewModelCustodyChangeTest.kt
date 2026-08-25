@@ -4,6 +4,7 @@ import com.coparently.app.data.local.dao.CustodyScheduleDao
 import com.coparently.app.data.local.preferences.EncryptedPreferences
 import com.coparently.app.data.local.preferences.PreferenceKeys
 import com.coparently.app.data.repository.CustodyModelRepository
+import com.coparently.app.domain.custody.CustodyTimestamp
 import com.coparently.app.domain.custody.SharedCustody
 import com.coparently.app.domain.model.CustodyModel
 import com.coparently.app.domain.model.CustodyModelType
@@ -184,28 +185,37 @@ class CalendarViewModelCustodyChangeTest {
         advanceUntilIdle()
         assertEquals(change, viewModel.custodyChangeAnnouncement.value)
 
-        viewModel.dismissCustodyChange(change.lastModifiedAt)
+        viewModel.dismissCustodyChange(change.lastModifiedAtMillis)
         advanceUntilIdle()
 
         assertNull(viewModel.custodyChangeAnnouncement.value)
         verify {
-            encryptedPreferences.putString(PreferenceKeys.DISMISSED_CUSTODY_CHANGE_AT, change.lastModifiedAt)
+            encryptedPreferences.putString(
+                PreferenceKeys.DISMISSED_CUSTODY_CHANGE_AT,
+                change.lastModifiedAtMillis.toString()
+            )
         }
     }
 
     @Test
-    fun `a later change with a different lastModifiedAt is announced again after dismissal`() =
+    fun `a later change with a different instant is announced again after dismissal`() =
         runTest(testDispatcher) {
             val viewModel = viewModelSignedInAs(MY_UID)
             advanceUntilIdle()
-            val firstChange = custodyOf(lastModifiedBy = CO_PARENT_UID, lastModifiedAt = "2026-08-05T09:00:00")
+            val firstChange = custodyOf(
+                lastModifiedBy = CO_PARENT_UID,
+                lastModifiedAtMillis = CustodyTimestamp.fromWire("2026-08-05T09:00:00")
+            )
             sharedCustody.value = firstChange
             advanceUntilIdle()
-            viewModel.dismissCustodyChange(firstChange.lastModifiedAt)
+            viewModel.dismissCustodyChange(firstChange.lastModifiedAtMillis)
             advanceUntilIdle()
             assertNull(viewModel.custodyChangeAnnouncement.value)
 
-            val secondChange = custodyOf(lastModifiedBy = CO_PARENT_UID, lastModifiedAt = "2026-08-06T10:00:00")
+            val secondChange = custodyOf(
+                lastModifiedBy = CO_PARENT_UID,
+                lastModifiedAtMillis = CustodyTimestamp.fromWire("2026-08-06T10:00:00")
+            )
             sharedCustody.value = secondChange
             advanceUntilIdle()
 
@@ -217,7 +227,7 @@ class CalendarViewModelCustodyChangeTest {
         val change = custodyOf(lastModifiedBy = CO_PARENT_UID)
         every {
             encryptedPreferences.getString(PreferenceKeys.DISMISSED_CUSTODY_CHANGE_AT)
-        } returns change.lastModifiedAt
+        } returns change.lastModifiedAtMillis.toString()
         sharedCustody.value = change
 
         val viewModel = viewModelSignedInAs(MY_UID)
@@ -275,7 +285,7 @@ class CalendarViewModelCustodyChangeTest {
 
     private fun custodyOf(
         lastModifiedBy: String,
-        lastModifiedAt: String = MODIFIED_AT
+        lastModifiedAtMillis: Long = MODIFIED_AT
     ) = SharedCustody(
         model = CustodyModel(
             id = "model-1",
@@ -285,13 +295,13 @@ class CalendarViewModelCustodyChangeTest {
             startDate = LocalDate.of(2026, 1, 1)
         ),
         lastModifiedBy = lastModifiedBy,
-        lastModifiedAt = lastModifiedAt,
+        lastModifiedAtMillis = lastModifiedAtMillis,
         createdAt = "2026-01-01T00:00:00"
     )
 
     private companion object {
         const val MY_UID = "my-uid"
         const val CO_PARENT_UID = "co-parent-uid"
-        const val MODIFIED_AT = "2026-08-05T12:00:00"
+        val MODIFIED_AT = CustodyTimestamp.fromWire("2026-08-05T12:00:00")
     }
 }

@@ -156,7 +156,7 @@ fun VacationBanner(label: String, modifier: Modifier = Modifier) {
  *   otherwise have the co-parent's write reported as the signed-in parent's own. This parameter
  *   is that already-safe result.
  * @param onDismiss Persists the dismissal, keyed by the caller on the change's own
- *   `lastModifiedAt` so a later change is announced again.
+ *   instant so a later change is announced again.
  * @param modifier Modifier for the banner
  */
 @Composable

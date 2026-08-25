@@ -94,4 +94,5 @@
     <string name="calendar_retry">Zkusit znovu</string>
     <!-- UX-8. -->
     <string name="calendar_agenda_custody_day">den rodiče %1$s</string>
+    <string name="calendar_filter_members">Zobrazit pro</string>
 </resources>

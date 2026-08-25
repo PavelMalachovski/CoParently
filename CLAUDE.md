@@ -236,6 +236,44 @@ cd firestore-tests && npm test              # firestore.rules against the local 
   single place that joins the two halves. A ViewModel that needs the two parents exposes
   `parents: StateFlow<Parents>` from there; a composable resolves the fallback strings with
   `rememberParentNames` and passes one `ParentNames` down its tree.
+- **How many children or pets a family has is derived, never stored** (FAM-1, Aug 2026). Nothing
+  asks "one child or several", and no flag records the answer: the onboarding wizard's child and
+  pet steps are repeatable lists that collect *names*, and everything downstream reads
+  `children.size`. A stored count is a fact that goes stale the day a second child arrives or a
+  pet dies, and would then need a settings toggle to correct; a derived one cannot disagree with
+  the records. It is the same reasoning `FamilyKind` documents for reading an unanswered account
+  as "show everything". The visible consequence, and the rule for every screen that grows a
+  per-child affordance: **it appears at two, not at one.** A family with one child must see the
+  screen they saw before — a picker for a set of one is design item 8 in miniature. The wizard
+  was the last place in the app insisting on exactly one of anything (`ChildInfoScreen`,
+  `PetsScreen` and `ContactDirectory` were already plural). The calendar caught up in FAM-3:
+  `Event.forMembers` names the children and pets an event is about, and the grid has a filter
+  strip that appears at two. What it still does not do is mark an *individual chip* — see
+  **FAM-5** before adding one, because the two obvious channels are both spoken for.
+- **Who a record is about goes through `domain/family/FamilyMemberRef`** (FAM-2, Aug 2026) — one
+  file defining the stored vocabulary, like `Tombstone.kt` and `PushPayload.kt`. Children *and*
+  pets, because a vet's bill is an expense and the `Expense.childId` it replaced had nowhere to
+  put it. `Expense.forMembers` and `Budget.forMembers` are lists of it; the wire form is a JSON
+  array of the prefixed strings (`"child:abc"`, `"pet:xyz"`), never a Gson serialisation of the
+  type — R8 rewrote a Gson model's field names once already and it shipped. Three things not to
+  invert. **Naming nobody is not naming everybody:** an untagged record shows in the unfiltered
+  list and under no chip, or every chip shows the same untagged pile and the filter says nothing;
+  a budget naming members is charged only what names them back. **An unrecognised reference
+  survives a round trip** as `FamilyMemberRef.Unknown`, so an older build cannot erase a tag a
+  newer one wrote — dropping it on read is data loss, not a missing feature. And **a member is a
+  name, never a colour**: pink and blue are the parent slots, teal is a calendar friend, neutral
+  grey is the weekend, and a fifth colour channel breaks what `DayCellFills.kt` protects. The
+  `childId` columns survive on `ExpenseEntity`/`BudgetEntity`, dead and documented: dropping a
+  SQLite column needs a table rebuild, and while `MIGRATION_12_13` is one — proved row by row by
+  `CoPlanlyDatabaseMigrationTest`, *because* `app/schemas/12.json` exists for
+  `MigrationTestHelper` to build from — `app/schemas/` stops at v14 (**CQ-1**), so no such test
+  can be written for a v26 database.
+  `Event.forMembers` joined them in FAM-3 (schema 28) and adds one rule of its own: **it is not
+  `parentOwner`.** That stays a custody slot — whose *day* an event falls on does not change
+  because it is one child's dentist appointment and not the other's — and the two must never be
+  collapsed. On the wire, `data/sync/EventDocument.kt` is the one place the events format is
+  defined in both directions, so `SyncService`'s two event maps convert through it rather than
+  repeating the conversion (item 5 above).
 - Conventional Commits (`feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`).
 
 ## Architecture map
@@ -316,10 +354,11 @@ Data flow: UI → ViewModel → UseCase → Repository → Room (source of truth
     older build stays readable. Deliberately *not* changed: `Event`, `Expense`, `Budget`
     and `ChildInfo` dates, where a naive local time is often the right model — whether a
     custody handover follows the child's zone or the viewer's is an unmade product
-    decision, not an oversight. **`CustodyModelEntity.lastModifiedAt` is a fifth, and it
-    does not belong with those four**: it is not merely displayed, it decides which phone's
-    schedule survives. See the custody entry in "Known issues" below before adding to this
-    list.
+    decision, not an oversight. **`CustodyModelEntity.lastModifiedAtMillis` made the same move
+    (SEC-4, schema 29)**, and for a sharper reason than chat's: it is not merely displayed, it
+    decides which phone's schedule survives. Its wire form is the one to copy when the same
+    question comes up again — see `domain/custody/CustodyTimestamp.kt`, which explains why the
+    Firestore field kept both its name *and* its type and only changed the zone it expresses.
 14. **A delete is a tombstone, never a document removal** (CQ-3). `data/sync/Tombstone.kt` is
     the one definition: the client writes `deletedAtMillis` (epoch millis) and `deletedBy` onto
     the document with `update()` — never `set()`, which would replace the `createdByFirebaseUid`
@@ -493,24 +532,26 @@ whatever you were doing; a stale "known issue" costs more than a missing one.
   badge clears on open, and the ticks reach READ — was **deferred, not run**. Backlog item for
   the next review round. Everything else in that acceptance run passed on real devices.
 
-- **The shared custody schedule orders the two phones' writes by a naive local date-time.**
-  `CustodyModelEntity.lastModifiedAt` (and the `lastModifiedAt` field of the `custody_models`
-  document, which mirrors it) is `LocalDateTime.now()` formatted ISO — no zone, no offset.
-  `CustodyModelRepository.isNewer` parses both sides and compares them, and `mirrorIntoRoom`
-  acts on the answer: the side it judges newer is not merely kept, it is **re-pushed over the
-  other**. So for two parents 2–3 zones apart the wrong side can win *and overwrite*, where
-  before the custody sync existed a local pattern merely stayed local. The banner does fire on
-  the loser's phone (`lastModifiedBy` is the other parent), so this is silent-wrong-answer, not
-  silent-loss — but the answer can still be wrong by exactly the offset between the two zones.
-  Accepted for this round rather than fixed: the correct fix is epoch millis with a Room
-  migration, the same move `Message.sentAtMillis` made in item 13, and it drags the Firestore
-  field, a legacy-ISO read path for a co-parent on an older build, and a migration test with it
-  — a change of its own size, not a rider on the sync work. `isNewer` already degrades an
-  unparseable value on either side to "not newer", so a mixed-format transition is survivable.
-  Until then: do not add more decisions to `lastModifiedAt`, and do not "fix" it by comparing
-  the strings (they are ISO, so string order agrees with the same wrong answer) or by stamping
-  `now()` in `saveReslotted`/`archiveRejected` — those two keep the stored dates on purpose,
-  and re-dating them makes this device win every comparison forever
+- ~~**The shared custody schedule orders the two phones' writes by a naive local date-time.**~~
+  **Fixed (SEC-4, schema 29).** `CustodyModelEntity.lastModifiedAtMillis` is epoch millis and
+  `CustodyModelRepository.isNewer` is a `>` on two of them, so two parents in different zones
+  order their writes by real time. It mattered more than a displayed date: the side `isNewer`
+  judges newer is not merely kept, it is **re-pushed over the other**, so the wrong schedule
+  could win *and overwrite*.
+  **Read `domain/custody/CustodyTimestamp.kt` before touching the wire form**, because the two
+  obvious ways to carry an instant are both wrong here and the file says why. The Firestore
+  field keeps its name *and* its ISO-string type, and only the zone it expresses changed, to
+  UTC. Changing the type would leave a co-parent on an older build reading a blank — and a
+  blank compares equal to their last dismissal, so every future change would go silently
+  un-announced, which is the one failure this product must not have. Adding a numeric field
+  beside it would put a new key in `affectedKeys()`, and `firestore.rules` gates a proposal or
+  swap write with `hasOnly([...])` — the first such write from an upgraded build would be
+  denied outright. Widening those lists is not the way out: `lastModifiedAt` is absent from
+  them precisely so a swap cannot re-date the document and win every later comparison.
+  Two things that still hold: a value written by an older build carries no offset to recover,
+  so reading it as UTC is wrong by that device's offset — irreducible, and no worse than it
+  already was; and `saveReslotted`/`archiveRejected` still keep the stored dates on purpose,
+  because re-dating them makes this device win every comparison forever
   (`CustodyModelRepositoryTest` pins both).
 
 - ~~**The calendar never renders `EventUiState.Error`.**~~ **Fixed** — and this entry described

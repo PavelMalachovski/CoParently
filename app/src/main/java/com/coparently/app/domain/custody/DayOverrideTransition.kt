@@ -12,8 +12,8 @@ package com.coparently.app.domain.custody
  * transition is a real outcome the UI has to show, and a silent no-op is the invisible change
  * this whole family of features exists to remove.
  *
- * **A swap write leaves the pattern and `SharedCustody.lastModifiedAt` exactly as they were.**
- * That is not tidiness: `lastModifiedAt` is what `CustodyModelRepository.isNewer` uses to decide
+ * **A swap write leaves the pattern and `SharedCustody.lastModifiedAtMillis` exactly as they were.**
+ * That is not tidiness: `lastModifiedAtMillis` is what `CustodyModelRepository.isNewer` uses to decide
  * which phone's document survives — a comparison that then *re-pushes the winner over the loser*
  * — so re-dating the document for a swap would make this device win every future comparison.
  *

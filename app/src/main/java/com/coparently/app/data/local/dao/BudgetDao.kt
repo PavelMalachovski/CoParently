@@ -18,9 +18,6 @@ interface BudgetDao {
     @Query("SELECT * FROM budgets WHERE isActive = 1")
     fun getActiveBudgets(): Flow<List<BudgetEntity>>
 
-    @Query("SELECT * FROM budgets WHERE childId = :childId")
-    fun getBudgetsForChild(childId: String): Flow<List<BudgetEntity>>
-
     @Query("SELECT * FROM budgets WHERE id = :id")
     suspend fun getBudgetById(id: String): BudgetEntity?
 

@@ -232,15 +232,36 @@ Thirty-three strings in five locales. Remaining gap: the chat preview still rela
 composes — its title *is* the sender and its body *is* the message — but only the Cloud Function
 that saw the message can produce that type, and the rule refuses it from a client.
 
-### SEC-4 · P2 · S · `CustodyModelEntity.lastModifiedAt` is a naive local date-time
+### SEC-4 · **DONE** · The custody schedule was ordered by a naive local date-time
 
-Two phones 2–3 time zones apart can have the **wrong side win and overwrite** the shared
-custody schedule. `CLAUDE.md` documents the hazard and why it was accepted; the fix is epoch
-millis plus a Room migration, a legacy-ISO read path for co-parents on older builds, and a
-migration test — the same move `Message.sentAtMillis` already made.
+Two phones 2–3 time zones apart could have the **wrong side win and overwrite** the shared
+custody schedule: `isNewer` compared two naive `LocalDateTime`s, and the side it judged newer
+was not merely kept but re-pushed over the other. `CustodyModelEntity.lastModifiedAtMillis` is
+epoch millis (schema 29) and the comparison is a `>`.
 
-Promoted from "someday" the moment anything is exported for legal use: see **MON-4**, which
-depends on whose clock orders writes.
+The interesting half was the wire form, and `domain/custody/CustodyTimestamp.kt` exists to
+record it, because the two obvious designs are both wrong:
+
+* **Changing the field's type** would leave a co-parent on an older build reading a blank — and
+  a blank compares equal to their last dismissal, so every future change would go silently
+  un-announced. In a product whose premise is an adversarial counterparty that is the worst
+  available failure.
+* **Adding a numeric field beside it** puts a new key in `affectedKeys()`, and `firestore.rules`
+  gates a proposal or swap write with `hasOnly([...])` — the first such write from an upgraded
+  build would be denied outright. Widening those lists is not the way out either: `lastModifiedAt`
+  is absent from them precisely so a swap cannot re-date the document and win every later
+  comparison.
+
+So the field keeps its name *and* its ISO-string type, and only the zone it expresses changed, to
+UTC. Between two upgraded builds the ordering is exact; against a value written by an older build
+it is wrong by that device's offset, which is irreducible — the offset was never stored — and no
+worse than before.
+
+Not covered by an instrumented migration test, for the reason CQ-1 gives: `app/schemas/` stops at
+v14, so `MigrationTestHelper` cannot build a v28 database. The conversion itself reuses
+`wallClockToEpochMillis`, which `MIGRATION_12_13` already proves row by row.
+
+Relevant to **MON-4**, which depends on whose clock orders writes.
 
 ### SEC-5 · P3 · S · `androidx.security:security-crypto` is on an alpha
 
@@ -884,7 +905,130 @@ attachments. Re-baseline before planning MVP 3, or the plan describes work alrea
 
 ---
 
-## 6. Done — so it is not re-litigated
+## 6. [FAM] More than one child, more than one pet
+
+The app is architecturally single-child in the place that matters most — the calendar — and half
+built for several everywhere else. Found in August 2026 by asking a question nobody had asked:
+what happens when a pair is raising two children, or two children and a dog.
+
+Four facts, measured rather than assumed:
+
+* `Event` carries **no reference to a child at all** — not in the domain model, not in
+  `EventEntity`, not among the 25 fields `EventRepositoryImpl.toFirestoreMap()` writes. With two
+  children nothing can say whose Thursday training this is.
+* `Expense.childId` and `Budget.childId` exist through the whole stack — Room columns, Firestore
+  fields, `getExpensesForChild`/`getBudgetsForChild` DAO queries — and **nothing writes them and
+  nothing reads them.** `AddExpenseScreen` and `BudgetScreen` never pass a child, and the two
+  query methods have zero callers, so every row production has ever written holds `null`. This
+  is the `splitBetween` pattern exactly: a field that looks implemented and never was. The one
+  mercy is that a migration costs nothing, because there is no data to convert.
+* `custody_models/{pairId}` is **one schedule per pair**, so siblings on different arrangements
+  cannot be described, and Home's handover hero is written in the singular to match.
+* A pet cannot be the subject of anything — not an event, and not even an expense, because a
+  single `childId` has nowhere to put a vet's bill.
+
+What already works, and should not be rebuilt: `ChildInfoScreen` and `PetsScreen` are genuine
+lists, and `ContactDirectory` already groups by child *and* by pet.
+
+### FAM-1 · **DONE** · The wizard could only ever create one child and one pet
+
+`OnboardingViewModel` held the child flat — `childName`, `childDateOfBirth`, `childAllergies`,
+`childMedicalProfile` — and the pet the same way, with a single `childInfoId`/`petId` apiece and
+a `prefill` that read `.firstOrNull()`. A family with two children could not say so during
+setup: they had to finish the questionnaire, then find the child list. The relatives step was
+worse than incomplete — emergency contacts were one flat list written onto whichever child was
+saved first, so with two children they were silently mis-filed.
+
+Both steps are now repeatable lists of drafts, and the relatives step asks which child a contact
+belongs to once there is more than one to choose between. **Nobody is asked how many children
+they have.** The steps collect names and the count falls out of them — see the rule in CLAUDE.md
+for why a stored "one or several" is the wrong shape of answer. A family with one child sees the
+form they saw before: no heading, no remove action, nothing new but the Add button that makes a
+second reachable.
+
+Removing a draft deletes its record when one was written, through the same
+`ChildInfoRepository.deleteChildInfo` the child editor's own Delete uses — which means it rides
+the missing-tombstone defect recorded in CLAUDE.md's known issues. Not a new caller of a broken
+path so much as a second one; fixing it there fixes it here.
+
+### FAM-2 · **DONE** · One reference for "who this is about", and expenses that use it
+
+`Expense.childId` and `Budget.childId` become `forMembers`, a list of a new
+`domain/family/FamilyMemberRef` — the same shape as `data/sync/Tombstone.kt` and
+`data/remote/firebase/PushPayload.kt`: one file defining a wire vocabulary, typed in Kotlin
+(`Child(id)` / `Pet(id)`) and one string on the wire (`"child:abc"` / `"pet:xyz"`).
+
+The prefix convention is not invented here — `ContactDirectory` already writes
+`childId = "pet:" + pet.id` by hand. This gives that a name and a single definition.
+
+One reference covering both is what makes a vet's bill expressible at all, which a
+child-only field never could. Then: the picker on `AddExpenseScreen` and `BudgetScreen`, a
+filter on the expenses screen, and per-member balances. Room v26 → v27; no data is lost because
+there is none.
+
+The `childId` columns stay on `ExpenseEntity`/`BudgetEntity`, dead and documented. Dropping a
+SQLite column needs a table rebuild, and `MIGRATION_12_13` is one — proved row by row by
+`CoPlanlyDatabaseMigrationTest`, but *only* because `app/schemas/12.json` exists for
+`MigrationTestHelper` to build a v12 database from. `app/schemas/` stops at v14 (CQ-1), so no
+such test can be written for a v26 database. Delete the columns when CQ-1 lands.
+
+Two rules came out of building it, and both have an obvious wrong answer one keystroke away:
+
+* **Naming nobody is not naming everybody.** An untagged expense appears in the unfiltered month
+  and under no chip. The alternative puts the family's whole grocery bill under every child's
+  chip, and every chip then shows the same list. The same rule scopes a budget: one that names
+  members is charged only what names them back.
+* **An unrecognised reference survives a round trip.** `FamilyMemberRef.Unknown` keeps the stored
+  text verbatim, so an older build cannot erase a tag a newer one wrote.
+
+Still open here: the calendar (**FAM-3**), which is where a family with two children actually
+feels the difference.
+
+### FAM-3 · **DONE** · Events know who they are about
+
+`Event.forMembers`, empty meaning "the whole family" — the same reading `FamilyKind` gives an
+unanswered account, and the reason an upgrade hides nothing. Room migration, the field in
+`toFirestoreMap()` **and** the matching `SyncService` map (CLAUDE.md item 5), and a chip strip
+in the calendar header that appears only at two or more.
+
+Two constraints that are not negotiable:
+
+* **A child is initials or an avatar, never a colour.** Pink and blue are the parent slots, teal
+  is a calendar friend, neutral grey is the weekend. A fifth colour channel breaks exactly what
+  `DayCellFills` was written to protect.
+* **`firestore.rules` needs no change** — the `events` block validates with
+  `keys().hasAll([...])`, presence-based, so a new key passes. Verified, not assumed.
+
+Known and accepted: a co-parent on an older build who edits an event drops the tag, because
+their `toFirestoreMap()` does not know the field. In the other direction nothing is lost — a
+reference a *newer* build wrote survives an edit made here as `FamilyMemberRef.Unknown`.
+
+**Left undone deliberately: the event chip carries no member marker.** Filtering answers "what
+does Anya's week look like" and the preview sheet names who an event is about, but in an
+unfiltered day view the chips still do not say whose training Thursday is. Chips are single-line
+with ellipsis, so anything prefixed eats the title, and the one channel that would not — colour —
+is spent three times over already. Worth an owner's eye on a real device rather than a treatment
+invented blind. **FAM-5.**
+
+### FAM-5 · P2 · S · The event chip does not say who it is about
+
+Only reachable in an unfiltered day or week view, and only for a family with two or more members.
+The constraints are the interesting part: `softWrap = false` plus ellipsis means a prefix costs
+title, and pink/blue/teal/grey are taken by the two parent slots, a calendar friend and the
+weekend. An initial-letter avatar at chip height is the obvious candidate; so is doing nothing
+and leaving the filter to answer it.
+
+### FAM-4 · P2 · L · Custody per child
+
+One schedule per pair stays the default; a per-child schedule is an override. It drags Home's
+handover hero (singular today), the calendar banners and `getCustody` with it — and **SEC-4
+first**: `lastModifiedAt` is a naive local date-time that already decides which phone's schedule
+survives, and multiplying the documents multiplies that defect before fixing it.
+
+Genuinely rarer than FAM-2 and FAM-3 — a teenager who negotiated their own arrangement, an
+infant who stays with one parent — which is why it is last rather than never.
+
+## 7. Done — so it is not re-litigated
 
 Closed in PR #68 and #69, listed only to stop these reappearing as "todo":
 
@@ -907,7 +1051,7 @@ Closed in PR #68 and #69, listed only to stop these reappearing as "todo":
 
 ---
 
-## 7. The order to actually do it in
+## 8. The order to actually do it in
 
 Not a wish-list ordering — a dependency ordering. Each block assumes the one above it.
 

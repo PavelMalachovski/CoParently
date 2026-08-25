@@ -13,7 +13,7 @@ import com.coparently.app.domain.model.CustodyModel
  * remove.
  *
  * **A proposal write leaves the pattern, [SharedCustody.lastModifiedBy] and
- * [SharedCustody.lastModifiedAt] exactly as they were.** That is not tidiness: `lastModifiedBy`
+ * [SharedCustody.lastModifiedAtMillis] exactly as they were.** That is not tidiness: `lastModifiedBy`
  * is what [CustodyChangeAnnouncement] compares against the reader's own uid to ignore the echo
  * of its own write, so a proposal that stamped the proposer would make the co-parent's
  * not-yet-dismissed pattern change read as the proposer's own echo and swallow its banner.
@@ -75,14 +75,23 @@ object CustodyProposalTransition {
      * [SharedCustody.createdAt] is preserved, so agreeing a change does not re-date the
      * arrangement itself — the same rule `CustodyModelRepository` already follows when updating
      * the pattern directly.
+     *
+     * Two stamps, from one moment: [atMillis] dates the *document*, which is what orders two
+     * phones' writes, while [atIso] records when the decision was made for the proposer to read
+     * back. They are different questions and only the first has to survive a change of zone.
      */
-    fun accept(current: SharedCustody, byUid: String, atIso: String): Result<SharedCustody> =
+    fun accept(
+        current: SharedCustody,
+        byUid: String,
+        atIso: String,
+        atMillis: Long
+    ): Result<SharedCustody> =
         current.pendingForDecisionBy(byUid).map { pending ->
             current.copy(
                 model = pending.model,
                 repeatYearly = pending.repeatYearly,
                 lastModifiedBy = byUid,
-                lastModifiedAt = atIso,
+                lastModifiedAtMillis = atMillis,
                 proposal = null,
                 lastDecision = CustodyDecision(
                     outcome = CustodyDecisionOutcome.ACCEPTED,

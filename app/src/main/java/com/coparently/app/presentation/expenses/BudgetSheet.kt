@@ -28,9 +28,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.coparently.app.R
+import com.coparently.app.domain.family.FamilyMemberRef
 import com.coparently.app.domain.model.Budget
 import com.coparently.app.domain.model.ExpenseCategory
 import com.coparently.app.presentation.common.ConfirmationDialog
+import com.coparently.app.presentation.common.FamilyMember
+import com.coparently.app.presentation.common.FamilyMemberChips
+import com.coparently.app.presentation.common.toggling
 
 /**
  * Bottom sheet for creating **or editing** a budget: a category and a monthly limit.
@@ -53,13 +57,22 @@ import com.coparently.app.presentation.common.ConfirmationDialog
 @Composable
 fun BudgetSheet(
     onDismiss: () -> Unit,
-    onSave: (category: ExpenseCategory, monthlyLimit: Double) -> Unit,
+    onSave: (
+        category: ExpenseCategory,
+        monthlyLimit: Double,
+        forMembers: List<FamilyMemberRef>
+    ) -> Unit,
+    members: List<FamilyMember> = emptyList(),
     existing: Budget? = null,
     onDelete: () -> Unit = {}
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var category by remember { mutableStateOf(existing?.category ?: ExpenseCategory.EDUCATION) }
     var limit by remember { mutableStateOf(existing?.monthlyLimit?.asLimitText().orEmpty()) }
+    // Empty is the family's budget, charged everything in its category — what every budget was
+    // before this could be picked. The chips render nothing below two members, so a family with
+    // one child is never asked a question with one answer.
+    var forMembers by remember { mutableStateOf(existing?.forMembers ?: emptyList()) }
     var categoryExpanded by remember { mutableStateOf(false) }
     var confirmingDelete by remember { mutableStateOf(false) }
 
@@ -151,8 +164,15 @@ fun BudgetSheet(
                 modifier = Modifier.fillMaxWidth()
             )
 
+            FamilyMemberChips(
+                members = members,
+                selected = forMembers,
+                onToggle = { forMembers = forMembers.toggling(it) },
+                label = R.string.budget_for_members
+            )
+
             Button(
-                onClick = { limitValue?.let { onSave(category, it) } },
+                onClick = { limitValue?.let { onSave(category, it, forMembers) } },
                 enabled = isValid,
                 modifier = Modifier.fillMaxWidth()
             ) {
