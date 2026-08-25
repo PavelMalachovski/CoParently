@@ -10,9 +10,14 @@ import androidx.compose.ui.graphics.luminance
  * Parent identity colours, resolved for the theme that is actually being painted.
  *
  * A colour identifies a *parent*, not a role: the app no longer shows the words Mom and Dad,
- * and `"mom"`/`"dad"` survive only as slot identifiers assigned by pairing. Slot 1 is pink and
- * slot 2 is blue. Which person holds which slot is decided in `functions/index.js`
- * (`assignSlots`) and shown by name everywhere else — see `presentation/common/ParentLabels.kt`.
+ * and `"mom"`/`"dad"` survive only as slot identifiers assigned by pairing. Which person holds
+ * which slot is decided in `functions/index.js` (`assignSlots`) and shown by name everywhere
+ * else — see `presentation/common/ParentLabels.kt`.
+ *
+ * **Which colour a slot draws in is no longer fixed.** Each parent chooses their own
+ * ([ParentColorChoice]), and the family's two answers arrive here as a [ParentPalette]. The
+ * default is the pink and blue the app has always used, so a call site that does not have the
+ * parents to hand — and a family where nobody has chosen — looks exactly as it did.
  *
  * `CoPlanlyColors.MomPink`/`DadBlue` are **fill-only** — neither clears 4.5:1 as a foreground
  * in either theme — so any screen that wants to write a parent's name in pink has to reach for
@@ -39,11 +44,13 @@ object ParentColors {
      * The parent's identity hue at full strength, for **fills only** — dots, bars, borders,
      * custody tints. Never use as a text colour; use [text] for that.
      *
-     * @param parent `"mom"` or `"dad"`; anything else falls back to mom, matching the
-     *   existing `parentColor` helpers this replaces.
+     * @param parent `"mom"` or `"dad"`; anything else falls back to slot 1.
+     * @param palette The family's two chosen colours. Defaults to pink and blue, which is
+     *   what a screen that has not resolved the parents draws — unchanged from before anyone
+     *   could choose.
      */
-    fun fill(parent: String): Color =
-        if (parent == "dad") CoPlanlyColors.DadBlue else CoPlanlyColors.MomPink
+    fun fill(parent: String, palette: ParentPalette = ParentPalette.Default): Color =
+        palette.of(parent).fill
 
     /**
      * The parent's identity hue as a **text-grade** foreground for the current theme.
@@ -52,11 +59,8 @@ object ParentColors {
      */
     @Composable
     @ReadOnlyComposable
-    fun text(parent: String): Color = if (parent == "dad") {
-        if (isDarkTheme) CoPlanlyColors.DadBlueLight else CoPlanlyColors.DadBlueDark
-    } else {
-        if (isDarkTheme) CoPlanlyColors.MomPinkLight else CoPlanlyColors.MomPinkDark
-    }
+    fun text(parent: String, palette: ParentPalette = ParentPalette.Default): Color =
+        palette.of(parent).let { if (isDarkTheme) it.light else it.dark }
 
     /**
      * A soft container tint in the parent's hue, for chips and hero backgrounds that carry
@@ -66,6 +70,9 @@ object ParentColors {
      * @param alpha Tint strength; the default matches the calendar's custody wash so a chip on
      *   the dashboard and a day cell in the grid read as the same system.
      */
-    fun container(parent: String, alpha: Float = CoPlanlyColors.CUSTODY_TINT_ALPHA): Color =
-        fill(parent).copy(alpha = alpha)
+    fun container(
+        parent: String,
+        alpha: Float = CoPlanlyColors.CUSTODY_TINT_ALPHA,
+        palette: ParentPalette = ParentPalette.Default
+    ): Color = fill(parent, palette).copy(alpha = alpha)
 }

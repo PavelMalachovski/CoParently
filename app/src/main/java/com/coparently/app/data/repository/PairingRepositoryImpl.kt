@@ -338,7 +338,11 @@ class PairingRepositoryImpl @Inject constructor(
             // Their answer to "children, pets or both". Absent on a build that never wrote it,
             // which reads as "contributes nothing" rather than "everything" — one parent's real
             // answer must not be widened by the other's silence.
-            caresFor = FamilyKind.fromStored(data.getString("caresFor"))
+            caresFor = FamilyKind.fromStored(data.getString("caresFor")),
+            // The colour they chose for themselves. Blank normalizes to null for the same
+            // reason the photo does: the legacy full-profile write stores "" for a missing
+            // value, and "" must read as "has not chosen" rather than as an unknown colour.
+            colorCode = data.getString("colorCode")?.takeIf { it.isNotBlank() }
         )
     }
 

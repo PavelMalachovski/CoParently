@@ -27,7 +27,13 @@ data class PartnerSummary(
      * never written it. Unioned with this parent's answer so one side saying "children" is
      * enough for the child records to appear on both.
      */
-    val caresFor: Set<FamilyKind> = emptySet()
+    val caresFor: Set<FamilyKind> = emptySet(),
+    /**
+     * The colour the co-parent chose for themselves, or null when their build has never
+     * written one. Null draws the default for their slot, which is what the app looked like
+     * before anyone could choose.
+     */
+    val colorCode: String? = null
 )
 
 /**

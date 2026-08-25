@@ -22,17 +22,28 @@ import com.coparently.app.domain.model.User
  *   to the co-parent. Null for an email/password account, for a Google account with no picture,
  *   and for a co-parent whose phone has not yet run a build that stores one, so the
  *   initial-letter fallback in `AccountAvatar` stays load-bearing rather than decorative.
+ * @property colorCode The colour this parent chose for themselves, or null when they have not.
+ *   Null is a real answer and not a gap: it means "draw the default for their slot", which is
+ *   what every account looked like before anyone could choose. See
+ *   [com.coparently.app.presentation.theme.ParentColorChoice].
  */
 data class NamedParent(
     val uid: String,
     val slot: String,
     val name: String,
-    val photoUrl: String? = null
+    val photoUrl: String? = null,
+    val colorCode: String? = null
 )
 
 /** This device's own parent, projected for labelling. */
 fun User.asNamedParent(): NamedParent =
-    NamedParent(uid = id, slot = role, name = name, photoUrl = profilePhotoUrl)
+    NamedParent(
+        uid = id,
+        slot = role,
+        name = name,
+        photoUrl = profilePhotoUrl,
+        colorCode = colorCode
+    )
 
 /**
  * The co-parent, projected for labelling — or null when their slot is not known.
@@ -43,4 +54,12 @@ fun User.asNamedParent(): NamedParent =
  * so rather than assuming they hold whichever slot is left over.
  */
 fun PartnerSummary.asNamedParent(): NamedParent? =
-    role?.let { NamedParent(uid = id, slot = it, name = name, photoUrl = photoUrl) }
+    role?.let {
+        NamedParent(
+            uid = id,
+            slot = it,
+            name = name,
+            photoUrl = photoUrl,
+            colorCode = colorCode
+        )
+    }
