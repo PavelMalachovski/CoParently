@@ -157,15 +157,33 @@ cd firestore-tests && npm test              # firestore.rules against the local 
   degrades gracefully if it is missing (see the conditional apply in `app/build.gradle.kts`).
 - **GitHub CI runs on every pull request, and on every push to `main`** — a push to a
   feature branch with no PR open is not built (`.github/workflows/ci.yml`, added
-  August 2026 — this line used to say there was none). Three jobs: Gradle
-  (`assembleDebug`, `testDebugUnitTest`, `lint`, `detekt`, `assembleRelease`), Cloud
-  Functions, and the Firestore rules suite against the emulator. Two caveats, both
+  August 2026 — this line used to say there was none). Six jobs: `changes` (a cheap gate,
+  below), three Android ones — `build-test` (`assembleDebug` + `testDebugUnitTest` in a
+  single invocation), `static` (`lint`, then `detekt`), `release` (`assembleRelease`, where
+  R8 runs) — plus Cloud Functions and the Firestore rules suite against the emulator. They
+  run **in parallel**; the Android three were one sequential job until the August 2026 CI
+  pass, which is why a run took 13:22 for about 7 minutes of critical path. Two caveats, both
   deliberate and both tracked in `docs/BACKLOG.md` (**CQ-12**, **CQ-1**): **detekt reports but does not gate**
   (`continue-on-error`) until its baseline is regenerated locally, and there is **no
   instrumented migration job**, because `app/schemas/` stops at v14 while the database is at
   v25. Still run the build locally before pushing — CI is a backstop, not a substitute.
   After switching branches, prefer `clean` — stale Hilt/kapt stubs from another branch cause
   errors like "Could not find class file for '…Application'".
+- **A docs/functions/rules-only pull request skips the Android jobs.** The `changes` job
+  diffs against the base and sets one output; the three Android jobs are `if:`-gated on it.
+  Two things not to get wrong. The ignore list is deliberately conservative — a path wrongly
+  *on* it silently stops building real changes, which is far worse than a path wrongly off it
+  costing a few free runner minutes — and `.github/workflows/**` is deliberately **not** on
+  it, because editing the workflow is exactly when you want the build it describes to run. A
+  gated-out job reports as *skipped*, which branch protection counts as passing; nothing is a
+  required check today, so this is safe, but marking one required later means a docs-only PR
+  merges on a skip rather than a build.
+- **No Gradle invocation in CI passes `--no-daemon`** — `gradle/actions/setup-gradle` manages
+  the daemon itself and asks you not to, and without one every invocation re-pays JVM and
+  Kotlin-compiler startup. `org.gradle.caching=true` and a 4 GB heap live in
+  `gradle.properties` and apply locally too; the build cache is local-only (there is no
+  remote cache), so in CI it pays off on a re-run of the same branch, where `setup-gradle`'s
+  per-job cache of `~/.gradle/caches` carries the previous run's task outputs forward.
 
 ## Hard project rules
 
