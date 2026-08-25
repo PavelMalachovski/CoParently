@@ -25,6 +25,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -43,7 +44,7 @@ class SettingsViewModel @Inject constructor(
     private val preferencesRepository: PreferencesRepository,
     private val analyticsManager: AnalyticsManager,
     signedInAccountSource: SignedInAccountSource,
-    familyKindSource: FamilyKindSource,
+    private val familyKindSource: FamilyKindSource,
     private val familySettingsRepository: FamilySettingsRepository
 ) : ViewModel() {
 
@@ -88,16 +89,51 @@ class SettingsViewModel @Inject constructor(
         )
 
     /**
+     * What happened to a family answer, for the one case each where saying nothing would be a lie.
+     */
+    enum class CaresForOutcome {
+        /**
+         * Saved, but a kind this parent removed stays on screen because the co-parent keeps it.
+         * The union is what the app shows; unticking here changes only this parent's record.
+         */
+        KEPT_BY_CO_PARENT,
+
+        /** Not saved at all: this account has no local profile row to write onto. */
+        NOT_SAVED
+    }
+
+    private val _caresForOutcome = MutableSharedFlow<CaresForOutcome>(extraBufferCapacity = 1)
+
+    /** Raised when a family answer needs a word said about it. See [CaresForOutcome]. */
+    val caresForOutcome: SharedFlow<CaresForOutcome> = _caresForOutcome.asSharedFlow()
+
+    /**
      * Records a new answer onto this parent's own record.
      *
      * Refuses an empty set: with neither kind selected the app would have nothing to offer, and
      * a family that co-parents nothing is not a state this product has.
+     *
+     * Both non-obvious outcomes are announced rather than swallowed. A missing profile row made
+     * this a silent no-op that read as "the setting resets itself"; and unticking a kind the
+     * co-parent still holds changes this row but nothing on screen, because what the app draws is
+     * the union — a control that appears to do nothing is what CLAUDE.md's design item 8 forbids.
      */
     fun setCaresFor(kinds: Set<FamilyKind>) {
         if (kinds.isEmpty()) return
         viewModelScope.launch {
-            val fresh = userRepository.getCurrentUser() ?: return@launch
+            val fresh = userRepository.getCurrentUser()
+            if (fresh == null) {
+                _caresForOutcome.tryEmit(CaresForOutcome.NOT_SAVED)
+                return@launch
+            }
             userRepository.updateUser(fresh.copy(caresFor = kinds))
+            // Read at save time, off the shared upstream, rather than from a `WhileSubscribed`
+            // `.value` — invariant 17. `first()` is one emission of a flow that already has a
+            // subscriber on this screen, so it costs no listener.
+            val theirs = familyKindSource.observeTheirs().first()
+            if ((theirs - kinds).isNotEmpty()) {
+                _caresForOutcome.tryEmit(CaresForOutcome.KEPT_BY_CO_PARENT)
+            }
         }
     }
 

@@ -28,6 +28,17 @@ enum class FamilyKind {
         val ALL: Set<FamilyKind> = entries.toSet()
 
         /**
+         * What a parent who has never answered is **offered** when they are asked.
+         *
+         * Not [ALL], and emphatically not the co-parent's answer. This seeds a control whose
+         * Save writes this parent's own record, so it must not put anybody else's words in
+         * their mouth — seeding it from the union is how the Settings dialog came to copy the
+         * co-parent's answer onto yours. Children, matching what the first-run wizard opens
+         * pre-answered with; a parent who has pets instead simply changes it.
+         */
+        val DEFAULT: Set<FamilyKind> = setOf(CHILDREN)
+
+        /**
          * Reads a stored value back.
          *
          * @param stored The joined constant names, or null/blank for an unanswered account.

@@ -236,6 +236,22 @@ fun SettingsScreen(
         }
     }
 
+    // Both non-obvious outcomes of the family answer. Unticking a kind the co-parent still keeps
+    // saves onto this parent's record and changes nothing on screen, because what the app draws
+    // is the union of the two answers — silence there reads as a control that does not work.
+    val familyKeptByCoParent = stringResource(R.string.settings_family_kind_kept_by_co_parent)
+    val familyNotSaved = stringResource(R.string.settings_family_kind_not_saved)
+    LaunchedEffect(Unit) {
+        settingsViewModel.caresForOutcome.collect { outcome ->
+            snackbarHostState.showSnackbar(
+                when (outcome) {
+                    SettingsViewModel.CaresForOutcome.KEPT_BY_CO_PARENT -> familyKeptByCoParent
+                    SettingsViewModel.CaresForOutcome.NOT_SAVED -> familyNotSaved
+                }
+            )
+        }
+    }
+
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {

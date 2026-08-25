@@ -52,6 +52,8 @@
     <string name="settings_family_kind_both">%1$s и %2$s</string>
     <string name="settings_family_kind_save">Сохранить</string>
     <string name="settings_family_kind_cancel">Отмена</string>
+    <string name="settings_family_kind_kept_by_co_parent">Сохранено. Убранный вами раздел остаётся видимым, потому что его сохраняет второй родитель.</string>
+    <string name="settings_family_kind_not_saved">Не удалось сохранить — профиль ещё не загрузился. Попробуйте через мгновение.</string>
     <string name="settings_split_ratio_title">Деление расходов</string>
     <string name="settings_split_ratio_value">%1$d / %2$d</string>
     <string name="settings_split_ratio_hint">Действует для расходов, внесённых с этого момента. Уже внесённые сохранят своё деление.</string>

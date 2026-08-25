@@ -35,8 +35,11 @@ import javax.inject.Inject
  *
  * Children rather than nothing, so the step always has something to move on with and the very
  * first screen of the app is not a gate. A parent who has pets instead simply changes it.
+ *
+ * One definition, shared with the Settings dialog's seed: both are "what an unanswered parent is
+ * offered", and the two drifting apart is how one of them ends up offering the co-parent's answer.
  */
-private val DEFAULT_CARES_FOR = setOf(FamilyKind.CHILDREN)
+private val DEFAULT_CARES_FOR = FamilyKind.DEFAULT
 
 /** Half each, which is what a family splits by until they agree otherwise. */
 private const val EVEN_SPLIT_PERCENT = 50
