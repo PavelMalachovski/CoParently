@@ -579,6 +579,25 @@ object DatabaseMigrations {
     }
 
     /**
+     * v27 -> v28: an event can name the children and pets it is about.
+     *
+     * One additive column, and nothing to convert: unlike `expenses` and `budgets`, the events
+     * table never had a child field at all. `[]` on every existing row means "the whole family",
+     * which is what every event created so far is.
+     *
+     * Not the same question as `parentOwner`, which stays exactly what it was: a custody slot.
+     * Whose day an event falls on does not change because it is one child's dentist appointment
+     * and not the other's.
+     */
+    val MIGRATION_27_28 = object : Migration(27, 28) {
+        override fun migrate(database: SupportSQLiteDatabase) {
+            database.execSQL(
+                "ALTER TABLE events ADD COLUMN forMembersJson TEXT NOT NULL DEFAULT '[]'"
+            )
+        }
+    }
+
+    /**
      * List of all migrations in order.
      */
     val ALL_MIGRATIONS = arrayOf(
@@ -603,6 +622,7 @@ object DatabaseMigrations {
         MIGRATION_23_24,
         MIGRATION_24_25,
         MIGRATION_25_26,
-        MIGRATION_26_27
+        MIGRATION_26_27,
+        MIGRATION_27_28
     )
 }

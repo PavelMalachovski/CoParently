@@ -1,6 +1,7 @@
 package com.coparently.app.domain.model
 
 import com.coparently.app.domain.events.EventAcceptance
+import com.coparently.app.domain.family.FamilyMemberRef
 import java.time.LocalDateTime
 
 /**
@@ -39,6 +40,11 @@ import java.time.LocalDateTime
  * expectation and not an obligation the app enforces: nothing blocks saving and nothing chases
  * the other parent. Distinct from [acceptance], which asks the co-parent a question they must
  * answer before the event counts at all — this one only says what the event means.
+ * @property forMembers The children and pets this event is about. Empty means the whole family,
+ * which is what every event created before the reference type existed is — see [FamilyMemberRef].
+ * Deliberately a different question from [parentOwner]: that is a custody slot, and whose *day*
+ * an event falls on does not change because it is one child's dentist appointment and not the
+ * other's.
  */
 data class Event(
     val id: String,
@@ -67,6 +73,7 @@ data class Event(
     val acceptedBy: String? = null,
     val acceptedAt: LocalDateTime? = null,
     val isImportant: Boolean = false,
+    val forMembers: List<FamilyMemberRef> = emptyList(),
     /**
      * The UID of the calendar friend expected at this event, or null when none is.
      *

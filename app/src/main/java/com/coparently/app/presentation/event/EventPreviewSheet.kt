@@ -16,6 +16,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Schedule
@@ -43,6 +44,7 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.coparently.app.R
 import com.coparently.app.domain.model.Event
+import com.coparently.app.presentation.common.FamilyMember
 import com.coparently.app.presentation.common.FullScreenImageDialog
 import com.coparently.app.presentation.common.ParentNames
 import com.coparently.app.presentation.theme.CoPlanlyColors
@@ -54,6 +56,7 @@ import java.time.format.DateTimeFormatter
  *
  * @param event Event (or expanded occurrence) to preview
  * @param parentNames Resolves a slot to that parent's name
+ * @param members The family's children and pets, for naming who the event is about
  * @param onEdit Open the full editor for this event
  * @param onDelete Delete the event
  * @param onDismiss Close the sheet without action
@@ -64,6 +67,7 @@ import java.time.format.DateTimeFormatter
 fun EventPreviewSheet(
     event: Event,
     parentNames: ParentNames,
+    members: List<FamilyMember> = emptyList(),
     onEdit: () -> Unit,
     onDelete: () -> Unit,
     onDismiss: () -> Unit
@@ -118,6 +122,26 @@ fun EventPreviewSheet(
 
             PreviewRow(icon = Icons.Default.Person) {
                 Text(text = parentLabel, style = MaterialTheme.typography.bodyMedium)
+            }
+
+            // Who the event is about, named rather than coloured — the parent slot above already
+            // owns the one colour this sheet spends. An event that names nobody is the whole
+            // family's and gets no row at all, rather than a row saying "everyone", which would
+            // add a line to every event in the app to state the default.
+            //
+            // Resolved against the family's current records, so a reference this build does not
+            // understand, or one whose record is gone, is simply not named. It stays on the
+            // event either way — see `FamilyMemberRef.Unknown`.
+            val memberNames = event.forMembers.mapNotNull { ref ->
+                members.firstOrNull { it.ref == ref }?.name
+            }
+            if (memberNames.isNotEmpty()) {
+                PreviewRow(icon = Icons.Default.Groups) {
+                    Text(
+                        text = memberNames.joinToString(", "),
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
             }
 
             event.description?.takeIf { it.isNotBlank() }?.let { description ->

@@ -60,6 +60,7 @@ import com.coparently.app.R
 import com.coparently.app.data.sync.SyncWorker
 import com.coparently.app.domain.custody.CustodyResolver
 import com.coparently.app.domain.custody.DaySwapInbox
+import com.coparently.app.domain.family.FamilyMemberRef
 import com.coparently.app.domain.holidays.CzechHolidays
 import com.coparently.app.domain.holidays.Holiday
 import com.coparently.app.domain.model.Event
@@ -68,8 +69,10 @@ import com.coparently.app.presentation.calendar.components.ChangeRequestBanner
 import com.coparently.app.presentation.calendar.components.CustodyChangedBanner
 import com.coparently.app.presentation.calendar.components.DaySwapSheet
 import com.coparently.app.presentation.calendar.components.EventTypeFilterSheet
+import com.coparently.app.presentation.common.FamilyMemberChips
 import com.coparently.app.presentation.common.rememberParentNames
 import com.coparently.app.presentation.common.rememberToday
+import com.coparently.app.presentation.common.toggling
 import com.coparently.app.presentation.event.EventUiState
 import com.coparently.app.presentation.event.EventViewModel
 import com.coparently.app.presentation.theme.dimensions
@@ -275,6 +278,18 @@ fun CalendarScreen(
 
     // Event type filter sheet state
     var showTypeFilters by remember { mutableStateOf(false) }
+
+    // Who the grid is narrowed to. Screen state rather than ViewModel state, like the parent and
+    // type filters beside it: it is a way of looking at this month, not a fact about the family.
+    val familyMembers by eventViewModel.familyMembers.collectAsState()
+    var memberFilter by remember { mutableStateOf(emptyList<FamilyMemberRef>()) }
+    // A child removed while their chip was selected must not leave the grid filtered to somebody
+    // with no chip left to tap. Derived, so the selection heals itself — the same reasoning
+    // `ExpenseViewModel.memberFilter` documents.
+    val activeMemberFilter = remember(memberFilter, familyMembers) {
+        val known = familyMembers.map { it.ref }.toSet()
+        memberFilter.filter { it in known }
+    }
     val typeFilterSheetState = rememberModalBottomSheetState()
 
     // Snackbar state for undo functionality
@@ -345,9 +360,16 @@ fun CalendarScreen(
             .toSet()
     }
 
-    // Events filtered by parent view and hidden event types
-    val filteredEvents = remember(events, parentFilter, hiddenEventTypes) {
+    // Events filtered by parent view, hidden event types, and who they are about
+    val filteredEvents = remember(events, parentFilter, hiddenEventTypes, activeMemberFilter) {
         events
+            // An event that names nobody is the whole family's and shows only in the unfiltered
+            // grid. Reading "names nobody" as "names everybody" would leave every chip showing
+            // the same month — see `FamilyMemberRef.names`.
+            .filter { event ->
+                activeMemberFilter.isEmpty() ||
+                    event.forMembers.any { it in activeMemberFilter }
+            }
             .filter { event ->
                 when (parentFilter) {
                     ParentFilter.BOTH -> true
@@ -661,6 +683,21 @@ fun CalendarScreen(
                     )
                 }
 
+                // Renders nothing below two members, so a family with one child sees the grid
+                // they always saw. Placed with the banners rather than in the Filters sheet: the
+                // question "what does Anya's week look like" is asked at a glance, and the
+                // Expenses screen answers the same question the same way.
+                FamilyMemberChips(
+                    members = familyMembers,
+                    selected = activeMemberFilter,
+                    onToggle = { memberFilter = activeMemberFilter.toggling(it) },
+                    label = R.string.calendar_filter_members,
+                    modifier = Modifier.padding(
+                        horizontal = dims.paddingMedium,
+                        vertical = dims.paddingSmall / 2
+                    )
+                )
+
                 // While a swap selection is open, the grid needs a way out and a way to commit —
                 // predictive back is on, so a `BackHandler` clears it too. Shown only in MONTH:
                 // week and day views draw no swap markers at all, so a selection made there would
@@ -830,6 +867,7 @@ fun CalendarScreen(
             com.coparently.app.presentation.event.EventPreviewSheet(
                 event = previewEvent,
                 parentNames = parentNames,
+                members = familyMembers,
                 onEdit = {
                     previewEventId = null
                     onEventClick(eventId)

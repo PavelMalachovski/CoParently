@@ -15,6 +15,7 @@ import com.coparently.app.domain.activity.ActivityKind
 import com.coparently.app.domain.events.CalendarVisibility
 import com.coparently.app.domain.events.EventAcceptance
 import com.coparently.app.domain.events.EventAcceptanceTransition
+import com.coparently.app.domain.family.FamilyMemberRef
 import com.coparently.app.domain.model.Event
 import com.coparently.app.domain.repository.EventRepository
 import com.google.gson.Gson
@@ -395,6 +396,10 @@ class EventRepositoryImpl @Inject constructor(
             "acceptedAt" to (acceptedAt?.format(dateFormatter) ?: ""),
             "isImportant" to isImportant,
             "friendParticipates" to (friendParticipates ?: ""),
+            // Who the event is about, as prefixed strings. An empty array is "the whole family",
+            // never an absent key: the read side distinguishes neither, but a document whose
+            // fields are iterated should not have a hole where a schema field belongs.
+            "forMembers" to FamilyMemberRef.store(forMembers),
             // Round-tripped, not dropped: omitting it here meant the download half of a full
             // sync REPLACEd the creator's own row with a map that had no reminder, wiping the
             // value and (on the next update) cancelling the scheduled WorkManager reminder.
@@ -439,7 +444,12 @@ class EventRepositoryImpl @Inject constructor(
             acceptedBy = acceptedBy,
             acceptedAt = acceptedAt,
             isImportant = isImportant,
-            friendParticipates = friendParticipates
+            friendParticipates = friendParticipates,
+            forMembers = FamilyMemberRef.parse(
+                runCatching {
+                    gson.fromJson(forMembersJson, Array<String>::class.java)?.toList()
+                }.getOrNull()
+            )
         )
     }
 
@@ -474,7 +484,8 @@ class EventRepositoryImpl @Inject constructor(
             acceptedBy = acceptedBy,
             acceptedAt = acceptedAt,
             isImportant = isImportant,
-            friendParticipates = friendParticipates
+            friendParticipates = friendParticipates,
+            forMembersJson = gson.toJson(FamilyMemberRef.store(forMembers))
         )
     }
 

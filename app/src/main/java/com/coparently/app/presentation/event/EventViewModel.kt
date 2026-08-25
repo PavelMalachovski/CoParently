@@ -9,6 +9,8 @@ import com.coparently.app.domain.model.Event
 import com.coparently.app.domain.repository.EventImageStorage
 import com.coparently.app.domain.repository.EventRepository
 import com.coparently.app.presentation.common.Parents
+import com.coparently.app.presentation.common.FamilyMember
+import com.coparently.app.presentation.common.FamilyMembersSource
 import com.coparently.app.presentation.common.ParentsSource
 import com.google.gson.Gson
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -73,7 +75,8 @@ class EventViewModel @Inject constructor(
     private val encryptedPreferences: EncryptedPreferences,
     private val gson: Gson,
     private val eventImageStorage: EventImageStorage,
-    private val parentsSource: ParentsSource
+    private val parentsSource: ParentsSource,
+    familyMembersSource: FamilyMembersSource
 ) : ViewModel() {
 
     /**
@@ -82,6 +85,16 @@ class EventViewModel @Inject constructor(
      */
     val parents: StateFlow<Parents> = parentsSource.observe()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(PARENTS_STOP_TIMEOUT_MS), Parents())
+
+    /**
+     * The children and pets this family cares for.
+     *
+     * Serves both the editor's "who is this for" picker and the calendar's filter strip, so the
+     * two cannot disagree about who exists. Rendered, never read by a save path — what a parent
+     * picked comes down from the form as an explicit list.
+     */
+    val familyMembers: StateFlow<List<FamilyMember>> = familyMembersSource.observe()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(PARENTS_STOP_TIMEOUT_MS), emptyList())
 
     private val _uiState = MutableStateFlow<EventUiState>(EventUiState.Loading)
     val uiState: StateFlow<EventUiState> = _uiState.asStateFlow()

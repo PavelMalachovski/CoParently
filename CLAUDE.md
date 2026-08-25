@@ -246,9 +246,10 @@ cd firestore-tests && npm test              # firestore.rules against the local 
   per-child affordance: **it appears at two, not at one.** A family with one child must see the
   screen they saw before — a picker for a set of one is design item 8 in miniature. The wizard
   was the last place in the app insisting on exactly one of anything (`ChildInfoScreen`,
-  `PetsScreen` and `ContactDirectory` were already plural); what is still singular is the
-  calendar, which carries no child reference at all — see **FAM-3** in `docs/BACKLOG.md` before
-  adding one.
+  `PetsScreen` and `ContactDirectory` were already plural). The calendar caught up in FAM-3:
+  `Event.forMembers` names the children and pets an event is about, and the grid has a filter
+  strip that appears at two. What it still does not do is mark an *individual chip* — see
+  **FAM-5** before adding one, because the two obvious channels are both spoken for.
 - **Who a record is about goes through `domain/family/FamilyMemberRef`** (FAM-2, Aug 2026) — one
   file defining the stored vocabulary, like `Tombstone.kt` and `PushPayload.kt`. Children *and*
   pets, because a vet's bill is an expense and the `Expense.childId` it replaced had nowhere to
@@ -265,6 +266,12 @@ cd firestore-tests && npm test              # firestore.rules against the local 
   `childId` columns survive on `ExpenseEntity`/`BudgetEntity`, dead and documented: dropping a
   SQLite column needs a table rebuild, this migration file has never contained one, and with
   `app/schemas/` stopping at v14 (**CQ-1**) there is nothing to check a rebuild against.
+  `Event.forMembers` joined them in FAM-3 (schema 28) and adds one rule of its own: **it is not
+  `parentOwner`.** That stays a custody slot — whose *day* an event falls on does not change
+  because it is one child's dentist appointment and not the other's — and the two must never be
+  collapsed. On the wire, `data/sync/EventDocument.kt` is the one place the events format is
+  defined in both directions, so `SyncService`'s two event maps convert through it rather than
+  repeating the conversion (item 5 above).
 - Conventional Commits (`feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`).
 
 ## Architecture map

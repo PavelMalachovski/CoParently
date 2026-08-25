@@ -194,7 +194,11 @@ class SyncService @Inject constructor(
                 "acceptedBy" to entity.acceptedBy,
                 "acceptedAt" to entity.acceptedAt?.format(formatter),
                 "isImportant" to entity.isImportant,
-                "friendParticipates" to (entity.friendParticipates ?: "")
+                "friendParticipates" to (entity.friendParticipates ?: ""),
+                // Through `EventDocument` rather than converted here: that file is the one
+                // definition of the events wire format, and a second copy of this conversion is
+                // one more place for the schema to drift (CLAUDE.md item 5).
+                "forMembers" to EventDocument.storedMembers(entity.forMembersJson)
             )
 
             val result = firestoreEventDataSource.insertEvent(entity.id, eventData)
@@ -281,7 +285,9 @@ class SyncService @Inject constructor(
                                 "acceptedAt" to localEntity.acceptedAt?.format(formatter),
                                 "isImportant" to localEntity.isImportant,
                                 "friendParticipates" to (localEntity.friendParticipates ?: ""),
-                                "reminderMinutes" to localEntity.reminderMinutes
+                                "reminderMinutes" to localEntity.reminderMinutes,
+                                "forMembers" to
+                                    EventDocument.storedMembers(localEntity.forMembersJson)
                             )
                             firestoreEventDataSource.updateEvent(localEntity.id, localData)
                             eventDao.markAsSynced(localEntity.id)

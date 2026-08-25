@@ -957,7 +957,7 @@ Two rules came out of building it, and both have an obvious wrong answer one key
 Still open here: the calendar (**FAM-3**), which is where a family with two children actually
 feels the difference.
 
-### FAM-3 · P1 · L · Events know who they are about
+### FAM-3 · **DONE** · Events know who they are about
 
 `Event.forMembers`, empty meaning "the whole family" — the same reading `FamilyKind` gives an
 unanswered account, and the reason an upgrade hides nothing. Room migration, the field in
@@ -973,7 +973,23 @@ Two constraints that are not negotiable:
   `keys().hasAll([...])`, presence-based, so a new key passes. Verified, not assumed.
 
 Known and accepted: a co-parent on an older build who edits an event drops the tag, because
-their `toFirestoreMap()` does not know the field.
+their `toFirestoreMap()` does not know the field. In the other direction nothing is lost — a
+reference a *newer* build wrote survives an edit made here as `FamilyMemberRef.Unknown`.
+
+**Left undone deliberately: the event chip carries no member marker.** Filtering answers "what
+does Anya's week look like" and the preview sheet names who an event is about, but in an
+unfiltered day view the chips still do not say whose training Thursday is. Chips are single-line
+with ellipsis, so anything prefixed eats the title, and the one channel that would not — colour —
+is spent three times over already. Worth an owner's eye on a real device rather than a treatment
+invented blind. **FAM-5.**
+
+### FAM-5 · P2 · S · The event chip does not say who it is about
+
+Only reachable in an unfiltered day or week view, and only for a family with two or more members.
+The constraints are the interesting part: `softWrap = false` plus ellipsis means a prefix costs
+title, and pink/blue/teal/grey are taken by the two parent slots, a calendar friend and the
+weekend. An initial-letter avatar at chip height is the obvious candidate; so is doing nothing
+and leaving the filter to answer it.
 
 ### FAM-4 · P2 · L · Custody per child
 

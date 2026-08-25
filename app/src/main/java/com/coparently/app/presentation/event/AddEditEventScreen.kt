@@ -100,9 +100,12 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.coparently.app.R
+import com.coparently.app.domain.family.FamilyMemberRef
 import com.coparently.app.domain.model.Event
+import com.coparently.app.presentation.common.FamilyMemberChips
 import com.coparently.app.presentation.common.FullScreenImageDialog
 import com.coparently.app.presentation.common.rememberParentNames
+import com.coparently.app.presentation.common.toggling
 import com.coparently.app.presentation.components.TimePickerDialog
 import com.coparently.app.presentation.theme.CoPlanlyColors
 import com.coparently.app.presentation.theme.dimensions
@@ -219,6 +222,12 @@ fun AddEditEventScreen(
     var isImportant by remember { mutableStateOf(false) }
     // Which calendar friend takes part, or null. Not an owner — see Event.friendParticipates.
     var friendParticipates by remember { mutableStateOf<String?>(null) }
+    // The family's children and pets, and which of them this event is about. Empty is the whole
+    // family — a different question from parentOwner, which is the custody slot whose day it
+    // falls on. The picker renders nothing below two members, so nothing is asked of a family
+    // with one child.
+    val familyMembers by viewModel.familyMembers.collectAsState()
+    var forMembers by remember { mutableStateOf(emptyList<FamilyMemberRef>()) }
     // Event photo: URL of an already-attached image, and a freshly picked local image
     // (not yet uploaded). Picking a new one supersedes the existing image on save.
     var existingImageUrl by remember { mutableStateOf<String?>(null) }
@@ -356,6 +365,7 @@ fun AddEditEventScreen(
                     isPrivate = it.isPrivate
                     isImportant = it.isImportant
                     friendParticipates = it.friendParticipates
+                    forMembers = it.forMembers
                     existingImageUrl = it.imageUrl
                 }
             }
@@ -405,6 +415,7 @@ fun AddEditEventScreen(
                 isPrivate = false
                 isImportant = false
                 friendParticipates = null
+                forMembers = emptyList()
                 viewModel.clearEventDraft()
             }
             draftRestored = false
@@ -502,6 +513,7 @@ fun AddEditEventScreen(
                     isPrivate = isPrivate,
                     isImportant = isImportant,
                     friendParticipates = friendParticipates,
+                    forMembers = forMembers,
                     imageUrl = finalImageUrl,
                     updatedAt = LocalDateTime.now()
                 )
@@ -1301,6 +1313,14 @@ fun AddEditEventScreen(
                     }
                 }
             }
+
+            FamilyMemberChips(
+                members = familyMembers,
+                selected = forMembers,
+                onToggle = { forMembers = forMembers.toggling(it) },
+                label = R.string.event_form_for_members,
+                modifier = Modifier.fillMaxWidth()
+            )
 
             // Who else takes part (item 16). Only when the family has admitted a friend: a
             // toggle naming nobody would be a control for a relationship that does not exist.

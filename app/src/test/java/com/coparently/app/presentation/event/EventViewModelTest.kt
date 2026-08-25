@@ -10,6 +10,7 @@ import com.coparently.app.domain.usecase.DeleteEventUseCase
 import com.coparently.app.domain.usecase.EventUseCases
 import com.coparently.app.domain.usecase.GetEventsUseCase
 import com.coparently.app.domain.usecase.UpdateEventUseCase
+import com.coparently.app.presentation.common.testFamilyMembersSource
 import com.coparently.app.presentation.common.testParentsSource
 import com.google.gson.Gson
 import io.mockk.clearAllMocks
@@ -90,7 +91,8 @@ class EventViewModelTest {
             encryptedPreferences,
             Gson(),
             eventImageStorage = mockk(relaxed = true),
-            parentsSource = testParentsSource(me = signedInParent)
+            parentsSource = testParentsSource(me = signedInParent),
+            familyMembersSource = testFamilyMembersSource()
         )
     }
 
