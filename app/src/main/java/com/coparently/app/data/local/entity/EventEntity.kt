@@ -104,6 +104,19 @@ data class EventEntity(
      * the same question as [parentOwner], which is the custody slot whose day it falls on.
      */
     val forMembersJson: String = "[]",
+    /**
+     * The co-parenting relationship this record belongs to, or null while it belongs to nobody
+     * but its creator.
+     *
+     * `FamilyKey.of(myUid, partnerUid)` — the same id `custody_models`, `family_settings` and
+     * `conversations` are already named with. It **is** the audience: the security rules read
+     * `families/{familyId}.members` to decide who may see this, rather than the record carrying
+     * a copy of the audience that can go stale (see docs/DESIGN-multi-family.md).
+     *
+     * Null on every row written before its owner paired, and on every row written before this
+     * column existed. Pairing backfills it.
+     */
+    val familyId: String? = null,
     val deletedAtMillis: Long? = null
 )
 

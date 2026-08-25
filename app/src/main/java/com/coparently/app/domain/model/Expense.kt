@@ -54,7 +54,12 @@ data class Expense(
      * parents had already settled and argued about. Null means an expense recorded before the
      * agreement existed, which the balance math reads as an even split — what it was.
      */
-    val splitBasisPoints: Int? = null
+    val splitBasisPoints: Int? = null,
+    /**
+     * The co-parenting relationship this record belongs to, or null while it belongs to nobody
+     * but its creator. See [com.coparently.app.domain.model.Event.familyId].
+     */
+    val familyId: String? = null
 )
 
 /**

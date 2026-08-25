@@ -71,7 +71,10 @@ internal object EventDocument {
         // reference type is. A reference this build does not understand is carried through
         // rather than dropped, so a co-parent on a newer build cannot have their tag erased by
         // an edit made here — see `FamilyMemberRef.Unknown`.
-        forMembersJson = membersJson(data["forMembers"])
+        forMembersJson = membersJson(data["forMembers"]),
+        // Absent reads as null — "belongs to nobody but its creator" — which is what every
+        // document written before the field existed is.
+        familyId = (data["familyId"] as? String)?.takeIf { it.isNotEmpty() }
     )
 
     /**

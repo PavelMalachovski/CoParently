@@ -42,6 +42,22 @@ object FamilyKey {
     }
 
     /**
+     * The family id for [uid] and [partnerId], or null when there is no relationship yet.
+     *
+     * The shape every writer actually needs. A record created before its owner pairs belongs to
+     * nobody but them, and null is what says so — so this returns null rather than inventing an
+     * id for a pair of one. Callers that stamp a record all reach for the same three questions
+     * (is there a uid, is there a partner, is the partner blank), and having them in one place
+     * is what stops one of them answering differently.
+     */
+    fun orNull(uid: String?, partnerId: String?): String? {
+        val mine = uid?.takeIf { it.isNotBlank() } ?: return null
+        val theirs = partnerId?.takeIf { it.isNotBlank() } ?: return null
+        if (mine == theirs) return null
+        return of(mine, theirs)
+    }
+
+    /**
      * The two uids a family id is built from, or null when [familyId] is not one.
      *
      * The inverse matters because a rule and a callable both need it: `custody_models`'

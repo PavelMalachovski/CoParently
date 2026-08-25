@@ -6,6 +6,7 @@ import com.coparently.app.data.local.dao.UserDao
 import com.coparently.app.data.local.entity.BudgetEntity
 import com.coparently.app.data.remote.firebase.FirebaseAuthService
 import com.coparently.app.data.remote.firebase.FirestoreBudgetDataSource
+import com.coparently.app.domain.family.FamilyKey
 import com.coparently.app.domain.family.FamilyMemberRef
 import com.coparently.app.domain.model.Budget
 import com.coparently.app.domain.model.BudgetAlert
@@ -107,15 +108,21 @@ class BudgetRepositoryImpl @Inject constructor(
     }
 
     override suspend fun addBudget(budget: Budget) {
-        val entity = budget.toEntity()
-        budgetDao.insertBudget(entity)
+        // Which relationship this belongs to, and therefore who may see it. Null while the
+        // account is unpaired — see `ExpenseRepositoryImpl.addExpense`.
+        val uid = firebaseAuthService.getCurrentUser()?.uid
+        val owned = budget.copy(
+            familyId = budget.familyId
+                ?: FamilyKey.orNull(uid, userDao.getUserById(uid.orEmpty())?.partnerId)
+        )
+        budgetDao.insertBudget(owned.toEntity())
 
         val firebaseUser = firebaseAuthService.getCurrentUser() ?: return
         // A rejected/failed sync must never crash the app — the budget is already
         // saved locally and will re-sync later (same guard as ExpenseRepositoryImpl).
         try {
-            firestoreBudgetDataSource.setBudget(budget.id, budgetToFirestoreMap(budget, firebaseUser.uid))
-            val syncedBudget = budget.copy(syncedToFirestore = true)
+            firestoreBudgetDataSource.setBudget(owned.id, budgetToFirestoreMap(owned, firebaseUser.uid))
+            val syncedBudget = owned.copy(syncedToFirestore = true)
             budgetDao.insertBudget(syncedBudget.toEntity())
         } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             android.util.Log.w("BudgetRepo", "Budget Firestore sync failed; kept locally", e)
@@ -161,6 +168,7 @@ class BudgetRepositoryImpl @Inject constructor(
     private fun budgetToFirestoreMap(budget: Budget, ownerUid: String): Map<String, Any> = mapOf(
         "id" to budget.id,
         "forMembers" to FamilyMemberRef.store(budget.forMembers),
+        "familyId" to (budget.familyId ?: ""),
         "category" to budget.category.name,
         "monthlyLimit" to budget.monthlyLimit,
         "currency" to budget.currency,
@@ -196,6 +204,7 @@ class BudgetRepositoryImpl @Inject constructor(
                 budgets.forEach { data ->
                     val budget = Budget(
                         id = data["id"] as String,
+                        familyId = (data["familyId"] as? String)?.takeIf { it.isNotEmpty() },
                         forMembers = FamilyMemberRef.parse(data["forMembers"])
                             .ifEmpty { FamilyMemberRef.fromLegacyChildId(data["childId"] as? String) },
                         category = ExpenseCategory.valueOf(data["category"] as String),
@@ -214,6 +223,7 @@ class BudgetRepositoryImpl @Inject constructor(
     private fun BudgetEntity.toDomain(): Budget {
         return Budget(
             id = id,
+            familyId = familyId,
             forMembers = refsFrom(forMembersJson),
             category = ExpenseCategory.valueOf(category),
             monthlyLimit = monthlyLimit,
@@ -228,6 +238,7 @@ class BudgetRepositoryImpl @Inject constructor(
     private fun Budget.toEntity(): BudgetEntity {
         return BudgetEntity(
             id = id,
+            familyId = familyId,
             // `childId` is a dead column and is left null; see BudgetEntity.
             forMembersJson = gson.toJson(FamilyMemberRef.store(forMembers)),
             category = category.name,

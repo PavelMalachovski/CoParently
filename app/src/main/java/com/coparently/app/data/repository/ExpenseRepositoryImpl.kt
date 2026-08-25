@@ -10,6 +10,7 @@ import com.coparently.app.domain.activity.ActivityAnnouncement
 import com.coparently.app.domain.activity.ActivityAnnouncer
 import com.coparently.app.domain.activity.ActivityEntityType
 import com.coparently.app.domain.activity.ActivityKind
+import com.coparently.app.domain.family.FamilyKey
 import com.coparently.app.domain.family.FamilyMemberRef
 import com.coparently.app.domain.model.Expense
 import com.coparently.app.domain.model.ExpenseCategory
@@ -86,9 +87,15 @@ class ExpenseRepositoryImpl @Inject constructor(
         // the Room row too, so the client can enforce creator-only editing without a network
         // read. Null when signed out; the row then reads as "editable by both", which is all
         // this device can honestly say about it.
+        val uid = expense.createdByFirebaseUid ?: firebaseAuthService.getCurrentUser()?.uid
         val owned = expense.copy(
-            createdByFirebaseUid = expense.createdByFirebaseUid
-                ?: firebaseAuthService.getCurrentUser()?.uid
+            createdByFirebaseUid = uid,
+            // Which relationship this belongs to, and therefore who may see it. Null while the
+            // account is unpaired: the expense is this parent's alone until there is somebody to
+            // share it with, and inventing an id for a pair of one would say otherwise. Pairing
+            // backfills, the same way the audience on events is re-stamped.
+            familyId = expense.familyId
+                ?: FamilyKey.orNull(uid, userDao.getUserById(uid.orEmpty())?.partnerId)
         )
 
         // Room is the source of truth — persist locally first so the expense is never
@@ -153,6 +160,9 @@ class ExpenseRepositoryImpl @Inject constructor(
         // Replaces the single `childId`, which is no longer written. Nothing is lost by
         // dropping it: no client ever set it, so every document in production carries "".
         "forMembers" to FamilyMemberRef.store(expense.forMembers),
+        // Empty rather than an absent key: the read side treats "" as "no family yet", and a
+        // document whose fields are iterated should not have a hole where a schema field is.
+        "familyId" to (expense.familyId ?: ""),
         "title" to expense.title,
         "amount" to expense.amount,
         "currency" to expense.currency,
@@ -246,6 +256,7 @@ class ExpenseRepositoryImpl @Inject constructor(
                         // A co-parent on a build that predates the reference type still writes
                         // `childId`, so it is read as a fallback. In practice it converts
                         // nothing — the field was never populated by any client.
+                        familyId = (data["familyId"] as? String)?.takeIf { it.isNotEmpty() },
                         forMembers = FamilyMemberRef.parse(data["forMembers"])
                             .ifEmpty { FamilyMemberRef.fromLegacyChildId(data["childId"] as? String) },
                         title = data["title"] as String,
@@ -341,6 +352,7 @@ class ExpenseRepositoryImpl @Inject constructor(
 
         return Expense(
             id = id,
+            familyId = familyId,
             forMembers = FamilyMemberRef.parse(forMembers),
             title = title,
             amount = amount,
@@ -361,6 +373,7 @@ class ExpenseRepositoryImpl @Inject constructor(
     private fun Expense.toEntity(): ExpenseEntity {
         return ExpenseEntity(
             id = id,
+            familyId = familyId,
             // `childId` is a dead column and is left null; see ExpenseEntity.
             forMembersJson = gson.toJson(FamilyMemberRef.store(forMembers)),
             title = title,

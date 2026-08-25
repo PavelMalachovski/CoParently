@@ -8,6 +8,7 @@ import com.coparently.app.data.remote.firebase.FirestoreChildInfoDataSource
 import com.coparently.app.data.sync.ChildInfoAudience
 import com.coparently.app.data.sync.ChildInfoGuests
 import com.coparently.app.data.sync.ChildInfoPhotos
+import com.coparently.app.domain.family.FamilyKey
 import com.coparently.app.domain.guests.GuestGrantPolicy
 import com.coparently.app.domain.model.ChildInfo
 import com.coparently.app.domain.model.MedicalProfile
@@ -55,20 +56,28 @@ class ChildInfoRepositoryImpl @Inject constructor(
     }
 
     override suspend fun upsertChildInfo(childInfo: ChildInfo) {
-        val entity = childInfo.toEntity()
+        val firebaseUser = firebaseAuthService.getCurrentUser()
+        val partnerId = firebaseUser?.let { currentPartnerId(it.uid) }
+        // Which relationship this child belongs to, and therefore whose family screens list
+        // them. Null while the account is unpaired: the record is this parent's alone until
+        // there is somebody to share it with. Kept once stamped, so a re-pairing to a
+        // different co-parent cannot silently move a child between families.
+        val owned = childInfo.copy(
+            familyId = childInfo.familyId ?: FamilyKey.orNull(firebaseUser?.uid, partnerId)
+        )
+        val entity = owned.toEntity()
         childInfoDao.insertChildInfo(entity)
 
         // Sync to Firestore if authenticated
-        val firebaseUser = firebaseAuthService.getCurrentUser()
         if (firebaseUser != null) {
             val audience = ChildInfoAudience.entitled(
                 userId = firebaseUser.uid,
-                creatorUid = childInfo.createdByFirebaseUid,
-                partnerId = currentPartnerId(firebaseUser.uid),
-                guestUids = activeGuestUids(childInfo)
+                creatorUid = owned.createdByFirebaseUid,
+                partnerId = partnerId,
+                guestUids = activeGuestUids(owned)
             )
-            val childInfoData = childInfo.toFirestoreMap(audience)
-            val result = firestoreChildInfoDataSource.upsertChildInfo(childInfo.id, childInfoData)
+            val childInfoData = owned.toFirestoreMap(audience)
+            val result = firestoreChildInfoDataSource.upsertChildInfo(owned.id, childInfoData)
 
             // Mark as synced only when the remote write actually succeeded. Marking it
             // unconditionally (the previous behaviour) stranded a failed write out of
@@ -172,7 +181,8 @@ class ChildInfoRepositoryImpl @Inject constructor(
             updatedAt = updatedAt,
             createdByFirebaseUid = createdByFirebaseUid,
             lastModifiedBy = lastModifiedBy,
-            syncedToFirestore = syncedToFirestore
+            syncedToFirestore = syncedToFirestore,
+            familyId = familyId
         )
     }
 
@@ -197,7 +207,8 @@ class ChildInfoRepositoryImpl @Inject constructor(
             updatedAt = updatedAt,
             createdByFirebaseUid = createdByFirebaseUid,
             lastModifiedBy = lastModifiedBy,
-            syncedToFirestore = syncedToFirestore
+            syncedToFirestore = syncedToFirestore,
+            familyId = familyId
         )
     }
 
@@ -250,7 +261,8 @@ class ChildInfoRepositoryImpl @Inject constructor(
             "updatedAt" to updatedAt.format(formatter),
             "createdByFirebaseUid" to createdByFirebaseUid,
             "lastModifiedBy" to lastModifiedBy,
-            "sharedWith" to audience
+            "sharedWith" to audience,
+            "familyId" to (familyId ?: "")
         )
     }
 
@@ -311,7 +323,8 @@ class ChildInfoRepositoryImpl @Inject constructor(
             updatedAt = LocalDateTime.parse(this["updatedAt"] as String, formatter),
             createdByFirebaseUid = this["createdByFirebaseUid"] as? String,
             lastModifiedBy = this["lastModifiedBy"] as? String,
-            syncedToFirestore = true
+            syncedToFirestore = true,
+            familyId = (this["familyId"] as? String)?.takeIf { it.isNotEmpty() }
         )
     }
 }

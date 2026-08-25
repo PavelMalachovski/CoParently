@@ -82,6 +82,12 @@ data class Event(
      * the pickup. This only records that the friend takes part, which is what the calendar's
      * friend filter shows and what the grid marks in the friend's colour.
      */
-    val friendParticipates: String? = null
+    val friendParticipates: String? = null,
+    /**
+     * The co-parenting relationship this record belongs to, or null while it belongs to nobody
+     * but its creator — see [com.coparently.app.domain.family.FamilyKey]. It **is** the audience:
+     * the security rules read the family's members rather than a copy carried on the record.
+     */
+    val familyId: String? = null
 )
 

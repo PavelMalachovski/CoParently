@@ -645,6 +645,34 @@ object DatabaseMigrations {
     }
 
     /**
+     * v29 -> v30: every shared record says which co-parenting relationship it belongs to.
+     *
+     * One nullable column on each of the six tables whose documents are shared between two
+     * adults. `familyId` **is** the audience: `firestore.rules` reads
+     * `families/{familyId}.members` to decide who may see a record, rather than the record
+     * carrying a copy of the audience — which is what `Event.sharedWith` does today, and why an
+     * event created before pairing stays unreadable by a co-parent who arrives later
+     * (CLAUDE.md item 16). See docs/DESIGN-multi-family.md.
+     *
+     * Nullable, and nothing is converted, because the honest value for an existing row is
+     * "unknown". The id is `FamilyKey.of(myUid, partnerUid)` and this migration knows neither
+     * uid: Room has no signed-in user. The backfill belongs where the pairing is known, which is
+     * the same place `SyncService.backfillAudienceForPartner` already re-stamps `sharedWith`.
+     *
+     * Null therefore means "mine alone" — which is exactly right for a row written before its
+     * owner paired, and is the state every existing row is in until that backfill runs.
+     */
+    val MIGRATION_29_30 = object : Migration(29, 30) {
+        override fun migrate(database: SupportSQLiteDatabase) {
+            listOf(
+                "events", "expenses", "budgets", "child_info", "pets", "change_requests"
+            ).forEach { table ->
+                database.execSQL("ALTER TABLE $table ADD COLUMN familyId TEXT")
+            }
+        }
+    }
+
+    /**
      * List of all migrations in order.
      */
     val ALL_MIGRATIONS = arrayOf(
@@ -671,6 +699,7 @@ object DatabaseMigrations {
         MIGRATION_25_26,
         MIGRATION_26_27,
         MIGRATION_27_28,
-        MIGRATION_28_29
+        MIGRATION_28_29,
+        MIGRATION_29_30
     )
 }

@@ -7,6 +7,7 @@ import com.coparently.app.data.remote.firebase.FcmService
 import com.coparently.app.data.remote.firebase.FirebaseAuthService
 import com.coparently.app.data.remote.firebase.FirestoreChangeRequestDataSource
 import com.coparently.app.data.remote.firebase.PushPayload
+import com.coparently.app.domain.family.FamilyKey
 import com.coparently.app.domain.model.ChangeRequest
 import com.coparently.app.domain.model.ChangeRequestStatus
 import com.coparently.app.domain.repository.ChangeRequestRepository
@@ -50,9 +51,16 @@ class ChangeRequestRepositoryImpl @Inject constructor(
     }
 
     override suspend fun createChangeRequest(request: ChangeRequest) {
-        changeRequestDao.insertChangeRequest(request.toEntity())
+        // Unlike an event or an expense, a change request already names both adults, so its
+        // family is a fact about the record rather than something to look up: no `UserDao`
+        // read, and no window in which pairing state and the stamp disagree.
+        val owned = request.copy(
+            familyId = request.familyId
+                ?: FamilyKey.orNull(request.requestedBy, request.requestedTo)
+        )
+        changeRequestDao.insertChangeRequest(owned.toEntity())
         if (firebaseAuthService.getCurrentUser() == null) return
-        publish(request, targetUserId = request.requestedTo, action = "created")
+        publish(owned, targetUserId = owned.requestedTo, action = "created")
     }
 
     override suspend fun updateStatus(requestId: String, status: ChangeRequestStatus) {
@@ -167,7 +175,8 @@ class ChangeRequestRepositoryImpl @Inject constructor(
         "note" to (note ?: ""),
         "status" to status.name,
         "createdAt" to createdAt.format(dateTimeFormatter),
-        "respondedAt" to (respondedAt?.format(dateTimeFormatter) ?: "")
+        "respondedAt" to (respondedAt?.format(dateTimeFormatter) ?: ""),
+        "familyId" to (familyId ?: "")
     )
 
     private fun Map<String, Any>.toDomain(): ChangeRequest = ChangeRequest(
@@ -189,7 +198,12 @@ class ChangeRequestRepositoryImpl @Inject constructor(
         createdAt = LocalDateTime.parse(this["createdAt"] as String, dateTimeFormatter),
         respondedAt = (this["respondedAt"] as? String)
             ?.takeIf { it.isNotEmpty() }
-            ?.let { LocalDateTime.parse(it, dateTimeFormatter) }
+            ?.let { LocalDateTime.parse(it, dateTimeFormatter) },
+        // Derived when absent, which is what a document written before the field existed looks
+        // like. Safe here and nowhere else: the pair is recorded in the document itself, so
+        // this reconstructs the stamp rather than guessing it from current pairing state.
+        familyId = (this["familyId"] as? String)?.takeIf { it.isNotEmpty() }
+            ?: FamilyKey.orNull(this["requestedBy"] as? String, this["requestedTo"] as? String)
     )
 
     private fun ChangeRequestEntity.toDomain(): ChangeRequest = ChangeRequest(
@@ -206,7 +220,8 @@ class ChangeRequestRepositoryImpl @Inject constructor(
         status = ChangeRequestStatus.valueOf(status),
         createdAt = createdAt,
         respondedAt = respondedAt,
-        syncedToFirestore = syncedToFirestore
+        syncedToFirestore = syncedToFirestore,
+        familyId = familyId
     )
 
     private fun ChangeRequest.toEntity(): ChangeRequestEntity = ChangeRequestEntity(
@@ -223,7 +238,8 @@ class ChangeRequestRepositoryImpl @Inject constructor(
         status = status.name,
         createdAt = createdAt,
         respondedAt = respondedAt,
-        syncedToFirestore = syncedToFirestore
+        syncedToFirestore = syncedToFirestore,
+        familyId = familyId
     )
 
     private companion object {

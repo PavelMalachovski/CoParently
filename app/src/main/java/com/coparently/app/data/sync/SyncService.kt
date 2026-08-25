@@ -198,7 +198,8 @@ class SyncService @Inject constructor(
                 // Through `EventDocument` rather than converted here: that file is the one
                 // definition of the events wire format, and a second copy of this conversion is
                 // one more place for the schema to drift (CLAUDE.md item 5).
-                "forMembers" to EventDocument.storedMembers(entity.forMembersJson)
+                "forMembers" to EventDocument.storedMembers(entity.forMembersJson),
+                "familyId" to (entity.familyId ?: "")
             )
 
             val result = firestoreEventDataSource.insertEvent(entity.id, eventData)
@@ -287,7 +288,8 @@ class SyncService @Inject constructor(
                                 "friendParticipates" to (localEntity.friendParticipates ?: ""),
                                 "reminderMinutes" to localEntity.reminderMinutes,
                                 "forMembers" to
-                                    EventDocument.storedMembers(localEntity.forMembersJson)
+                                    EventDocument.storedMembers(localEntity.forMembersJson),
+                                "familyId" to (localEntity.familyId ?: "")
                             )
                             firestoreEventDataSource.updateEvent(localEntity.id, localData)
                             eventDao.markAsSynced(localEntity.id)
@@ -465,6 +467,7 @@ class SyncService @Inject constructor(
                 "updatedAt" to entity.updatedAt.format(formatter),
                 "createdByFirebaseUid" to entity.createdByFirebaseUid,
                 "lastModifiedBy" to entity.lastModifiedBy,
+                "familyId" to (entity.familyId ?: ""),
                 "sharedWith" to ChildInfoAudience.entitled(
                     userId = userId,
                     creatorUid = entity.createdByFirebaseUid,
@@ -529,7 +532,8 @@ class SyncService @Inject constructor(
                                 "createdAt" to localEntity.createdAt.format(formatter),
                                 "updatedAt" to LocalDateTime.now().format(formatter),
                                 "createdByFirebaseUid" to localEntity.createdByFirebaseUid,
-                                "lastModifiedBy" to userId
+                                "lastModifiedBy" to userId,
+                                "familyId" to (localEntity.familyId ?: "")
                             )
                             firestoreChildInfoDataSource.updateChildInfo(localEntity.id, localData)
                             childInfoDao.markAsSynced(localEntity.id)
@@ -707,7 +711,8 @@ class SyncService @Inject constructor(
             updatedAt = LocalDateTime.parse(this["updatedAt"] as String, formatter),
             createdByFirebaseUid = this["createdByFirebaseUid"] as? String,
             lastModifiedBy = this["lastModifiedBy"] as? String,
-            syncedToFirestore = true
+            syncedToFirestore = true,
+            familyId = (this["familyId"] as? String)?.takeIf { it.isNotEmpty() }
         )
     }
 
