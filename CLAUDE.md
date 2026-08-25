@@ -168,10 +168,22 @@ cd firestore-tests && npm test              # firestore.rules against the local 
   R8 runs) — plus Cloud Functions and the Firestore rules suite against the emulator. They
   run **in parallel**; the Android three were one sequential job until the August 2026 CI
   pass, which is why a run took 13:22 for about 7 minutes of critical path. Two caveats, both
-  deliberate and both tracked in `docs/ROADMAP.md` (**CQ-12**, **CQ-1**): **detekt reports but does not gate**
-  (`continue-on-error`) until its baseline is regenerated locally, and there is **no
-  instrumented migration job**, because `app/schemas/` stops at v14 while the database is at
-  v33. Still run the build locally before pushing — CI is a backstop, not a substitute.
+  deliberate. **detekt gates again** as of CQ-12 — do not add `continue-on-error` back to turn a
+  red build green; fix the finding, or regenerate the baseline through the Regenerate workflow so
+  that accepting debt is a visible commit. There is still **no instrumented migration job**
+  (**CQ-1**), and it buys nothing until v34: `app/schemas/` now holds 14 and 33 with the versions
+  between them irrecoverable, so there is no earlier version to migrate *from*.
+  `DatabaseSchemaExportTest` is what stops the gap growing — it fails the build if the database
+  version outruns the newest exported schema.
+
+  **A seventh workflow exists and is not part of CI**: `.github/workflows/regenerate.yml` runs
+  `detektBaseline` and exports the Room schema, then commits both back to the branch it ran on.
+  It exists because those are the two artefacts only a machine with an Android SDK can produce,
+  and it is **manual on purpose** — regenerating a baseline accepts every violation that exists
+  at that moment. Trigger it with `workflow_dispatch` from `main`, or, on a branch that has not
+  merged, by touching `.github/regenerate-request`.
+
+  Still run the build locally before pushing — CI is a backstop, not a substitute.
   After switching branches, prefer `clean` — stale Hilt/kapt stubs from another branch cause
   errors like "Could not find class file for '…Application'".
 - **A docs/functions/rules-only pull request skips the Android jobs.** The `changes` job

@@ -46,7 +46,7 @@ Android SDK**: Gradle cannot be invoked here at all, so nothing Android is compi
 locally. What *is* verifiable in the session is the Firestore rules suite against the emulator
 (`firestore-tests/`, needs a JDK 21+) and the Cloud Functions suite (`functions/`, mocha + eslint).
 Everything Kotlin is proved by **CI** — `assembleDebug`, `testDebugUnitTest`, `lint`, `detekt`
-(reporting only, **CQ-12**) and `assembleRelease` so R8 runs. CI has an Android SDK but **no
+(a gate again since **CQ-12**) and `assembleRelease` so R8 runs. CI has an Android SDK but **no
 emulator job**, so nothing instrumented runs anywhere today (**CQ-1**). And no session holds
 Firebase or Play credentials: every `firebase deploy`, every console change and every callable
 invocation is yours.
@@ -91,8 +91,7 @@ invocation is yours.
 
 | Id | What | Why it needs a job |
 | --- | --- | --- |
-| **CQ-1** | Restore the Room schemas (v15 → v33) and test the migrations | Exporting a schema is a Gradle task, so CI can do it and upload `app/schemas/` as an artifact; **running** a migration test needs an Android emulator, and no workflow starts one. Both jobs are writable here; neither exists. |
-| **CQ-12** | Regenerate the detekt baseline, then let detekt gate again | `./gradlew detektBaseline` needs the Android SDK. A one-shot `workflow_dispatch` job that runs it and uploads the XML is enough — commit the artifact, delete `continue-on-error`. |
+| **CQ-1** | An instrumented job for migration tests — the schema export and the guard against a new gap are done | Running a migration test needs an Android emulator that no workflow starts. Worth adding at v34, when there is a second schema to migrate between. |
 
 ### 👁 Cloud writes it, only a device or a console can say whether it is right
 
@@ -126,15 +125,17 @@ invocation is yours.
 
 In this order, and each is genuinely finishable in the cloud:
 
-1. **CQ-12 then CQ-1** — the two CI jobs. After them, detekt gates again and migrations are tested
-   for the first time since v14, which is the precondition for trusting any later schema change.
-   Three untestable migrations have been added since this document was written; the number only
-   grows.
-2. **MON-4 → MON-3** — settle what the record guarantees, then build the export. In that order: an
-   export of a record nobody can vouch for is worth nothing to a lawyer.
-3. *(The three honesty gaps — **CQ-20**, **UX-17**, **UX-18** — are done.)*
+1. **MON-4 → MON-3** — settle what a court-facing record guarantees, then build the export. In that
+   order: an export of a record nobody can vouch for is worth nothing to a lawyer.
+2. **CQ-5** — the sync downloads every event every fifteen minutes, on both phones. It grows worse
+   with tenure, so it lands on your longest-standing users first. Settle the two design questions
+   in the item before writing any of it.
+3. **CQ-6 + CQ-8** together — the chat's last unbounded query and a listener that gives up for the
+   life of the process. Neither can sensibly be done without the other.
+4. **SEC-2** — Room is not encrypted at rest, and a child's medical profile is in it.
 
-*(**M-6** and **CQ-19**, which headed this list, are done.)*
+*(Everything that headed this list — **M-6**, **CQ-19**, **CQ-12**, **CQ-1**'s bleeding half, and
+the three honesty gaps **CQ-20**, **UX-17**, **UX-18** — is done.)*
 
 ---
 
@@ -421,31 +422,37 @@ Decide: pin and document, or move off it.
 
 ## 5. [CQ] Code quality, correctness and platform
 
-### CQ-1 · P0 · M · Restore the Room schemas (v15 → v33)
+### CQ-1 · **PARTLY DONE** · P1 · S · Restore the Room schemas (v15 → v33)
 
-**Where:** ⚙️ cloud, once two CI jobs exist. Exporting schemas is a Gradle task CI can run and
-upload as an artifact; running a migration test needs an Android emulator, which no workflow starts
-today.
+**Where:** ☁️ the gap is closed and fenced; ⚙️ what is left needs an emulator job, and only pays
+off from v34 onward.
 
-`CoPlanlyDatabase` is at `version = 33`; `app/schemas/` stops at `14.json`. The files were never
-committed, so they cannot be recovered from git — they must be regenerated. Every migration test
-above v14 fails with *"Cannot find the schema file in the assets folder"*, which means **migrations
-15→33 have never run against real SQLite**. `DatabaseModule` deliberately does not fall back to
-destructive migration above v4: a broken migration is a **crash on launch** for a user with real
-data, not a wipe.
+`CoPlanlyDatabase` reached `version = 33` while `app/schemas/` stopped at `14.json`, and nothing
+noticed for nineteen versions. `MigrationTestHelper` builds a database at a past version *from
+those files*, so every migration since v14 shipped with no fixture to test it against — and
+`DatabaseModule` deliberately refuses destructive migration above v4, which makes a broken one a
+**crash on launch** for somebody with real data rather than a wipe.
 
-This is the item that gates several others. **FAM-2**'s dead `childId` columns cannot be dropped
-without it (a column drop is a table rebuild, and `MIGRATION_12_13` is only provable because
-`12.json` exists), **SEC-4**'s timestamp conversion has no instrumented test for the same reason,
-**CQ-19** and **MON-13** have just added two more that nobody can prove, and **SEC-2** will add another.
+**Done, and it is the half that stops the bleeding:**
 
-- [ ] Regenerate per version (`./gradlew kaptDebugKotlin` at each version-bump commit), or accept
-      the gap, export 31 only, and document the untested migrations.
-- [ ] Write the missing tests for the migrations that shipped in `versionCode 2` untested — this is
-      what the old **CQ-2** id referred to; it is folded in here.
-- [ ] Add the instrumented job to CI. It is deliberately absent from `.github/workflows/ci.yml`
-      today because it would be red from its first run.
-- [ ] Have CI assert `version == max(schemas)` so this cannot silently recur.
+- **Schema 33 is exported and committed**, by `.github/workflows/regenerate.yml` — the answer to
+  why this sat still so long, which was never the decision but the mechanics: exporting needs an
+  Android SDK that the sessions writing this repository do not have.
+- **`DatabaseSchemaExportTest` asserts `version == max(schemas)`** and that each file's name
+  matches the version inside it. A plain JVM test rather than a Gradle task, so it gates every
+  pull request in the existing job and needs no SDK. A bumped version with no schema beside it now
+  fails the build with a message saying which workflow to run.
+
+**Accepted, deliberately: v15 → v32 are gone.** They were never committed and a build of today's
+code cannot produce them; rebuilding each historical commit was considered and rejected, since old
+commits may not build at all under today's Kotlin and AGP and the result would be a partial set
+that looks complete. The consequence is stated rather than hidden: those nineteen migrations, plus
+**SEC-4**'s timestamp conversion and **FAM-2**'s dead `childId` columns, stay unprovable.
+
+**Left:** an instrumented CI job. It buys nothing yet — with one exported schema there is no
+earlier version to migrate *from* — so it becomes worth adding at v34, together with the first
+migration test that can use it. The old **CQ-2** id, the untested migrations that shipped in
+`versionCode 2`, is folded in here and dies with the same reasoning.
 
 ### CQ-5 · P1 · M · Sync downloads the entire event collection every 15 minutes
 
@@ -513,19 +520,28 @@ own package, and 228 `catch` blocks — 116 of them `catch (e: Exception)` — a
 use. Audit §8.12. Decide whether `AppError` becomes real or goes; a declared model nobody uses is
 worse than none, because it reads as coverage.
 
-### CQ-12 · P2 · S · Regenerate the detekt baseline, then let detekt gate again
-
-**Where:** ⚙️ cloud, through a one-shot CI job. `./gradlew detektBaseline` needs the Android SDK,
-so run it in a `workflow_dispatch` job that uploads the XML, then commit the artifact.
+### CQ-12 · **DONE** · detekt gates again
 
 CI's first run found **194 weighted issues**, essentially all pre-existing: `AddEditEventScreen` at
 1,246 lines, `AnalyticsManager` with 22 functions, and every screen added since the baseline was
-last generated. detekt therefore runs with `continue-on-error: true` — a report, not a gate.
-Deliberate and temporary, commented as such in the workflow.
+last generated. Refactoring those to get a first CI run green would have buried the change that
+introduced CI in an unrelated rewrite, so detekt ran with `continue-on-error: true` — a report,
+not a gate.
 
-- [ ] Generate the baseline, commit it.
-- [ ] Delete `continue-on-error: true` so new violations fail again.
-- [ ] Optionally work the debt down afterwards; the baseline records what was accepted.
+What kept it there was not the decision but the *mechanics*: regenerating a baseline needs
+`./gradlew detektBaseline`, which needs an Android SDK, which the sessions writing this repository
+do not have. `.github/workflows/regenerate.yml` is the answer — it runs the task and commits the
+result back to the branch. The baseline is regenerated, `continue-on-error` is gone, and a new
+violation fails the build.
+
+**The regeneration is deliberately manual**, and that matters more than it looks: `detektBaseline`
+overwrites the file with everything detekt currently finds, so a job doing it automatically would
+absolve every new violation silently — the exact opposite of a gate. Asking for it is a commit,
+and accepting debt is therefore visible in the history.
+
+Do not put `continue-on-error` back to turn a red build green. Fix the finding, or regenerate the
+baseline through the workflow so the acceptance is somebody's decision rather than a side effect.
+The debt the baseline records is still there to work down; the baseline is what stops it growing.
 
 ### CQ-13 · P2 · M · Test coverage is concentrated in pure domain logic
 
@@ -1107,8 +1123,10 @@ Not a wish-list ordering — a dependency ordering. Each block assumes the one a
 5. ~~**M-6** — the calendar-friend grant is still per person.~~ **Done.**
 6. ~~**CQ-19** — a deleted child or pet never reaches the other phone.~~ **Done**, and it added the
    third migration `app/schemas/` cannot describe.
-7. **CQ-12** then **CQ-1** — make detekt gate again, then restore the schemas and add the emulator
-   job. After them every later schema change is provable, which SEC-2 needs and CQ-19 wanted.
+7. ~~**CQ-12** then **CQ-1** — make detekt gate again, then restore the schemas.~~ **Done**, both
+   through `.github/workflows/regenerate.yml`, which does what only a machine with an Android SDK
+   can and commits the result back. What is left of CQ-1 is the emulator job, and it is worth
+   adding at v34 — with one exported schema there is nothing to migrate *from*.
 
 **Before any launch**
 
@@ -1137,7 +1155,9 @@ plaintext refresh token, the two-year recurrence bug, thirty unit tests failing 
 constructor that changed months ago — none of it was carelessness. They are the failure modes of a
 codebase with careful reasoning and, until recently, no automation to check it. CI is not low on the
 list because it was urgent; it was built first because everything above it is a symptom. The two
-remaining CI jobs (**CQ-1**, **CQ-12**) are the same argument, one layer down.
+last of that automation — the baseline that lets detekt gate and the schema export that makes a
+migration provable — is **CQ-12** and **CQ-1**, and both landed the same way: by giving the cloud a
+job that runs the one thing it cannot.
 
 ---
 

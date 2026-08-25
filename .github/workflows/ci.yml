@@ -163,25 +163,26 @@ jobs:
       - name: Android lint
         run: ./gradlew lint
 
-      # detekt reports but does not gate, **for now**. Its first run against this repository
-      # found 194 weighted issues, essentially all of them pre-existing: `AddEditEventScreen`
-      # at 1,246 lines, `AnalyticsManager` with 22 functions, and the friends/pets/expense
-      # screens added since `config/detekt/baseline.xml` was last generated. Those are real
-      # debt, but they are not this PR's, and refactoring them to get a first CI run green
-      # would bury the change that introduced CI in an unrelated rewrite.
+      # detekt **gates** again (CQ-12). It did not for a while: its first run against this
+      # repository found 194 weighted issues, essentially all pre-existing — `AddEditEventScreen`
+      # at 1,246 lines, `AnalyticsManager` with 22 functions, and every screen added since
+      # `config/detekt/baseline.xml` was last generated. Refactoring those to get a first CI run
+      # green would have buried the change that introduced CI in an unrelated rewrite, so the
+      # step ran with `continue-on-error` instead.
       #
-      # The baseline is the mechanism designed for exactly this — it accepts existing debt and
-      # fails on new violations — but regenerating it needs `./gradlew detektBaseline`, which
-      # needs the Android SDK, which the environment that wrote this workflow did not have.
+      # The baseline is the mechanism designed for exactly that: it accepts the debt that exists
+      # and fails on anything new. Regenerating it needs `./gradlew detektBaseline` and therefore
+      # an Android SDK, which the sessions writing this repository do not have — that is what
+      # kept it stuck, and what `.github/workflows/regenerate.yml` now solves.
       #
-      # So: run it, print it, do not fail on it. Regenerate the baseline locally and delete
-      # `continue-on-error` — one line here, and CQ-12 in docs/ROADMAP.md.
-      # Until then this step is a report, not a gate, and should not be mistaken for one.
+      # **Do not put `continue-on-error` back to get a red build green.** That turns every future
+      # violation into a report nobody reads. Either fix the finding or, if it is genuinely
+      # accepted debt, regenerate the baseline through the Regenerate workflow so the acceptance
+      # is a visible commit.
       #
       # `if: always()` so one push reports lint *and* detekt rather than the first of them.
-      - name: detekt (reporting only — see docs/ROADMAP.md)
+      - name: detekt
         if: always()
-        continue-on-error: true
         run: ./gradlew detekt
 
       - name: Upload reports
