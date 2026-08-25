@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ReceiptLong
@@ -60,6 +62,15 @@ import kotlinx.coroutines.launch
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+
+/**
+ * How much empty space the scrolling page keeps under its last row.
+ *
+ * The Add button floats over the content, so without this the bottom of the analytics ledger
+ * would come to rest underneath it. Sized for a standard 56 dp FAB plus its 16 dp margin, and
+ * a little air on top of that.
+ */
+private val FAB_CLEARANCE = 88.dp
 
 /**
  * Expense list screen — a top-level bottom-navigation destination.
@@ -239,8 +250,30 @@ fun ExpenseScreen(
                     label = "expenses-month",
                     modifier = Modifier.weight(1f)
                 ) { shownMonth ->
-                    Column(modifier = Modifier.fillMaxSize()) {
-                        val monthExpenses = shownMonth.expenses
+                    val monthExpenses = shownMonth.expenses
+                    // **The analytics view scrolls as a page, the list does not.** The list is a
+                    // `LazyColumn` that must be given the remaining height — nesting it in a
+                    // scrolling parent is the "measured with infinite maximum height" crash — so
+                    // only the analytics branch takes the scroll, and only when there is a month
+                    // to draw. The empty-month branch below keeps a `weight(1f)` placeholder,
+                    // which is the other thing a scrolling column cannot hold.
+                    //
+                    // Without it the summary cards and the switcher were pinned and the whole
+                    // breakdown lived in whatever was left: on a month with two currencies that
+                    // is a couple of hundred dp for a pie, a table and a ledger, and the figures
+                    // under the arc could not be reached at all.
+                    val pageScrolls = showAnalytics && monthExpenses.isNotEmpty()
+                    // Remembered inside the month's own content slot, so paging to another
+                    // month opens at the top rather than at this one's offset, while
+                    // switching List/Analytics within a month comes back where it was.
+                    val pageScroll = rememberScrollState()
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .then(
+                                if (pageScrolls) Modifier.verticalScroll(pageScroll) else Modifier
+                            )
+                    ) {
                         val balancesByCurrency = shownMonth.balances
                         val monthNavigation = MonthNavigation(
                             label = rememberMonthLabel(shownMonth.month),
@@ -322,7 +355,10 @@ fun ExpenseScreen(
                                     roleByUid = roleByUid,
                                     onSelectCurrency = viewModel::selectAnalyticsCurrency,
                                     onSelectPayer = viewModel::selectAnalyticsPayer,
-                                    modifier = Modifier.weight(1f)
+                                    // No weight: the page scrolls, so this is as tall as
+                                    // it needs to be, and the clearance keeps the last
+                                    // ledger row from coming to rest under the Add button.
+                                    modifier = Modifier.padding(bottom = FAB_CLEARANCE)
                                 )
                             } else {
                                 // Budgets belong to the list: they are about what is left to spend, not

@@ -6,14 +6,12 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -98,10 +96,14 @@ fun ExpenseAnalytics(
     onSelectPayer: (String?) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    // **This view does not scroll itself.** It used to, and that was the bug: the caller gave it
+    // `weight(1f)` of whatever was left under the summary cards and the switcher, so on a month
+    // with two currencies the chart got a couple of hundred dp to scroll a pie, a table and a
+    // ledger inside — the figures below the arc were simply unreachable. Scrolling belongs to
+    // the page, so that the cards scroll away and the whole breakdown gets the screen.
     Column(
         modifier = modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
+            .fillMaxWidth()
             .padding(horizontal = 14.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
