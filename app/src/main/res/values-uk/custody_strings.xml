@@ -64,4 +64,18 @@
     <string name="custody_preview_every_other_weekend">Усі інші дні: %1$s. Кожні другі сб–нд: %2$s.</string>
     <string name="custody_who_is_resident">З ким живе дитина?</string>
     <string name="custody_is_resident">Живе з: %1$s</string>
+    <string name="custody_midweek_title">Контакт всередині тижня</string>
+    <string name="custody_midweek_enable">Додати день всередині тижня</string>
+    <string name="custody_midweek_overnight_warning">Цей графік розподіляє цілі дні, тож день всередині тижня включає й ніч. Якщо у вашому рішенні йдеться лише про вечір, складіть двотижневий цикл у розділі «Власний графік».</string>
+    <string name="custody_midweek_every_week">Щотижня</string>
+    <string name="custody_midweek_off_week_only">Лише в тиждень без вихідних</string>
+    <string name="custody_preview_every_other_weekend_midweek">Кожен день: %1$s. Кожні другі сб–нд і %3$s: %2$s.</string>
+    <string name="custody_preview_every_other_weekend_midweek_off_week">Кожен день: %1$s. Кожні другі сб–нд, а також %3$s на тижні між ними: %2$s.</string>
+    <plurals name="custody_diff_days_move">
+        <item quantity="one">У найближчі тижні зміниться %1$d день.</item>
+        <item quantity="few">У найближчі тижні зміняться %1$d дні.</item>
+        <item quantity="many">У найближчі тижні зміниться %1$d днів.</item>
+        <item quantity="other">У найближчі тижні зміниться %1$d днів.</item>
+    </plurals>
+    <string name="custody_diff_none">У календарі нічого не зміниться.</string>
 </resources>

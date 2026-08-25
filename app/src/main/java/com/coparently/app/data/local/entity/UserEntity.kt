@@ -50,6 +50,13 @@ data class UserEntity(
      * Null means the wizard has not been completed. A string rather than a converted type
      * because that is how every date crosses this Firestore schema.
      */
-    val onboardingCompletedAt: String? = null
+    val onboardingCompletedAt: String? = null,
+    /**
+     * `FamilyKind` constant names joined by a pipe, or null while the question is unanswered.
+     *
+     * Names rather than a localized label, and null rather than `""` for "none": a blank and a
+     * null must not be two spellings of the same value in a column a whole-row comparison reads.
+     */
+    val caresForKinds: String? = null
 )
 

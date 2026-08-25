@@ -46,13 +46,13 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.coparently.app.R
 import com.coparently.app.domain.changerequests.ChangeRequestHighlight
 import com.coparently.app.domain.custody.DayOverrideStatus
-import com.coparently.app.domain.custody.DaySwap
-import com.coparently.app.domain.custody.DaySwapInbox
+import com.coparently.app.domain.custody.DaySwapGroup
 import com.coparently.app.domain.model.ChangeRequest
 import com.coparently.app.domain.model.ChangeRequestStatus
 import com.coparently.app.domain.model.Event
 import com.coparently.app.presentation.common.ParentNames
 import com.coparently.app.presentation.common.rememberParentNames
+import com.coparently.app.presentation.custody.custodyDiffDescription
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 
@@ -95,13 +95,14 @@ fun ChangeRequestsScreen(
     val incoming = requests.filter { it.requestedTo == currentUserId }
     val outgoing = requests.filter { it.requestedBy == currentUserId }
 
-    val daySwaps by viewModel.daySwaps.collectAsState()
+    val daySwapGroups by viewModel.daySwapGroups.collectAsState()
     val pendingProposal by viewModel.pendingProposal.collectAsState()
+    val pendingProposalDiff by viewModel.pendingProposalDiff.collectAsState()
     val parents by viewModel.parents.collectAsState()
     val parentNames = rememberParentNames(parents)
     // Header plus one card per swap, or nothing at all. `indexInInbox` needs the count because
     // this section renders above the incoming one and every index below it shifts.
-    val swapItemCount = if (daySwaps.isEmpty()) 0 else 1 + daySwaps.size
+    val swapItemCount = if (daySwapGroups.isEmpty()) 0 else 1 + daySwapGroups.size
 
     val eventsAwaitingMe by viewModel.eventsAwaitingMe.collectAsState()
     val awaitingItemCount = if (eventsAwaitingMe.isEmpty()) 0 else 1 + eventsAwaitingMe.size
@@ -162,7 +163,7 @@ fun ChangeRequestsScreen(
             )
         }
     ) { padding ->
-        if (incoming.isEmpty() && outgoing.isEmpty() && daySwaps.isEmpty() &&
+        if (incoming.isEmpty() && outgoing.isEmpty() && daySwapGroups.isEmpty() &&
             eventsAwaitingMe.isEmpty() && pendingProposal == null
         ) {
             Column(
@@ -200,6 +201,7 @@ fun ChangeRequestsScreen(
                     item {
                         CustodyProposalCard(
                             proposal = proposal,
+                            diff = pendingProposalDiff,
                             parentNames = parentNames,
                             onAccept = { viewModel.acceptProposal() },
                             onDecline = { viewModel.declineProposal() }
@@ -222,15 +224,15 @@ fun ChangeRequestsScreen(
                 // Day swaps next: a pending swap is the most actionable thing the inbox can
                 // hold — a date is about to arrive whether or not it is answered — and unlike a
                 // change request it has no second home anywhere else in the app.
-                if (daySwaps.isNotEmpty()) {
+                if (daySwapGroups.isNotEmpty()) {
                     item { SectionHeader(stringResource(R.string.day_swap_inbox_section)) }
-                    items(daySwaps, key = { it.date.toString() }) { swap ->
+                    items(daySwapGroups, key = { it.key }) { group ->
                         DaySwapCard(
-                            swap = swap,
+                            group = group,
                             currentUserId = currentUserId,
                             parentNames = parentNames,
-                            onAccept = { viewModel.acceptSwap(swap.date) },
-                            onDecline = { viewModel.declineSwap(swap.date) }
+                            onAccept = { viewModel.decideSwapGroup(group, accept = true) },
+                            onDecline = { viewModel.decideSwapGroup(group, accept = false) }
                         )
                     }
                 }
@@ -339,15 +341,17 @@ private fun AwaitingEventCard(
  */
 @Composable
 private fun DaySwapCard(
-    swap: DaySwap,
+    group: DaySwapGroup,
     currentUserId: String,
     parentNames: ParentNames,
     onAccept: () -> Unit,
     onDecline: () -> Unit
 ) {
     val dateFormatter = remember { DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM) }
-    val awaitsMe = DaySwapInbox.awaitsAnswerFrom(swap, currentUserId)
-    val offeredByMe = swap.override.requestedBy == currentUserId
+    val context = LocalContext.current
+    val first = group.swaps.first()
+    val awaitsMe = group.awaitsAnswerFrom(currentUserId)
+    val offeredByMe = first.override.requestedBy == currentUserId
 
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(
@@ -355,30 +359,44 @@ private fun DaySwapCard(
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Text(
-                text = swap.date.format(dateFormatter),
+                text = if (group.dayCount == 1) {
+                    group.firstDate.format(dateFormatter)
+                } else {
+                    stringResource(
+                        R.string.day_swap_range,
+                        group.firstDate.format(dateFormatter),
+                        group.lastDate.format(dateFormatter)
+                    )
+                },
                 style = MaterialTheme.typography.titleMedium
             )
             Text(
+                // The count is in the sentence, so one card answers "how many days" without the
+                // reader counting rows — the thing five separate cards made impossible.
                 text = if (offeredByMe) {
-                    stringResource(
-                        R.string.day_swap_inbox_offered_by_you,
-                        parentNames.labelFor(swap.override.toParent)
+                    context.resources.getQuantityString(
+                        R.plurals.day_swap_inbox_offered_by_you_days,
+                        group.dayCount,
+                        group.dayCount,
+                        parentNames.labelFor(first.override.toParent)
                     )
                 } else {
-                    stringResource(
-                        R.string.day_swap_inbox_offered_to_you,
-                        parentNames.labelForUid(swap.override.requestedBy)
+                    context.resources.getQuantityString(
+                        R.plurals.day_swap_inbox_offered_to_you_days,
+                        group.dayCount,
+                        group.dayCount,
+                        parentNames.labelForUid(first.override.requestedBy)
                     )
                 },
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            swap.override.note?.let { note ->
+            first.override.note?.let { note ->
                 Text(text = note, style = MaterialTheme.typography.bodyMedium)
             }
             Text(
                 text = stringResource(
-                    when (swap.override.status) {
+                    when (first.override.status) {
                         DayOverrideStatus.ACCEPTED -> R.string.day_swap_inbox_accepted
                         DayOverrideStatus.DECLINED -> R.string.day_swap_inbox_declined
                         DayOverrideStatus.PENDING -> R.string.day_swap_inbox_waiting
@@ -408,6 +426,7 @@ private fun DaySwapCard(
 @Composable
 private fun CustodyProposalCard(
     proposal: com.coparently.app.domain.custody.CustodyProposal,
+    diff: com.coparently.app.domain.custody.CustodyPatternDiff?,
     parentNames: ParentNames,
     onAccept: () -> Unit,
     onDecline: () -> Unit
@@ -429,6 +448,14 @@ private fun CustodyProposalCard(
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+            // What it would actually change. Answering a schedule without being told which days
+            // move is the complaint this card and the Home dialog both existed to produce.
+            custodyDiffDescription(diff, parentNames)?.let { description ->
+                Text(
+                    text = description,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = onAccept) {
                     Text(stringResource(R.string.custody_proposal_accept))

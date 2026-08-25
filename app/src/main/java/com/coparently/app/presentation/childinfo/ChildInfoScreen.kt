@@ -13,22 +13,20 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.coparently.app.R
-import com.coparently.app.domain.model.Activity
 import com.coparently.app.domain.guests.GuestGrant
 import com.coparently.app.domain.guests.GuestGrantPolicy
+import com.coparently.app.domain.model.Activity
 import com.coparently.app.domain.model.ChildInfo
 import com.coparently.app.domain.model.EmergencyContact
 import com.coparently.app.domain.model.MedicalProfile
 import com.coparently.app.domain.model.Medication
 import com.coparently.app.domain.model.SchoolInfo
 import com.coparently.app.domain.model.Vaccination
-import com.coparently.app.presentation.childinfo.components.GuestInviteSheet
 import com.coparently.app.presentation.childinfo.components.MedicalPhotoStrip
 import com.coparently.app.presentation.common.ConfirmationDialog
 import com.coparently.app.presentation.common.GroupLabel
@@ -43,47 +41,36 @@ import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 
 /**
- * Screen for displaying and managing child information.
- * Shows medications, activities, allergies, and other important data.
+ * The family's children, one row each.
  *
- * @param onNavigateBack Callback for navigation back
- * @param onEditClick Callback for edit action
- * @param viewModel ViewModel for managing child info
+ * A list, where this screen used to be a detail view of `childInfoList.first()`. Everything
+ * beneath the UI has always been per-record — the entity, the DAO, the repository, the Firestore
+ * documents, the sync and the rules — and the whole single-child ceiling was that one
+ * `firstOrNull()` plus an "Add child" button that only existed inside the empty state. A second
+ * child could be created (by pairing, or by the co-parent) and was simply never shown.
+ *
+ * Three levels rather than the two Pets uses, and deliberately: a pet has no read-only summary,
+ * while a child's does real work — medications, allergies, the medical photo strip, emergency
+ * contacts, school, and the guest-access group. Folding it into the form would lose it.
+ *
+ * @param onNavigateBack Up-arrow.
+ * @param onOpenChild Opens one child's summary, by id.
+ * @param onAddChild Opens the editor on a new child.
+ * @param viewModel ViewModel for the children list.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChildInfoScreen(
     onNavigateBack: () -> Unit,
-    onEditClick: (String) -> Unit,
+    onOpenChild: (String) -> Unit,
+    onAddChild: () -> Unit,
     viewModel: ChildInfoViewModel = hiltViewModel()
 ) {
     val haptic = LocalHapticFeedback.current
-    val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsState()
-    val guestInvite by viewModel.guestInvite.collectAsState()
-    val snackbarHostState = remember { SnackbarHostState() }
-
-    // A failed revoke has to be said out loud. The row vanishes from the list either way once
-    // Room is written, so silence here would leave the parent believing access is gone.
-    val revokeFailed by viewModel.guestRevokeFailed.collectAsState()
-    val revokeFailedMessage = stringResource(R.string.guest_revoke_failed)
-    LaunchedEffect(revokeFailed) {
-        if (revokeFailed) {
-            snackbarHostState.showSnackbar(revokeFailedMessage)
-            viewModel.clearGuestRevokeFailed()
-        }
-    }
-
-    GuestInviteSheet(
-        state = guestInvite,
-        onChooseDuration = viewModel::chooseGuestDuration,
-        onCreate = viewModel::createGuestInvite,
-        onShare = { link -> context.startActivity(guestShareIntent(context, link)) },
-        onDismiss = viewModel::dismissGuestInvite
-    )
+    val children = (uiState as? ChildInfoUiState.Success)?.childInfoList.orEmpty()
 
     Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.childinfo_screen_title)) },
@@ -99,8 +86,6 @@ fun ChildInfoScreen(
                     }
                 },
                 actions = {
-                    // The only manual sync trigger on this screen. Editing now happens by
-                    // tapping a section below, not through a top-bar pencil.
                     IconButton(onClick = {
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         viewModel.syncChildInfo()
@@ -112,6 +97,21 @@ fun ChildInfoScreen(
                     }
                 }
             )
+        },
+        floatingActionButton = {
+            // Only once there is a list. With none, the empty state carries the call to action,
+            // so a FAB would be a second button saying the same thing — the shape `PetsScreen`
+            // already settled on.
+            if (children.isNotEmpty()) {
+                ExtendedFloatingActionButton(
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onAddChild()
+                    },
+                    icon = { Icon(Icons.Default.Add, contentDescription = null) },
+                    text = { Text(stringResource(R.string.childinfo_add_child_button)) }
+                )
+            }
         }
     ) { paddingValues ->
         Box(
@@ -163,7 +163,7 @@ fun ChildInfoScreen(
                             Spacer(modifier = Modifier.height(8.dp))
                             Button(onClick = {
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                onEditClick("new")
+                                onAddChild()
                             }) {
                                 Icon(Icons.Default.Add, contentDescription = null)
                                 Spacer(modifier = Modifier.width(8.dp))
@@ -171,19 +171,48 @@ fun ChildInfoScreen(
                             }
                         }
                     } else {
-                        // Read from the list this screen already holds, rather than from
-                        // `currentChildInfo`: that state belongs to the editor and is set by the
-                        // child it was opened on. Feeding it from the head of the list is what
-                        // let an edit of one child be saved over another.
-                        state.childInfoList.firstOrNull()?.let { childInfo ->
-                            ChildInfoContent(
-                                childInfo = childInfo,
-                                onEditClick = onEditClick,
-                                onInviteGuest = { viewModel.openGuestInvite(childInfo.id) },
-                                onRevokeGuest = { uid -> viewModel.revokeGuest(childInfo, uid) }
-                            )
-                        }
+                        ChildrenList(children = state.childInfoList, onOpenChild = onOpenChild)
                     }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * One row per child, through the shared design-system primitives.
+ *
+ * Reads `state.childInfoList`, never `currentChildInfo`: that state belongs to the editor and is
+ * set by the child it was opened on. Feeding a list from it — or an editor from the head of a
+ * list — is exactly the defect CLAUDE.md records, where an edit of one child was saved over
+ * another.
+ */
+@Composable
+private fun ChildrenList(children: List<ChildInfo>, onOpenChild: (String) -> Unit) {
+    val dateFormatter = remember {
+        DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM)
+    }
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        item {
+            GroupLabel(stringResource(R.string.childinfo_children_group_label))
+            SectionGroup {
+                children.forEach { child ->
+                    SectionRow(
+                        icon = Icons.Default.ChildCare,
+                        title = child.childName,
+                        supporting = child.dateOfBirth?.let { dob ->
+                            stringResource(
+                                R.string.childinfo_dob_value,
+                                dob.toLocalDate().format(dateFormatter)
+                            )
+                        },
+                        onClick = { onOpenChild(child.id) }
+                    )
+                    if (child != children.last()) Divider()
                 }
             }
         }
@@ -199,7 +228,7 @@ fun ChildInfoScreen(
  * [SectionGroup]/[SectionRow] from the shared design system.
  */
 @Composable
-private fun ChildInfoContent(
+internal fun ChildInfoContent(
     childInfo: ChildInfo,
     onEditClick: (String) -> Unit,
     onInviteGuest: () -> Unit,
@@ -335,7 +364,7 @@ private fun localDate(millis: Long): String =
         .format(Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()))
 
 /** Builds the share-sheet intent for a guest link. */
-private fun guestShareIntent(context: Context, link: String): Intent {
+internal fun guestShareIntent(context: Context, link: String): Intent {
     val sendIntent = Intent(Intent.ACTION_SEND).apply {
         type = "text/plain"
         putExtra(Intent.EXTRA_TEXT, context.getString(R.string.guest_invite_share_message, link))

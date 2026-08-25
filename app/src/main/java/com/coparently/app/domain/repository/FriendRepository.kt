@@ -53,6 +53,19 @@ interface FriendRepository {
      */
     fun observeMyGrant(): Flow<CalendarFriendGrant?>
 
+    /**
+     * This account's own grant, read once.
+     *
+     * The save path's accessor, and it exists for the reason CLAUDE.md's invariant 17 gives:
+     * `FriendViewModel.myGrant` is a `WhileSubscribed` StateFlow, and `FriendProfileScreen` is
+     * its own route that never collects it — so `myGrant.value` was the initial `null` for every
+     * save that ViewModel instance ever made, and the profile went out with an empty
+     * `familyParents`, which is the gate the parents read it through.
+     *
+     * @return the grant, or null when this account is not a calendar friend or it has lapsed.
+     */
+    suspend fun myGrant(): CalendarFriendGrant?
+
     /** The friend's own profile, or null before they have written one. */
     fun observeMyProfile(): Flow<FriendProfile?>
 

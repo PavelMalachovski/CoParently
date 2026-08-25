@@ -64,4 +64,16 @@
     <string name="custody_preview_every_other_weekend">Alle übrigen Tage: %1$s. Jeden zweiten Sa–So: %2$s.</string>
     <string name="custody_who_is_resident">Bei wem lebt das Kind?</string>
     <string name="custody_is_resident">Lebt bei: %1$s</string>
+    <string name="custody_midweek_title">Kontakt unter der Woche</string>
+    <string name="custody_midweek_enable">Einen Tag unter der Woche hinzufügen</string>
+    <string name="custody_midweek_overnight_warning">Dieser Plan vergibt ganze Tage, ein Tag unter der Woche schließt also die Übernachtung ein. Wenn eure Regelung nur den Nachmittag vorsieht, erstellt die zwei Wochen stattdessen unter Benutzerdefiniert.</string>
+    <string name="custody_midweek_every_week">Jede Woche</string>
+    <string name="custody_midweek_off_week_only">Nur in der Woche ohne Wochenende</string>
+    <string name="custody_preview_every_other_weekend_midweek">Jeden Tag: %1$s. Jedes zweite Sa–So und jeden %3$s: %2$s.</string>
+    <string name="custody_preview_every_other_weekend_midweek_off_week">Jeden Tag: %1$s. Jedes zweite Sa–So, dazu %3$s in der Woche dazwischen: %2$s.</string>
+    <plurals name="custody_diff_days_move">
+        <item quantity="one">In den kommenden Wochen würde sich %1$d Tag verschieben.</item>
+        <item quantity="other">In den kommenden Wochen würden sich %1$d Tage verschieben.</item>
+    </plurals>
+    <string name="custody_diff_none">Im Kalender würde sich nichts ändern.</string>
 </resources>

@@ -1,6 +1,7 @@
 package com.coparently.app.presentation.event
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,6 +28,10 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -38,6 +43,7 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.coparently.app.R
 import com.coparently.app.domain.model.Event
+import com.coparently.app.presentation.common.FullScreenImageDialog
 import com.coparently.app.presentation.common.ParentNames
 import com.coparently.app.presentation.theme.CoPlanlyColors
 import java.time.format.DateTimeFormatter
@@ -131,15 +137,26 @@ fun EventPreviewSheet(
             }
 
             event.imageUrl?.let { url ->
+                // Cropped to 180dp here, so the photo is a hint at what is attached rather than
+                // the thing itself; tapping opens the zoomable viewer that shows all of it.
+                var viewingPhoto by rememberSaveable { mutableStateOf(false) }
                 AsyncImage(
                     model = url,
-                    contentDescription = stringResource(R.string.event_preview_photo),
+                    contentDescription = stringResource(R.string.image_viewer_open),
                     contentScale = ContentScale.Crop,
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(180.dp)
                         .clip(MaterialTheme.shapes.medium)
+                        .clickable { viewingPhoto = true }
                 )
+                if (viewingPhoto) {
+                    FullScreenImageDialog(
+                        model = url,
+                        contentDescription = stringResource(R.string.event_preview_photo),
+                        onDismiss = { viewingPhoto = false }
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(4.dp))

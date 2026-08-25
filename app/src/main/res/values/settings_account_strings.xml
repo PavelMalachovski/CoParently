@@ -49,6 +49,20 @@
     <string name="settings_account_delete_cancel">Keep my account</string>
     <string name="settings_account_delete_progress">Deleting your account…</string>
     <string name="settings_account_delete_failed">Your account was not deleted. Please try again.</string>
+    <string name="settings_family_kind_title">What you co-parent</string>
+    <string name="settings_family_kind_both">%1$s and %2$s</string>
+    <string name="settings_family_kind_save">Save</string>
+    <string name="settings_family_kind_cancel">Cancel</string>
+    <string name="settings_family_kind_kept_by_co_parent">Saved. A section you removed stays visible because your co-parent still keeps it.</string>
+    <string name="settings_family_kind_records_kept">Removed. Those records stay on your device — turn the section back on here to see them again.</string>
+    <string name="settings_family_kind_not_saved">Could not save that — your profile has not finished loading. Try again in a moment.</string>
+    <string name="settings_split_ratio_title">Expense split</string>
+    <string name="settings_split_ratio_value">%1$d / %2$d</string>
+    <string name="settings_split_ratio_value_named">%1$s %2$d / %3$s %4$d</string>
+    <string name="settings_split_ratio_hint">Applies to expenses recorded from now on. Ones already recorded keep the split they were entered under.</string>
+    <string name="settings_split_ratio_applied">Split saved</string>
+    <string name="settings_split_ratio_proposed">Sent to your co-parent to confirm</string>
+    <string name="settings_split_ratio_refused">That split could not be proposed</string>
     <!-- Content descriptions for the disclosure chevron on the Google Calendar row (UX-11).
          The row's trailing slot used to hold a switch and an unnamed chevron, so TalkBack
          announced a switch and never said the row expands. -->

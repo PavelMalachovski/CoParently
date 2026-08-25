@@ -166,4 +166,48 @@ class ParentsSourceTest {
             cancelAndIgnoreRemainingEvents()
         }
     }
+
+    @Test
+    fun `coParentUid answers without the pairing side, so a save path need not subscribe`() =
+        runTest {
+            // The reason this exists: `parents` is shared with `WhileSubscribed`, so a route
+            // that never collects it reads `Parents()` forever — and a save path that asked it
+            // who the co-parent is wrote every shared expense as a claim on nobody.
+            val pairing = mockk<PairingRepository>() // no stubs: any call is an error
+            val users = mockk<UserRepository> {
+                coEvery { getCurrentUserId() } returns "u1"
+                coEvery { getUserById("u1") } returns me.copy(partnerId = "u2")
+            }
+
+            assertEquals("u2", ParentsSource(users, pairing).coParentUid())
+
+            verify { pairing wasNot Called }
+        }
+
+    @Test
+    fun `coParentUid is null for an unpaired account, and for one with no local row`() = runTest {
+        val unpaired = mockk<UserRepository> {
+            coEvery { getCurrentUserId() } returns "u1"
+            coEvery { getUserById("u1") } returns me
+        }
+        assertNull(ParentsSource(unpaired, mockk()).coParentUid())
+
+        // The window `UserRepositoryImpl` leaves open on a fresh install: signed in, no row yet.
+        val rowless = mockk<UserRepository> {
+            coEvery { getCurrentUserId() } returns "u1"
+            coEvery { getUserById("u1") } returns null
+        }
+        assertNull(ParentsSource(rowless, mockk()).coParentUid())
+    }
+
+    @Test
+    fun `coParentUid refuses a row that names itself as its own partner`() = runTest {
+        // Not hypothetical: a partnerId equal to the signed-in uid would put the payer twice
+        // into `splitBetween` and charge them their own share on top of the whole amount.
+        val selfPaired = mockk<UserRepository> {
+            coEvery { getCurrentUserId() } returns "u1"
+            coEvery { getUserById("u1") } returns me.copy(partnerId = "u1")
+        }
+        assertNull(ParentsSource(selfPaired, mockk()).coParentUid())
+    }
 }

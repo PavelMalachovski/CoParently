@@ -34,4 +34,22 @@
     <string name="push_pairing_removed_title">Verknüpfung aufgehoben</string>
     <string name="push_pairing_removed_body">%1$s hat die Verknüpfung beendet</string>
     <string name="push_actor_fallback">Der andere Elternteil</string>
+    <plurals name="push_day_swap_group_offered_body">
+        <item quantity="one">Dein Co-Elternteil schlägt vor, %1$d Tag zu tauschen</item>
+        <item quantity="other">Dein Co-Elternteil schlägt vor, %1$d Tage zu tauschen</item>
+    </plurals>
+    <plurals name="push_day_swap_group_accepted_body">
+        <item quantity="one">Dein Co-Elternteil hat dem Tausch von %1$d Tag zugestimmt</item>
+        <item quantity="other">Dein Co-Elternteil hat dem Tausch von %1$d Tagen zugestimmt</item>
+    </plurals>
+    <plurals name="push_day_swap_group_declined_body">
+        <item quantity="one">Dein Co-Elternteil hat den Tausch von %1$d Tag abgelehnt</item>
+        <item quantity="other">Dein Co-Elternteil hat den Tausch von %1$d Tagen abgelehnt</item>
+    </plurals>
+    <string name="push_split_ratio_proposed_title">Neue Kostenaufteilung vorgeschlagen</string>
+    <string name="push_split_ratio_proposed_body">Dein Co-Elternteil schlägt eine andere Aufteilung vor. Öffne die App zum Bestätigen oder Ablehnen.</string>
+    <string name="push_split_ratio_accepted_title">Kostenaufteilung vereinbart</string>
+    <string name="push_split_ratio_accepted_body">Dein Co-Elternteil hat der neuen Aufteilung zugestimmt. Sie gilt ab jetzt.</string>
+    <string name="push_split_ratio_declined_title">Kostenaufteilung abgelehnt</string>
+    <string name="push_split_ratio_declined_body">Dein Co-Elternteil hat die neue Aufteilung abgelehnt. Es hat sich nichts geändert.</string>
 </resources>

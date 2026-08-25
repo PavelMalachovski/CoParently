@@ -23,4 +23,15 @@
     <string name="onboarding_coparent_title">Пригласите второго родителя</string>
     <string name="onboarding_coparent_body">Отправьте ссылку или код. Как только он присоединится, он увидит всё, что вы здесь заполнили, и сможет дополнить.</string>
     <string name="onboarding_coparent_open">Отправить приглашение</string>
+    <string name="onboarding_family_title">Кого вы воспитываете вместе?</string>
+    <string name="onboarding_family_body">Отметьте оба варианта, если это про вашу семью. Позже это можно изменить в Настройках.</string>
+    <string name="onboarding_family_children">Дети</string>
+    <string name="onboarding_family_children_hint">Карточки детей, контакты и данные о школе</string>
+    <string name="onboarding_family_pets">Питомцы</string>
+    <string name="onboarding_family_pets_hint">Карточки питомцев, прививки и телефон ветеринара</string>
+    <string name="onboarding_pet_title">Ваш питомец</string>
+    <string name="onboarding_pet_body">Только имя и вид. Прививки, заметки о кормлении и ветеринар — потом, на странице питомца.</string>
+    <string name="onboarding_split_title">Как будете делить расходы?</string>
+    <string name="onboarding_split_body">Пополам, если не договоритесь иначе. Как только второй родитель будет подключён, изменение придётся подтверждать ему — а уже внесённые расходы сохранят своё деление.</string>
+    <string name="onboarding_split_value">Вы %1$d / Второй родитель %2$d</string>
 </resources>

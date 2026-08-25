@@ -73,4 +73,16 @@
     <string name="custody_preview_every_other_weekend">Every day: %1$s. Every second Sat–Sun: %2$s.</string>
     <string name="custody_who_is_resident">Who does the child live with?</string>
     <string name="custody_is_resident">Lives with: %1$s</string>
+    <string name="custody_midweek_title">Midweek contact</string>
+    <string name="custody_midweek_enable">Add a midweek day</string>
+    <string name="custody_midweek_overnight_warning">This schedule assigns whole days, so a midweek day includes the overnight. If your order says afternoon only, build the fortnight under Custom instead.</string>
+    <string name="custody_midweek_every_week">Every week</string>
+    <string name="custody_midweek_off_week_only">Only the week without the weekend</string>
+    <string name="custody_preview_every_other_weekend_midweek">Every day: %1$s. Every second Sat–Sun and every %3$s: %2$s.</string>
+    <string name="custody_preview_every_other_weekend_midweek_off_week">Every day: %1$s. Every second Sat–Sun, plus %3$s in the week between: %2$s.</string>
+    <plurals name="custody_diff_days_move">
+        <item quantity="one">%1$d day would move over the coming weeks.</item>
+        <item quantity="other">%1$d days would move over the coming weeks.</item>
+    </plurals>
+    <string name="custody_diff_none">Nothing on the calendar would change.</string>
 </resources>

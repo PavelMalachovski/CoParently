@@ -4,19 +4,31 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.coparently.app.data.analytics.AnalyticsManager
 import com.coparently.app.data.remote.firebase.FcmService
+import com.coparently.app.data.repository.FamilySettingsRepository
+import com.coparently.app.data.repository.RatioSubmission
 import com.coparently.app.data.session.AccountDeletionService
 import com.coparently.app.data.session.SignedInAccountSource
+import com.coparently.app.domain.expenses.SplitRatio
 import com.coparently.app.domain.model.AccountSummary
+import com.coparently.app.domain.model.FamilyKind
 import com.coparently.app.domain.money.SupportedCurrency
 import com.coparently.app.domain.repository.PreferencesRepository
 import com.coparently.app.domain.repository.UserRepository
+import com.coparently.app.presentation.common.FamilyKindSource
+import com.coparently.app.presentation.common.Parents
+import com.coparently.app.presentation.common.ParentsSource
 import com.coparently.app.presentation.common.UiError
 import com.coparently.app.presentation.common.UiState
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.io.IOException
@@ -33,7 +45,10 @@ class SettingsViewModel @Inject constructor(
     private val userRepository: UserRepository,
     private val preferencesRepository: PreferencesRepository,
     private val analyticsManager: AnalyticsManager,
-    signedInAccountSource: SignedInAccountSource
+    signedInAccountSource: SignedInAccountSource,
+    private val familyKindSource: FamilyKindSource,
+    parentsSource: ParentsSource,
+    private val familySettingsRepository: FamilySettingsRepository
 ) : ViewModel() {
 
     /**
@@ -46,6 +61,161 @@ class SettingsViewModel @Inject constructor(
      */
     val account: StateFlow<AccountSummary?> = signedInAccountSource.observe()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(ACCOUNT_STOP_TIMEOUT_MS), null)
+
+    /**
+     * Whether this family's app offers child records, pet records, or both.
+     *
+     * The union of the two parents' answers, from [FamilyKindSource]; an account that has never
+     * answered — every one that predates the question — reads as both, so an upgrade hides
+     * nothing somebody was already using.
+     */
+    val caresFor: StateFlow<Set<FamilyKind>> = familyKindSource.observe()
+        .stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(ACCOUNT_STOP_TIMEOUT_MS),
+            FamilyKind.ALL
+        )
+
+    /**
+     * Signed-in parent and paired co-parent, for naming the two halves of the split.
+     *
+     * Two bare numbers cannot say which half is yours, and the answer is not guessable: the
+     * stored share is slot 1's and pairing decides which slot this device holds. A parent
+     * dragging that slider without names can propose the opposite of what they meant.
+     */
+    val parents: StateFlow<Parents> = parentsSource.observe()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(ACCOUNT_STOP_TIMEOUT_MS), Parents())
+
+    /**
+     * This parent's **own** answer, which is what the Settings dialog edits.
+     *
+     * Not [caresFor]. That is the union of both parents' answers and decides which rows the app
+     * draws; [setCaresFor] writes to this parent's row alone. Seeding the dialog with the union
+     * meant a box ticked only by the co-parent looked like yours: saving without touching
+     * anything copied their answer onto your record, and unticking one put it straight back.
+     */
+    val myCaresFor: StateFlow<Set<FamilyKind>> = familyKindSource.observeMine()
+        .stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(ACCOUNT_STOP_TIMEOUT_MS),
+            FamilyKind.ALL
+        )
+
+    /**
+     * What happened to a family answer, for the one case each where saying nothing would be a lie.
+     */
+    enum class CaresForOutcome {
+        /**
+         * Saved, but a kind this parent removed stays on screen because the co-parent keeps it.
+         * The union is what the app shows; unticking here changes only this parent's record.
+         */
+        KEPT_BY_CO_PARENT,
+
+        /**
+         * Saved, and a kind this parent removed is now hidden — along with every route to the
+         * records under it, which keep existing, keep syncing, and keep holding guest grants.
+         * The switch is reversible; saying nothing would make it look like a deletion.
+         */
+        RECORDS_KEPT,
+
+        /** Not saved at all: this account has no local profile row to write onto. */
+        NOT_SAVED
+    }
+
+    /**
+     * A **conflated `Channel`**, not a `MutableSharedFlow`: a shared flow with `replay = 0`
+     * discards a `tryEmit` outright when nothing is collecting — and returns `true` while doing
+     * it — so a signal raised a moment after the parent left Settings would vanish. The channel
+     * holds the last one until a collector attaches.
+     */
+    private val _caresForOutcome = Channel<CaresForOutcome>(Channel.CONFLATED)
+
+    /** Raised when a family answer needs a word said about it. See [CaresForOutcome]. */
+    val caresForOutcome: Flow<CaresForOutcome> = _caresForOutcome.receiveAsFlow()
+
+    /**
+     * Records a new answer onto this parent's own record.
+     *
+     * Refuses an empty set: with neither kind selected the app would have nothing to offer, and
+     * a family that co-parents nothing is not a state this product has.
+     *
+     * Both non-obvious outcomes are announced rather than swallowed. A missing profile row made
+     * this a silent no-op that read as "the setting resets itself"; and unticking a kind the
+     * co-parent still holds changes this row but nothing on screen, because what the app draws is
+     * the union — a control that appears to do nothing is what CLAUDE.md's design item 8 forbids.
+     */
+    fun setCaresFor(kinds: Set<FamilyKind>) {
+        if (kinds.isEmpty()) return
+        viewModelScope.launch {
+            val fresh = userRepository.getCurrentUser()
+            if (fresh == null) {
+                _caresForOutcome.trySend(CaresForOutcome.NOT_SAVED)
+                return@launch
+            }
+            val dropped = fresh.caresFor - kinds
+            userRepository.updateUser(fresh.copy(caresFor = kinds))
+            // Read at save time, off the shared upstream, rather than from a `WhileSubscribed`
+            // `.value` — invariant 17. `first()` is one emission of a flow that already has a
+            // subscriber on this screen, so it costs no listener.
+            val theirs = familyKindSource.observeTheirs().first()
+            // Both branches judge what the screen actually *draws* — the union — rather than
+            // this parent's row alone. Judging by the row got both answers wrong: `dropped` is
+            // empty for every account that never answered, which is the population that upgrades
+            // into this question, so the one save that really did hide a section said nothing;
+            // and `theirs - kinds` is non-empty whenever the co-parent holds a kind this parent
+            // does not, so an unchanged save told them they had removed one.
+            val hidden = FamilyKind.effective(fresh.caresFor, theirs) -
+                FamilyKind.effective(kinds, theirs)
+            when {
+                // Given up here and still drawn because the co-parent keeps it. Conditioned on a
+                // real removal, so it can never claim one that did not happen.
+                (dropped intersect theirs).isNotEmpty() ->
+                    _caresForOutcome.trySend(CaresForOutcome.KEPT_BY_CO_PARENT)
+                hidden.isNotEmpty() -> _caresForOutcome.trySend(CaresForOutcome.RECORDS_KEPT)
+                else -> Unit
+            }
+        }
+    }
+
+    /**
+     * The agreed split of a shared expense.
+     *
+     * Half each until the family agrees otherwise. Cached locally as it changes, because the
+     * expense save path reads it and cannot wait on a document.
+     */
+    val agreedRatio: StateFlow<SplitRatio> = familySettingsRepository.observeSettings()
+        .map { settings ->
+            settings?.ratio?.also(familySettingsRepository::cacheAgreedRatio)
+                ?: familySettingsRepository.agreedRatioOrDefault()
+        }
+        .stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(ACCOUNT_STOP_TIMEOUT_MS),
+            SplitRatio.EVEN
+        )
+
+    /**
+     * How the last submitted ratio landed, for the screen to report once.
+     *
+     * Conflated channel for the reason [caresForOutcome] gives: a `MutableSharedFlow` with
+     * `replay = 0` drops an emission when nothing is collecting, and the round trip to Firestore
+     * easily outlives a parent closing Settings.
+     */
+    private val _ratioSubmission = Channel<RatioSubmission?>(Channel.CONFLATED)
+    val ratioSubmission: Flow<RatioSubmission?> = _ratioSubmission.receiveAsFlow()
+
+    /**
+     * Puts a new split to the co-parent, or applies it when there is nobody to ask.
+     *
+     * Emits null on a refusal — the transition refuses proposing over the co-parent's pending
+     * one, and refuses a "change" to the ratio already agreed. Either way the screen has to say
+     * something: a control that looks like it worked is worse than one that says it did not.
+     */
+    fun submitRatio(ratio: SplitRatio) {
+        viewModelScope.launch {
+            _ratioSubmission.send(familySettingsRepository.submitRatio(ratio).getOrNull())
+        }
+    }
 
     private val _settingsState = MutableStateFlow(SettingsUiState())
     val settingsState: StateFlow<SettingsUiState> = _settingsState.asStateFlow()

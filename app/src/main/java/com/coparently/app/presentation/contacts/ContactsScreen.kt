@@ -34,6 +34,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.coparently.app.R
+import com.coparently.app.domain.contacts.ContactDirectory
 import com.coparently.app.domain.contacts.ContactGroup
 import com.coparently.app.domain.contacts.DirectoryContact
 import com.coparently.app.presentation.common.GroupLabel
@@ -184,13 +185,22 @@ private fun ContactRow(
     onDial: (String) -> Unit
 ) {
     val dialable = contact.dialable
-    val supporting = (listOf(contact.relationship) + contact.numbers)
+    // A vet row carries a sentinel rather than a typed relationship, so the word is resolved
+    // here, where there is a `Context` and five translations, instead of in the domain.
+    val vetLabel = stringResource(R.string.contacts_vet)
+    val relationship = if (contact.relationship == ContactDirectory.VET_RELATIONSHIP) {
+        vetLabel
+    } else {
+        contact.relationship
+    }
+    val title = contact.name.ifBlank { relationship }
+    val supporting = (listOf(relationship) + contact.numbers)
         .filter { it.isNotBlank() }
         .joinToString(NUMBER_SEPARATOR)
     val callLabel = stringResource(R.string.contacts_call)
 
     SectionRow(
-        title = contact.name,
+        title = title,
         icon = Icons.Default.Person,
         supporting = supporting.ifBlank { null },
         onClick = dialable?.let { number -> { onDial(number) } },

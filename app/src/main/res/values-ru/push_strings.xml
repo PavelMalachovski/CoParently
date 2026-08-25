@@ -34,4 +34,28 @@
     <string name="push_pairing_removed_title">Связь с со-родителем разорвана</string>
     <string name="push_pairing_removed_body">%1$s разорвал(а) связь</string>
     <string name="push_actor_fallback">Второй родитель</string>
+    <plurals name="push_day_swap_group_offered_body">
+        <item quantity="one">Второй родитель предлагает обменять %1$d день</item>
+        <item quantity="few">Второй родитель предлагает обменять %1$d дня</item>
+        <item quantity="many">Второй родитель предлагает обменять %1$d дней</item>
+        <item quantity="other">Второй родитель предлагает обменять %1$d дней</item>
+    </plurals>
+    <plurals name="push_day_swap_group_accepted_body">
+        <item quantity="one">Второй родитель согласился обменять %1$d день</item>
+        <item quantity="few">Второй родитель согласился обменять %1$d дня</item>
+        <item quantity="many">Второй родитель согласился обменять %1$d дней</item>
+        <item quantity="other">Второй родитель согласился обменять %1$d дней</item>
+    </plurals>
+    <plurals name="push_day_swap_group_declined_body">
+        <item quantity="one">Второй родитель отклонил обмен %1$d дня</item>
+        <item quantity="few">Второй родитель отклонил обмен %1$d дней</item>
+        <item quantity="many">Второй родитель отклонил обмен %1$d дней</item>
+        <item quantity="other">Второй родитель отклонил обмен %1$d дней</item>
+    </plurals>
+    <string name="push_split_ratio_proposed_title">Предложено новое деление расходов</string>
+    <string name="push_split_ratio_proposed_body">Второй родитель предлагает другое деление. Откройте приложение, чтобы подтвердить или отклонить.</string>
+    <string name="push_split_ratio_accepted_title">Деление расходов согласовано</string>
+    <string name="push_split_ratio_accepted_body">Второй родитель согласился с новым делением. Оно действует для новых расходов.</string>
+    <string name="push_split_ratio_declined_title">Деление расходов отклонено</string>
+    <string name="push_split_ratio_declined_body">Второй родитель отклонил новое деление. Ничего не изменилось.</string>
 </resources>

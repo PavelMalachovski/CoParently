@@ -166,7 +166,12 @@ class ExpenseRepositoryImpl @Inject constructor(
         "date" to expense.date.format(dateFormatter),
         "receiptUrl" to (expense.receiptUrl ?: ""),
         "notes" to (expense.notes ?: ""),
-        "createdAt" to expense.createdAt.format(dateTimeFormatter)
+        "createdAt" to expense.createdAt.format(dateTimeFormatter),
+        // The share this expense was priced at, so both phones agree on a settled month even
+        // after the family renegotiates. -1 rather than an omitted key: the read below narrows
+        // through `Number` and a negative value is not a share, which is how "recorded before
+        // the agreement existed" crosses the wire.
+        "splitBasisPoints" to (expense.splitBasisPoints ?: -1)
     )
 
     /**
@@ -254,7 +259,9 @@ class ExpenseRepositoryImpl @Inject constructor(
                         createdAt = LocalDateTime.parse(data["createdAt"] as String, dateTimeFormatter),
                         syncedToFirestore = true,
                         createdByFirebaseUid =
-                            (data["createdByFirebaseUid"] as? String)?.takeIf { it.isNotEmpty() }
+                            (data["createdByFirebaseUid"] as? String)?.takeIf { it.isNotEmpty() },
+                        splitBasisPoints = (data["splitBasisPoints"] as? Number)?.toInt()
+                            ?.takeIf { it >= 0 }
                     )
                     expenseDao.insertExpense(expense.toEntity())
                 }
@@ -344,7 +351,8 @@ class ExpenseRepositoryImpl @Inject constructor(
             notes = notes,
             createdAt = createdAt,
             syncedToFirestore = syncedToFirestore,
-            createdByFirebaseUid = createdByFirebaseUid
+            createdByFirebaseUid = createdByFirebaseUid,
+            splitBasisPoints = splitBasisPoints
         )
     }
 
@@ -363,7 +371,8 @@ class ExpenseRepositoryImpl @Inject constructor(
             notes = notes,
             createdAt = createdAt,
             syncedToFirestore = syncedToFirestore,
-            createdByFirebaseUid = createdByFirebaseUid
+            createdByFirebaseUid = createdByFirebaseUid,
+            splitBasisPoints = splitBasisPoints
         )
     }
 }

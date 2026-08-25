@@ -103,4 +103,11 @@
     <string name="childinfo_grade_placeholder">напр., 3-й класс</string>
     <string name="childinfo_teacher_name_optional_label">Имя учителя (необязательно)</string>
     <string name="childinfo_teacher_email_optional_label">Эл. почта учителя (необязательно)</string>
+    <string name="childinfo_save_failed">Не удалось сохранить данные ребёнка. Попробуйте ещё раз.</string>
+    <string name="childinfo_children_group_label">Дети</string>
+    <string name="childinfo_delete_title">Удалить %1$s?</string>
+    <string name="childinfo_delete_message">Запись, лекарства, аллергии и фотографии будут удалены с этого устройства и с устройства второго родителя.</string>
+    <string name="childinfo_delete_confirm">Удалить</string>
+    <string name="childinfo_delete_cancel">Оставить</string>
+    <string name="childinfo_delete_action">Удалить ребёнка</string>
 </resources>

@@ -48,6 +48,20 @@
     <string name="settings_account_delete_cancel">Ponechat účet</string>
     <string name="settings_account_delete_progress">Mažeme váš účet…</string>
     <string name="settings_account_delete_failed">Účet se nepodařilo smazat. Zkuste to prosím znovu.</string>
+    <string name="settings_family_kind_title">Co vychováváte společně</string>
+    <string name="settings_family_kind_both">%1$s a %2$s</string>
+    <string name="settings_family_kind_save">Uložit</string>
+    <string name="settings_family_kind_cancel">Zrušit</string>
+    <string name="settings_family_kind_kept_by_co_parent">Uloženo. Sekce, kterou jste odebrali, zůstává viditelná, protože ji druhý rodič má dál.</string>
+    <string name="settings_family_kind_records_kept">Odebráno. Záznamy zůstávají v zařízení — sekci sem můžete kdykoli vrátit.</string>
+    <string name="settings_family_kind_not_saved">Nepodařilo se uložit — váš profil se ještě nenačetl. Zkuste to za chvíli znovu.</string>
+    <string name="settings_split_ratio_title">Rozdělení výdajů</string>
+    <string name="settings_split_ratio_value">%1$d / %2$d</string>
+    <string name="settings_split_ratio_value_named">%1$s %2$d / %3$s %4$d</string>
+    <string name="settings_split_ratio_hint">Platí pro výdaje zadané od této chvíle. Již zadané si ponechají rozdělení, se kterým byly pořízeny.</string>
+    <string name="settings_split_ratio_applied">Rozdělení uloženo</string>
+    <string name="settings_split_ratio_proposed">Odesláno druhému rodiči k potvrzení</string>
+    <string name="settings_split_ratio_refused">Toto rozdělení se nepodařilo navrhnout</string>
     <!-- Disclosure chevron content descriptions (UX-11). -->
     <string name="settings_expand">Zobrazit možnosti</string>
     <string name="settings_collapse">Skrýt možnosti</string>

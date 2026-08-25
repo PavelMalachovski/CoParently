@@ -80,6 +80,15 @@ interface MessageRepository {
     suspend fun sendMessage(message: Message)
 
     /**
+     * Re-sends every conversation and message this device wrote locally but never got onto the
+     * server.
+     *
+     * Safe to call at any time and cheap when there is nothing queued. One pass, no loop: the
+     * next thread open, pull-to-refresh, or periodic sync is the retry.
+     */
+    suspend fun flushOutbox()
+
+    /**
      * Records that [myUid] has read [conversationId] up to now.
      *
      * @param conversationId The deterministic conversation id.

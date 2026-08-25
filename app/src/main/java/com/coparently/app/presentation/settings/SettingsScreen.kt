@@ -21,6 +21,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.filled.Balance
 import androidx.compose.material.icons.filled.ChildCare
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.DeleteForever
@@ -28,6 +29,7 @@ import androidx.compose.material.icons.filled.Diversity3
 import androidx.compose.material.icons.filled.EventAvailable
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.FamilyRestroom
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Language
@@ -41,6 +43,7 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -49,6 +52,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
@@ -59,9 +63,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -74,17 +80,22 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.coparently.app.R
+import com.coparently.app.data.repository.RatioSubmission
 import com.coparently.app.data.sync.SyncStatus
+import com.coparently.app.domain.expenses.SplitRatio
+import com.coparently.app.domain.model.FamilyKind
 import com.coparently.app.domain.money.SupportedCurrency
 import com.coparently.app.presentation.common.ConfirmationDialog
 import com.coparently.app.presentation.common.GroupLabel
+import com.coparently.app.presentation.common.ParentNames
 import com.coparently.app.presentation.common.SectionGroup
 import com.coparently.app.presentation.common.SectionRow
 import com.coparently.app.presentation.common.SignedInAsRow
+import com.coparently.app.presentation.common.rememberParentNames
 import com.coparently.app.presentation.sync.GoogleCalendarSyncState
 import com.coparently.app.presentation.sync.SyncViewModel
-import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.launch
+import java.time.format.DateTimeFormatter
 
 private val syncTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 
@@ -149,6 +160,39 @@ fun SettingsScreen(
     val userEmail by syncViewModel.userEmail.collectAsState()
 
     val settingsUiState by settingsViewModel.settingsState.collectAsState()
+    val caresFor by settingsViewModel.caresFor.collectAsState()
+    // The dialog edits this parent's own answer; `caresFor` above is the union of both and is
+    // what decides which rows below are drawn. Seeding the dialog from the union made a box the
+    // co-parent ticked look like this parent's own.
+    val myCaresFor by settingsViewModel.myCaresFor.collectAsState()
+    val agreedRatio by settingsViewModel.agreedRatio.collectAsState()
+    // The split is two numbers about money; without names they do not say whose is whose.
+    val splitParentNames = rememberParentNames(settingsViewModel.parents.collectAsState().value)
+    var showFamilyKindPicker by rememberSaveable { mutableStateOf(false) }
+    var showSplitPicker by rememberSaveable { mutableStateOf(false) }
+
+    if (showSplitPicker) {
+        SplitRatioDialog(
+            current = agreedRatio,
+            parentNames = splitParentNames,
+            onConfirm = { ratio ->
+                settingsViewModel.submitRatio(ratio)
+                showSplitPicker = false
+            },
+            onDismiss = { showSplitPicker = false }
+        )
+    }
+
+    if (showFamilyKindPicker) {
+        FamilyKindDialog(
+            selected = myCaresFor,
+            onConfirm = { kinds ->
+                settingsViewModel.setCaresFor(kinds)
+                showFamilyKindPicker = false
+            },
+            onDismiss = { showFamilyKindPicker = false }
+        )
+    }
     val darkTheme by settingsViewModel.darkThemeFlow.collectAsState()
     val account by settingsViewModel.account.collectAsState()
     val defaultCurrency by settingsViewModel.defaultCurrency.collectAsState()
@@ -177,6 +221,41 @@ fun SettingsScreen(
         if (settingsUiState.errorMessage != null) {
             snackbarHostState.showSnackbar(deletionFailed)
             settingsViewModel.clearMessages()
+        }
+    }
+
+    // "Saved" and "sent to your co-parent to confirm" are different outcomes, and a parent told
+    // the first when the second is true will spend against a split nobody has agreed.
+    val splitApplied = stringResource(R.string.settings_split_ratio_applied)
+    val splitProposed = stringResource(R.string.settings_split_ratio_proposed)
+    val splitRefused = stringResource(R.string.settings_split_ratio_refused)
+    LaunchedEffect(Unit) {
+        settingsViewModel.ratioSubmission.collect { outcome ->
+            snackbarHostState.showSnackbar(
+                when (outcome) {
+                    RatioSubmission.APPLIED -> splitApplied
+                    RatioSubmission.PROPOSED -> splitProposed
+                    null -> splitRefused
+                }
+            )
+        }
+    }
+
+    // Both non-obvious outcomes of the family answer. Unticking a kind the co-parent still keeps
+    // saves onto this parent's record and changes nothing on screen, because what the app draws
+    // is the union of the two answers — silence there reads as a control that does not work.
+    val familyKeptByCoParent = stringResource(R.string.settings_family_kind_kept_by_co_parent)
+    val familyNotSaved = stringResource(R.string.settings_family_kind_not_saved)
+    val familyRecordsKept = stringResource(R.string.settings_family_kind_records_kept)
+    LaunchedEffect(Unit) {
+        settingsViewModel.caresForOutcome.collect { outcome ->
+            snackbarHostState.showSnackbar(
+                when (outcome) {
+                    SettingsViewModel.CaresForOutcome.KEPT_BY_CO_PARENT -> familyKeptByCoParent
+                    SettingsViewModel.CaresForOutcome.RECORDS_KEPT -> familyRecordsKept
+                    SettingsViewModel.CaresForOutcome.NOT_SAVED -> familyNotSaved
+                }
+            )
         }
     }
 
@@ -241,7 +320,41 @@ fun SettingsScreen(
                         )
                         Divider()
                     }
-                    onNavigateToChildInfo?.let { navigate ->
+                    // What this family co-parents, and the way back into that answer. Without
+                    // this row a family that gets a dog a year after signing up could never
+                    // reach the (fully built) pet records — design item 8 in reverse.
+                    SectionRow(
+                        icon = Icons.Default.FamilyRestroom,
+                        title = stringResource(R.string.settings_family_kind_title),
+                        supporting = caresForSummary(caresFor),
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            showFamilyKindPicker = true
+                        },
+                        trailing = { Chevron() }
+                    )
+                    Divider()
+                    // The money agreement lives with the family, not under App preferences: it
+                    // is something the two parents agree, like the custody pattern, not a device
+                    // setting like the language.
+                    SectionRow(
+                        icon = Icons.Default.Balance,
+                        title = stringResource(R.string.settings_split_ratio_title),
+                        supporting = stringResource(
+                            R.string.settings_split_ratio_value_named,
+                            splitParentNames.labelFor(SLOT_MOM),
+                            agreedRatio.momPercent,
+                            splitParentNames.labelFor(SLOT_DAD),
+                            agreedRatio.dadPercent
+                        ),
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            showSplitPicker = true
+                        },
+                        trailing = { Chevron() }
+                    )
+                    Divider()
+                    onNavigateToChildInfo?.takeIf { FamilyKind.CHILDREN in caresFor }?.let { navigate ->
                         SectionRow(
                             icon = Icons.Default.ChildCare,
                             title = stringResource(R.string.settings_child_info_title),
@@ -254,7 +367,7 @@ fun SettingsScreen(
                         )
                         Divider()
                     }
-                    onNavigateToPets?.let { navigate ->
+                    onNavigateToPets?.takeIf { FamilyKind.PETS in caresFor }?.let { navigate ->
                         SectionRow(
                             icon = Icons.Default.Pets,
                             title = stringResource(R.string.settings_pets_title),
@@ -899,3 +1012,170 @@ private fun SyncStatus.summaryDot(): Color? = when (this) {
     is SyncStatus.Success -> MaterialTheme.colorScheme.tertiary
     is SyncStatus.Error -> MaterialTheme.colorScheme.error
 }
+
+/**
+ * The one-line summary of what the family co-parents, for the Settings row.
+ *
+ * Composable because the answer is a set of slot-like constants and the row shows names in the
+ * reader's language, which a ViewModel has no `Context` to resolve.
+ */
+@Composable
+private fun caresForSummary(kinds: Set<FamilyKind>): String {
+    val children = stringResource(R.string.onboarding_family_children)
+    val pets = stringResource(R.string.onboarding_family_pets)
+    return when {
+        kinds.containsAll(FamilyKind.ALL) -> stringResource(
+            R.string.settings_family_kind_both,
+            children,
+            pets
+        )
+        FamilyKind.PETS in kinds -> pets
+        else -> children
+    }
+}
+
+/**
+ * Changes what the family co-parents.
+ *
+ * A dialog rather than a second screen: two checkboxes and a confirm is the whole interaction,
+ * and it is reached from a row that already says the current answer. Confirm is disabled with
+ * nothing ticked — a family that co-parents neither is not a state this product has, and an OK
+ * that silently did nothing would be worse than one that is plainly unavailable.
+ *
+ * @param selected What is currently agreed, as the union of both parents' answers.
+ * @param onConfirm Called with the new set; only this parent's own record is written.
+ * @param onDismiss Closes without changing anything.
+ */
+@Composable
+private fun FamilyKindDialog(
+    selected: Set<FamilyKind>,
+    onConfirm: (Set<FamilyKind>) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var chosen by rememberSaveable(selected) { mutableStateOf(selected.map { it.name }.toSet()) }
+    val kinds = chosen.mapNotNull { name -> FamilyKind.entries.firstOrNull { it.name == name } }
+        .toSet()
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.settings_family_kind_title)) },
+        text = {
+            Column {
+                FamilyKind.entries.forEach { kind ->
+                    val label = stringResource(
+                        if (kind == FamilyKind.CHILDREN) {
+                            R.string.onboarding_family_children
+                        } else {
+                            R.string.onboarding_family_pets
+                        }
+                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(
+                            checked = kind.name in chosen,
+                            onCheckedChange = { checked ->
+                                chosen = if (checked) chosen + kind.name else chosen - kind.name
+                            }
+                        )
+                        Text(label)
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onConfirm(kinds) },
+                enabled = kinds.isNotEmpty()
+            ) {
+                Text(stringResource(R.string.settings_family_kind_save))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.settings_family_kind_cancel))
+            }
+        }
+    )
+}
+
+/**
+ * Picks a new split of a shared expense.
+ *
+ * A slider over whole percents for slot 1, with slot 2 taking the remainder — the two can never
+ * be stored inconsistently because only one of them is a value. Percent rather than a free
+ * amount because a ratio is what the parents agree; an amount is what an individual expense is.
+ *
+ * This dialog **proposes**. Whether it applies straight away depends on whether there is a
+ * co-parent to ask, and the screen says which happened rather than letting a parent believe a
+ * split the other has not agreed.
+ *
+ * @param current The agreed ratio, as the slider opens.
+ * @param onConfirm Called with the chosen ratio.
+ * @param onDismiss Closes without proposing anything.
+ */
+@Composable
+private fun SplitRatioDialog(
+    current: SplitRatio,
+    parentNames: ParentNames,
+    onConfirm: (SplitRatio) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var momPercent by rememberSaveable(current) { mutableIntStateOf(current.momPercent) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.settings_split_ratio_title)) },
+        text = {
+            Column {
+                Text(
+                    text = stringResource(
+                        R.string.settings_split_ratio_value_named,
+                        parentNames.labelFor(SLOT_MOM),
+                        momPercent,
+                        parentNames.labelFor(SLOT_DAD),
+                        SPLIT_WHOLE_PERCENT - momPercent
+                    ),
+                    style = MaterialTheme.typography.titleMedium
+                )
+                Slider(
+                    value = momPercent.toFloat(),
+                    onValueChange = { momPercent = it.toInt() },
+                    valueRange = 0f..SPLIT_WHOLE_PERCENT.toFloat(),
+                    steps = SPLIT_SLIDER_STEPS
+                )
+                Text(
+                    text = stringResource(R.string.settings_split_ratio_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(SplitRatio.ofMomPercent(momPercent)) }) {
+                Text(stringResource(R.string.settings_family_kind_save))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.settings_family_kind_cancel))
+            }
+        }
+    )
+}
+
+/** A whole share, as a percent. */
+/**
+ * The two slot identifiers, never shown as words — [ParentNames] turns each into that person's
+ * name. See CLAUDE.md: `"mom"`/`"dad"` are schema identifiers and the app never prints them.
+ */
+private const val SLOT_MOM = "mom"
+private const val SLOT_DAD = "dad"
+
+private const val SPLIT_WHOLE_PERCENT = 100
+
+/**
+ * Stops on the slider: every 5 %.
+ *
+ * `steps` counts the stops *between* the ends, so twenty 5 % intervals give nineteen. Whole
+ * single percents would be a slider nobody can land on with a thumb.
+ */
+private const val SPLIT_SLIDER_STEPS = 19

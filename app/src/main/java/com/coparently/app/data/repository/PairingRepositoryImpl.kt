@@ -7,6 +7,7 @@ import com.coparently.app.data.local.dao.UserDao
 import com.coparently.app.data.remote.firebase.FirebaseAuthService
 import com.coparently.app.data.remote.firebase.PairingException
 import com.coparently.app.data.remote.firebase.PairingFunctions
+import com.coparently.app.domain.model.FamilyKind
 import com.coparently.app.domain.model.PairingError
 import com.coparently.app.domain.model.PairingInvite
 import com.coparently.app.domain.model.PairingState
@@ -219,6 +220,12 @@ class PairingRepositoryImpl @Inject constructor(
             }
             if (partnerId != null) ensureConversationWith(partnerId)
         } catch (e: CancellationException) {
+            // Reset before rethrowing, for the same reason the generic branch below does. This
+            // flow is collected under `WhileSubscribed`, so leaving the app mid-`await()`
+            // cancels it — and a marker left set here means the conversation document is never
+            // created for the rest of the process, which the `messages` create rule turns into
+            // "every send from this device is denied".
+            appliedPairing.set(null)
             throw e
         } catch (
             @Suppress("TooGenericExceptionCaught") e: Exception
@@ -304,7 +311,11 @@ class PairingRepositoryImpl @Inject constructor(
             // their name depends on it. Blank normalizes to null for the same reason as the
             // photo: a pair created before slot assignment shipped has no slot here, and
             // "unknown" must not be dressed up as an answer.
-            role = data.getString("role")?.takeIf { it.isNotBlank() }
+            role = data.getString("role")?.takeIf { it.isNotBlank() },
+            // Their answer to "children, pets or both". Absent on a build that never wrote it,
+            // which reads as "contributes nothing" rather than "everything" — one parent's real
+            // answer must not be widened by the other's silence.
+            caresFor = FamilyKind.fromStored(data.getString("caresFor"))
         )
     }
 

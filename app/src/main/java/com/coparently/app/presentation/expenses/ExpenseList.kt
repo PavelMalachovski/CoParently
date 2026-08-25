@@ -38,11 +38,13 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
 import com.coparently.app.R
+import com.coparently.app.domain.expenses.SplitRatio
+import com.coparently.app.domain.expenses.bothSlotsKnown
+import com.coparently.app.domain.expenses.isTwoWaySplit
 import com.coparently.app.domain.model.Expense
+import com.coparently.app.presentation.common.FullScreenImageDialog
 import com.coparently.app.presentation.common.ParentNames
 import com.coparently.app.presentation.theme.ParentColors
 import java.time.format.DateTimeFormatter
@@ -61,6 +63,12 @@ private val TILE_SIZE = 40.dp
  * backdrop with tighter corners shows as a red outline around every row in the list.
  */
 private val ROW_CORNER = 12.dp
+
+/**
+ * Slot 1, whose share the stored ratio counts. Never shown as the word — [ParentNames] turns it
+ * into that person's name, which is the whole reason the row can print a ratio at all.
+ */
+private const val MOM_SLOT = "mom"
 
 /**
  * List of expenses for the period. Each row swipes left to delete, matching [EventListScreen].
@@ -92,6 +100,12 @@ fun ExpenseList(
     // Receipt being viewed full-screen; transient UI state, deliberately local.
     var viewedReceiptUrl by remember { mutableStateOf<String?>(null) }
 
+    // Whether the two parents can be told apart, which is what decides whether a row may print a
+    // ratio at all — the same fact `calculateExpenseBalance` keys the share it charges on. While
+    // both parents still read one slot the balance divides evenly, so a row claiming 70/30 would
+    // contradict the summary directly above it.
+    val splitKnown = remember(roleByUid) { bothSlotsKnown(roleByUid) }
+
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(horizontal = 14.dp, vertical = 4.dp),
@@ -104,6 +118,7 @@ fun ExpenseList(
                     expense = expense,
                     payerRole = roleByUid[expense.paidBy],
                     parentNames = parentNames,
+                    splitKnown = splitKnown,
                     onClick = onExpenseClick?.takeIf { modifiable }?.let { { it(expense) } },
                     onReceiptClick = { url -> viewedReceiptUrl = url }
                 )
@@ -117,8 +132,12 @@ fun ExpenseList(
     }
 
     viewedReceiptUrl?.let { url ->
-        ReceiptViewerDialog(
-            receiptUrl = url,
+        // A receipt is a document, not a snapshot: it is read, not glanced at. The shared
+        // viewer pinches, pans and double-taps, and — unlike the fit-to-width dialog it
+        // replaces — does not close on the first exploratory tap.
+        FullScreenImageDialog(
+            model = url,
+            contentDescription = stringResource(R.string.expenses_receipt_photo),
             onDismiss = { viewedReceiptUrl = null }
         )
     }
@@ -137,6 +156,9 @@ fun ExpenseList(
  * @param expense Expense to render
  * @param parentNames Resolves a slot to that parent's name
  * @param payerRole The payer's slot, or null when the payer is not a known parent
+ * @param splitKnown Whether both parent slots are known. Required rather than defaulted: false is
+ *   not silence, it makes the row assert "split 50/50", and a caller that has not worked the
+ *   answer out would be publishing a claim about money by omission.
  * @param onClick Opens the expense editor; null leaves the row inert
  * @param onReceiptClick Opens the full-screen receipt viewer
  */
@@ -145,6 +167,7 @@ fun ExpenseItem(
     expense: Expense,
     parentNames: ParentNames,
     payerRole: String? = null,
+    splitKnown: Boolean,
     onClick: (() -> Unit)? = null,
     onReceiptClick: (String) -> Unit = {}
 ) {
@@ -173,8 +196,25 @@ fun ExpenseItem(
         )
     }
 
+    // The ratio the expense was recorded under, not the family's current agreement: an expense
+    // is priced once and a later renegotiation must not re-label a settled month. Null — a row
+    // from before the agreement existed — divides evenly, which is what it was.
+    val ratio = remember(expense.splitBasisPoints, splitKnown, expense.splitBetween) {
+        SplitRatio.fromStored(expense.splitBasisPoints)
+            ?.takeIf { splitKnown && expense.isTwoWaySplit() }
+    }
     val splitLabel = when {
-        expense.splitBetween.size >= 2 && expense.splitBetween.size == 2 ->
+        // Named, not two bare numbers. The subtitle immediately before this already names one
+        // parent — the payer — so "split 70/30" beside it reads as *their* share, and the first
+        // figure is always slot 1's whoever paid. Naming the half the first number belongs to is
+        // the difference between a label and a wrong claim about money.
+        ratio != null -> stringResource(
+            R.string.expenses_split_ratio,
+            parentNames.labelFor(MOM_SLOT),
+            ratio.momPercent,
+            ratio.dadPercent
+        )
+        expense.isTwoWaySplit() ->
             stringResource(R.string.expenses_split_even)
         expense.splitBetween.size > 2 ->
             stringResource(R.string.expenses_split_n_ways, expense.splitBetween.size)
@@ -313,30 +353,5 @@ private fun SwipeToDeleteRow(
         }
     ) {
         content()
-    }
-}
-
-/**
- * Full-width receipt photo viewer; tap anywhere on the image or outside to close.
- */
-@Composable
-private fun ReceiptViewerDialog(
-    receiptUrl: String,
-    onDismiss: () -> Unit
-) {
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
-    ) {
-        AsyncImage(
-            model = receiptUrl,
-            contentDescription = stringResource(R.string.expenses_receipt_photo),
-            contentScale = ContentScale.Fit,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp)
-                .clip(MaterialTheme.shapes.medium)
-                .clickable(onClick = onDismiss)
-        )
     }
 }

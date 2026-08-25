@@ -1,5 +1,6 @@
 package com.coparently.app.data.repository
 
+import android.util.Log
 import com.coparently.app.data.remote.firebase.AcceptCalendarFriendResult
 import com.coparently.app.data.remote.firebase.FirebaseAuthService
 import com.coparently.app.data.remote.firebase.PairingException
@@ -127,6 +128,22 @@ class FriendRepositoryImpl @Inject constructor(
             }
     }
 
+    override suspend fun myGrant(): CalendarFriendGrant? {
+        val myUid = authService.getCurrentUser()?.uid ?: return null
+        val data = try {
+            firestore.collection(CALENDAR_FRIENDS).document(myUid).get().await().data
+        } catch (e: CancellationException) {
+            // Never swallowed: `runFriend` in this same file rethrows it for the same reason —
+            // a cancelled coroutine that reports itself as a failed read is a lie about why.
+            throw e
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+            Log.w(TAG, "Could not read this account's calendar-friend grant", e)
+            return null
+        }
+        return FriendMappers.grantFrom(myUid, data)
+            ?.takeIf { CalendarFriendPolicy.isActive(it, System.currentTimeMillis()) }
+    }
+
     override fun observeMyProfile(): Flow<FriendProfile?> {
         val myUid = authService.getCurrentUser()?.uid ?: return flowOf(null)
         return observeFriendProfile(myUid)
@@ -180,6 +197,7 @@ class FriendRepositoryImpl @Inject constructor(
     }
 
     private companion object {
+        const val TAG = "FriendRepository"
         const val USERS = "users"
         const val INVITATIONS = "invitations"
         const val CALENDAR_FRIENDS = "calendar_friends"

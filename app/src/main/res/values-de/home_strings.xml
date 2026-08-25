@@ -51,4 +51,8 @@
     <string name="home_dialog_requests_message">Dein Co-Elternteil wartet auf deine Antwort auf Anfragen.</string>
     <string name="home_dialog_later">Später</string>
     <string name="home_dialog_review">Ansehen</string>
+    <plurals name="home_dialog_swap_message_days">
+        <item quantity="one">%2$s schlägt vor, an %1$d Tag zu wechseln, wer das Kind hat: %3$s.</item>
+        <item quantity="other">%2$s schlägt vor, an %1$d Tagen zu wechseln, wer das Kind hat: %3$s bis %4$s.</item>
+    </plurals>
 </resources>

@@ -192,14 +192,7 @@ class MessageRepositoryImpl @Inject constructor(
 
         val sentAtMillis = message.sentAtMillis
         try {
-            firestoreMessageDataSource.sendMessage(
-                message.id,
-                message.toFirestoreMap(),
-                sentAtMillis
-            )
-            messageDao.insertMessage(
-                message.copy(syncedToFirestore = true, status = MessageSendStatus.SENT).toEntity()
-            )
+            deliver(message)
             bumpConversation(message.conversationId, message.senderId, sentAtMillis)
         } catch (e: CancellationException) {
             throw e
@@ -208,6 +201,117 @@ class MessageRepositoryImpl @Inject constructor(
         ) {
             messageDao.insertMessage(message.copy(status = MessageSendStatus.ERROR).toEntity())
             throw e
+        }
+    }
+
+    /**
+     * Writes one message to Firestore and settles its Room row, healing a missing conversation
+     * document on the way.
+     *
+     * The `messages` create rule reads `get(conversations/$(conversationId)).data.participants`,
+     * and a `get()` on a document that does not exist is an evaluation error, so the rule denies.
+     * `ensureConversation` writes that document best-effort and nothing retries it, so a device
+     * whose conversation write was refused or cancelled once could never send again — the thread
+     * looked entirely normal, because Room renders it. On a refusal this re-publishes the
+     * conversation from the local row and tries the message once more.
+     *
+     * The remote `lastMessageAt` bump is deliberately **after** the row is settled and is
+     * best-effort: it is ordering metadata, and it used to be able to condemn a message the
+     * co-parent had already received.
+     *
+     * @param message The message to deliver, exactly as it is stored.
+     */
+    private suspend fun deliver(message: Message) {
+        try {
+            firestoreMessageDataSource.sendMessage(message.id, message.toFirestoreMap())
+        } catch (e: CancellationException) {
+            throw e
+        } catch (
+            @Suppress("TooGenericExceptionCaught") e: Exception
+        ) {
+            Log.w(TAG, "Sending message ${message.id} was refused; re-publishing the thread", e)
+            if (!republishConversation(message.conversationId)) throw e
+            firestoreMessageDataSource.sendMessage(message.id, message.toFirestoreMap())
+        }
+        messageDao.insertMessage(
+            message.copy(syncedToFirestore = true, status = MessageSendStatus.SENT).toEntity()
+        )
+        runRemote("lastMessageAt bump", message.conversationId) {
+            firestoreMessageDataSource.bumpLastMessageAt(message.conversationId, message.sentAtMillis)
+        }
+    }
+
+    /**
+     * Re-writes the conversation document from this device's Room row.
+     *
+     * Derived from the stored participants rather than from a partner uid the caller would have
+     * to supply, so the outbox can heal a thread without knowing who is on the other end.
+     * `title` stays local for the reason [ensureConversation] documents.
+     *
+     * @param conversationId The thread to publish.
+     * @return true when the document is now there.
+     */
+    private suspend fun republishConversation(conversationId: String): Boolean {
+        val local = messageDao.getConversationById(conversationId)?.toDomain() ?: return false
+        if (local.participants.size != PARTICIPANT_COUNT) return false
+        return try {
+            firestoreMessageDataSource.setConversation(
+                conversationId,
+                mapOf(
+                    "id" to conversationId,
+                    "participants" to local.participants,
+                    "archived" to local.archived,
+                    "createdAt" to local.createdAt.toIsoString()
+                )
+            )
+            messageDao.insertConversation(local.copy(syncedToFirestore = true).toEntity())
+            true
+        } catch (e: CancellationException) {
+            throw e
+        } catch (
+            @Suppress("TooGenericExceptionCaught") e: Exception
+        ) {
+            Log.w(TAG, "Re-publishing conversation $conversationId failed", e)
+            false
+        }
+    }
+
+    /**
+     * Re-sends everything this device has written locally but never got onto the server.
+     *
+     * The outbox this drains is the pair of Room columns that already existed and had no reader:
+     * `conversations.syncedToFirestore` and `messages.syncedToFirestore`. Without it a message
+     * whose write failed once stayed `ERROR` forever — nothing retried it on reconnect, on
+     * reopening the thread, on relaunch, or on the periodic sync — which is why a co-parent
+     * simply never received it.
+     *
+     * **Rows are replayed exactly as stored.** A re-send is a `set()` on an id that may already
+     * exist, so Firestore evaluates it against the `messages` *update* rule, which admits only
+     * an `isRead` or `conversationId` diff. Replaying the stored row produces an empty diff and
+     * passes; rebuilding the map from the current profile would be denied on any account whose
+     * display name has changed since.
+     *
+     * Conversations go first: a message cannot be accepted into a thread that is not there.
+     * One pass, no loop — the next open or the next sync tick is the retry.
+     */
+    override suspend fun flushOutbox() {
+        for (entity in messageDao.getUnsyncedConversations()) {
+            republishConversation(entity.id)
+        }
+        for (entity in messageDao.getUnsyncedMessages()) {
+            val message = entity.toDomain()
+            // Somebody else's message that arrived over the mirror is not this device's to send.
+            if (message.senderId != firebaseAuthService.getCurrentUser()?.uid) continue
+            try {
+                deliver(message)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (
+                @Suppress("TooGenericExceptionCaught") e: Exception
+            ) {
+                Log.w(TAG, "Outbox: message ${message.id} still undelivered", e)
+                messageDao.insertMessage(message.copy(status = MessageSendStatus.ERROR).toEntity())
+            }
         }
     }
 
@@ -441,5 +545,8 @@ class MessageRepositoryImpl @Inject constructor(
 
         /** Ceiling on a single backoff, so the last attempts stay a minute apart, not an hour. */
         const val RECONNECT_MAX_DELAY_MS = 60_000L
+
+        /** A conversation is between exactly the two parents; anything else is not publishable. */
+        const val PARTICIPANT_COUNT = 2
     }
 }

@@ -8,6 +8,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -19,6 +20,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.coparently.app.R
 import com.coparently.app.domain.model.*
 import com.coparently.app.presentation.childinfo.components.*
+import com.coparently.app.presentation.common.ConfirmationDialog
 import com.coparently.app.presentation.common.MedicalProfileEditor
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
@@ -60,8 +62,30 @@ fun AddEditChildInfoScreen(
     var removedPhotos by remember { mutableStateOf<List<String>>(emptyList()) }
     var isSaving by remember { mutableStateOf(false) }
     var showDatePicker by remember { mutableStateOf(false) }
-    var saveCompleted by remember { mutableStateOf(false) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
+
+    // The ViewModel says when the write landed. This used to be a `saveCompleted && !isSaving`
+    // guard over two local flags, and nothing ever cleared `isSaving`, so it never fired: the
+    // form stayed disabled behind a spinner while the record had already been written to Room.
+    val saveFailed = stringResource(R.string.childinfo_save_failed)
+    LaunchedEffect(Unit) {
+        viewModel.saveOutcome.collect { outcome ->
+            when (outcome) {
+                ChildSaveOutcome.SAVED -> {
+                    // Cleared before leaving: a second Save would otherwise re-upload the same
+                    // content URIs, orphaning objects in the bucket and doubling the strip.
+                    pickedPhotos = emptyList()
+                    removedPhotos = emptyList()
+                    onNavigateBack()
+                }
+                ChildSaveOutcome.FAILED -> {
+                    isSaving = false
+                    snackbarHostState.showSnackbar(saveFailed)
+                }
+            }
+        }
+    }
 
     // Load existing child info if editing
     LaunchedEffect(childInfoId) {
@@ -87,6 +111,26 @@ fun AddEditChildInfoScreen(
             medicalProfile = info.medicalProfile
             storedPhotos = info.medicalPhotos
         }
+    }
+
+    if (showDeleteConfirm) {
+        val child = currentChildInfo
+        ConfirmationDialog(
+            title = stringResource(R.string.childinfo_delete_title, child?.childName.orEmpty()),
+            message = stringResource(R.string.childinfo_delete_message),
+            confirmText = stringResource(R.string.childinfo_delete_confirm),
+            dismissText = stringResource(R.string.childinfo_delete_cancel),
+            isDestructive = true,
+            onDismiss = { showDeleteConfirm = false },
+            onConfirm = {
+                showDeleteConfirm = false
+                if (child != null) {
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    viewModel.deleteChildInfo(child)
+                    onNavigateBack()
+                }
+            }
+        )
     }
 
     // The same picker the receipt and event-photo flows use. Nothing is uploaded here: the URI
@@ -144,6 +188,22 @@ fun AddEditChildInfoScreen(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = stringResource(R.string.childinfo_back)
                         )
+                    }
+                },
+                actions = {
+                    // `deleteChildInfo` has existed on the ViewModel since the feature shipped
+                    // and had no caller: with one child a mis-added record was tolerable, with
+                    // several it is a row nobody can remove. Same anatomy as the pet editor's.
+                    if (childInfoId != null && childInfoId != "new" && currentChildInfo != null) {
+                        IconButton(onClick = { showDeleteConfirm = true }) {
+                            Icon(
+                                imageVector = Icons.Default.Delete,
+                                contentDescription = stringResource(
+                                    R.string.childinfo_delete_action
+                                ),
+                                tint = MaterialTheme.colorScheme.error
+                            )
+                        }
                     }
                 }
             )
@@ -452,7 +512,6 @@ fun AddEditChildInfoScreen(
                             newPhotoUris = pickedPhotos,
                             removedPhotoUrls = removedPhotos
                         )
-                        saveCompleted = true
                     }
                 },
                 modifier = Modifier.fillMaxWidth(),
@@ -473,13 +532,6 @@ fun AddEditChildInfoScreen(
                         stringResource(R.string.childinfo_save_changes)
                     }
                 )
-            }
-
-            // Navigate back after save completes
-            LaunchedEffect(saveCompleted, isSaving) {
-                if (saveCompleted && !isSaving) {
-                    onNavigateBack()
-                }
             }
 
             // Bottom spacing

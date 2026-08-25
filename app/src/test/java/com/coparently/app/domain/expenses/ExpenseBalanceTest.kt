@@ -21,8 +21,10 @@ class ExpenseBalanceTest {
         id: String,
         amount: Double,
         paidBy: String,
-        splitBetween: List<String> = listOf(mom, dad)
+        splitBetween: List<String> = listOf(mom, dad),
+        splitBasisPoints: Int? = null
     ) = Expense(
+        splitBasisPoints = splitBasisPoints,
         id = id,
         title = id,
         amount = amount,
@@ -211,5 +213,88 @@ class ExpenseBalanceTest {
         )
 
         assertTrue(balances.isEmpty())
+    }
+
+    // ---- the agreed split ------------------------------------------------------
+
+    @Test
+    fun `an expense priced at an agreed split owes that share, not half`() {
+        // 70/30 means slot 1 owes 70 of a 100 they did not pay for.
+        val balance = calculateExpenseBalance(
+            expenses = listOf(expense("school", 100.0, dad, splitBasisPoints = 7000)),
+            currentUserId = mom,
+            roleByUid = roles
+        )
+
+        assertEquals(-70.0, balance.netForCurrentUser, 0.001)
+    }
+
+    @Test
+    fun `the payer's own share is netted off, so they are owed only the rest`() {
+        val balance = calculateExpenseBalance(
+            expenses = listOf(expense("school", 100.0, dad, splitBasisPoints = 7000)),
+            currentUserId = dad,
+            roleByUid = roles
+        )
+
+        assertEquals(70.0, balance.netForCurrentUser, 0.001)
+    }
+
+    @Test
+    fun `an expense recorded before the agreement existed still divides evenly`() {
+        // The whole reason the ratio is snapshotted onto the expense: a row that predates it
+        // must keep the split it was actually entered under.
+        val balance = calculateExpenseBalance(
+            expenses = listOf(expense("school", 100.0, dad, splitBasisPoints = null)),
+            currentUserId = mom,
+            roleByUid = roles
+        )
+
+        assertEquals(-50.0, balance.netForCurrentUser, 0.001)
+    }
+
+    @Test
+    fun `a month spanning a renegotiation prices each expense at its own split`() {
+        val balance = calculateExpenseBalance(
+            expenses = listOf(
+                expense("before", 100.0, dad, splitBasisPoints = 5000),
+                expense("after", 100.0, dad, splitBasisPoints = 7000)
+            ),
+            currentUserId = mom,
+            roleByUid = roles
+        )
+
+        assertEquals(-120.0, balance.netForCurrentUser, 0.001)
+    }
+
+    @Test
+    fun `a ratio on a row naming one person is ignored, so it stays a claim on nobody`() {
+        // The shape every expense had before the co-parent was resolved on the save path, and
+        // the shape an unpaired account still produces: shared, stamped with a ratio, and split
+        // with the payer alone. Once the account pairs, both slots become known — and applying
+        // the ratio there charged the payer 70 % of a cost nobody else was party to, reporting
+        // the other 30 % on screen as a debt the co-parent owed.
+        val balance = calculateExpenseBalance(
+            expenses = listOf(
+                expense("nappies", 100.0, mom, splitBetween = listOf(mom), splitBasisPoints = 7000)
+            ),
+            currentUserId = mom,
+            roleByUid = roles
+        )
+
+        assertEquals(0.0, balance.netForCurrentUser, 0.001)
+    }
+
+    @Test
+    fun `a ratio is ignored while the two parents cannot be told apart`() {
+        // Both still on slot 1 — the same condition that leaves `splitKnown` false. Applying a
+        // slot-keyed ratio there would charge one of them the other's share.
+        val balance = calculateExpenseBalance(
+            expenses = listOf(expense("school", 100.0, dad, splitBasisPoints = 7000)),
+            currentUserId = mom,
+            roleByUid = mapOf(mom to "mom", dad to "mom")
+        )
+
+        assertEquals(-50.0, balance.netForCurrentUser, 0.001)
     }
 }

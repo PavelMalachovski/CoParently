@@ -5,11 +5,12 @@ import androidx.lifecycle.viewModelScope
 import com.coparently.app.domain.contacts.ContactDirectory
 import com.coparently.app.domain.contacts.ContactGroup
 import com.coparently.app.domain.repository.ChildInfoRepository
+import com.coparently.app.domain.repository.PetRepository
 import com.coparently.app.presentation.common.Loadable
 import com.coparently.app.presentation.common.stateInLoadable
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.combine
 import javax.inject.Inject
 
 /** Keeps the flow warm across a configuration change. */
@@ -27,7 +28,8 @@ private const val STOP_TIMEOUT_MS = 5_000L
  */
 @HiltViewModel
 class ContactsViewModel @Inject constructor(
-    childInfoRepository: ChildInfoRepository
+    childInfoRepository: ChildInfoRepository,
+    petRepository: PetRepository
 ) : ViewModel() {
 
     /**
@@ -36,8 +38,10 @@ class ContactsViewModel @Inject constructor(
      * `getAllChildInfo()` is the right subscription here, unlike in the child editor: this screen
      * owns showing *every* child's contacts, so the whole list is exactly what it is about.
      */
-    val groups: StateFlow<Loadable<List<ContactGroup>>> = childInfoRepository.getAllChildInfo()
-        .map(ContactDirectory::of)
+    val groups: StateFlow<Loadable<List<ContactGroup>>> = combine(
+        childInfoRepository.getAllChildInfo(),
+        petRepository.getAllPets()
+    ) { children, pets -> ContactDirectory.of(children, pets) }
         // This is the emergency surface. Telling a parent in a hurry that there are no contacts,
         // a frame before showing them, is the worst instance of the defect Loadable exists for.
         .stateInLoadable(viewModelScope, STOP_TIMEOUT_MS)

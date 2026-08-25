@@ -347,6 +347,19 @@ Data flow: UI → ViewModel → UseCase → Repository → Room (source of truth
     exclude private rows **in the statement**, because a row with the flag cleared is a row
     queued for upload. Rows whose `createdByFirebaseUid` is null are deliberately not matched —
     nothing distinguishes this user's un-stamped event from anybody else's.
+17. **A save path never reads a `WhileSubscribed` StateFlow's `.value`.** Every ViewModel shares
+    `ParentsSource`/`FamilyKindSource` with `SharingStarted.WhileSubscribed`, so in a ViewModel
+    instance no screen has collected — which is exactly what a **form-only route** is — `.value`
+    is still the initial value and always will be. `ExpenseViewModel.sharedWith` read
+    `parents.value` to decide who a shared expense divides between, and the Add Expense screen
+    collects `agreedRatio` but not `parents`: every expense was written naming only the payer, so
+    the payer's month looked right and the co-parent's showed nothing owed at all. The cheap
+    facts have suspend accessors for this — `ParentsSource.signedInSlot()` and
+    `ParentsSource.coParentUid()`, both one Room row — and a save path must use those. The
+    stream is for what the screen *renders*. Same reason a Settings dialog seeds from
+    `FamilyKindSource.observeMine()` and not `observe()`: the union of both parents' answers is
+    what the app *shows*, while the dialog *writes* this parent's row alone, so seeding it with
+    the union made every checkbox a lie.
 
 ## Known issues / do not "fix" silently
 
@@ -355,6 +368,81 @@ claim in `storage.rules`, have described defects that were already fixed or limi
 never real — a reader following them would have re-fixed working code, or accepted a constraint
 that does not exist. When an item here turns out to be stale, correct it in the same commit as
 whatever you were doing; a stale "known issue" costs more than a missing one.
+
+- **Deleting a child or a pet removes the Firestore document outright, which item 14 forbids.**
+  `ChildInfoRepositoryImpl.deleteChildInfo` and `PetRepositoryImpl.deletePet` both call the data
+  source's `.delete()` and both discard the `Result`. Two consequences, and they are the ones the
+  tombstone rule exists to prevent: the co-parent's phone never learns of the deletion — nothing
+  reconciles by absence, correctly — so the record stays on their device forever; and a refused or
+  offline remote delete leaves the local row gone and the document alive, so the next download
+  re-inserts it. Pre-existing and systemic across both record types, not something the multi-child
+  work introduced — the August 2026 branch only made the child half *reachable*, by putting a
+  Delete action on the editor where before there was none. The fix is the treatment
+  `data/sync/Tombstone.kt` already defines for events and expenses: `update()` with
+  `deletedAtMillis`/`deletedBy`, hide tombstoned rows from the read queries, hard-delete locally
+  only once the remote write lands. It wants a Room column and a migration on both tables, which
+  is why it is recorded here rather than folded into a bug-fix branch. Do not "fix" it by removing
+  the Delete action — parity with pets is what was asked for.
+
+- **A change request says "Sent" whether or not it left the phone.**
+  `ChangeRequestRepositoryImpl.publish` catches everything and returns, leaving
+  `syncedToFirestore = false`, and `RequestChangeViewModel` sets `Sent` unconditionally before
+  the screen pops. `ChangeRequest.syncedToFirestore` reaches the domain model and **no** screen
+  reads it, so there is no queued badge and no way to tell a request the co-parent has from one
+  sitting in Room. The August 2026 outbox (`flushOutbox`, drained on every sync) means it does
+  eventually go — this is a wording and visibility gap, not a loss — but "sent" is still a claim
+  the app cannot make. `MessagesList` already renders the honest version for a message; a request
+  should say "queued" the same way, with a string in all five locales.
+
+- **A proposed split ratio cannot be withdrawn, and the proposer is told nothing.**
+  `SplitRatioTransition.withdraw` exists and is unit-tested; nothing calls it.
+  `FamilySettingsRepository` exposes `submitRatio`/`acceptProposal`/`declineProposal` only, and
+  Settings renders the agreed ratio with no sign that a proposal of your own is pending — the
+  banner is the *co-parent's* view. The sibling feature wires the whole shape
+  (`CustodyModelRepository.withdrawProposal`, plus a Withdraw button on the inbox card); the split
+  ratio wants the same. Until then do not delete `withdraw`: the gap is the missing UI, not the
+  transition.
+
+- **A ratio agreed before pairing reaches the pair silently.**
+  `FamilySettingsRepository.publishCachedRatioIfMissing` writes `family_settings/{pairId}` with no
+  `notifyPartner`, where `submitRatio`'s propose branch sends `PushPayload.SPLIT_RATIO_PROPOSED`.
+  Deliberate as far as it goes — this is the *first* agreement, so there is no proposal to confirm
+  and nothing for the co-parent to answer — but the effect is that a parent who set 70/30 in the
+  wizard has it become the pair's agreement of record, priced onto every expense from that moment,
+  and the co-parent learns of it only by opening Settings. The honest fix is a push type of its own
+  — an agreement, not a proposal: "the split is now X/Y, set before you paired" — which is four
+  places per CLAUDE.md item 15 and five locales. Do not "fix" it
+  by routing the publish through `propose` instead: an unanswered proposal would leave the pair
+  splitting evenly, which is the exact bug `publishCachedRatioIfMissing` was written to end.
+
+- **`storage.rules` has never been deployed past its July 2026 state, and that is why attaching a
+  photo to a pet fails.** The file in this repo covers `receipts/`, `event_images/`,
+  `medical_photos/` and `pet_photos/`; the live bucket, on the evidence, still covers only the
+  first two, so `pet_photos/**` falls through to `match /{allPaths=**} { allow read, write: if
+  false; }` and every pet — and, silently, every medical — photo upload is refused. The client
+  path is sound and was ruled out end to end. **The fix is an ops action nobody has taken:
+  `firebase deploy --only storage`**, which also closes the still-unchecked box at
+  `docs/REVIEW-2026-07-23.md:65`. Nothing catches this: `firebase.json` configures a Firestore
+  emulator only, and Storage rules have no test coverage at all. The upload handlers now write a
+  `Log.e` line so the next occurrence is at least diagnosable on a device — they reported only
+  through Crashlytics before, which writes nothing to logcat.
+
+- **The expense split is agreed per pair, and each expense is priced at the split in force when it
+  was recorded.** `family_settings/{pairId}` (same derived id as `custody_models`) holds the agreed
+  `momShareBasisPoints` and any pending proposal; `Expense.splitBasisPoints` is a **snapshot** of
+  it. Do not "simplify" that by reading the current agreement when the balance is computed — the
+  whole point is that renegotiating cannot re-price a month the two parents have already settled
+  and argued about. A null on an expense means it predates the agreement and divides evenly, which
+  is what it was. The ratio is also ignored while both parents still read the same slot, the same
+  condition that leaves `ExpenseBalance.splitKnown` false: applying a slot-keyed share there would
+  charge one parent the other's part.
+
+- **`Expense.splitBetween` used to be empty on every row production ever wrote**, so
+  `calculateExpenseBalance`'s guard never fired, `currentUserOwes` was always zero, and both
+  parents were told at once that the other owed them their whole month's spend. `addExpense` now
+  names both parents on a shared expense. The unit suite missed it for months because
+  `ExpenseBalanceTest`'s fixture defaults `splitBetween` to both parents — a shape production never
+  produced. Be suspicious of any fixture whose default is the thing under test.
 
 - `Expense.currency` is a real per-expense field. A month mixing currencies is now summarised
   **per currency** (`calculateExpenseBalancesByCurrency` → one `ExpenseSummaryHeader` per currency

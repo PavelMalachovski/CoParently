@@ -1530,6 +1530,11 @@ async function unpairCoParentImpl(db, callerUid) {
     // of which branch below runs.
     tx.delete(db.collection('custody_models').doc(custodyModelKey(callerUid, partnerId)));
 
+    // The pair's money agreement goes with it, at the same derived key and for the same
+    // reason: left behind, it would silently reattach if these two ever re-paired, and a
+    // split neither of them remembers agreeing would start pricing their expenses again.
+    tx.delete(db.collection('family_settings').doc(custodyModelKey(callerUid, partnerId)));
+
     // Re-verify the link is still mutually intact before clearing it. If the
     // partner has already unpaired or re-paired with someone else, the link
     // this call was asked to remove is already gone from their side — but the
@@ -2232,6 +2237,10 @@ async function deleteAccountDataImpl(db, uid) {
 
   removed.custody_models = await deleteQueryInBatches(
       db, db.collection('custody_models').where('participants', 'array-contains', uid));
+
+  // Holds both parents' uids, so it is personal data of a deleted account either way.
+  removed.family_settings = await deleteQueryInBatches(
+      db, db.collection('family_settings').where('participants', 'array-contains', uid));
 
   // Both directions of the calendar-friend relationship: the grant this user holds over
   // somebody's family, and the grants their own family handed out.

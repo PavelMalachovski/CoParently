@@ -38,6 +38,33 @@ data class CurrencyBalance(
 )
 
 /**
+ * Whether [this] is a split between exactly the two parents.
+ *
+ * The companion condition to [bothSlotsKnown], and it is here for the same reason: a slot-keyed
+ * ratio describes two people, so the balance may only apply one to a row that names two — and the
+ * expense row's label has to agree with the figure above it. Written once because the two drifted
+ * apart the first time they were not: `shareOf` charged a ratio on an expense recorded while
+ * unpaired, whose `splitBetween` names the payer alone, while the row printed "not split".
+ */
+fun Expense.isTwoWaySplit(): Boolean = splitBetween.size == PAIR_SIZE
+
+/** A slot-keyed ratio only describes two people; anything else divides evenly. */
+private const val PAIR_SIZE = 2
+
+/**
+ * Whether the two parents can actually be told apart — both slots present in [roleByUid].
+ *
+ * One definition, because three answers have to agree: [ExpenseBalance.splitKnown], the share
+ * `shareOf` applies to an expense, and the split label an expense row prints. A pair whose two
+ * parents still read the same slot fails it, and each of the three falls back to an even
+ * division — applying a slot-keyed share there would charge one parent the other's part.
+ *
+ * @param roleByUid Map of uid to `"mom"`/`"dad"`; incomplete while unpaired
+ */
+fun bothSlotsKnown(roleByUid: Map<String, String>): Boolean =
+    roleByUid.values.toSet().containsAll(setOf("mom", "dad"))
+
+/**
  * Works out the split bar and settle-up figure for a month of expenses.
  *
  * The money screen of a two-household app never said who paid; this is what makes
@@ -46,10 +73,15 @@ data class CurrencyBalance(
  * slot into a person's name; see `presentation/common/ParentLabels.kt`.
  *
  * Each expense leaves its payer out of pocket by the full amount, and every uid in
- * `splitBetween` owes an equal share of it. An expense with an empty `splitBetween` is treated
- * as **unsplit**: it counts towards the payer's total and towards the month total, but creates
- * no debt in either direction — a parent buying something purely for themselves is not a claim
- * on the other.
+ * `splitBetween` owes **their agreed share** of it. An expense with an empty `splitBetween` is
+ * treated as **unsplit**: it counts towards the payer's total and towards the month total, but
+ * creates no debt in either direction — a parent buying something purely for themselves is not a
+ * claim on the other.
+ *
+ * **The share comes from the expense, not from the family's current agreement.** Each expense
+ * carries the ratio it was recorded under (`Expense.splitBasisPoints`), so renegotiating the
+ * split cannot re-price a month the two parents have already settled and argued about. A row
+ * from before the agreement existed carries null and is divided evenly, which is what it was.
  *
  * @param expenses Expenses in the period
  * @param currentUserId Firebase uid of the signed-in parent
@@ -79,13 +111,13 @@ fun calculateExpenseBalance(
             currentUserPaid += expense.amount
         }
         if (expense.splitBetween.isNotEmpty() && currentUserId in expense.splitBetween) {
-            currentUserOwes += expense.amount / expense.splitBetween.size
+            currentUserOwes += expense.amount * shareOf(expense, currentUserId, roleByUid)
         }
     }
 
     // Both roles must be known for the split bar to mean anything: while unpaired there is only
     // one parent on record, and a 100% bar would be decoration pretending to be data.
-    val splitKnown = roleByUid.values.toSet().containsAll(setOf("mom", "dad"))
+    val splitKnown = bothSlotsKnown(roleByUid)
 
     return ExpenseBalance(
         momPaid = momPaid,
@@ -94,6 +126,29 @@ fun calculateExpenseBalance(
         netForCurrentUser = currentUserPaid - currentUserOwes,
         splitKnown = splitKnown
     )
+}
+
+/**
+ * The fraction of [expense] that [uid] owes.
+ *
+ * The ratio stored on the expense when it is a **two-way** split and both parents' slots are
+ * known; an even division among the people it is split between otherwise. The fallback covers
+ * four real cases and gets each of them right: a row recorded before the agreement existed; an
+ * unpaired account where one of the two slots is unknown; a pair whose two parents both still
+ * read `"mom"` — the same condition that leaves `ExpenseBalance.splitKnown` false, because the
+ * two people genuinely cannot be told apart yet; and a row whose `splitBetween` names one person.
+ *
+ * That last one is why the size check is here and not merely implied. An expense recorded while
+ * unpaired is stamped with a ratio and split with the payer alone, and once the account pairs,
+ * `bothSlotsKnown` starts answering true for it: charging the payer 70 % of a cost nobody else
+ * is party to reported the other 30 % on screen as a debt the co-parent owed. One member divides
+ * by one — the whole thing, net zero — which is what "not split", the label the row prints for
+ * exactly this expense, has to mean.
+ */
+private fun shareOf(expense: Expense, uid: String, roleByUid: Map<String, String>): Double {
+    val slot = roleByUid[uid]?.takeIf { expense.isTwoWaySplit() && bothSlotsKnown(roleByUid) }
+    val ratio = slot?.let { SplitRatio.fromStored(expense.splitBasisPoints) }
+    return ratio?.shareFor(slot) ?: (1.0 / expense.splitBetween.size)
 }
 
 /**

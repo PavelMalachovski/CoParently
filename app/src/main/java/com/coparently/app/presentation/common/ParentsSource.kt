@@ -1,5 +1,6 @@
 package com.coparently.app.presentation.common
 
+import android.util.Log
 import com.coparently.app.domain.model.PairingState
 import com.coparently.app.domain.repository.PairingRepository
 import com.coparently.app.domain.repository.UserRepository
@@ -178,7 +179,40 @@ class ParentsSource @Inject constructor(
         return userRepository.getUserById(uid)?.role
     }
 
+    /**
+     * The co-parent's uid, or null when this account is unpaired.
+     *
+     * The other cheap question, and it exists for a sharper reason than [signedInSlot]: a
+     * **save path** must never depend on somebody having subscribed to [observe]. Every
+     * ViewModel shares that flow with `WhileSubscribed`, so `parents.value` answers `Parents()`
+     * in any ViewModel instance no screen has collected — which is exactly what a form-only
+     * route is. `ExpenseViewModel` read it that way to decide who a shared expense is split
+     * between, and the Add Expense screen collects `agreedRatio` but not `parents`: every
+     * expense was written naming only the payer, and the co-parent's phone showed a month in
+     * which nobody owed anybody anything.
+     *
+     * Read from the signed-in parent's own Room row, which is where the pairing lives —
+     * `FamilySettingsRepository.currentPair` derives the pair the same way. Never
+     * [UserRepository.getAllUsers], which CLAUDE.md records cannot answer "who is the other
+     * parent".
+     */
+    suspend fun coParentUid(): String? {
+        val uid = userRepository.getCurrentUserId() ?: return null
+        val partnerId = userRepository.getUserById(uid)?.partnerId
+        if (partnerId.isNullOrBlank()) {
+            // Not an error — an unpaired account has no co-parent — but it is also the answer a
+            // paired account gets in the window between the accept callable returning and
+            // `PairingRepositoryImpl` writing the pairing into Room. That window prices an
+            // expense as unshared, and without this line the only evidence is a wrong balance.
+            Log.i(TAG, "No co-parent on the local row for $uid; treating this account as unpaired")
+            return null
+        }
+        return partnerId.takeIf { it != uid }
+    }
+
     private companion object {
+        const val TAG = "ParentsSource"
+
         /** Keeps the shared upstream warm across a tab switch or a config change. */
         const val STOP_TIMEOUT_MS = 5_000L
     }

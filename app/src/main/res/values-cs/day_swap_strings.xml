@@ -10,6 +10,7 @@
     <string name="day_swap_needs_coparent">Nejdřív se propojte s druhým rodičem — na výměně se domlouváte spolu.</string>
     <string name="day_swap_error_refused">Výměnu se nepodařilo nabídnout</string>
     <string name="day_swap_error_not_ready">Ještě zjišťujeme, kdo je druhý rodič — zkuste to za chvíli</string>
+    <string name="day_swap_error_partial">Nabídnuto %1$d z %2$d dnů — na ty už druhý rodič odpovídá; zbytek nabídněte znovu</string>
     <string name="day_swap_inbox_section">Výměny dnů</string>
     <string name="day_swap_inbox_offered_by_you">Tento den jste nabídli: %1$s</string>
     <string name="day_swap_inbox_offered_to_you">%1$s vám nabízí tento den</string>
@@ -18,4 +19,38 @@
     <string name="day_swap_inbox_waiting">Čeká na odpověď</string>
     <string name="day_swap_accept">Přijmout</string>
     <string name="day_swap_decline">Odmítnout</string>
+    <string name="day_swap_range">%1$s – %2$s</string>
+    <string name="day_swap_sheet_title_range">Vyměnit tyto dny</string>
+    <string name="day_swap_select_hint">Klepnutím na další dny výměnu rozšíříte</string>
+    <string name="day_swap_selection_cancel">Zrušit výběr</string>
+    <plurals name="day_swap_day_count">
+        <item quantity="one">%1$d den</item>
+        <item quantity="few">%1$d dny</item>
+        <item quantity="many">%1$d dne</item>
+        <item quantity="other">%1$d dní</item>
+    </plurals>
+    <plurals name="day_swap_direction">
+        <item quantity="one">%1$d den přechází od %2$s k %3$s</item>
+        <item quantity="few">%1$d dny přecházejí od %2$s k %3$s</item>
+        <item quantity="many">%1$d dne přechází od %2$s k %3$s</item>
+        <item quantity="other">%1$d dní přechází od %2$s k %3$s</item>
+    </plurals>
+    <plurals name="day_swap_skipped_days">
+        <item quantity="one">U %1$d vybraného dne není zaznamenána péče, proto je vynechán.</item>
+        <item quantity="few">U %1$d vybraných dnů není zaznamenána péče, proto jsou vynechány.</item>
+        <item quantity="many">U %1$d vybraných dne není zaznamenána péče, proto jsou vynechány.</item>
+        <item quantity="other">U %1$d vybraných dní není zaznamenána péče, proto jsou vynechány.</item>
+    </plurals>
+    <plurals name="day_swap_inbox_offered_by_you_days">
+        <item quantity="one">Nabídli jste %2$s %1$d den</item>
+        <item quantity="few">Nabídli jste %2$s %1$d dny</item>
+        <item quantity="many">Nabídli jste %2$s %1$d dne</item>
+        <item quantity="other">Nabídli jste %2$s %1$d dní</item>
+    </plurals>
+    <plurals name="day_swap_inbox_offered_to_you_days">
+        <item quantity="one">%2$s vám nabízí %1$d den</item>
+        <item quantity="few">%2$s vám nabízí %1$d dny</item>
+        <item quantity="many">%2$s vám nabízí %1$d dne</item>
+        <item quantity="other">%2$s vám nabízí %1$d dní</item>
+    </plurals>
 </resources>

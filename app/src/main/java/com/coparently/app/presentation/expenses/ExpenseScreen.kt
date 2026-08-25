@@ -1,8 +1,10 @@
 package com.coparently.app.presentation.expenses
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -10,6 +12,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -23,9 +26,12 @@ import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -41,6 +47,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.coparently.app.R
+import com.coparently.app.domain.expenses.SplitRatioProposal
 import com.coparently.app.domain.model.Expense
 import com.coparently.app.presentation.common.ListSkeleton
 import com.coparently.app.presentation.common.Loadable
@@ -109,9 +116,25 @@ fun ExpenseScreen(
     var showAnalytics by rememberSaveable { mutableStateOf(false) }
 
     val snackbarHostState = remember { SnackbarHostState() }
+    val pendingRatioProposal by viewModel.pendingRatioProposal.collectAsState()
+    // Plain `remember`: putting the banner off is for this visit to the screen. A dismissal that
+    // survived the process would quietly turn "later" into "never", and the co-parent would go
+    // on waiting for an answer that was never coming.
+    var ratioProposalDismissed by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val deletedMessage = stringResource(R.string.expenses_deleted)
     val undoLabel = stringResource(R.string.expenses_deleted_undo)
+
+    // A refused answer has to say so. The banner is the only route to accepting or declining a
+    // split, and the ViewModel used to report the refusal into `saveState`, which belongs to the
+    // Add Expense form and nothing here reads — so the tap looked like it had simply done
+    // nothing while the co-parent went on waiting.
+    val answerFailedMessage = stringResource(R.string.expenses_split_answer_failed)
+    LaunchedEffect(Unit) {
+        viewModel.ratioAnswerFailed.collect {
+            snackbarHostState.showSnackbar(answerFailedMessage)
+        }
+    }
 
     // Delete now, offer Undo — the same shape EventListScreen uses. The receipt photo is only
     // purged once the window closes, because a deleted photo cannot be brought back and Undo
@@ -163,6 +186,21 @@ fun ExpenseScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
+            // The money screen is where a change to how money divides belongs. A banner, not a
+            // modal: every other agreement in this app is an inline banner plus an inbox card,
+            // and a dialog that steals focus on open would be a new visual language for the one
+            // feature least in need of one.
+            pendingRatioProposal?.takeIf { !ratioProposalDismissed }?.let { proposal ->
+                SplitRatioProposalBanner(
+                    proposal = proposal,
+                    onAccept = { viewModel.decideRatioProposal(accept = true) },
+                    onDecline = { viewModel.decideRatioProposal(accept = false) },
+                    // "Later" leaves it pending, so it is still the co-parent's open question
+                    // and still in the inbox. An answer that quietly meant "no" is the silent
+                    // outcome this whole family of features exists to remove.
+                    onLater = { ratioProposalDismissed = true }
+                )
+            }
             if (expensesState is Loadable.Loading) {
                 ListSkeleton(modifier = Modifier.weight(1f))
             } else if (expenses.isEmpty()) {
@@ -350,4 +388,62 @@ private fun ViewSwitcher(
 private fun rememberMonthLabel(month: YearMonth): String = remember(month) {
     month.format(DateTimeFormatter.ofPattern("LLLL yyyy", Locale.getDefault()))
         .replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() }
+}
+
+/**
+ * The co-parent has proposed a different split, and this parent has to answer.
+ *
+ * Confirm, Decline, Later — the three the reporter asked for, and Later is deliberately not an
+ * answer: it hides the banner for this visit and leaves the proposal pending, so it is still in
+ * the inbox and still the co-parent's open question.
+ *
+ * The proposed figure is shown, and the currently agreed one beside it, because "70/30" means
+ * nothing without knowing what it is replacing.
+ *
+ * @param proposal What the co-parent put forward.
+ * @param onAccept Agrees; the new split prices expenses recorded from then on.
+ * @param onDecline Turns it down; nothing changes.
+ * @param onLater Hides the banner without answering.
+ */
+@Composable
+private fun SplitRatioProposalBanner(
+    proposal: SplitRatioProposal,
+    onAccept: () -> Unit,
+    onDecline: () -> Unit,
+    onLater: () -> Unit
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 14.dp, vertical = 6.dp),
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                text = stringResource(R.string.expenses_split_proposal_title),
+                style = MaterialTheme.typography.titleSmall
+            )
+            Text(
+                text = stringResource(
+                    R.string.expenses_split_proposal_body,
+                    proposal.ratio.momPercent,
+                    proposal.ratio.dadPercent
+                ),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = onAccept) {
+                    Text(stringResource(R.string.expenses_split_proposal_confirm))
+                }
+                TextButton(onClick = onDecline) {
+                    Text(stringResource(R.string.expenses_split_proposal_decline))
+                }
+                TextButton(onClick = onLater) {
+                    Text(stringResource(R.string.expenses_split_proposal_later))
+                }
+            }
+        }
+    }
 }

@@ -3,6 +3,7 @@ package com.coparently.app.presentation.chat
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.coparently.app.data.local.preferences.EncryptedPreferences
 import com.coparently.app.domain.chat.ChatReadState
 import com.coparently.app.domain.chat.ConversationKey
 import com.coparently.app.domain.model.Conversation
@@ -20,6 +21,7 @@ import com.coparently.app.presentation.common.valueOrNull
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -98,7 +100,8 @@ class ChatViewModel @Inject constructor(
     private val messageRepository: MessageRepository,
     private val userRepository: UserRepository,
     private val eventRepository: EventRepository,
-    private val pairingRepository: PairingRepository
+    private val pairingRepository: PairingRepository,
+    private val preferences: EncryptedPreferences
 ) : ViewModel() {
 
     private val _currentConversationId = MutableStateFlow<String?>(null)
@@ -115,6 +118,20 @@ class ChatViewModel @Inject constructor(
      * stops re-asserting marks for a thread no longer on screen.
      */
     private val _openedConversationId = MutableStateFlow<String?>(null)
+
+    /**
+     * Unsent composer text per conversation, authoritative for the life of this ViewModel.
+     *
+     * The encrypted store behind it is what survives the ViewModel; this map is what makes a
+     * read after a keystroke correct before the debounced write has landed.
+     */
+    private val drafts = mutableMapOf<String, String>()
+
+    /** The conversation whose draft is typed but not yet written, or null when none is. */
+    private var pendingDraft: String? = null
+
+    /** The pending debounced write, cancelled and rescheduled on each keystroke. */
+    private var draftWriteJob: Job? = null
 
     private val _events = MutableSharedFlow<ChatEvent>(extraBufferCapacity = 1)
 
@@ -437,6 +454,55 @@ class ChatViewModel @Inject constructor(
     fun onThreadOpened(conversationId: String) {
         _currentConversationId.value = conversationId
         _openedConversationId.value = conversationId
+        // Anything this device wrote and never got onto the server goes out now. Before the
+        // outbox existed, a send that failed once stayed failed forever and the co-parent
+        // simply never received it.
+        launchGuarded("flush chat outbox") { messageRepository.flushOutbox() }
+    }
+
+    /**
+     * The unsent text the composer should open with for [conversationId].
+     *
+     * Read through the in-memory map first so a draft typed a moment ago is returned even if
+     * the debounced write has not landed yet.
+     */
+    fun draftFor(conversationId: String): String =
+        drafts[conversationId] ?: preferences.getChatDraft(conversationId)
+
+    /**
+     * Records what the user has typed but not sent.
+     *
+     * Kept in memory immediately and written to the encrypted store on a debounce — a write per
+     * keystroke would encrypt a string on the main thread for every character. The pending write
+     * is flushed synchronously by [onThreadClosed], which is what actually covers the reported
+     * case: switching tabs clears the Chat back-stack entry, and with it this ViewModel, well
+     * inside the debounce window.
+     */
+    fun onDraftChanged(conversationId: String, text: String) {
+        drafts[conversationId] = text
+        pendingDraft = conversationId
+        // A hand-rolled debounce rather than `Flow.debounce`, which is still `@FlowPreview` in
+        // coroutines 1.9 and would need a module-wide opt-in for one call site.
+        draftWriteJob?.cancel()
+        draftWriteJob = viewModelScope.launch {
+            delay(DRAFT_PERSIST_DEBOUNCE_MS)
+            flushDraft()
+        }
+    }
+
+    /** Drops the draft for [conversationId] — the composer is empty, so there is nothing unsent. */
+    private fun clearDraft(conversationId: String) {
+        drafts.remove(conversationId)
+        if (pendingDraft == conversationId) pendingDraft = null
+        preferences.putChatDraft(conversationId, "")
+    }
+
+    /** Writes whatever the composer last held, now rather than on the debounce. */
+    private fun flushDraft() {
+        draftWriteJob?.cancel()
+        val conversationId = pendingDraft ?: return
+        pendingDraft = null
+        preferences.putChatDraft(conversationId, drafts[conversationId].orEmpty())
     }
 
     /**
@@ -450,12 +516,38 @@ class ChatViewModel @Inject constructor(
      */
     fun onThreadClosed() {
         _openedConversationId.value = null
+        // Synchronous on purpose: the tab switch that disposes this screen also clears the
+        // back-stack entry and this ViewModel, so a coroutine scheduled here would be cancelled
+        // before it ran and the draft would be lost — the exact reported bug.
+        flushDraft()
+    }
+
+    override fun onCleared() {
+        flushDraft()
+        super.onCleared()
     }
 
     fun sendMessage(content: String, type: MessageType = MessageType.TEXT, attachments: List<String> = emptyList()) {
-        val conversationId = _currentConversationId.value ?: return
+        val conversationId = _currentConversationId.value
+        if (conversationId == null) {
+            Log.w(TAG, "Send ignored: no conversation is open")
+            return
+        }
         val userId = currentUserId.value
-        if (userId.isEmpty()) return
+        if (userId.isEmpty()) {
+            Log.w(TAG, "Send ignored: the session has not resolved a uid yet")
+            return
+        }
+
+        // Cleared here, not on the send's success. The screen empties the composer the instant
+        // this returns, so anything still in `drafts` is text the user can no longer see — and
+        // two paths never reach the success line: a refused write, which `sendMessage` rethrows
+        // after marking the row ERROR, and a tab switch, which clears this back-stack-scoped
+        // ViewModel mid-flight while `onThreadClosed` has already flushed the draft to storage.
+        // Either way the next open would re-seed the composer with a message that is already in
+        // the thread and queued for retry, inviting the parent to send it twice. The SENDING row
+        // is the record of what was sent; `flushOutbox` is what retries it.
+        clearDraft(conversationId)
 
         launchGuarded("send message") {
             val user = userRepository.getCurrentUser()
@@ -534,12 +626,24 @@ class ChatViewModel @Inject constructor(
      */
     fun refreshThread() {
         launchGuarded("refresh thread") {
+            messageRepository.flushOutbox()
             val conversationId = _currentConversationId.value ?: return@launchGuarded
             val userId = currentUserId.value
             if (userId.isNotEmpty()) {
                 messageRepository.markRead(conversationId, userId)
             }
         }
+    }
+
+    /**
+     * Re-sends one message the user tapped in the thread.
+     *
+     * The whole outbox rather than that one row: if an earlier message is still stuck, sending
+     * this one first would deliver the conversation out of order, and the flush is cheap when
+     * there is nothing else queued.
+     */
+    fun resendFailedMessages() {
+        launchGuarded("resend failed messages") { messageRepository.flushOutbox() }
     }
 
     /**
@@ -587,6 +691,14 @@ class ChatViewModel @Inject constructor(
     private companion object {
         const val UPCOMING_DAYS = 30L
         const val TAG = "ChatViewModel"
+
+        /**
+         * Quiet period before an unsent draft is written to the encrypted store.
+         *
+         * Only a backstop for process death: a tab switch flushes synchronously through
+         * [onThreadClosed], which is the case that actually loses text today.
+         */
+        const val DRAFT_PERSIST_DEBOUNCE_MS = 400L
 
         /** How long a `WhileSubscribed` flow stays warm across a configuration change. */
         const val SUBSCRIPTION_TIMEOUT_MS = 5000L

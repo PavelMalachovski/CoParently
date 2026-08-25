@@ -45,7 +45,8 @@
     </plurals>
     <string name="expenses_row_subtitle">%1$s · сплатив(ла) %2$s · %3$s</string>
     <string name="expenses_row_subtitle_unknown_payer">%1$s · %2$s</string>
-    <string name="expenses_split_even">порівну 50/50</string>
+    <string name="expenses_split_even">розділено 50/50</string>
+    <string name="expenses_split_ratio">розділено %1$s %2$d/%3$d</string>
     <string name="expenses_split_n_ways">розділено 1/%1$d</string>
     <string name="expenses_split_none">не розділено</string>
     <string name="expenses_delete">Видалити витрату</string>
@@ -86,6 +87,16 @@
     <string name="expenses_row_meta_with_receipt">%1$s · %2$s · чек</string>
     <string name="expenses_budget_chip">%1$s %2$s / %3$s</string>
     <string name="expenses_budget_add">+ Бюджет</string>
+    <string name="expenses_split_proposal_title">Запропоновано новий поділ витрат</string>
+    <string name="expenses_split_proposal_body">Другий з батьків пропонує ділити спільні витрати %1$d / %2$d починаючи з цього моменту. Уже внесені витрати збережуть свій поділ.</string>
+    <string name="expenses_split_proposal_confirm">Підтвердити</string>
+    <string name="expenses_split_proposal_decline">Відхилити</string>
+    <string name="expenses_split_proposal_later">Пізніше</string>
+    <string name="expenses_split_answer_failed">Не вдалося відповісти на пропозицію поділу. Перевірте з\'єднання та спробуйте ще раз.</string>
+    <string name="expense_split_shared">Ділити з другим із батьків</string>
+    <string name="expense_split_not_shared_hint">Зараховується у ваші витрати, але ніхто нікому за нього не винен.</string>
+    <string name="expense_split_ratio">Поділ %1$d / %2$d</string>
+    <string name="expense_split_override_hint">Інший поділ лише для цієї витрати. Погоджений поділ сім\'ї не змінюється.</string>
     <!-- Budget status in words (UX-10). -->
     <string name="budget_status_near">Близько до ліміту</string>
     <string name="budget_status_over">Перевищено</string>

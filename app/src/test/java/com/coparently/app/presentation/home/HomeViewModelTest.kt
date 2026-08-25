@@ -12,6 +12,7 @@ import com.coparently.app.domain.repository.MessageRepository
 import com.coparently.app.domain.repository.PairingRepository
 import com.coparently.app.domain.repository.PreferencesRepository
 import com.coparently.app.domain.repository.UserRepository
+import com.coparently.app.presentation.common.FamilyKindSource
 import com.coparently.app.presentation.common.ParentsSource
 import io.mockk.coEvery
 import io.mockk.every
@@ -93,6 +94,7 @@ class HomeViewModelTest {
             custodyModelRepository = custodyModelRepository,
             monthSpendDependencies = MonthSpendDependencies(expenseRepository, preferencesRepository),
             messageRepository = messageRepository,
+            familyKindSource = FamilyKindSource(userRepository, pairingRepository),
             homeIdentityDependencies = HomeIdentityDependencies(
                 userRepository,
                 pairingRepository,

@@ -32,10 +32,6 @@ interface ChangeRequestRepository {
     suspend fun updateStatus(requestId: String, status: ChangeRequestStatus)
 
     /**
-     * Mirrors remote change requests into Room for as long as it is collected.
-     * Never completes on its own — launch it in a scope tied to the UI.
-     */
-    /**
      * Mirrors the remote side into Room and **never returns** — it collects a snapshot
      * listener for as long as its caller's scope lives.
      *
@@ -44,6 +40,16 @@ interface ChangeRequestRepository {
      * `SyncService.performFullSync()`. It is not: that call would hang, `SyncWorker` would be
      * killed at WorkManager's ten-minute ceiling, and sync would stop entirely with no
      * exception and no log. Call it from a scope that is allowed to run forever.
+     *
+     * Contrast [flushOutbox], which is the one-pass upload half and does return — the two
+     * together are why the shape had to be in the name.
      */
     suspend fun observeRemote()
+
+    /**
+     * Re-uploads every change request this device wrote locally but never got onto the server.
+     *
+     * One pass, no loop. Safe to call at any time and cheap when nothing is queued.
+     */
+    suspend fun flushOutbox()
 }

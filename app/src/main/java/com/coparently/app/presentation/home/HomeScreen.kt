@@ -27,8 +27,8 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ChildCare
 import androidx.compose.material.icons.filled.Contacts
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Pets
 import androidx.compose.material.icons.filled.Payments
+import androidx.compose.material.icons.filled.Pets
 import androidx.compose.material.icons.filled.PriorityHigh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SwapHoriz
@@ -43,14 +43,18 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -59,6 +63,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -68,9 +73,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.coparently.app.R
+import com.coparently.app.domain.custody.DaySwapGroup
 import com.coparently.app.domain.custody.HandoverInfo
 import com.coparently.app.domain.expenses.CurrencyBalance
 import com.coparently.app.domain.home.WeekEntry
+import com.coparently.app.domain.model.FamilyKind
 import com.coparently.app.presentation.calendar.components.DayAgendaCard
 import com.coparently.app.presentation.changerequests.ChangeRequestViewModel
 import com.coparently.app.presentation.common.ParentNames
@@ -80,9 +87,9 @@ import com.coparently.app.presentation.common.SectionRow
 import com.coparently.app.presentation.common.rememberParentNames
 import com.coparently.app.presentation.common.rememberToday
 import com.coparently.app.presentation.components.SkeletonBox
+import com.coparently.app.presentation.custody.custodyDiffDescription
 import com.coparently.app.presentation.theme.ParentColors
 import java.text.NumberFormat
-import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 import java.util.Currency
@@ -139,11 +146,27 @@ fun HomeScreen(
     changeRequestViewModel: ChangeRequestViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val caresFor by viewModel.caresFor.collectAsState()
     val today by rememberToday()
     val parentNames = rememberParentNames(viewModel.parents.collectAsState().value)
     val pendingProposal by changeRequestViewModel.pendingProposal.collectAsState()
+    val pendingProposalDiff by changeRequestViewModel.pendingProposalDiff.collectAsState()
+
+    // The swap and proposal dialogs live here, and until this existed their refusals did not:
+    // `ChangeRequestViewModel` wrote every failure into `errorMessage`, and only the inbox
+    // screen read it. Answering from Home therefore looked like it had worked — the dialog
+    // closed either way — while the co-parent went on waiting.
+    val snackbarHostState = remember { SnackbarHostState() }
+    val changeRequestError by changeRequestViewModel.errorMessage.collectAsState()
+    LaunchedEffect(changeRequestError) {
+        changeRequestError?.let { message ->
+            snackbarHostState.showSnackbar(message)
+            changeRequestViewModel.clearError()
+        }
+    }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = {
@@ -192,6 +215,7 @@ fun HomeScreen(
                     onOpenContacts = onOpenContacts,
                     onOpenChildInfo = onOpenChildInfo,
                     onOpenPets = onOpenPets,
+                    caresFor = caresFor,
                     onOpenExpenses = onOpenExpenses,
                     onOpenChat = onOpenChat
                 )
@@ -199,8 +223,13 @@ fun HomeScreen(
                     state = state,
                     parentNames = parentNames,
                     pendingProposal = pendingProposal,
-                    onAcceptSwap = changeRequestViewModel::acceptSwap,
-                    onDeclineSwap = changeRequestViewModel::declineSwap,
+                    pendingProposalDiff = pendingProposalDiff,
+                    onAcceptSwap = { group ->
+                        changeRequestViewModel.decideSwapGroup(group, accept = true)
+                    },
+                    onDeclineSwap = { group ->
+                        changeRequestViewModel.decideSwapGroup(group, accept = false)
+                    },
                     onAcceptProposal = changeRequestViewModel::acceptProposal,
                     onDeclineProposal = changeRequestViewModel::declineProposal,
                     onOpenChangeRequests = onOpenChangeRequests
@@ -225,8 +254,9 @@ private fun AwaitingDialogs(
     state: HomeUiState.Dashboard,
     parentNames: ParentNames,
     pendingProposal: com.coparently.app.domain.custody.CustodyProposal?,
-    onAcceptSwap: (LocalDate) -> Unit,
-    onDeclineSwap: (LocalDate) -> Unit,
+    pendingProposalDiff: com.coparently.app.domain.custody.CustodyPatternDiff?,
+    onAcceptSwap: (DaySwapGroup) -> Unit,
+    onDeclineSwap: (DaySwapGroup) -> Unit,
     onAcceptProposal: () -> Unit,
     onDeclineProposal: () -> Unit,
     onOpenChangeRequests: () -> Unit
@@ -244,12 +274,15 @@ private fun AwaitingDialogs(
                 onDismissRequest = { dismissed = dismissed + key },
                 title = { Text(stringResource(R.string.custody_proposal_inbox_title)) },
                 text = {
-                    Text(
-                        stringResource(
-                            R.string.custody_proposal_inbox_body,
-                            parentNames.labelForUid(pendingProposal.proposedBy)
-                        )
+                    // Who proposed it, and — the part that was missing — what it would actually
+                    // do. The agreed pattern and the proposed one sit on the same document, so
+                    // the diff costs no extra read; the dialog simply never asked for it.
+                    val diff = custodyDiffDescription(pendingProposalDiff, parentNames)
+                    val who = stringResource(
+                        R.string.custody_proposal_inbox_body,
+                        parentNames.labelForUid(pendingProposal.proposedBy)
                     )
+                    Text(if (diff == null) who else "$who\n\n$diff")
                 },
                 confirmButton = {
                     TextButton(onClick = {
@@ -273,19 +306,35 @@ private fun AwaitingDialogs(
         }
     }
 
-    val swap = state.awaitingSwaps.firstOrNull { "swap_${it.date}" !in dismissed }
-    if (swap != null) {
-        val key = "swap_${swap.date}"
+    // One dialog per *offer*, not per day. A week offered as one agreement used to raise seven
+    // dialogs in a row, each dismissal revealing the next and every one asking the same question.
+    val swapGroup = state.awaitingSwaps.firstOrNull { "swap_${it.key}" !in dismissed }
+    if (swapGroup != null) {
+        val key = "swap_${swapGroup.key}"
+        val first = swapGroup.swaps.first()
+        val dateFormat = DateTimeFormatter.ofLocalizedDate(FormatStyle.FULL)
+        val context = LocalContext.current
         AlertDialog(
             onDismissRequest = { dismissed = dismissed + key },
             title = { Text(stringResource(R.string.home_dialog_swap_title)) },
             text = {
                 Text(
-                    stringResource(
-                        R.string.home_dialog_swap_message,
-                        parentNames.labelForUid(swap.override.requestedBy),
-                        swap.date.format(DateTimeFormatter.ofLocalizedDate(FormatStyle.FULL))
-                    )
+                    if (swapGroup.dayCount == 1) {
+                        stringResource(
+                            R.string.home_dialog_swap_message,
+                            parentNames.labelForUid(first.override.requestedBy),
+                            swapGroup.firstDate.format(dateFormat)
+                        )
+                    } else {
+                        context.resources.getQuantityString(
+                            R.plurals.home_dialog_swap_message_days,
+                            swapGroup.dayCount,
+                            swapGroup.dayCount,
+                            parentNames.labelForUid(first.override.requestedBy),
+                            swapGroup.firstDate.format(dateFormat),
+                            swapGroup.lastDate.format(dateFormat)
+                        )
+                    }
                 )
             },
             confirmButton = {
@@ -293,7 +342,7 @@ private fun AwaitingDialogs(
                 // moment, and the dialog must not sit there inviting a second tap meanwhile.
                 TextButton(onClick = {
                     dismissed = dismissed + key
-                    onAcceptSwap(swap.date)
+                    onAcceptSwap(swapGroup)
                 }) {
                     Text(stringResource(R.string.day_swap_accept))
                 }
@@ -305,7 +354,7 @@ private fun AwaitingDialogs(
                     }
                     TextButton(onClick = {
                         dismissed = dismissed + key
-                        onDeclineSwap(swap.date)
+                        onDeclineSwap(swapGroup)
                     }) {
                         Text(stringResource(R.string.day_swap_decline))
                     }
@@ -456,6 +505,7 @@ private fun Dashboard(
     onOpenContacts: () -> Unit,
     onOpenChildInfo: () -> Unit,
     onOpenPets: () -> Unit,
+    caresFor: Set<FamilyKind>,
     onOpenExpenses: () -> Unit,
     onOpenChat: () -> Unit
 ) {
@@ -480,22 +530,28 @@ private fun Dashboard(
                     onClick = onOpenContacts,
                     trailing = { HomeChevron() }
                 )
-                Divider()
-                SectionRow(
-                    title = stringResource(R.string.settings_child_info_title),
-                    icon = Icons.Default.ChildCare,
-                    supporting = stringResource(R.string.settings_child_info_description),
-                    onClick = onOpenChildInfo,
-                    trailing = { HomeChevron() }
-                )
-                Divider()
-                SectionRow(
-                    title = stringResource(R.string.settings_pets_title),
-                    icon = Icons.Default.Pets,
-                    supporting = stringResource(R.string.settings_pets_description),
-                    onClick = onOpenPets,
-                    trailing = { HomeChevron() }
-                )
+                // Only what this family actually co-parents. An account that never answered the
+                // question reads as both, so nothing an upgrade was already showing disappears.
+                if (FamilyKind.CHILDREN in caresFor) {
+                    Divider()
+                    SectionRow(
+                        title = stringResource(R.string.settings_child_info_title),
+                        icon = Icons.Default.ChildCare,
+                        supporting = stringResource(R.string.settings_child_info_description),
+                        onClick = onOpenChildInfo,
+                        trailing = { HomeChevron() }
+                    )
+                }
+                if (FamilyKind.PETS in caresFor) {
+                    Divider()
+                    SectionRow(
+                        title = stringResource(R.string.settings_pets_title),
+                        icon = Icons.Default.Pets,
+                        supporting = stringResource(R.string.settings_pets_description),
+                        onClick = onOpenPets,
+                        trailing = { HomeChevron() }
+                    )
+                }
             }
         }
 
