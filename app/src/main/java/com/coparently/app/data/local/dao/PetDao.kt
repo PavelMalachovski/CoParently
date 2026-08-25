@@ -18,7 +18,7 @@ interface PetDao {
     /**
      * Gets all pets as a Flow, ordered by name.
      */
-    @Query("SELECT * FROM pets ORDER BY name ASC")
+    @Query("SELECT * FROM pets WHERE deletedAtMillis IS NULL ORDER BY name ASC")
     fun getAllPets(): Flow<List<PetEntity>>
 
     /**
@@ -35,7 +35,7 @@ interface PetDao {
      *
      * @param id The pet ID
      */
-    @Query("SELECT * FROM pets WHERE id = :id")
+    @Query("SELECT * FROM pets WHERE id = :id AND deletedAtMillis IS NULL")
     fun observePetById(id: String): Flow<PetEntity?>
 
     /**
@@ -64,9 +64,28 @@ interface PetDao {
 
     /**
      * Gets all pets that need to be synced to Firestore.
+     *
+     * **Deliberately not filtered on `deletedAtMillis`** — this is the outbox, and a pending
+     * tombstone is what it exists to carry. See [ChildInfoDao.getUnsyncedChildInfo].
      */
     @Query("SELECT * FROM pets WHERE syncedToFirestore = 0")
     suspend fun getUnsyncedPets(): List<PetEntity>
+
+    /**
+     * Marks a pet deleted, leaving the row in place as an outbox entry.
+     *
+     * The `child_info` twin, and see [ChildInfoDao.markDeleted] for why the WHERE clause
+     * excludes rows that are already tombstones.
+     *
+     * @param id The pet's id.
+     * @param deletedAtMillis When it was deleted, epoch millis.
+     * @return How many rows were marked — zero if it was already a tombstone.
+     */
+    @Query(
+        "UPDATE pets SET deletedAtMillis = :deletedAtMillis, syncedToFirestore = 0 " +
+            "WHERE id = :id AND deletedAtMillis IS NULL"
+    )
+    suspend fun markDeleted(id: String, deletedAtMillis: Long): Int
 
     /**
      * Marks a pet as synced to Firestore.
@@ -84,7 +103,10 @@ interface PetDao {
      * @param myUid Firebase UID of the signed-in user.
      * @return How many rows were re-queued.
      */
-    @Query("UPDATE pets SET syncedToFirestore = 0 WHERE createdByFirebaseUid = :myUid")
+    @Query(
+        "UPDATE pets SET syncedToFirestore = 0 " +
+            "WHERE createdByFirebaseUid = :myUid AND deletedAtMillis IS NULL"
+    )
     suspend fun markOwnPetsUnsynced(myUid: String): Int
 
     /**

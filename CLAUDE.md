@@ -171,7 +171,7 @@ cd firestore-tests && npm test              # firestore.rules against the local 
   deliberate and both tracked in `docs/ROADMAP.md` (**CQ-12**, **CQ-1**): **detekt reports but does not gate**
   (`continue-on-error`) until its baseline is regenerated locally, and there is **no
   instrumented migration job**, because `app/schemas/` stops at v14 while the database is at
-  v30. Still run the build locally before pushing — CI is a backstop, not a substitute.
+  v32. Still run the build locally before pushing — CI is a backstop, not a substitute.
   After switching branches, prefer `clean` — stale Hilt/kapt stubs from another branch cause
   errors like "Could not find class file for '…Application'".
 - **A docs/functions/rules-only pull request skips the Android jobs.** The `changes` job
@@ -295,7 +295,7 @@ cd firestore-tests && npm test              # firestore.rules against the local 
 
 ```
 domain/    — models, repository interfaces, use cases, holidays, ReminderScheduler
-data/      — Room (v30 + migrations), Firestore/Google clients, repository impls, sync
+data/      — Room (v32 + migrations), Firestore/Google clients, repository impls, sync
 presentation/ — Compose screens per feature + ViewModels + theme
 di/        — Hilt modules (Database, Firebase, Google, UseCase, Notification, …)
 ```
@@ -362,7 +362,7 @@ Data flow: UI → ViewModel → UseCase → Repository → Room (source of truth
     the conversation as `{uid: epochMillis}` maps — one write per event — and the ticks and
     unread badge are derived from them by `ChatReadState`, never stored per message.
     Message times are stored the same way: `Message.sentAtMillis`, epoch millis (Room
-    schema v13, since superseded — the database is at v30), not a naive `LocalDateTime`, so two
+    schema v13, since superseded — the database is at v32), not a naive `LocalDateTime`, so two
     parents in different time zones agree
     on what a mark means and on when a message was sent. The Firestore field keeps its name
     (`timestamp`) and the read path still accepts a legacy ISO string, so a co-parent on an
@@ -480,20 +480,19 @@ never real — a reader following them would have re-fixed working code, or acce
 that does not exist. When an item here turns out to be stale, correct it in the same commit as
 whatever you were doing; a stale "known issue" costs more than a missing one.
 
-- **Deleting a child or a pet removes the Firestore document outright, which item 14 forbids.**
-  `ChildInfoRepositoryImpl.deleteChildInfo` and `PetRepositoryImpl.deletePet` both call the data
-  source's `.delete()` and both discard the `Result`. Two consequences, and they are the ones the
-  tombstone rule exists to prevent: the co-parent's phone never learns of the deletion — nothing
-  reconciles by absence, correctly — so the record stays on their device forever; and a refused or
-  offline remote delete leaves the local row gone and the document alive, so the next download
-  re-inserts it. Pre-existing and systemic across both record types, not something the multi-child
-  work introduced — the August 2026 branch only made the child half *reachable*, by putting a
-  Delete action on the editor where before there was none. The fix is the treatment
-  `data/sync/Tombstone.kt` already defines for events and expenses: `update()` with
-  `deletedAtMillis`/`deletedBy`, hide tombstoned rows from the read queries, hard-delete locally
-  only once the remote write lands. It wants a Room column and a migration on both tables, which
-  is why it is recorded here rather than folded into a bug-fix branch. Do not "fix" it by removing
-  the Delete action — parity with pets is what was asked for.
+- ~~**Deleting a child or a pet removes the Firestore document outright.**~~ **Fixed (CQ-19,
+  schema 32.)** Both now take the treatment `data/sync/Tombstone.kt` defines for events and
+  expenses, and the four rules item 14 states apply unchanged. Two things specific to these two
+  tables are worth knowing before touching them. **`SyncService` syncs `child_info` as well as
+  the repository does**, so the outbox split had to be made in both places — sending a pending
+  tombstone through `upsertChildInfo`, which is a `set()`, would rewrite the document from a row
+  that exists only to record its own deletion and resurrect the child on both phones. And
+  **`getChildInfoById`/`getPetById` deliberately still return a tombstoned row**, mirroring
+  `EventDao.getEventById`: the sync path needs "there is a row this device has deleted" and
+  "there is no such row" to be different answers, so the filtering for a *user's* question
+  happens at the repository boundary. The hard-delete methods on both Firestore data sources
+  were removed rather than left beside the tombstone writers, since neither had a caller left —
+  unlike `FirestoreEventDataSource.deleteEvent`, which keeps one (an event turned private).
 
 - **A change request says "Sent" whether or not it left the phone.**
   `ChangeRequestRepositoryImpl.publish` catches everything and returns, leaving

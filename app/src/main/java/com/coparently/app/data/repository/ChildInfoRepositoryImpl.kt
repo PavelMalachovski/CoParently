@@ -8,6 +8,7 @@ import com.coparently.app.data.remote.firebase.FirestoreChildInfoDataSource
 import com.coparently.app.data.sync.ChildInfoAudience
 import com.coparently.app.data.sync.ChildInfoGuests
 import com.coparently.app.data.sync.ChildInfoPhotos
+import com.coparently.app.data.sync.Tombstone
 import com.coparently.app.domain.family.FamilyKey
 import com.coparently.app.domain.guests.GuestGrantPolicy
 import com.coparently.app.domain.model.ChildInfo
@@ -48,7 +49,10 @@ class ChildInfoRepositoryImpl @Inject constructor(
     }
 
     override suspend fun getChildInfoById(id: String): ChildInfo? {
-        return childInfoDao.getChildInfoById(id)?.toDomain()
+        // Filtered here rather than in the DAO: `getChildInfoById` deliberately returns a
+        // pending tombstone so the sync path can recognise one, and a caller answering a user's
+        // question must not see a record that has been deleted.
+        return childInfoDao.getChildInfoById(id)?.takeIf { it.deletedAtMillis == null }?.toDomain()
     }
 
     override fun observeChildInfoById(id: String): Flow<ChildInfo?> {
@@ -99,13 +103,49 @@ class ChildInfoRepositoryImpl @Inject constructor(
     private suspend fun currentPartnerId(userId: String): String? =
         userDao.getUserById(userId)?.partnerId?.takeIf { it.isNotBlank() }
 
+    /**
+     * Deletes a child record in a way the co-parent can actually find out about (CQ-19).
+     *
+     * The row is **tombstoned** rather than removed: every query hides it immediately, so the
+     * parent sees it go at once, but it survives in Room as an outbox entry until the deletion
+     * has been written to Firestore. Before this, the row was removed and the remote document
+     * deleted on a call whose `Result` was discarded — so a refused or offline delete left the
+     * local row gone and the document alive, and the next download put the child back, while a
+     * *successful* delete made the document vanish with nothing left for the co-parent's phone
+     * to act on. Nothing reconciles by absence, correctly (`data/sync/Tombstone.kt`), so the
+     * co-parent kept the record forever.
+     *
+     * Signed out, the deletion simply waits: the row stays a tombstone and [pullOnce] retries it
+     * on every sync until the write lands.
+     */
     override suspend fun deleteChildInfo(childInfo: ChildInfo) {
-        childInfoDao.deleteChildInfoById(childInfo.id)
+        val deletedAtMillis = System.currentTimeMillis()
+        childInfoDao.markDeleted(childInfo.id, deletedAtMillis)
 
-        // Delete from Firestore if authenticated
-        val firebaseUser = firebaseAuthService.getCurrentUser()
-        if (firebaseUser != null) {
-            firestoreChildInfoDataSource.deleteChildInfo(childInfo.id)
+        val firebaseUser = firebaseAuthService.getCurrentUser() ?: return
+        tombstoneRemotely(childInfo.id, deletedAtMillis, firebaseUser.uid)
+    }
+
+    /**
+     * Writes one pending tombstone, and drops the local row only once it lands.
+     *
+     * Shared by the delete path and [pullOnce]'s retry so the two cannot drift on what "the
+     * deletion was delivered" means.
+     */
+    private suspend fun tombstoneRemotely(id: String, deletedAtMillis: Long, deletedBy: String) {
+        val tombstoned = firestoreChildInfoDataSource.tombstoneChildInfo(
+            id = id,
+            deletedAtMillis = deletedAtMillis,
+            deletedBy = deletedBy
+        )
+        if (tombstoned.isSuccess) {
+            childInfoDao.deleteChildInfoById(id)
+        } else {
+            android.util.Log.w(
+                "ChildInfoRepo",
+                "Child tombstone not written; the deletion stays queued for the next sync",
+                tombstoned.exceptionOrNull()
+            )
         }
     }
 
@@ -113,8 +153,15 @@ class ChildInfoRepositoryImpl @Inject constructor(
         val firebaseUser = firebaseAuthService.getCurrentUser() ?: return
         val partnerId = currentPartnerId(firebaseUser.uid)
 
-        // Get unsynced local child info
-        val unsyncedChildInfo = childInfoDao.getUnsyncedChildInfo()
+        // Deletions first — they are the half of this queue that used to have no path at all.
+        // A pending tombstone is retried here on every sync until the write lands, and only
+        // then does the row go for real.
+        val (pendingDeletions, unsyncedChildInfo) =
+            childInfoDao.getUnsyncedChildInfo().partition { it.deletedAtMillis != null }
+
+        for (entity in pendingDeletions) {
+            tombstoneRemotely(entity.id, entity.deletedAtMillis ?: continue, firebaseUser.uid)
+        }
 
         // Upload to Firestore
         for (entity in unsyncedChildInfo) {
@@ -138,7 +185,21 @@ class ChildInfoRepositoryImpl @Inject constructor(
             .catch { e -> android.util.Log.w("ChildInfoRepo", "Child info sync failed", e) }
             .collect { firestoreList ->
                 for (firestoreData in firestoreList) {
+                    // A tombstone is the co-parent telling this device the child record is gone.
+                    // Answered from the raw document, before it is mapped: a deletion is the one
+                    // thing that must not depend on the rest of the document still parsing.
+                    if (Tombstone.isDeleted(firestoreData)) {
+                        childInfoDao.deleteChildInfoById(firestoreData["id"] as? String ?: continue)
+                        continue
+                    }
                     val childInfo = firestoreData.toChildInfo()
+                    // The mirror image: this device has deleted the record and the deletion has
+                    // not been written yet, so the document is still alive remotely. Inserting it
+                    // would undo the parent's own delete a few lines after the upload half tried
+                    // to deliver it.
+                    if (childInfoDao.getChildInfoById(childInfo.id)?.deletedAtMillis != null) {
+                        continue
+                    }
                     val entity = childInfo.toEntity().copy(syncedToFirestore = true)
                     childInfoDao.insertChildInfo(entity)
                 }

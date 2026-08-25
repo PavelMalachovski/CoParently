@@ -6,6 +6,7 @@ import com.coparently.app.data.local.entity.PetEntity
 import com.coparently.app.data.remote.firebase.FirebaseAuthService
 import com.coparently.app.data.remote.firebase.FirestorePetDataSource
 import com.coparently.app.data.sync.PetAudience
+import com.coparently.app.data.sync.Tombstone
 import com.coparently.app.domain.family.FamilyKey
 import com.coparently.app.domain.model.Medication
 import com.coparently.app.domain.model.Pet
@@ -52,7 +53,9 @@ class PetRepositoryImpl @Inject constructor(
     }
 
     override suspend fun getPetById(id: String): Pet? {
-        return petDao.getPetById(id)?.toDomain()
+        // Filtered here rather than in the DAO: `getPetById` deliberately returns a pending
+        // tombstone so the sync path can recognise one.
+        return petDao.getPetById(id)?.takeIf { it.deletedAtMillis == null }?.toDomain()
     }
 
     override fun observePetById(id: String): Flow<Pet?> {
@@ -87,12 +90,42 @@ class PetRepositoryImpl @Inject constructor(
         }
     }
 
+    /**
+     * Deletes a pet in a way the co-parent can actually find out about (CQ-19).
+     *
+     * The `child_info` twin — see `ChildInfoRepositoryImpl.deleteChildInfo` for the two failure
+     * modes a hard delete had, both of which this ends: a discarded `Result` left the local row
+     * gone and the document alive, and a *successful* removal left the co-parent's phone nothing
+     * to learn from.
+     */
     override suspend fun deletePet(pet: Pet) {
-        petDao.deletePetById(pet.id)
+        val deletedAtMillis = System.currentTimeMillis()
+        petDao.markDeleted(pet.id, deletedAtMillis)
 
-        val firebaseUser = firebaseAuthService.getCurrentUser()
-        if (firebaseUser != null) {
-            firestorePetDataSource.deletePet(pet.id)
+        val firebaseUser = firebaseAuthService.getCurrentUser() ?: return
+        tombstoneRemotely(pet.id, deletedAtMillis, firebaseUser.uid)
+    }
+
+    /**
+     * Writes one pending tombstone, and drops the local row only once it lands.
+     *
+     * Shared by the delete path and [pullOnce]'s retry so the two cannot drift on what "the
+     * deletion was delivered" means.
+     */
+    private suspend fun tombstoneRemotely(id: String, deletedAtMillis: Long, deletedBy: String) {
+        val tombstoned = firestorePetDataSource.tombstonePet(
+            id = id,
+            deletedAtMillis = deletedAtMillis,
+            deletedBy = deletedBy
+        )
+        if (tombstoned.isSuccess) {
+            petDao.deletePetById(id)
+        } else {
+            android.util.Log.w(
+                "PetRepo",
+                "Pet tombstone not written; the deletion stays queued for the next sync",
+                tombstoned.exceptionOrNull()
+            )
         }
     }
 
@@ -100,8 +133,18 @@ class PetRepositoryImpl @Inject constructor(
         val firebaseUser = firebaseAuthService.getCurrentUser() ?: return
         val partnerId = currentPartnerId(firebaseUser.uid)
 
+        // Deletions first — the half of this queue that used to have no path at all. A pending
+        // tombstone is retried on every sync until the write lands, and only then does the row
+        // go for real.
+        val (pendingDeletions, unsyncedPets) =
+            petDao.getUnsyncedPets().partition { it.deletedAtMillis != null }
+
+        for (entity in pendingDeletions) {
+            tombstoneRemotely(entity.id, entity.deletedAtMillis ?: continue, firebaseUser.uid)
+        }
+
         // Upload before downloading, so a local edit is never overwritten by the pull.
-        for (entity in petDao.getUnsyncedPets()) {
+        for (entity in unsyncedPets) {
             val pet = entity.toDomain()
             val audience = PetAudience.entitled(
                 userId = firebaseUser.uid,
@@ -118,7 +161,19 @@ class PetRepositoryImpl @Inject constructor(
             .catch { e -> android.util.Log.w("PetRepo", "Pet sync failed", e) }
             .collect { firestoreList ->
                 for (firestoreData in firestoreList) {
+                    // A tombstone is the co-parent telling this device the pet is gone. Answered
+                    // from the raw document, before it is mapped: a deletion must not depend on
+                    // the rest of the document still parsing.
+                    if (Tombstone.isDeleted(firestoreData)) {
+                        petDao.deletePetById(firestoreData["id"] as? String ?: continue)
+                        continue
+                    }
                     val pet = firestoreData.toPet()
+                    // The mirror image: this device deleted the pet and the deletion has not been
+                    // written yet, so the document is still alive remotely.
+                    if (petDao.getPetById(pet.id)?.deletedAtMillis != null) {
+                        continue
+                    }
                     petDao.insertPet(pet.toEntity().copy(syncedToFirestore = true))
                     repairAudience(firebaseUser.uid, partnerId, firestoreData)
                 }

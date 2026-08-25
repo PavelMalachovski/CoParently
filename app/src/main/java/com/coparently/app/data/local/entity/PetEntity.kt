@@ -49,6 +49,15 @@ data class PetEntity(
     val lastModifiedBy: String?,
     val syncedToFirestore: Boolean,
     /**
+     * When the record was deleted (epoch millis), or null while it is alive.
+     *
+     * A **pending-tombstone outbox**, not a soft-delete flag: every read query hides the row at
+     * once, and it survives only until the deletion has been written to Firestore, after which
+     * it is removed for real. Epoch millis for the reason `data/sync/Tombstone.kt` gives — the
+     * value crosses between two phones that may be in different time zones.
+     */
+    val deletedAtMillis: Long? = null,
+    /**
      * The co-parenting relationship this record belongs to, or null while it belongs to nobody
      * but its creator. See [com.coparently.app.data.local.entity.EventEntity.familyId].
      */

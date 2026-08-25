@@ -89,6 +89,48 @@ function expenseDoc(overrides) {
   }, overrides);
 }
 
+/**
+ * Builds a child record as `ChildInfoRepositoryImpl` writes it.
+ *
+ * @param {!Object} overrides Fields to override.
+ * @return {!Object} The document data.
+ */
+function childDoc(overrides) {
+  return Object.assign({
+    id: 'child-1',
+    childName: 'Anya',
+    dateOfBirth: '2018-04-02',
+    medicalNotes: '',
+    createdAt: '2026-08-01T10:00:00',
+    updatedAt: '2026-08-01T10:00:00',
+    createdByFirebaseUid: ALICE,
+    familyId: FAMILY,
+    sharedWith: [ALICE, BOB],
+    lastModifiedBy: ALICE,
+    guests: {},
+  }, overrides);
+}
+
+/**
+ * Builds a pet record as `PetRepositoryImpl` writes it.
+ *
+ * @param {!Object} overrides Fields to override.
+ * @return {!Object} The document data.
+ */
+function petDoc(overrides) {
+  return Object.assign({
+    id: 'pet-1',
+    name: 'Rex',
+    species: 'DOG',
+    createdAt: '2026-08-01T10:00:00',
+    updatedAt: '2026-08-01T10:00:00',
+    createdByFirebaseUid: ALICE,
+    familyId: FAMILY,
+    sharedWith: [ALICE, BOB],
+    lastModifiedBy: ALICE,
+  }, overrides);
+}
+
 /** @return {!Object} The two linked parents plus an unrelated third user. */
 function users() {
   return {
@@ -200,6 +242,84 @@ describe('CQ-3: tombstones', () => {
       const db = env.authenticatedContext(BOB).firestore();
       await assertSucceeds(
           db.collection('expenses').where('familyId', '==', FAMILY).get());
+    });
+  });
+
+  // ---- CQ-19 -----------------------------------------------------------------------------
+  //
+  // Deleting a child or a pet removed the document outright and discarded the `Result`. As with
+  // events and expenses, turning the delete into a tombstone **widens no rule**: it turns a
+  // `delete` into an `update`, and both collections already admit the creator and their
+  // co-parent as writers. These pin that, and that the tombstone stays readable — a deletion
+  // nobody may read is a deletion nobody is told about.
+
+  describe('child_info', () => {
+    const PATH = 'child_info/child-1';
+
+    it('lets the creator tombstone their own child record', async () => {
+      await seed(env, {[PATH]: childDoc({})});
+      await assertSucceeds(
+          env.authenticatedContext(ALICE).firestore().doc(PATH).update(tombstone(ALICE)));
+    });
+
+    it('lets the co-parent tombstone it too', async () => {
+      // Unlike an expense, a child record is a shared thing rather than one parent's record of
+      // what they paid, and the update rule already says so.
+      await seed(env, {[PATH]: childDoc({})});
+      await assertSucceeds(
+          env.authenticatedContext(BOB).firestore().doc(PATH).update(tombstone(BOB)));
+    });
+
+    it('denies a stranger', async () => {
+      await seed(env, {[PATH]: childDoc({})});
+      await assertFails(
+          env.authenticatedContext(CAROL).firestore().doc(PATH).update(tombstone(CAROL)));
+    });
+
+    it('keeps a tombstoned child record readable by the co-parent', async () => {
+      await seed(env, {[PATH]: childDoc(tombstone(ALICE))});
+      await assertSucceeds(env.authenticatedContext(BOB).firestore().doc(PATH).get());
+    });
+
+    it('keeps it inside the audience query the sync runs', async () => {
+      await seed(env, {[PATH]: childDoc(tombstone(ALICE))});
+      await assertSucceeds(
+          env.authenticatedContext(BOB).firestore().collection('child_info')
+              .where('sharedWith', 'array-contains', BOB).get());
+    });
+  });
+
+  describe('pets', () => {
+    const PATH = 'pets/pet-1';
+
+    it('lets the creator tombstone their own pet', async () => {
+      await seed(env, {[PATH]: petDoc({})});
+      await assertSucceeds(
+          env.authenticatedContext(ALICE).firestore().doc(PATH).update(tombstone(ALICE)));
+    });
+
+    it('lets the co-parent tombstone it too', async () => {
+      await seed(env, {[PATH]: petDoc({})});
+      await assertSucceeds(
+          env.authenticatedContext(BOB).firestore().doc(PATH).update(tombstone(BOB)));
+    });
+
+    it('denies a stranger', async () => {
+      await seed(env, {[PATH]: petDoc({})});
+      await assertFails(
+          env.authenticatedContext(CAROL).firestore().doc(PATH).update(tombstone(CAROL)));
+    });
+
+    it('keeps a tombstoned pet readable by the co-parent', async () => {
+      await seed(env, {[PATH]: petDoc(tombstone(ALICE))});
+      await assertSucceeds(env.authenticatedContext(BOB).firestore().doc(PATH).get());
+    });
+
+    it('keeps it inside the audience query the sync runs', async () => {
+      await seed(env, {[PATH]: petDoc(tombstone(ALICE))});
+      await assertSucceeds(
+          env.authenticatedContext(BOB).firestore().collection('pets')
+              .where('sharedWith', 'array-contains', BOB).get());
     });
   });
 });

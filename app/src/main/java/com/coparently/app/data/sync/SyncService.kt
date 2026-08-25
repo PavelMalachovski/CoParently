@@ -458,8 +458,31 @@ class SyncService @Inject constructor(
         val partnerId = userDao.getUserById(userId)?.partnerId?.takeIf { it.isNotBlank() }
         backfillChildInfoAudienceForPartner(userId, partnerId)
 
-        // Upload unsynced local child info
-        val unsyncedChildInfo = childInfoDao.getUnsyncedChildInfo()
+        // Upload unsynced local child info. Deletions first, and they are *not* uploadable as
+        // documents: `getUnsyncedChildInfo` is the outbox and carries pending tombstones, so
+        // sending one through `upsertChildInfo` — a `set()` — would rewrite the document from a
+        // row that only still exists to record its own deletion, wiping the tombstone and
+        // resurrecting the child on both phones.
+        val (pendingDeletions, unsyncedChildInfo) =
+            childInfoDao.getUnsyncedChildInfo().partition { it.deletedAtMillis != null }
+
+        for (entity in pendingDeletions) {
+            val deletedAtMillis = entity.deletedAtMillis ?: continue
+            val tombstoned = firestoreChildInfoDataSource.tombstoneChildInfo(
+                id = entity.id,
+                deletedAtMillis = deletedAtMillis,
+                deletedBy = userId
+            )
+            if (tombstoned.isSuccess) {
+                childInfoDao.deleteChildInfoById(entity.id)
+            } else {
+                Log.w(
+                    TAG,
+                    "Child tombstone for ${entity.id} not written; it stays queued",
+                    tombstoned.exceptionOrNull()
+                )
+            }
+        }
 
         for (entity in unsyncedChildInfo) {
             val childInfoData = mapOf(
@@ -506,8 +529,24 @@ class SyncService @Inject constructor(
         // Download child info from Firestore with conflict resolution
         firestoreChildInfoDataSource.getChildInfoForParent(userId).collect { firestoreList ->
             for (firestoreData in firestoreList) {
+                // The co-parent deleted the child record. Answered from the raw document, and
+                // ahead of the conflict resolver: a deletion is decided by rule rather than by
+                // comparing `updatedAt`, which is a naive `LocalDateTime` with SEC-4's ordering
+                // defect.
+                if (Tombstone.isDeleted(firestoreData)) {
+                    childInfoDao.deleteChildInfoById(firestoreData["id"] as? String ?: continue)
+                    continue
+                }
+
                 val remoteEntity = firestoreData.toChildInfoEntity()
                 val localEntity = childInfoDao.getChildInfoById(remoteEntity.id)
+
+                // This device deleted the record and the deletion has not been written yet, so
+                // the document is still alive remotely. Inserting it would undo the parent's own
+                // delete a few lines after the upload half tried to deliver it.
+                if (localEntity?.deletedAtMillis != null) {
+                    continue
+                }
 
                 if (localEntity != null && !localEntity.syncedToFirestore) {
                     // Conflict detected - resolve it

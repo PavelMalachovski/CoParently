@@ -70,7 +70,6 @@ invocation is yours.
 | **CQ-14** | User-facing strings produced inside ViewModels and services | P2 | M |
 | **CQ-15** | The last of the dead code, and one decision about it | P3 | S |
 | **CQ-17** | Six dependencies worth moving | P3 | S |
-| **CQ-19** | Deleting a child or a pet removes the document outright, which the tombstone rule forbids | P1 | M |
 | **CQ-20** | A change request says "Sent" whether or not it left the phone | P2 | S |
 | **UX-9** | Five different empty-state anatomies, one of which renders under the top bar | P2 | M |
 | **UX-12** | Clerical English success messages — and a branch on the literal that will break when they are localised | P2 | S |
@@ -96,7 +95,7 @@ invocation is yours.
 
 | Id | What | Why it needs a job |
 | --- | --- | --- |
-| **CQ-1** | Restore the Room schemas (v15 → v31) and test the migrations | Exporting a schema is a Gradle task, so CI can do it and upload `app/schemas/` as an artifact; **running** a migration test needs an Android emulator, and no workflow starts one. Both jobs are writable here; neither exists. |
+| **CQ-1** | Restore the Room schemas (v15 → v32) and test the migrations | Exporting a schema is a Gradle task, so CI can do it and upload `app/schemas/` as an artifact; **running** a migration test needs an Android emulator, and no workflow starts one. Both jobs are writable here; neither exists. |
 | **CQ-12** | Regenerate the detekt baseline, then let detekt gate again | `./gradlew detektBaseline` needs the Android SDK. A one-shot `workflow_dispatch` job that runs it and uploads the XML is enough — commit the artifact, delete `continue-on-error`. |
 
 ### 👁 Cloud writes it, only a device or a console can say whether it is right
@@ -131,13 +130,17 @@ invocation is yours.
 
 In this order, and each is genuinely finishable in the cloud:
 
-1. **M-6** — a friend of one family reading the other family's calendar is the same class of defect
-   PR #76 existed to close, and it is still open.
-2. **CQ-19** — a child or pet deleted on one phone lives forever on the other.
-3. **CQ-12 then CQ-1** — the two CI jobs. After them, detekt gates again and migrations are tested
+1. **CQ-12 then CQ-1** — the two CI jobs. After them, detekt gates again and migrations are tested
    for the first time since v14, which is the precondition for trusting any later schema change.
-4. **MON-4 → MON-3** — settle what the record guarantees, then build the export. In that order: an
+   Three untestable migrations have been added since this document was written; the number only
+   grows.
+2. **MON-4 → MON-3** — settle what the record guarantees, then build the export. In that order: an
    export of a record nobody can vouch for is worth nothing to a lawyer.
+3. **CQ-20** and **UX-17/UX-18** — three small honesty gaps: an app that says "Sent" when it means
+   "queued", a proposal that cannot be withdrawn, and a split ratio that becomes the pair's
+   agreement without telling the other parent.
+
+*(**M-6** and **CQ-19**, which headed this list, are done.)*
 
 ---
 
@@ -407,23 +410,23 @@ Decide: pin and document, or move off it.
 
 ## 5. [CQ] Code quality, correctness and platform
 
-### CQ-1 · P0 · M · Restore the Room schemas (v15 → v31)
+### CQ-1 · P0 · M · Restore the Room schemas (v15 → v32)
 
 **Where:** ⚙️ cloud, once two CI jobs exist. Exporting schemas is a Gradle task CI can run and
 upload as an artifact; running a migration test needs an Android emulator, which no workflow starts
 today.
 
-`CoPlanlyDatabase` is at `version = 31`; `app/schemas/` stops at `14.json`. The files were never
+`CoPlanlyDatabase` is at `version = 32`; `app/schemas/` stops at `14.json`. The files were never
 committed, so they cannot be recovered from git — they must be regenerated. Every migration test
 above v14 fails with *"Cannot find the schema file in the assets folder"*, which means **migrations
-15→31 have never run against real SQLite**. `DatabaseModule` deliberately does not fall back to
+15→32 have never run against real SQLite**. `DatabaseModule` deliberately does not fall back to
 destructive migration above v4: a broken migration is a **crash on launch** for a user with real
 data, not a wipe.
 
 This is the item that gates several others. **FAM-2**'s dead `childId` columns cannot be dropped
 without it (a column drop is a table rebuild, and `MIGRATION_12_13` is only provable because
 `12.json` exists), **SEC-4**'s timestamp conversion has no instrumented test for the same reason,
-and **SEC-2** and **CQ-19** will each add a migration nobody can prove.
+**CQ-19** has just added one more that nobody can prove, and **SEC-2** will add another.
 
 - [ ] Regenerate per version (`./gradlew kaptDebugKotlin` at each version-bump commit), or accept
       the gap, export 31 only, and document the untested migrations.
@@ -587,23 +590,40 @@ Epoch-millis message times are covered by unit tests that drive two zones explic
 one phone 2–3 hours apart, send, confirm unread counts, badge clearing and READ ticks — was
 deferred, not run. Everything else in that acceptance round passed on real devices.
 
-### CQ-19 · P1 · M · Deleting a child or a pet removes the document outright
+### CQ-19 · **DONE** · Deleting a child or a pet removed the document outright
 
-**Where:** ☁️ cloud; ⚙️ its migration wants CQ-1's emulator job to be provable.
-
-`ChildInfoRepositoryImpl.deleteChildInfo` and `PetRepositoryImpl.deletePet` both call the data
-source's `.delete()` and both discard the `Result` — which is exactly what **CQ-3**'s tombstone rule
-exists to prevent. Two consequences: the co-parent's phone never learns of the deletion (nothing
-reconciles by absence, correctly), so the record stays on their device forever; and a refused or
-offline remote delete leaves the local row gone and the document alive, so the next download
-re-inserts it.
+`ChildInfoRepositoryImpl.deleteChildInfo` and `PetRepositoryImpl.deletePet` both called the data
+source's `.delete()` and both discarded the `Result` — exactly what **CQ-3**'s tombstone rule exists
+to prevent. Two consequences: the co-parent's phone never learned of the deletion (nothing
+reconciles by absence, correctly), so the record stayed on their device forever; and a refused or
+offline remote delete left the local row gone and the document alive, so the next download
+re-inserted it.
 
 Pre-existing and systemic across both record types — the multi-child work only made the child half
-*reachable*, by putting a Delete action on the editor where before there was none. The fix is the
-treatment `data/sync/Tombstone.kt` already defines: `update()` with `deletedAtMillis`/`deletedBy`,
-hide tombstoned rows from the read queries, hard-delete locally only once the remote write lands.
-It wants a Room column and a migration on both tables. **Do not** "fix" it by removing the Delete
-action — parity with pets is what was asked for.
+*reachable*, by putting a Delete action on the editor where before there was none.
+
+Fixed with the treatment `data/sync/Tombstone.kt` already defined, Room schema 32, and no rule
+widened: tombstoning turns a `delete` into an `update`, and both collections already admitted the
+creator and their co-parent as writers (pinned in `deletion-tombstones.test.js`, including that a
+tombstoned record stays *readable* — a deletion nobody may read is a deletion nobody is told
+about). Three things that were not obvious going in:
+
+- **`child_info` is synced in two places** — the repository's `pullOnce` *and* `SyncService` — so
+  the outbox split had to be made twice. Sending a pending tombstone through `upsertChildInfo`,
+  which is a `set()`, would rewrite the document from a row that exists only to record its own
+  deletion, wiping the tombstone and resurrecting the child on both phones.
+- **`getChildInfoById`/`getPetById` deliberately still return a tombstoned row**, mirroring
+  `EventDao.getEventById`. The sync path needs "there is a row this device has deleted" and "there
+  is no such row" to be opposite answers; a user's question is filtered at the repository boundary.
+- **The hard-delete methods on both Firestore data sources were removed**, not left beside the
+  tombstone writers. Neither had a caller left, and a `.delete()` sitting next to a `tombstone()`
+  is a trap — unlike `FirestoreEventDataSource.deleteEvent`, which keeps exactly one legitimate
+  caller (an event turned private has to leave Firestore with no trace).
+
+The 90-day server sweep now covers all four collections. `budgets` and `change_requests` still
+delete by other means, and the two halves must be added together: a collection in the sweep list
+with no client writing tombstones sweeps nothing, and a client writing them into an unlisted
+collection keeps them for ever.
 
 ### CQ-20 · P2 · S · A change request says "Sent" whether or not it left the phone
 
@@ -1038,12 +1058,13 @@ Not a wish-list ordering — a dependency ordering. Each block assumes the one a
 4. **MON-2 §1** — find out whether app2us "Rodina" has an Android build. One afternoon; it moves the
    plan more than any other single fact, and a session can do the fetching.
 
-**Then, the two open leaks and the two CI jobs** — all four are cloud work
+**Then the two CI jobs** — cloud work, and the pair everything later leans on
 
-5. **M-6** — the calendar-friend grant is still per person.
-6. **CQ-19** — a deleted child or pet never reaches the other phone.
+5. ~~**M-6** — the calendar-friend grant is still per person.~~ **Done.**
+6. ~~**CQ-19** — a deleted child or pet never reaches the other phone.~~ **Done**, and it added the
+   third migration `app/schemas/` cannot describe.
 7. **CQ-12** then **CQ-1** — make detekt gate again, then restore the schemas and add the emulator
-   job. After them, every later schema change is provable, which SEC-2 and CQ-19 both need.
+   job. After them every later schema change is provable, which SEC-2 needs and CQ-19 wanted.
 
 **Before any launch**
 

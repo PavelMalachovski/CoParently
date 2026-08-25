@@ -694,6 +694,27 @@ object DatabaseMigrations {
     }
 
     /**
+     * v31 -> v32: a deleted child or pet becomes a tombstone instead of vanishing (CQ-19).
+     *
+     * The same column `events` and `expenses` gained in v25, for the same reason and with the
+     * same meaning: a **pending-tombstone outbox**. Deleting a child or a pet used to remove the
+     * Firestore document outright and discard the `Result`, which is what
+     * `data/sync/Tombstone.kt` exists to forbid — the co-parent's phone never learned of the
+     * deletion (nothing reconciles by absence, correctly), so the record stayed on their device
+     * forever, and a refused or offline delete left the local row gone and the document alive,
+     * so the next download put it back.
+     *
+     * Nullable with no conversion: every existing row is alive, which is what null says.
+     */
+    val MIGRATION_31_32 = object : Migration(31, 32) {
+        override fun migrate(database: SupportSQLiteDatabase) {
+            listOf("child_info", "pets").forEach { table ->
+                database.execSQL("ALTER TABLE $table ADD COLUMN deletedAtMillis INTEGER")
+            }
+        }
+    }
+
+    /**
      * List of all migrations in order.
      */
     val ALL_MIGRATIONS = arrayOf(
@@ -722,6 +743,7 @@ object DatabaseMigrations {
         MIGRATION_27_28,
         MIGRATION_28_29,
         MIGRATION_29_30,
-        MIGRATION_30_31
+        MIGRATION_30_31,
+        MIGRATION_31_32
     )
 }

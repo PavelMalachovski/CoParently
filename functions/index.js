@@ -1306,14 +1306,22 @@ exports.sweepExpiredGuests = functions.pubsub
     });
 
 /**
- * Collections whose documents are deleted by being tombstoned rather than removed (CQ-3).
+ * Collections whose documents are deleted by being tombstoned rather than removed (CQ-3, CQ-19).
  *
- * Both are read by the co-parent's phone through a filtered collection query, which is the
+ * Each is read by the co-parent's phone through a filtered collection query, which is the
  * channel a deletion travels down: the client marks the document `deletedAtMillis` instead of
  * removing it, the other device sees the field on its next sync and drops its local row. That
  * only works while the document is still there, which is what this sweep is bounding.
+ *
+ * `child_info` and `pets` joined in CQ-19. They had the defect the other two were fixed for and
+ * kept it a release longer: both repositories called the data source's `.delete()` and discarded
+ * the `Result`, so a co-parent never learned a child or a pet had been removed, and a refused or
+ * offline delete left the local row gone and the document alive for the next download to restore.
+ *
+ * A collection listed here without a client that writes tombstones sweeps nothing; a client that
+ * writes tombstones into a collection *not* listed here keeps them for ever. Add to both halves.
  */
-const TOMBSTONED_COLLECTIONS = ['events', 'expenses'];
+const TOMBSTONED_COLLECTIONS = ['events', 'expenses', 'child_info', 'pets'];
 
 exports.TOMBSTONED_COLLECTIONS = TOMBSTONED_COLLECTIONS;
 
