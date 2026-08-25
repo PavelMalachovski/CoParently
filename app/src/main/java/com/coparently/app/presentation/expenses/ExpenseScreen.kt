@@ -1,6 +1,7 @@
 package com.coparently.app.presentation.expenses
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -8,6 +9,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ReceiptLong
@@ -60,6 +63,42 @@ import kotlinx.coroutines.launch
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+
+/**
+ * How much empty space the scrolling page keeps under its last row.
+ *
+ * The Add button floats over the content, so without this the bottom of the analytics ledger
+ * would come to rest underneath it. Sized for a standard 56 dp FAB plus its 16 dp margin, and
+ * a little air on top of that.
+ */
+private val FAB_CLEARANCE = 88.dp
+
+/**
+ * Gives the month its own vertical scroll — but only where what it holds can be measured without
+ * a bounded height.
+ *
+ * **The analytics view scrolls as a page, the list does not.** `ExpenseList` is a `LazyColumn`,
+ * and the empty-month branch is a `weight(1f)` placeholder; measuring either with an infinite
+ * maximum height is a crash, not a layout quirk. So the page scrolls on the analytics branch of a
+ * month that has expenses, and nowhere else.
+ *
+ * Without it, `ExpenseAnalytics` scrolled inside whatever was left under the banners, one summary
+ * card per currency and the switcher — on a month holding two currencies, a couple of hundred dp
+ * for a pie, a table and a ledger, with the figures under the arc unreachable.
+ *
+ * It is a named extension rather than a conditional at the call site because the two halves belong
+ * together: whoever changes what either branch renders has to find this rule, and it is one `if`
+ * standing between a working screen and a crash.
+ *
+ * @param showAnalytics Whether the analytics view is the one showing
+ * @param hasExpenses Whether this month has anything to draw
+ * @param state Scroll state for the page
+ */
+private fun Modifier.scrollsAsPage(
+    showAnalytics: Boolean,
+    hasExpenses: Boolean,
+    state: ScrollState
+): Modifier = if (showAnalytics && hasExpenses) verticalScroll(state) else this
 
 /**
  * Expense list screen — a top-level bottom-navigation destination.
@@ -239,8 +278,16 @@ fun ExpenseScreen(
                     label = "expenses-month",
                     modifier = Modifier.weight(1f)
                 ) { shownMonth ->
-                    Column(modifier = Modifier.fillMaxSize()) {
-                        val monthExpenses = shownMonth.expenses
+                    val monthExpenses = shownMonth.expenses
+                    // Remembered inside the month's own content slot, so paging to another
+                    // month opens at the top rather than at this one's offset, while
+                    // switching List/Analytics within a month comes back where it was.
+                    val pageScroll = rememberScrollState()
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .scrollsAsPage(showAnalytics, monthExpenses.isNotEmpty(), pageScroll)
+                    ) {
                         val balancesByCurrency = shownMonth.balances
                         val monthNavigation = MonthNavigation(
                             label = rememberMonthLabel(shownMonth.month),
@@ -322,7 +369,10 @@ fun ExpenseScreen(
                                     roleByUid = roleByUid,
                                     onSelectCurrency = viewModel::selectAnalyticsCurrency,
                                     onSelectPayer = viewModel::selectAnalyticsPayer,
-                                    modifier = Modifier.weight(1f)
+                                    // No weight: the page scrolls, so this is as tall as
+                                    // it needs to be, and the clearance keeps the last
+                                    // ledger row from coming to rest under the Add button.
+                                    modifier = Modifier.padding(bottom = FAB_CLEARANCE)
                                 )
                             } else {
                                 // Budgets belong to the list: they are about what is left to spend, not
