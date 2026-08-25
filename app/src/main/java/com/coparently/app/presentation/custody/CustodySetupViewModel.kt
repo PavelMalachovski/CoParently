@@ -127,9 +127,16 @@ class CustodySetupViewModel @Inject constructor(
      * every index the contact parent holds is negotiable — the two weekend days plus an optional
      * midweek day that may itself be a Monday — while "holds most of the cycle" is exactly what
      * makes a parent the resident one. Only meaningful for a pattern that is not a 50/50 split.
+     *
+     * Counts only indices the pattern can reach, the stance `CustodyModel.complemented` already
+     * takes: `getCustodyFor` reduces a date modulo `patternDays` and never sees an index outside
+     * the cycle, so counting one would answer about days the calendar does not paint — and could
+     * invert the form for a document written by an older or foreign build, which is the exact
+     * failure this function exists to prevent. It also keeps a zero `patternDays` from making an
+     * empty set the majority.
      */
     private fun CustodyModel.isResidentSlotOne(): Boolean =
-        momDayIndices.size * 2 > patternDays
+        momDayIndices.count { it in 0 until patternDays } * 2 > patternDays
 
     /**
      * Selects a model type.

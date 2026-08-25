@@ -1,5 +1,6 @@
 package com.coparently.app.presentation.common
 
+import android.util.Log
 import com.coparently.app.domain.model.PairingState
 import com.coparently.app.domain.repository.PairingRepository
 import com.coparently.app.domain.repository.UserRepository
@@ -197,10 +198,21 @@ class ParentsSource @Inject constructor(
      */
     suspend fun coParentUid(): String? {
         val uid = userRepository.getCurrentUserId() ?: return null
-        return userRepository.getUserById(uid)?.partnerId?.takeIf { it.isNotBlank() && it != uid }
+        val partnerId = userRepository.getUserById(uid)?.partnerId
+        if (partnerId.isNullOrBlank()) {
+            // Not an error — an unpaired account has no co-parent — but it is also the answer a
+            // paired account gets in the window between the accept callable returning and
+            // `PairingRepositoryImpl` writing the pairing into Room. That window prices an
+            // expense as unshared, and without this line the only evidence is a wrong balance.
+            Log.i(TAG, "No co-parent on the local row for $uid; treating this account as unpaired")
+            return null
+        }
+        return partnerId.takeIf { it != uid }
     }
 
     private companion object {
+        const val TAG = "ParentsSource"
+
         /** Keeps the shared upstream warm across a tab switch or a config change. */
         const val STOP_TIMEOUT_MS = 5_000L
     }

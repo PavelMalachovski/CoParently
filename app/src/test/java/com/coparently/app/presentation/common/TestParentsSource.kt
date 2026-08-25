@@ -27,7 +27,12 @@ fun testParentsSource(me: User? = null, partner: PartnerSummary? = null): Parent
         every { getAllUsers() } returns flowOf(listOfNotNull(me))
         // The cheap path ParentsSource.signedInSlot() takes; it must not need the pairing side.
         coEvery { getCurrentUserId() } returns me?.id
-        coEvery { getUserById(any()) } returns me
+        // The signed-in row must carry the pairing, or the two halves of this double describe
+        // different accounts: `coParentUid()` reads `partnerId` off this row while `partner`
+        // below is wired only into the pairing side, so a fake without it reports every paired
+        // account as unpaired — and a test would conclude the save path is fine when it is not.
+        coEvery { getUserById(any()) } returns
+            me?.let { row -> partner?.let { row.copy(partnerId = it.id) } ?: row }
     }
     val pairingRepository = mockk<PairingRepository> {
         every { observePairingState() } returns flowOf(

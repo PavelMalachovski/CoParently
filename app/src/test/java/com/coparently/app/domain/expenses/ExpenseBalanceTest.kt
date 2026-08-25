@@ -268,6 +268,24 @@ class ExpenseBalanceTest {
     }
 
     @Test
+    fun `a ratio on a row naming one person is ignored, so it stays a claim on nobody`() {
+        // The shape every expense had before the co-parent was resolved on the save path, and
+        // the shape an unpaired account still produces: shared, stamped with a ratio, and split
+        // with the payer alone. Once the account pairs, both slots become known — and applying
+        // the ratio there charged the payer 70 % of a cost nobody else was party to, reporting
+        // the other 30 % on screen as a debt the co-parent owed.
+        val balance = calculateExpenseBalance(
+            expenses = listOf(
+                expense("nappies", 100.0, mom, splitBetween = listOf(mom), splitBasisPoints = 7000)
+            ),
+            currentUserId = mom,
+            roleByUid = roles
+        )
+
+        assertEquals(0.0, balance.netForCurrentUser, 0.001)
+    }
+
+    @Test
     fun `a ratio is ignored while the two parents cannot be told apart`() {
         // Both still on slot 1 — the same condition that leaves `splitKnown` false. Applying a
         // slot-keyed ratio there would charge one of them the other's share.

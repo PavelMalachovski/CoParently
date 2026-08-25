@@ -117,22 +117,28 @@ fun calculateExpenseBalance(
 /**
  * The fraction of [expense] that [uid] owes.
  *
- * The ratio stored on the expense when both parents' slots are known and it carries one; an even
- * division among the people it is split between otherwise. The fallback covers three real cases
- * and gets each of them right: a row recorded before the agreement existed, an unpaired account
- * where one of the two slots is unknown, and a pair whose two parents both still read `"mom"` —
- * the same condition that leaves `ExpenseBalance.splitKnown` false, because the two people
- * genuinely cannot be told apart yet.
+ * The ratio stored on the expense when it is a **two-way** split and both parents' slots are
+ * known; an even division among the people it is split between otherwise. The fallback covers
+ * four real cases and gets each of them right: a row recorded before the agreement existed; an
+ * unpaired account where one of the two slots is unknown; a pair whose two parents both still
+ * read `"mom"` — the same condition that leaves `ExpenseBalance.splitKnown` false, because the
+ * two people genuinely cannot be told apart yet; and a row whose `splitBetween` names one person.
+ *
+ * That last one is why the size check is here and not merely implied. An expense recorded while
+ * unpaired is stamped with a ratio and split with the payer alone, and once the account pairs,
+ * `bothSlotsKnown` starts answering true for it: charging the payer 70 % of a cost nobody else
+ * is party to reported the other 30 % on screen as a debt the co-parent owed. One member divides
+ * by one — the whole thing, net zero — which is what "not split", the label the row prints for
+ * exactly this expense, has to mean.
  */
 private fun shareOf(expense: Expense, uid: String, roleByUid: Map<String, String>): Double {
-    val ratio = SplitRatio.fromStored(expense.splitBasisPoints)
-    val slot = roleByUid[uid]
-    return if (ratio != null && slot != null && bothSlotsKnown(roleByUid)) {
-        ratio.shareFor(slot)
-    } else {
-        1.0 / expense.splitBetween.size
-    }
+    val slot = roleByUid[uid]?.takeIf { expense.splitBetween.size == PAIR_SIZE && bothSlotsKnown(roleByUid) }
+    val ratio = slot?.let { SplitRatio.fromStored(expense.splitBasisPoints) }
+    return ratio?.shareFor(slot) ?: (1.0 / expense.splitBetween.size)
 }
+
+/** A slot-keyed ratio only describes two people; anything else divides evenly. */
+private const val PAIR_SIZE = 2
 
 /**
  * Splits [expenses] by currency and computes a separate [ExpenseBalance] for each.
