@@ -42,12 +42,18 @@ enum class DayCellOverlay {
  *   when they had not. The two translucent hues do blend into something that is neither parent's
  *   colour, and that is the intended reading — the day is being argued about. The cell's spoken
  *   description says so in words, which is what actually disambiguates it.
+ * @property isAdjacentMonth Whether this cell is one of the leading or trailing days borrowed
+ *   from a neighbouring month. It is a **fact about the day, not a colour**: the caller draws the
+ *   same fills at a reduced strength, the way the day number and the event dots are already
+ *   dimmed. Encoded here rather than left to the view so that every consequence of a day being
+ *   borrowed is decided in this file, which is the whole point of it.
  */
 data class DayCellFill(
     val base: DayCellBase,
     val overlay: DayCellOverlay,
     val handoverFrom: DayCellOverlay? = null,
-    val pendingProposalFor: DayCellOverlay? = null
+    val pendingProposalFor: DayCellOverlay? = null,
+    val isAdjacentMonth: Boolean = false
 )
 
 /**
@@ -80,8 +86,14 @@ object DayCellFills {
      *
      * @param isWeekend Saturday or Sunday.
      * @param isCurrentMonth False for the leading and trailing days borrowed from the
-     *   neighbouring months. They take the base but never an overlay, matching their already
-     *   dimmed day numbers.
+     *   neighbouring months. **They still carry the custody band**, at the reduced strength
+     *   [DayCellFill.isAdjacentMonth] asks the caller for. They used to carry nothing at all, and
+     *   a band that stops in the middle of a grid row is the same defect as a weekend band that
+     *   appears in some rows and not others: custody is a *pattern*, and a reader cannot infer a
+     *   pattern from a row that goes blank halfway across. What they still do not take is
+     *   anything they cannot be acted on for — the holiday tint, the proposal preview, the swap
+     *   arrows — because those mark a day you would do something about, and a borrowed cell
+     *   refuses every gesture.
      * @param custody `"mom"`, `"dad"`, or null when no custody model or legacy schedule applies.
      *   Any other value is treated as no custody rather than guessed at.
      * @param previousCustody Whose day *yesterday* was, resolved through the same lookup. When it
@@ -111,18 +123,25 @@ object DayCellFills {
         previousSwapped: Boolean = false
     ): DayCellFill = DayCellFill(
         base = baseFor(isWeekend),
-        overlay = if (!isCurrentMonth) {
-            DayCellOverlay.NONE
-        } else {
-            custodyOverlay(custody)
-                ?: if (isPublicHoliday) DayCellOverlay.PUBLIC_HOLIDAY else DayCellOverlay.NONE
-        },
-        handoverFrom = if (isCurrentMonth && !isSwapped && !previousSwapped) {
-            handoverFrom(custody, previousCustody)
-        } else {
+        // The holiday tint is the one overlay the borrowed days give up: it marks a single day,
+        // and a single day missing from a borrowed cell breaks no pattern. The custody band is a
+        // pattern, so it runs to the edge of the grid.
+        overlay = custodyOverlay(custody)
+            ?: if (isPublicHoliday && isCurrentMonth) {
+                DayCellOverlay.PUBLIC_HOLIDAY
+            } else {
+                DayCellOverlay.NONE
+            },
+        // The diagonal travels with the band, on a borrowed day too. Drawing the band but not the
+        // handover would put the change of hands a day late — wrong information, where leaving
+        // the whole cell blank was merely silent.
+        handoverFrom = if (isSwapped || previousSwapped) {
             null
+        } else {
+            handoverFrom(custody, previousCustody)
         },
-        pendingProposalFor = if (isCurrentMonth) pendingProposal(custody, proposedCustody) else null
+        pendingProposalFor = if (isCurrentMonth) pendingProposal(custody, proposedCustody) else null,
+        isAdjacentMonth = !isCurrentMonth
     )
 
     /**

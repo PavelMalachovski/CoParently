@@ -87,6 +87,14 @@ replace) the July 2026 overhaul below — those invariants still hold except whe
     strength — the old per-call-site 0.3/0.5 alphas are gone, so month and week read as one
     system. Don't "fix" a weekend that looks too subtle by putting it back ahead of custody:
     weekends are the days a separated parent checks first.
+    **The custody band runs to the edge of the grid, borrowed days included** (Aug 2026, second
+    pass). Those cells used to take the base and no overlay at all, so a band stopped mid-row and
+    the reader had no rule to infer the rest of the pattern from — the same complaint the weekend
+    fix answered, one layer up. They carry the band and the handover diagonal now, at
+    `ADJACENT_MONTH_TINT_SCALE` of the custody alpha, because the grid must still say which month
+    it is showing. What a borrowed cell still refuses is everything you would *act on*: the
+    holiday tint, the proposal preview, the swap arrows, the long press. That is the line — a
+    pattern crosses the month boundary, a thing you would answer does not.
 
 ## UX/UI overhaul (July 2026 design review) — implemented, keep consistent
 

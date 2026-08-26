@@ -417,11 +417,13 @@ private fun DayCell(
             }
         DayCellBase.SURFACE -> MaterialTheme.colorScheme.surface
     }
+    // One alpha for the whole custody channel of this cell, so the band and the handover
+    // triangle cannot come out at different strengths. A day borrowed from a neighbouring month
+    // keeps the band and gets it recessively — see `ADJACENT_MONTH_TINT_SCALE`.
+    val custodyAlpha = CoPlanlyColors.CUSTODY_TINT_ALPHA * adjacentScale(fill.isAdjacentMonth)
     val overlayColor = when (fill.overlay) {
-        DayCellOverlay.CUSTODY_MOM ->
-            CoPlanlyColors.MomPink.copy(alpha = CoPlanlyColors.CUSTODY_TINT_ALPHA)
-        DayCellOverlay.CUSTODY_DAD ->
-            CoPlanlyColors.DadBlue.copy(alpha = CoPlanlyColors.CUSTODY_TINT_ALPHA)
+        DayCellOverlay.CUSTODY_MOM -> CoPlanlyColors.MomPink.copy(alpha = custodyAlpha)
+        DayCellOverlay.CUSTODY_DAD -> CoPlanlyColors.DadBlue.copy(alpha = custodyAlpha)
         DayCellOverlay.PUBLIC_HOLIDAY -> CoPlanlyColors.HolidayRed.copy(alpha = HOLIDAY_TINT_ALPHA)
         DayCellOverlay.TODAY, DayCellOverlay.NONE -> Color.Transparent
     }
@@ -429,10 +431,8 @@ private fun DayCell(
     // The parent the child is coming *from* on a handover day, at the same custody alpha as the
     // overlay: the two triangles must read as one system, not as a tint and a competing block.
     val handoverColor = when (fill.handoverFrom) {
-        DayCellOverlay.CUSTODY_MOM ->
-            CoPlanlyColors.MomPink.copy(alpha = CoPlanlyColors.CUSTODY_TINT_ALPHA)
-        DayCellOverlay.CUSTODY_DAD ->
-            CoPlanlyColors.DadBlue.copy(alpha = CoPlanlyColors.CUSTODY_TINT_ALPHA)
+        DayCellOverlay.CUSTODY_MOM -> CoPlanlyColors.MomPink.copy(alpha = custodyAlpha)
+        DayCellOverlay.CUSTODY_DAD -> CoPlanlyColors.DadBlue.copy(alpha = custodyAlpha)
         else -> null
     }
 
@@ -645,8 +645,10 @@ private fun DayCell(
                 proposalColor?.let { drawRect(it) }
             }
             // Long-press offers the day to the co-parent. A day from a neighbouring month is
-            // excluded for the same reason it takes no overlay: it is shown for context, not to
-            // be acted on, and its dimmed number already says so.
+            // excluded: it is shown for context, not to be acted on, and its dimmed number and
+            // recessive tint already say so. That exclusion is why it takes no proposal preview
+            // and no holiday tint either — it does carry the custody band, which is a pattern
+            // rather than something you would answer.
             .combinedClickable(
                 // While a swap selection is open, a tap extends it — the same gesture that
                 // opened it. Outside selection mode the tap is untouched: it selects the day and
@@ -791,6 +793,15 @@ private fun eventDotColor(
     }
     return if (isCurrentMonth) base else base.copy(alpha = OUTSIDE_MONTH_DOT_ALPHA)
 }
+
+/**
+ * How much of the custody tint a cell gets, given whether it belongs to a neighbouring month.
+ *
+ * A function rather than an `if` inside the cell composable, which is long enough that detekt
+ * counts its branches: this is a lookup, not a decision the cell makes.
+ */
+private fun adjacentScale(isAdjacentMonth: Boolean): Float =
+    if (isAdjacentMonth) CoPlanlyColors.ADJACENT_MONTH_TINT_SCALE else 1f
 
 /**
  * Settles the pager onto a month boundary with one deliberate, direction-independent tween.

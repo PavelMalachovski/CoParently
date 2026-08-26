@@ -29,23 +29,16 @@ class DayCellFillsTest {
     }
 
     @Test
-    fun `a weekend in a neighbouring month is grey with no overlay`() {
+    fun `a day in a neighbouring month keeps the custody band, marked as borrowed`() {
+        // It used to keep nothing, and the band stopped in the middle of a grid row: the last
+        // days of the month were coloured and the cells beside them were blank, with no rule a
+        // reader could infer. `isAdjacentMonth` is how the caller knows to draw it recessively.
         assertEquals(
-            DayCellFill(DayCellBase.WEEKEND, DayCellOverlay.NONE),
-            DayCellFills.monthCell(
-                isWeekend = true,
-                isCurrentMonth = false,
-                custody = "dad",
-                previousCustody = "dad",
-                isPublicHoliday = true
-            )
-        )
-    }
-
-    @Test
-    fun `a weekday in a neighbouring month is plain surface`() {
-        assertEquals(
-            DayCellFill(DayCellBase.SURFACE, DayCellOverlay.NONE),
+            DayCellFill(
+                base = DayCellBase.SURFACE,
+                overlay = DayCellOverlay.CUSTODY_MOM,
+                isAdjacentMonth = true
+            ),
             DayCellFills.monthCell(
                 isWeekend = false,
                 isCurrentMonth = false,
@@ -53,6 +46,60 @@ class DayCellFillsTest {
                 previousCustody = "mom",
                 isPublicHoliday = false
             )
+        )
+    }
+
+    @Test
+    fun `a borrowed weekend keeps its grey base under the band`() {
+        assertEquals(
+            DayCellFill(
+                base = DayCellBase.WEEKEND,
+                overlay = DayCellOverlay.CUSTODY_DAD,
+                isAdjacentMonth = true
+            ),
+            DayCellFills.monthCell(
+                isWeekend = true,
+                isCurrentMonth = false,
+                custody = "dad",
+                previousCustody = "dad",
+                isPublicHoliday = false
+            )
+        )
+    }
+
+    @Test
+    fun `a borrowed day still refuses the holiday tint`() {
+        // The band is a pattern and has to run to the edge of the grid; a holiday marks one day,
+        // and one day missing from a cell you cannot act on breaks nothing. Custody is absent
+        // here, so the holiday branch is the one under test.
+        assertEquals(
+            DayCellFill(
+                base = DayCellBase.SURFACE,
+                overlay = DayCellOverlay.NONE,
+                isAdjacentMonth = true
+            ),
+            DayCellFills.monthCell(
+                isWeekend = false,
+                isCurrentMonth = false,
+                custody = null,
+                previousCustody = null,
+                isPublicHoliday = true
+            )
+        )
+    }
+
+    @Test
+    fun `a borrowed day is not marked as a pending proposal`() {
+        // A proposal is a day you would answer, and a borrowed cell refuses every gesture.
+        assertNull(
+            DayCellFills.monthCell(
+                isWeekend = false,
+                isCurrentMonth = false,
+                custody = "mom",
+                previousCustody = "mom",
+                isPublicHoliday = false,
+                proposedCustody = "dad"
+            ).pendingProposalFor
         )
     }
 
@@ -237,8 +284,12 @@ class DayCellFillsTest {
     }
 
     @Test
-    fun `a neighbouring month's day is never split, matching its dimmed number`() {
-        assertNull(
+    fun `a handover on a borrowed day is still split`() {
+        // The diagonal travels with the band. Drawing the band but not the handover would put
+        // the change of hands a day late — wrong information, where the old blank cell was
+        // merely silent.
+        assertEquals(
+            DayCellOverlay.CUSTODY_MOM,
             DayCellFills.monthCell(
                 isWeekend = false,
                 isCurrentMonth = false,
