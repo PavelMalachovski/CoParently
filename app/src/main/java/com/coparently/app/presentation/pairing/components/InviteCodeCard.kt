@@ -66,7 +66,6 @@ private val QR_SIZE = 180.dp
  * @param qrBitmap Rendered QR for the invite link, or null while it is still being generated
  * @param onCopy Copies the code to the clipboard
  * @param onShare Opens the system share sheet with the invite message
- * @param onEmailInvite Reveals the email-invitation field
  * @param onRegenerate Issues a fresh code
  */
 @Composable
@@ -77,7 +76,6 @@ fun InviteCodeCard(
     qrBitmap: Bitmap?,
     onCopy: () -> Unit,
     onShare: () -> Unit,
-    onEmailInvite: () -> Unit,
     onRegenerate: () -> Unit
 ) {
     Card(
@@ -169,17 +167,6 @@ fun InviteCodeCard(
                     )
                     Text(
                         text = stringResource(R.string.pairing_share_link),
-                        modifier = Modifier.padding(start = 8.dp)
-                    )
-                }
-                OutlinedButton(onClick = onEmailInvite, modifier = Modifier.weight(1f)) {
-                    Icon(
-                        imageVector = Icons.Default.Mail,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Text(
-                        text = stringResource(R.string.pairing_email_invite),
                         modifier = Modifier.padding(start = 8.dp)
                     )
                 }

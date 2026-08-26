@@ -139,9 +139,13 @@ class PairingRepositoryImpl @Inject constructor(
     }
 
     /**
-     * Withdraws only this user's active code/QR/link invite (the one
-     * [createOrReuseInviteCode] returns) — pending email invitations sent via
-     * [sendEmailInvitation] are a separate, longer-lived offer and are left alone.
+     * Withdraws this user's active code/QR/link invite (the one
+     * [createOrReuseInviteCode] returns).
+     *
+     * The `toEmail` filter survives the removal of email invitations: guest and friend
+     * invitations still write the field (as an empty string), and a co-parent on an older build
+     * may still have an email invitation pending. Withdrawing this user's code must not cancel
+     * one of those.
      */
     override suspend fun revokeActiveInvite(): Result<Unit> = runPairing {
         val user = requireUser()
@@ -154,14 +158,6 @@ class PairingRepositoryImpl @Inject constructor(
             .filter { it.getString("toEmail").orEmpty().isEmpty() }
             .filter { it.getString("kind") != KIND_GUEST }
             .forEach { it.reference.update("status", STATUS_CANCELLED).await() }
-    }
-
-    override suspend fun sendEmailInvitation(email: String): Result<Unit> {
-        val normalized = email.trim().lowercase()
-        if (!EMAIL_REGEX.matches(normalized)) {
-            return Result.failure(PairingException(PairingError.Unknown("Invalid email address")))
-        }
-        return runPairing { writeNewInvite(toEmail = normalized) }
     }
 
     override suspend fun redeem(code: String): Result<String?> {

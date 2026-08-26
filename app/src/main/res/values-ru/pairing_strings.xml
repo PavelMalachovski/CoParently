@@ -4,7 +4,6 @@
     <string name="pairing_screen_title">Связаться со вторым родителем</string>
     <string name="pairing_back">Назад</string>
     <string name="pairing_unpair_button">Разорвать пару</string>
-    <string name="pairing_partner_email_label">Эл. почта партнёра</string>
     <string name="pairing_scan_qr_code">Сканировать QR-код</string>
     <string name="pairing_unknown_sender">Неизвестно</string>
     <string name="pairing_accept_button">Принять</string>
@@ -30,7 +29,6 @@
     <string name="pairing_error_network">Нет соединения. Проверьте интернет и попробуйте снова.</string>
     <string name="pairing_error_unknown">Что-то пошло не так. Попробуйте ещё раз.</string>
     <string name="pairing_error_code_incomplete">Введите все 6 символов кода.</string>
-    <string name="pairing_error_invalid_email">Введите корректный адрес email.</string>
 
     <!-- Invite code hero card -->
     <string name="pairing_your_code_title">Ваш код приглашения</string>
@@ -40,13 +38,13 @@
     <string name="pairing_expires_in_hours">Действителен ещё %1$d ч %2$d мин</string>
     <string name="pairing_expires_in_minutes">Действителен ещё %1$d мин</string>
     <string name="pairing_code_expired_generate">Код истёк — нажмите «Новый код»</string>
-    <string name="pairing_share_message">%1$s приглашает вас в CoPlanly. Код: %2$s · %3$s</string>
+    <string name="pairing_share_message">%1$s приглашает вас в CoPlanly. Код: %2$s · %3$s
+Нет приложения? %4$s</string>
     <!-- Code entry -->
     <string name="pairing_have_a_code">У меня есть код</string>
     <string name="pairing_code_field_label">Код приглашения</string>
     <string name="pairing_link_accounts">Связать аккаунты</string>
     <!-- Email invite -->
-    <string name="pairing_invite_by_email">Пригласить по email</string>
     <!-- Paired state -->
     <string name="pairing_paired_since">Связаны с %1$s</string>
     <string name="pairing_partner_email_unknown">Email недоступен</string>
@@ -69,14 +67,12 @@
     <string name="pairing_copy_code">Скопировать код</string>
     <string name="pairing_tap_to_copy_and_expiry">Нажмите, чтобы скопировать · %1$s</string>
     <string name="pairing_share_link">Отправить ссылку</string>
-    <string name="pairing_email_invite">По эл. почте</string>
     <string name="pairing_trust_title">Что становится общим</string>
     <string name="pairing_trust_body">Общий календарь и график опеки, общие расходы и балансы, а также чат. Личные события никогда не покидают ваше устройство. Связь можно разорвать в любой момент.</string>
     <string name="pairing_error_friend_invitation">Это приглашение для друга. Откройте «Настройки» → «Друг с доступом к календарю».</string>
     <string name="pairing_error_not_friend_invitation">Это не приглашение для друга.</string>
     <!-- Shown after an email invitation is created. Deliberately does not claim the email
          arrived: the app cannot know that, and the code works either way. -->
-    <string name="pairing_email_invite_created">Приглашение отправлено. Если письмо не придёт — передайте код напрямую.</string>
     <string name="pairing_add_another_title">Добавить ещё одного со-родителя</string>
     <string name="pairing_add_another_description">Поделитесь кодом с тем, с кем вы воспитываете детей отдельно. Та семья останется отделённой от этой.</string>
 </resources>

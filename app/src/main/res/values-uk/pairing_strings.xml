@@ -4,7 +4,6 @@
     <string name="pairing_screen_title">З’єднатися з іншим із батьків</string>
     <string name="pairing_back">Назад</string>
     <string name="pairing_unpair_button">Розірвати пару</string>
-    <string name="pairing_partner_email_label">Ел. пошта партнера</string>
     <string name="pairing_scan_qr_code">Сканувати QR-код</string>
     <string name="pairing_unknown_sender">Невідомо</string>
     <string name="pairing_accept_button">Прийняти</string>
@@ -30,7 +29,6 @@
     <string name="pairing_error_network">Немає з’єднання. Перевірте інтернет і спробуйте ще раз.</string>
     <string name="pairing_error_unknown">Щось пішло не так. Спробуйте ще раз.</string>
     <string name="pairing_error_code_incomplete">Введіть усі 6 символів коду.</string>
-    <string name="pairing_error_invalid_email">Введіть коректну електронну адресу.</string>
 
     <!-- Invite code hero card -->
     <string name="pairing_your_code_title">Ваш код запрошення</string>
@@ -40,13 +38,13 @@
     <string name="pairing_expires_in_hours">Дійсний ще %1$d год %2$d хв</string>
     <string name="pairing_expires_in_minutes">Дійсний ще %1$d хв</string>
     <string name="pairing_code_expired_generate">Код прострочено — натисніть «Новий код»</string>
-    <string name="pairing_share_message">%1$s запрошує вас до CoPlanly. Код: %2$s · %3$s</string>
+    <string name="pairing_share_message">%1$s запрошує вас до CoPlanly. Код: %2$s · %3$s
+Немає застосунку? %4$s</string>
     <!-- Code entry -->
     <string name="pairing_have_a_code">У мене є код</string>
     <string name="pairing_code_field_label">Код запрошення</string>
     <string name="pairing_link_accounts">Пов’язати акаунти</string>
     <!-- Email invite -->
-    <string name="pairing_invite_by_email">Запросити електронною поштою</string>
     <!-- Paired state -->
     <string name="pairing_paired_since">У парі з %1$s</string>
     <string name="pairing_partner_email_unknown">Електронна пошта недоступна</string>
@@ -69,14 +67,12 @@
     <string name="pairing_copy_code">Скопіювати код</string>
     <string name="pairing_tap_to_copy_and_expiry">Натисніть, щоб скопіювати · %1$s</string>
     <string name="pairing_share_link">Надіслати посилання</string>
-    <string name="pairing_email_invite">Ел. поштою</string>
     <string name="pairing_trust_title">Що стає спільним</string>
     <string name="pairing_trust_body">Спільний календар і графік опіки, спільні витрати та баланси, а також чат. Приватні події ніколи не залишають ваш пристрій. Зв’язок можна розірвати будь-коли.</string>
     <string name="pairing_error_friend_invitation">Це запрошення для друга. Відкрийте «Налаштування» → «Друг із доступом до календаря».</string>
     <string name="pairing_error_not_friend_invitation">Це не запрошення для друга.</string>
     <!-- Shown after an email invitation is created. Deliberately does not claim the email
          arrived: the app cannot know that, and the code works either way. -->
-    <string name="pairing_email_invite_created">Запрошення надіслано. Якщо лист не надійде — передайте код напряму.</string>
     <string name="pairing_add_another_title">Додати ще одного співбатька</string>
     <string name="pairing_add_another_description">Поділіться кодом із тим, з ким ви виховуєте дітей окремо. Та сім\'я залишиться відокремленою від цієї.</string>
 </resources>

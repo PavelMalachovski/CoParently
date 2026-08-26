@@ -119,14 +119,12 @@ fun PairingScreen(
     val mode = rememberSaveable(prefilledCode) {
         mutableStateOf(if (prefilledCode.isNullOrEmpty()) PairingMode.SHARE else PairingMode.ENTER)
     }
-    val showEmailInvite = rememberSaveable { mutableStateOf(false) }
 
     val actions = rememberNotPairedActions(
         context = context,
         clipboard = clipboard,
         onCodeCopied = { scope.launch { snackbarHostState.showSnackbar(codeCopiedMessage) } },
-        onScanQr = { qrScannerLauncher.launch(Intent(context, QRScannerActivity::class.java)) },
-        onEmailInvite = { showEmailInvite.value = true }
+        onScanQr = { qrScannerLauncher.launch(Intent(context, QRScannerActivity::class.java)) }
     )
 
     // rememberSaveable so a config change never silently drops a decision the
@@ -176,11 +174,10 @@ fun PairingScreen(
                         viewModel = viewModel,
                         actions = actions,
                         mode = mode,
-                        showEmailInvite = showEmailInvite,
                         addingAnother = addingAnother
                     ) { showUnpairConfirm.value = true }
                 is PairingState.NotPaired ->
-                    notPairedSection(current, form, viewModel, actions, mode, showEmailInvite)
+                    notPairedSection(current, form, viewModel, actions, mode)
             }
         }
     }
@@ -330,7 +327,6 @@ private data class NotPairedActions(
     val onShareInvite: (PairingInvite) -> Unit,
     val onCopyCode: (String) -> Unit,
     val onScanQr: () -> Unit,
-    val onEmailInvite: () -> Unit
 )
 
 @Composable
@@ -339,19 +335,29 @@ private fun rememberNotPairedActions(
     context: Context,
     clipboard: ClipboardManager,
     onCodeCopied: () -> Unit,
-    onScanQr: () -> Unit,
-    onEmailInvite: () -> Unit
-): NotPairedActions = remember(context, clipboard, onCodeCopied, onScanQr, onEmailInvite) {
+    onScanQr: () -> Unit
+): NotPairedActions = remember(context, clipboard, onCodeCopied, onScanQr) {
     NotPairedActions(
         onShareInvite = { invite -> context.startActivity(shareIntent(context, invite)) },
         onCopyCode = { code ->
             clipboard.setText(AnnotatedString(code))
             onCodeCopied()
         },
-        onScanQr = onScanQr,
-        onEmailInvite = onEmailInvite
+        onScanQr = onScanQr
     )
 }
+
+/**
+ * Where a recipient without the app installed goes to get it.
+ *
+ * **This listing does not exist yet** (REL-6 in `docs/BACKLOG.md` is the Play Console work), so
+ * the link answers "item not found" until the app is published. Shipped anyway, on the owner's
+ * decision: the deep link alone strands exactly the person an invitation is for — someone who
+ * does not have the app — and the code in the same message still works by hand. When the listing
+ * goes live nothing here needs to change, which is why the URL is built from the applicationId
+ * rather than pasted.
+ */
+private const val PLAY_STORE_URL = "https://play.google.com/store/apps/details?id=app.coplanly"
 
 /** Builds the share-sheet intent for an outstanding invite. */
 private fun shareIntent(context: Context, invite: PairingInvite): Intent {
@@ -359,7 +365,8 @@ private fun shareIntent(context: Context, invite: PairingInvite): Intent {
         R.string.pairing_share_message,
         invite.fromUserName,
         invite.code,
-        PairingUri.build(invite.code)
+        PairingUri.build(invite.code),
+        PLAY_STORE_URL
     )
     val sendIntent = Intent(Intent.ACTION_SEND).apply {
         type = "text/plain"
@@ -395,7 +402,6 @@ private fun LazyListScope.pairedSection(
     viewModel: PairingViewModel,
     actions: NotPairedActions,
     mode: MutableState<PairingMode>,
-    showEmailInvite: MutableState<Boolean>,
     addingAnother: MutableState<Boolean>,
     onUnpairClick: () -> Unit
 ) {
@@ -427,8 +433,7 @@ private fun LazyListScope.pairedSection(
             form = form,
             viewModel = viewModel,
             actions = actions,
-            mode = mode,
-            showEmailInvite = showEmailInvite
+            mode = mode
         )
     }
 
@@ -457,7 +462,6 @@ private fun LazyListScope.pairedSection(
  * @param viewModel Pairing actions
  * @param actions Screen-level side effects the form cannot perform itself
  * @param mode Which of the two pairing jobs is showing
- * @param showEmailInvite Whether the email-invitation field has been revealed
  */
 @Suppress("LongParameterList") // section state, split out of the screen body for readability
 private fun LazyListScope.notPairedSection(
@@ -465,8 +469,7 @@ private fun LazyListScope.notPairedSection(
     form: PairingFormState,
     viewModel: PairingViewModel,
     actions: NotPairedActions,
-    mode: MutableState<PairingMode>,
-    showEmailInvite: MutableState<Boolean>
+    mode: MutableState<PairingMode>
 ) {
     inviteSection(
         activeInvite = current.activeInvite,
@@ -474,8 +477,7 @@ private fun LazyListScope.notPairedSection(
         form = form,
         viewModel = viewModel,
         actions = actions,
-        mode = mode,
-        showEmailInvite = showEmailInvite
+        mode = mode
     )
 }
 
@@ -493,7 +495,6 @@ private fun LazyListScope.notPairedSection(
  * @param viewModel Pairing actions.
  * @param actions Screen-level side effects the form cannot perform itself.
  * @param mode Which of the two pairing jobs is showing.
- * @param showEmailInvite Whether the email-invitation field has been revealed.
  */
 @Suppress("LongParameterList") // section state, split out of the screen body for readability
 private fun LazyListScope.inviteSection(
@@ -502,8 +503,7 @@ private fun LazyListScope.inviteSection(
     form: PairingFormState,
     viewModel: PairingViewModel,
     actions: NotPairedActions,
-    mode: MutableState<PairingMode>,
-    showEmailInvite: MutableState<Boolean>
+    mode: MutableState<PairingMode>
 ) {
     // With no invite of their own yet, "share my code" has nothing to show — so the toggle
     // only appears once there is something to switch between.
@@ -523,12 +523,8 @@ private fun LazyListScope.inviteSection(
                 qrBitmap = form.qrBitmap,
                 onCopy = { actions.onCopyCode(activeInvite.code) },
                 onShare = { actions.onShareInvite(activeInvite) },
-                onEmailInvite = actions.onEmailInvite,
                 onRegenerate = viewModel::regenerateInvite
             )
-        }
-        if (showEmailInvite.value) {
-            item { EmailInviteSection(form = form, viewModel = viewModel) }
         }
     } else {
         enterCodeSection(form, viewModel, actions)
@@ -653,27 +649,6 @@ private fun ScanQrButton(onClick: () -> Unit) {
             text = stringResource(R.string.pairing_scan_qr_code),
             modifier = Modifier.padding(start = 8.dp)
         )
-    }
-}
-
-@Composable
-private fun EmailInviteSection(form: PairingFormState, viewModel: PairingViewModel) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        OutlinedTextField(
-            value = form.emailInput,
-            onValueChange = viewModel::onEmailInputChange,
-            label = { Text(stringResource(R.string.pairing_partner_email_label)) },
-            isError = form.emailErrorRes != null,
-            supportingText = form.emailErrorRes?.let { { Text(stringResource(it)) } },
-            singleLine = true,
-            enabled = !form.isBusy,
-            modifier = Modifier.fillMaxWidth()
-        )
-        OutlinedButton(
-            onClick = viewModel::sendEmailInvitation,
-            enabled = !form.isBusy,
-            modifier = Modifier.fillMaxWidth()
-        ) { Text(stringResource(R.string.pairing_invite_by_email)) }
     }
 }
 

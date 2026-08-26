@@ -4,7 +4,6 @@
     <string name="pairing_screen_title">Propojit s druhým rodičem</string>
     <string name="pairing_back">Zpět</string>
     <string name="pairing_unpair_button">Zrušit párování</string>
-    <string name="pairing_partner_email_label">E-mail partnera</string>
     <string name="pairing_scan_qr_code">Naskenovat QR kód</string>
     <string name="pairing_unknown_sender">Neznámý</string>
     <string name="pairing_accept_button">Přijmout</string>
@@ -30,7 +29,6 @@
     <string name="pairing_error_network">Žádné připojení. Zkontrolujte internet a zkuste to znovu.</string>
     <string name="pairing_error_unknown">Něco se pokazilo. Zkuste to prosím znovu.</string>
     <string name="pairing_error_code_incomplete">Zadejte všech 6 znaků kódu.</string>
-    <string name="pairing_error_invalid_email">Zadejte platnou e-mailovou adresu.</string>
 
     <!-- Invite code hero card -->
     <string name="pairing_your_code_title">Váš pozvánkový kód</string>
@@ -40,13 +38,13 @@
     <string name="pairing_expires_in_hours">Platný ještě %1$d h %2$d min</string>
     <string name="pairing_expires_in_minutes">Platný ještě %1$d min</string>
     <string name="pairing_code_expired_generate">Kód vypršel — klepněte na „Nový kód“</string>
-    <string name="pairing_share_message">%1$s vás zve do CoPlanly. Kód: %2$s · %3$s</string>
+    <string name="pairing_share_message">%1$s vás zve do CoPlanly. Kód: %2$s · %3$s
+Nemáte aplikaci? %4$s</string>
     <!-- Code entry -->
     <string name="pairing_have_a_code">Mám kód</string>
     <string name="pairing_code_field_label">Pozvánkový kód</string>
     <string name="pairing_link_accounts">Propojit účty</string>
     <!-- Email invite -->
-    <string name="pairing_invite_by_email">Pozvat e-mailem</string>
     <!-- Paired state -->
     <string name="pairing_paired_since">Spárováno od %1$s</string>
     <string name="pairing_partner_email_unknown">E-mail není k dispozici</string>
@@ -69,14 +67,12 @@
     <string name="pairing_copy_code">Kopírovat kód</string>
     <string name="pairing_tap_to_copy_and_expiry">Klepnutím zkopírujete · %1$s</string>
     <string name="pairing_share_link">Sdílet odkaz</string>
-    <string name="pairing_email_invite">Pozvat e-mailem</string>
     <string name="pairing_trust_title">Co se propojením sdílí</string>
     <string name="pairing_trust_body">Sdílený kalendář a rozvrh péče, sdílené výdaje a zůstatky a chat. Soukromé události nikdy neopustí vaše zařízení. Propojení můžete kdykoli zrušit.</string>
     <string name="pairing_error_friend_invitation">Toto je pozvánka pro přítele. Otevřete Nastavení → Přítel s přístupem ke kalendáři.</string>
     <string name="pairing_error_not_friend_invitation">Toto není pozvánka pro přítele.</string>
     <!-- Shown after an email invitation is created. Deliberately does not claim the email
          arrived: the app cannot know that, and the code works either way. -->
-    <string name="pairing_email_invite_created">Pozvánka odeslána. Pokud nedorazí, předejte kód přímo.</string>
     <string name="pairing_add_another_title">Přidat dalšího rodiče</string>
     <string name="pairing_add_another_description">Sdílejte kód s někým, s kým vychováváte děti odděleně. Jejich rodina zůstane oddělená od této.</string>
 </resources>
