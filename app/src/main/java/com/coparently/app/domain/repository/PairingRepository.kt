@@ -1,6 +1,5 @@
 package com.coparently.app.domain.repository
 
-import com.coparently.app.domain.model.PairingError
 import com.coparently.app.domain.model.PairingInvite
 import com.coparently.app.domain.model.PairingState
 import kotlinx.coroutines.flow.Flow

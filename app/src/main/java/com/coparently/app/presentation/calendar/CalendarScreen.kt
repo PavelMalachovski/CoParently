@@ -316,6 +316,24 @@ fun CalendarScreen(
     // where it is now, including *shrinking* it when the finger comes back — which the set alone
     // cannot say, since `toggledForSwap` reads the run's own ends and would only ever grow.
     var swapAnchor by remember { mutableStateOf<LocalDate?>(null) }
+
+    // Null unless there is a co-parent: unpaired there is nobody to accept a swap, and a swap
+    // that applies itself is just an edit the custody editor already does. Null removes the
+    // long-press entirely rather than opening a sheet that would have to apologise.
+    val offerSwapDay: ((LocalDate) -> Unit)? = parents.coParent?.let {
+        fun(date: LocalDate) {
+            swapAnchor = date
+            swapSelection = swapSelection.toggledForSwap(date)
+        }
+    }
+    val dragSwapTo: ((LocalDate) -> Unit)? = parents.coParent?.let {
+        fun(date: LocalDate) {
+            val anchor = swapAnchor
+            if (anchor != null && swapSelection.isNotEmpty()) {
+                swapSelection = runForSwap(anchor, date)
+            }
+        }
+    }
     var swapSheetOpen by remember { mutableStateOf(false) }
 
     // Unified custody lookup: an accepted one-off swap, then the active CustodyModel (Custody
@@ -790,27 +808,10 @@ fun CalendarScreen(
                                     parentNames = parentNames,
                                     pendingSwapDates = pendingSwapDates,
                                     swappedDates = swappedDates,
-                                    // Only a paired account may offer a swap: unpaired there is
-                                    // nobody to accept, and a swap that applies itself is just an
-                                    // edit the custody editor already does. Null here removes the
-                                    // long-press entirely rather than opening a sheet that would
-                                    // have to apologise.
-                                    onDayLongClick = parents.coParent?.let {
-                                        { date: LocalDate ->
-                                            swapAnchor = date
-                                            swapSelection = swapSelection.toggledForSwap(date)
-                                        }
-                                    },
+                                    onDayLongClick = offerSwapDay,
                                     // A finger that long-pressed and kept moving redraws the run
                                     // from the anchor, so coming back shortens it again.
-                                    onSwapDragTo = parents.coParent?.let {
-                                        { date: LocalDate ->
-                                            val anchor = swapAnchor
-                                            if (anchor != null && swapSelection.isNotEmpty()) {
-                                                swapSelection = runForSwap(anchor, date)
-                                            }
-                                        }
-                                    },
+                                    onSwapDragTo = dragSwapTo,
                                     swapSelection = swapSelection,
                                     // Selects the day and opens Day view, where an empty hour
                                     // slot creates an event — the owner's walkthrough found the

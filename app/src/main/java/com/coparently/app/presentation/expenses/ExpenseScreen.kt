@@ -123,7 +123,10 @@ private fun Modifier.scrollsAsPage(
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-@Suppress("LongParameterList") // one callback per navigation target this screen offers
+// The body is one screen with two views of a month and the banners above them; the
+// callbacks are its navigation surface. Both are inherent, and splitting either for the
+// metric alone would scatter state this screen owns across functions that share it.
+@Suppress("LongParameterList", "LongMethod")
 fun ExpenseScreen(
     onAddExpense: () -> Unit,
     onEditExpense: (String) -> Unit = {},
