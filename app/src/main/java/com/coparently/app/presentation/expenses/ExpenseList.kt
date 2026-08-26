@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -97,6 +98,7 @@ fun ExpenseList(
     onExpenseClick: ((Expense) -> Unit)? = null,
     canModify: (Expense) -> Boolean = { true },
     bottomClearance: Dp = 0.dp,
+    header: (LazyListScope.() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     // Receipt being viewed full-screen; transient UI state, deliberately local.
@@ -122,6 +124,14 @@ fun ExpenseList(
         ),
         verticalArrangement = Arrangement.spacedBy(7.dp)
     ) {
+        // The month's summary, the List/Analytics switcher and the member filter are items of
+        // this list rather than composables stacked above it. Stacked, they were pinned: the
+        // list took `weight(1f)` of what they left, which on a phone was a few rows, and the
+        // screen read as "the list will not scroll". The analytics view never had the problem
+        // because it scrolls as a page and its header simply moves off the top — this gives the
+        // list the same behaviour without nesting one scroll inside another.
+        header?.invoke(this)
+
         items(expenses, key = { it.id }) { expense ->
             val modifiable = canModify(expense)
             val row: @Composable () -> Unit = {

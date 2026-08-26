@@ -117,11 +117,9 @@ private fun Modifier.scrollsAsPage(
  *
  * @param onAddExpense Opens the add-expense form
  * @param onEditExpense Opens an expense for editing
- * @param onOpenBudgets Opens the budgets screen; null hides the budget affordances
  * @param onOpenSettings Opens settings
  * @param onSettleUp Called with a drafted settle-up message, which the user then sends
  * @param viewModel Expense state
- * @param budgetViewModel Budget state, for the chip strip
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -129,11 +127,9 @@ private fun Modifier.scrollsAsPage(
 fun ExpenseScreen(
     onAddExpense: () -> Unit,
     onEditExpense: (String) -> Unit = {},
-    onOpenBudgets: (() -> Unit)? = null,
     onOpenSettings: (() -> Unit)? = null,
     onSettleUp: (String) -> Unit = {},
-    viewModel: ExpenseViewModel = hiltViewModel(),
-    budgetViewModel: BudgetViewModel = hiltViewModel()
+    viewModel: ExpenseViewModel = hiltViewModel()
 ) {
     val expensesState by viewModel.expenses.collectAsState()
     val expenses = expensesState.valueOrNull.orEmpty()
@@ -143,9 +139,6 @@ fun ExpenseScreen(
     val roleByUid by viewModel.roleByUid.collectAsState()
     val currentUserId by viewModel.currentUserId.collectAsState()
     val parentNames = rememberParentNames(viewModel.parents.collectAsState().value)
-    // Flattened: the budget progress bars have nothing to say while budgets load, and the
-    // chip strip they sit in is not the surface that answers "do you have budgets".
-    val budgets = budgetViewModel.budgets.collectAsState().value.valueOrNull.orEmpty()
     val familyMembers by viewModel.familyMembers.collectAsState()
     val memberFilter by viewModel.memberFilter.collectAsState()
     val breakdowns by viewModel.breakdowns.collectAsState()
@@ -329,36 +322,54 @@ fun ExpenseScreen(
                                     .getDisplayName(java.time.format.TextStyle.FULL_STANDALONE, Locale.getDefault())
                                     .replaceFirstChar { it.uppercase() }
                             }
+                            // The month's summary and the view switcher, as one piece. The two
+                            // branches place it differently and that is the whole point: the
+                            // analytics page scrolls, so it renders this inline, while the list
+                            // hands it to `ExpenseList` as the first items of the list itself.
+                            // Rendered above both, it was pinned, and the list got `weight(1f)` of
+                            // whatever was left — a few rows on a phone, which read as "the list
+                            // will not scroll".
+                            //
                             // One summary card per currency present this month — the app does no FX
                             // conversion, so a mixed-currency month is shown as separate honest totals
                             // rather than one wrong sum. Only the first card carries the month
                             // switcher; repeating it per currency would switch the same month N times.
-                            balancesByCurrency.forEachIndexed { index, currencyBalance ->
-                                ExpenseSummaryHeader(
-                                    balance = currencyBalance.balance,
-                                    currency = currencyBalance.currency,
-                                    parentNames = parentNames,
-                                    onSettleUp = onSettleUp,
-                                    monthLabel = monthLabel,
-                                    modifier = Modifier
-                                        .then(
-                                            if (index == 0) Modifier.monthSwipe(monthNavigation) else Modifier
+                            val monthHeader: @Composable () -> Unit = {
+                                Column {
+                                    balancesByCurrency.forEachIndexed { index, currencyBalance ->
+                                        ExpenseSummaryHeader(
+                                            balance = currencyBalance.balance,
+                                            currency = currencyBalance.currency,
+                                            parentNames = parentNames,
+                                            onSettleUp = onSettleUp,
+                                            monthLabel = monthLabel,
+                                            modifier = Modifier
+                                                .then(
+                                                    if (index == 0) {
+                                                        Modifier.monthSwipe(monthNavigation)
+                                                    } else {
+                                                        Modifier
+                                                    }
+                                                )
+                                                .padding(horizontal = 14.dp, vertical = 4.dp),
+                                            monthNavigation = monthNavigation.takeIf { index == 0 }
                                         )
-                                        .padding(horizontal = 14.dp, vertical = 4.dp),
-                                    monthNavigation = monthNavigation.takeIf { index == 0 }
-                                )
+                                    }
+
+                                    // One month control, two views of it. A separate analytics route
+                                    // would need its own month control, and the two could drift — a
+                                    // parent looking at August's chart and September's list with
+                                    // nothing on screen saying so.
+                                    ViewSwitcher(
+                                        showAnalytics = showAnalytics,
+                                        onSelect = { showAnalytics = it },
+                                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp)
+                                    )
+                                }
                             }
 
-                            // One month control, two views of it. A separate analytics route would need
-                            // its own month control, and the two could drift — a parent looking at
-                            // August's chart and September's list with nothing on screen saying so.
-                            ViewSwitcher(
-                                showAnalytics = showAnalytics,
-                                onSelect = { showAnalytics = it },
-                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp)
-                            )
-
                             if (showAnalytics) {
+                                monthHeader()
                                 ExpenseAnalytics(
                                     breakdown = selectedBreakdown,
                                     currencies = breakdowns.map { it.currency },
@@ -375,26 +386,6 @@ fun ExpenseScreen(
                                     modifier = Modifier.padding(bottom = FAB_CLEARANCE)
                                 )
                             } else {
-                                // Budgets belong to the list: they are about what is left to spend, not
-                                // about what was spent.
-                                onOpenBudgets?.let { openBudgets ->
-                                    val progress = remember(budgets, monthExpenses) {
-                                        budgetProgress(budgets, monthExpenses)
-                                    }
-                                    BudgetChips(progress = progress, onOpenBudgets = openBudgets)
-                                }
-
-                                // Renders nothing below two members, so a family with one child
-                                // sees the screen they always saw. Nothing selected is the whole
-                                // month, which is how a parent gets back out.
-                                FamilyMemberChips(
-                                    members = familyMembers,
-                                    selected = memberFilter,
-                                    onToggle = viewModel::toggleMemberFilter,
-                                    label = R.string.expenses_filter_members,
-                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp)
-                                )
-
                                 ExpenseList(
                                     expenses = monthExpenses,
                                     roleByUid = roleByUid,
@@ -412,6 +403,24 @@ fun ExpenseScreen(
                                     // reason: without it the last expense comes to rest under the
                                     // Add button and the list will not scroll any further.
                                     bottomClearance = FAB_CLEARANCE,
+                                    header = {
+                                        item { monthHeader() }
+                                        // Renders nothing below two members, so a family with one
+                                        // child sees the screen they always saw. Nothing selected is
+                                        // the whole month, which is how a parent gets back out.
+                                        item {
+                                            FamilyMemberChips(
+                                                members = familyMembers,
+                                                selected = memberFilter,
+                                                onToggle = viewModel::toggleMemberFilter,
+                                                label = R.string.expenses_filter_members,
+                                                modifier = Modifier.padding(
+                                                    horizontal = 14.dp,
+                                                    vertical = 4.dp
+                                                )
+                                            )
+                                        }
+                                    },
                                     modifier = Modifier.weight(1f)
                                 )
                             }

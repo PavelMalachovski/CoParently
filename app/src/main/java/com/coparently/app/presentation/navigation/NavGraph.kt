@@ -782,9 +782,6 @@ fun NavGraph(
                     onEditExpense = { expenseId ->
                         navController.navigate(Screen.EditExpense.createRoute(expenseId))
                     },
-                    onOpenBudgets = {
-                        navController.navigate(Screen.Budgets.route)
-                    },
                     onOpenSettings = {
                         navController.navigate(Screen.Settings.route)
                     },
