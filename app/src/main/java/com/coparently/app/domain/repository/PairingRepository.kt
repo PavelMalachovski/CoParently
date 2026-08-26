@@ -1,6 +1,5 @@
 package com.coparently.app.domain.repository
 
-import com.coparently.app.domain.model.PairingError
 import com.coparently.app.domain.model.PairingInvite
 import com.coparently.app.domain.model.PairingState
 import kotlinx.coroutines.flow.Flow
@@ -32,20 +31,10 @@ interface PairingRepository {
     suspend fun createOrReuseInviteCode(): Result<PairingInvite>
 
     /**
-     * Withdraws only this user's active code/QR/link invite (the one
-     * [createOrReuseInviteCode] returns) so that code stops working. Pending
-     * email invitations sent via [sendEmailInvitation] are a separate,
-     * longer-lived offer and are left untouched.
+     * Withdraws this user's active code/QR/link invite (the one
+     * [createOrReuseInviteCode] returns) so that code stops working.
      */
     suspend fun revokeActiveInvite(): Result<Unit>
-
-    /**
-     * Creates an invitation addressed to [email]. Fails with a
-     * [com.coparently.app.data.remote.firebase.PairingException] wrapping
-     * [PairingError.Unknown] without writing anything if [email] is blank or
-     * not a plausible email address.
-     */
-    suspend fun sendEmailInvitation(email: String): Result<Unit>
 
     /**
      * Redeems an invitation by its short [code].

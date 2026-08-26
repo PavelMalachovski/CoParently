@@ -21,7 +21,6 @@ import com.coparently.app.domain.model.PartnerSummary
 import com.coparently.app.domain.model.User
 import com.coparently.app.domain.repository.PairingRepository
 import com.coparently.app.domain.repository.UserRepository
-import com.coparently.app.utils.ValidationResult
 import com.coparently.app.utils.ValidationUtils
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -188,46 +187,6 @@ class PairingViewModelTest {
         dispatcher.scheduler.advanceUntilIdle()
 
         assertEquals(R.string.pairing_error_unknown, viewModel.form.value.codeErrorRes)
-    }
-
-    @Test
-    fun `sending an invitation with an invalid email is rejected before touching the repository`() =
-        runTest(dispatcher) {
-            every { ValidationUtils.validateEmail("not-an-email") } returns
-                ValidationResult.Error("Invalid email format")
-
-            viewModel.onEmailInputChange("not-an-email")
-            viewModel.sendEmailInvitation()
-
-            assertEquals(R.string.pairing_error_invalid_email, viewModel.form.value.emailErrorRes)
-            coVerify(exactly = 0) { repository.sendEmailInvitation(any()) }
-        }
-
-    @Test
-    fun `a successful email invitation clears the field and logs once`() = runTest(dispatcher) {
-        every { ValidationUtils.validateEmail("other@example.com") } returns ValidationResult.Success
-        coEvery { repository.sendEmailInvitation("other@example.com") } returns Result.success(Unit)
-
-        viewModel.onEmailInputChange("other@example.com")
-        viewModel.sendEmailInvitation()
-        dispatcher.scheduler.advanceUntilIdle()
-
-        assertEquals("", viewModel.form.value.emailInput)
-        coVerify(exactly = 1) { analyticsManager.logInvitationSent() }
-    }
-
-    @Test
-    fun `a failed email invitation surfaces under the email field and does not log`() = runTest(dispatcher) {
-        every { ValidationUtils.validateEmail("other@example.com") } returns ValidationResult.Success
-        coEvery { repository.sendEmailInvitation("other@example.com") } returns
-            Result.failure(PairingException(PairingError.Network))
-
-        viewModel.onEmailInputChange("other@example.com")
-        viewModel.sendEmailInvitation()
-        dispatcher.scheduler.advanceUntilIdle()
-
-        assertEquals(R.string.pairing_error_network, viewModel.form.value.emailErrorRes)
-        coVerify(exactly = 0) { analyticsManager.logInvitationSent() }
     }
 
     @Test

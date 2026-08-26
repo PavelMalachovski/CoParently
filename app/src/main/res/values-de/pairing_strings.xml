@@ -4,7 +4,6 @@
     <string name="pairing_screen_title">Mit dem anderen Elternteil verbinden</string>
     <string name="pairing_back">Zurück</string>
     <string name="pairing_unpair_button">Kopplung aufheben</string>
-    <string name="pairing_partner_email_label">E-Mail des Partners</string>
     <string name="pairing_scan_qr_code">QR-Code scannen</string>
     <string name="pairing_unknown_sender">Unbekannt</string>
     <string name="pairing_accept_button">Annehmen</string>
@@ -30,7 +29,6 @@
     <string name="pairing_error_network">Keine Verbindung. Prüfen Sie Ihr Internet und versuchen Sie es erneut.</string>
     <string name="pairing_error_unknown">Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut.</string>
     <string name="pairing_error_code_incomplete">Geben Sie alle 6 Zeichen des Codes ein.</string>
-    <string name="pairing_error_invalid_email">Geben Sie eine gültige E-Mail-Adresse ein.</string>
 
     <!-- Invite code hero card -->
     <string name="pairing_your_code_title">Ihr Einladungscode</string>
@@ -40,13 +38,13 @@
     <string name="pairing_expires_in_hours">Gültig noch %1$d Std. %2$d Min.</string>
     <string name="pairing_expires_in_minutes">Gültig noch %1$d Min.</string>
     <string name="pairing_code_expired_generate">Code abgelaufen — tippen Sie auf „Neuer Code“</string>
-    <string name="pairing_share_message">%1$s lädt Sie zu CoPlanly ein. Code: %2$s · %3$s</string>
+    <string name="pairing_share_message">%1$s lädt dich zu CoPlanly ein. Code: %2$s · %3$s
+Noch keine App? %4$s</string>
     <!-- Code entry -->
     <string name="pairing_have_a_code">Ich habe einen Code</string>
     <string name="pairing_code_field_label">Einladungscode</string>
     <string name="pairing_link_accounts">Konten verknüpfen</string>
     <!-- Email invite -->
-    <string name="pairing_invite_by_email">Per E-Mail einladen</string>
     <!-- Paired state -->
     <string name="pairing_paired_since">Gekoppelt seit %1$s</string>
     <string name="pairing_partner_email_unknown">E-Mail nicht verfügbar</string>
@@ -69,14 +67,12 @@
     <string name="pairing_copy_code">Code kopieren</string>
     <string name="pairing_tap_to_copy_and_expiry">Zum Kopieren tippen · %1$s</string>
     <string name="pairing_share_link">Link teilen</string>
-    <string name="pairing_email_invite">Per E-Mail</string>
     <string name="pairing_trust_title">Was beim Verbinden geteilt wird</string>
     <string name="pairing_trust_body">Gemeinsamer Kalender und Betreuungsplan, gemeinsame Ausgaben und Salden sowie der Chat. Private Termine verlassen Ihr Gerät nie. Sie können die Verbindung jederzeit trennen.</string>
     <string name="pairing_error_friend_invitation">Das ist eine Freundeseinladung. Öffne Einstellungen → Freund mit Kalenderzugriff.</string>
     <string name="pairing_error_not_friend_invitation">Das ist keine Freundeseinladung.</string>
     <!-- Shown after an email invitation is created. Deliberately does not claim the email
          arrived: the app cannot know that, and the code works either way. -->
-    <string name="pairing_email_invite_created">Einladung gesendet. Falls sie nicht ankommt, geben Sie den Code direkt weiter.</string>
     <string name="pairing_add_another_title">Weiteren Elternteil hinzufügen</string>
     <string name="pairing_add_another_description">Teile einen Code mit jemandem, mit dem du getrennt Kinder betreust. Diese Familie bleibt von dieser hier getrennt.</string>
 </resources>

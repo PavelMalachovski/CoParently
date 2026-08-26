@@ -7,7 +7,6 @@
     <string name="pairing_screen_title">Pair with your co-parent</string>
     <string name="pairing_back">Back</string>
     <string name="pairing_unpair_button">Unpair</string>
-    <string name="pairing_partner_email_label">Partner email</string>
     <string name="pairing_scan_qr_code">Scan QR Code</string>
     <string name="pairing_unknown_sender">Unknown</string>
     <string name="pairing_accept_button">Accept</string>
@@ -33,7 +32,6 @@
     <string name="pairing_error_network">No connection. Check your internet and try again.</string>
     <string name="pairing_error_unknown">Something went wrong. Please try again.</string>
     <string name="pairing_error_code_incomplete">Enter all 6 characters of the code.</string>
-    <string name="pairing_error_invalid_email">Enter a valid email address.</string>
 
     <!-- Invite code hero card -->
     <string name="pairing_your_code_title">Your invite code</string>
@@ -43,13 +41,13 @@
     <string name="pairing_expires_in_hours">Valid for %1$d h %2$d min</string>
     <string name="pairing_expires_in_minutes">Valid for %1$d min</string>
     <string name="pairing_code_expired_generate">Code expired — tap “New code”</string>
-    <string name="pairing_share_message">%1$s invites you to CoPlanly. Code: %2$s · %3$s</string>
+    <string name="pairing_share_message">%1$s invites you to CoPlanly. Code: %2$s · %3$s
+No app yet? %4$s</string>
     <!-- Code entry -->
     <string name="pairing_have_a_code">I have a code</string>
     <string name="pairing_code_field_label">Invite code</string>
     <string name="pairing_link_accounts">Link accounts</string>
     <!-- Email invite -->
-    <string name="pairing_invite_by_email">Invite by email</string>
     <!-- Paired state -->
     <string name="pairing_paired_since">Paired since %1$s</string>
     <string name="pairing_partner_email_unknown">Email unavailable</string>
@@ -72,14 +70,12 @@
     <string name="pairing_copy_code">Copy code</string>
     <string name="pairing_tap_to_copy_and_expiry">Tap to copy · %1$s</string>
     <string name="pairing_share_link">Share link</string>
-    <string name="pairing_email_invite">Email invite</string>
     <string name="pairing_trust_title">What pairing shares</string>
     <string name="pairing_trust_body">Shared calendar and custody schedule, shared expenses and balances, and chat. Private events never leave your device. You can unlink at any time.</string>
     <string name="pairing_error_friend_invitation">This is a friend invitation. Open Settings → Friend with calendar access to use it.</string>
     <string name="pairing_error_not_friend_invitation">This is not a friend invitation.</string>
     <!-- Shown after an email invitation is created. Deliberately does not claim the email
          arrived: the app cannot know that, and the code works either way. -->
-    <string name="pairing_email_invite_created">Invitation sent. If it doesn\'t arrive, share the code directly.</string>
     <string name="pairing_add_another_title">Add another co-parent</string>
     <string name="pairing_add_another_description">Share a code with someone you co-parent with separately. Their family stays separate from this one.</string>
 </resources>

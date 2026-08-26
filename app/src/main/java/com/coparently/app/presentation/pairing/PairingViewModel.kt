@@ -54,10 +54,8 @@ import javax.inject.Inject
  */
 data class PairingFormState(
     val codeInput: String = "",
-    val emailInput: String = "",
     val isBusy: Boolean = false,
     @StringRes val codeErrorRes: Int? = null,
-    @StringRes val emailErrorRes: Int? = null,
     @StringRes val actionErrorRes: Int? = null,
     /**
      * A one-shot confirmation to show once, cleared by [PairingViewModel.consumeActionInfo].
@@ -169,11 +167,6 @@ class PairingViewModel @Inject constructor(
         _form.value = _form.value.copy(codeInput = code, codeErrorRes = null)
     }
 
-    /** Updates the email-invite field, clearing its previous validation error. */
-    fun onEmailInputChange(email: String) {
-        _form.value = _form.value.copy(emailInput = email, emailErrorRes = null)
-    }
-
     /**
      * Redeems the code currently in the input field.
      *
@@ -191,26 +184,6 @@ class PairingViewModel @Inject constructor(
         launchAction(
             onError = { res -> _form.value = _form.value.copy(codeErrorRes = res) }
         ) { withSlotReslot { pairingRepository.redeem(code) } }
-    }
-
-    /** Sends an email invitation to the address currently in the email field. */
-    fun sendEmailInvitation() {
-        val email = _form.value.emailInput
-        val validation = ValidationUtils.validateEmail(email)
-        if (validation is ValidationResult.Error) {
-            _form.value = _form.value.copy(emailErrorRes = R.string.pairing_error_invalid_email)
-            return
-        }
-        launchAction(
-            onSuccess = {
-                analyticsManager.logInvitationSent()
-                _form.value = _form.value.copy(
-                    emailInput = "",
-                    actionInfoRes = R.string.pairing_email_invite_created
-                )
-            },
-            onError = { res -> _form.value = _form.value.copy(emailErrorRes = res) }
-        ) { pairingRepository.sendEmailInvitation(email) }
     }
 
     /**
@@ -460,9 +433,9 @@ class PairingViewModel @Inject constructor(
         }
     }
 
-    /** Clears the two field-level errors, e.g. when the user starts over. */
+    /** Clears the field-level error, e.g. when the user starts over. */
     fun clearError() {
-        _form.value = _form.value.copy(codeErrorRes = null, emailErrorRes = null)
+        _form.value = _form.value.copy(codeErrorRes = null)
     }
 
     /** Marks a field-less action error as shown; call once it has been presented (e.g. a snackbar). */

@@ -497,25 +497,6 @@ class PairingRepositoryImplTest {
         verify(exactly = 0) { emailInviteRef.update(any<String>(), any()) }
     }
 
-    // ---- sendEmailInvitation -------------------------------------------------
-
-    @Test
-    fun `sendEmailInvitation rejects a malformed address without writing`() = runTest {
-        val result = repository.sendEmailInvitation("not-an-email")
-
-        assertTrue(result.isFailure)
-        assertTrue((result.exceptionOrNull() as PairingException).error is PairingError.Unknown)
-        verify(exactly = 0) { firestore.collection("invitations") }
-    }
-
-    @Test
-    fun `sendEmailInvitation rejects a blank address without writing`() = runTest {
-        val result = repository.sendEmailInvitation("   ")
-
-        assertTrue(result.isFailure)
-        verify(exactly = 0) { firestore.collection("invitations") }
-    }
-
     // ---- runPairing error normalization -------------------------------------
 
     @Test

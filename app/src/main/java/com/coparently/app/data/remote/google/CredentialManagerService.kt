@@ -49,6 +49,13 @@ class CredentialManagerService @Inject constructor(
     }
     private val _googleSignInClient: GoogleSignInClient? by lazy {
         try {
+            // One client id for both, and it cannot be otherwise: `GoogleSignInOptions.Builder`
+            // rejects an id token and a server auth code naming different web clients
+            // ("two different server client ids provided") from inside `requestServerAuthCode`,
+            // before any request reaches Google. Splitting them was tried and threw on the
+            // builder, taking Google sign-in down with it.
+            //
+            // So the Cloud Function that redeems the code must hold *this* client's secret.
             val webClientId = getWebClientId()
             val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
                 .requestIdToken(webClientId)
