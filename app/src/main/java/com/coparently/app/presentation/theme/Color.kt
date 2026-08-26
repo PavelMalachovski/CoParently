@@ -38,6 +38,21 @@ object CoPlanlyColors {
     const val PROPOSAL_TINT_ALPHA = 0.09f
 
     /**
+     * What fraction of [CUSTODY_TINT_ALPHA] a day borrowed from a neighbouring month is tinted at.
+     *
+     * Those cells used to carry no tint at all, so the custody band stopped in the middle of a
+     * grid row and a reader had no rule to infer the rest of the pattern from. They carry it now,
+     * but recessively — the grid still has to say which month you are looking at.
+     *
+     * A scale rather than an alpha of its own, so it cannot drift away from the value it is a
+     * fraction of. It is deliberately higher than the 0.3 the day number and the 0.4 the event
+     * dots are dimmed to: those are foregrounds against the cell, while this is a wash that is
+     * only 14 % of itself to begin with, and taking the same fraction off it would leave nothing
+     * to see. Same subjective step down, different arithmetic.
+     */
+    const val ADJACENT_MONTH_TINT_SCALE = 0.6f
+
+    /**
      * Threshold for `MaterialTheme.colorScheme.surface.luminance()` when choosing between the
      * light- and dark-theme member of a text-grade colour pair. Below this the rendered theme
      * is dark. Use this rather than `isSystemInDarkTheme()`: the app can force light while the
