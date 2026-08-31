@@ -66,8 +66,26 @@ interface MessageDao {
     suspend fun archiveConversation(id: String)
 
     // Messages
-    @Query("SELECT * FROM messages WHERE conversationId = :conversationId ORDER BY sentAtMillis ASC")
-    fun getMessages(conversationId: String): Flow<List<MessageEntity>>
+
+    /**
+     * The newest [limit] messages of a thread, returned oldest-first (CQ-6).
+     *
+     * **The inner query orders descending and the outer one flips it back.** A single
+     * `ORDER BY sentAtMillis ASC LIMIT n` would take the *oldest* n — a thread would open on its
+     * first ever message and stop updating — which is the same trap `limitToLast` exists to avoid
+     * on the Firestore side of this feature.
+     *
+     * Unbounded until this change, so opening Chat materialised every message a pair had ever
+     * exchanged. `com.coparently.app.domain.chat.ChatWindow` decides what [limit] is and when to
+     * grow it.
+     */
+    @Query(
+        "SELECT * FROM (" +
+            "SELECT * FROM messages WHERE conversationId = :conversationId " +
+            "ORDER BY sentAtMillis DESC LIMIT :limit" +
+            ") ORDER BY sentAtMillis ASC"
+    )
+    fun getMessages(conversationId: String, limit: Int): Flow<List<MessageEntity>>
 
     /**
      * How many messages in [conversationId] were sent by somebody other than [myUid] after

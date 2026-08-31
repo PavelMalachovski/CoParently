@@ -66,7 +66,7 @@ class MessageRepositorySyncFailureTest {
         val firebaseUser = mockk<FirebaseUser> { every { uid } returns UID }
         every { firebaseAuthService.getCurrentUser() } returns firebaseUser
         coEvery { messageDao.getConversationById(any()) } returns null
-        every { messageDao.getMessages(CONVERSATION_ID) } returns flowOf(localMessages())
+        every { messageDao.getMessages(CONVERSATION_ID, any()) } returns flowOf(localMessages())
         every { messageDao.observeConversationById(CONVERSATION_ID) } returns flowOf(localConversation())
         every { firestoreMessageDataSource.observeConversation(CONVERSATION_ID) } returns flowOf(
             mapOf(

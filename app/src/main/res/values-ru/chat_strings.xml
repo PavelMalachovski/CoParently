@@ -77,4 +77,5 @@
     <string name="chat_template_schedule_change_title">Изменение расписания</string>
     <string name="chat_template_schedule_change_content">Мне нужно изменить расписание на [дата]. Можем поменяться? Я возьму [другая дата].</string>
     <string name="chat_failed_to_send_retry">Не отправлено — нажмите, чтобы повторить</string>
+    <string name="chat_load_earlier">Загрузить более ранние сообщения</string>
 </resources>
