@@ -287,6 +287,15 @@ class ChatViewModel @Inject constructor(
         )
 
     /**
+     * How many of the thread's newest messages the screen is asking Room for (CQ-6).
+     *
+     * Reset by [onThreadOpened], so re-entering a thread starts from one screenful again rather
+     * than from however far back a previous visit had scrolled. It is a view state, not a
+     * preference: what a reader wanted to see last week is not what they want on open.
+     */
+    private val _messageWindow = MutableStateFlow(ChatWindow.INITIAL)
+
+    /**
      * The selected conversation's raw messages, tagged with the id they belong to.
      *
      * Backs [messages] only — the read/delivered collector in `init` subscribes to
@@ -298,15 +307,6 @@ class ChatViewModel @Inject constructor(
      * definition, so a `combine` version would subscribe to `observeMessages("")` once and
      * a thread's messages could never appear at all.
      */
-    /**
-     * How many of the thread's newest messages the screen is asking Room for (CQ-6).
-     *
-     * Reset by [onThreadOpened], so re-entering a thread starts from one screenful again rather
-     * than from however far back a previous visit had scrolled. It is a view state, not a
-     * preference: what a reader wanted to see last week is not what they want on open.
-     */
-    private val _messageWindow = MutableStateFlow(ChatWindow.INITIAL)
-
     @OptIn(ExperimentalCoroutinesApi::class)
     private val currentThreadMessages: Flow<Pair<String?, List<Message>>> =
         combine(_currentConversationId, _messageWindow) { id, window -> id to window }

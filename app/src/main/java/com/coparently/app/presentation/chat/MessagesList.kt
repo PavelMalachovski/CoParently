@@ -153,8 +153,9 @@ private fun buildThread(messages: List<Message>): List<ThreadEntry> {
 // Already over detekt's LongMethod threshold before the Aug 2026 grouping/scroll work landed
 // (the codebase's own baseline records that); explicit like the other screen composables that
 // carry the same suppression rather than relying on a baseline entry keyed to an exact signature.
-@Suppress("LongMethod")
-@Suppress("LongParameterList") // one callback per action the thread offers
+// LongParameterList for the same reason it is suppressed on the other thread composables: one
+// callback per action the thread offers, and @Suppress is not repeatable so both share the one.
+@Suppress("LongMethod", "LongParameterList")
 fun MessagesList(
     messages: List<Message>,
     currentUserId: String,
