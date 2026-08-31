@@ -890,9 +890,29 @@ CoPlanly already *records* all three — the activity feed, `ChangeRequest`, `Ha
 expenses with per-currency balances and receipt photos. The data exists. What is missing is the one
 step that turns a nice app into something a parent pays for in the month they need it. Audit §7.2.
 
-### MON-4 · P1 · M · Decide what a court-facing record guarantees — **prerequisite for MON-3**
+### MON-4 · **PAPER WRITTEN, THREE ANSWERS OWED** · P1 · M · Decide what a court-facing record guarantees — **prerequisite for MON-3**
 
 **Where:** ☁️ cloud writes it; the guarantee itself is an owner's decision.
+
+**`docs/DESIGN-court-record.md` is that paper.** It audits what the code actually guarantees today,
+lays out three decisions with options and a recommendation each, and costs the recommended shape.
+§9 is a three-line form: fill it in and MON-3 is unblocked.
+
+Two findings from writing it that change the item:
+
+**The chat is already an unalterable record, and nobody knew.** `firestore.rules` sets
+`allow delete: if false` on `messages`, and update is two disjoint `hasOnly` branches — `isRead`
+alone, or a constrained `conversationId` re-point. Content, sender, timestamp and attachments
+cannot be changed by either parent. The activity feed rides the same collection, so every announced
+change to the calendar, the schedule and the expenses is in it. TalkingParents charges $32/month
+for a tier headlined "Unalterable Records"; CoPlanly has had them since the August 2026 chat work
+and has never said so. Nothing asserts the guarantee, though — pinning it in `firestore-tests/` is
+the first task, because a future rule edit could widen that `hasOnly` and no test would fail.
+
+**Events are the weak half, and the recommendation is a trail rather than versions.** One
+append-only `event_edits` row per edit carrying `{from, to}` per changed field, who, and when —
+not a copy of the old event. It answers what a court asks ("was this moved, by whom") without
+duplicating every event forever or making the 90-day tombstone sweep meaningless.
 
 An export that says "this is what happened" is only as good as the record behind it. Today `events`
 are freely editable by the creator with no history, conversations can be re-pointed, and — until

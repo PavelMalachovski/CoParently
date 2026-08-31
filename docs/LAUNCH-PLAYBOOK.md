@@ -66,6 +66,10 @@ Three edges in that graph are hard constraints rather than preferences:
   the record behind it. Today `events` are freely editable by their creator with no history. Decide
   which records are append-only and whose clock orders writes *before* selling the export, or the
   first lawyer who reads it closely destroys the feature's reputation and the app's.
+  **`docs/DESIGN-court-record.md` now puts those decisions in a three-line form**, and reaches one
+  conclusion worth knowing here: sell a *communication* record, not a truth record. The app cannot
+  honestly promise the latter for anything a parent types on their own phone — but chat is already
+  immutable server-side, which is precisely what the competitors charging most actually sell.
 - **MON-1 before MON-11.** The price, the unit, and what free contains shape the entitlement code.
   Building billing first means rewriting it.
 - **Everything after publishing.** Not because the code cannot be written — most of it is cloud
