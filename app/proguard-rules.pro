@@ -58,3 +58,17 @@
     public static int v(...);
     public static int i(...);
 }
+
+# ---- SQLCipher (SEC-2) ---------------------------------------------------
+# The database is opened through `net.zetetic.database.sqlcipher`, whose classes are
+# reached from JNI as well as from Kotlin: the native layer calls back into them by
+# name, so R8 renaming one produces a `NoSuchMethodError` at the first query rather
+# than a build error. `includedescriptorclasses` keeps the types in those signatures
+# too, for the same reason.
+#
+# Failing here is not a degradation but a launch crash — the open helper is built
+# before Room's first statement runs — and the release build is the only place it
+# would appear, which is exactly the shape of defect a keep rule exists to prevent.
+-keep,includedescriptorclasses class net.zetetic.database.** { *; }
+-keep,includedescriptorclasses interface net.zetetic.database.** { *; }
+-dontwarn net.zetetic.database.**

@@ -160,10 +160,12 @@ Personal Data Protection (Úřad pro ochranu osobních údajů), Pplk. Sochora 2
 ## Security
 
 Data in transit is encrypted. Access to your family's data is enforced server-side, so another
-account cannot read it by asking. Authentication tokens on your device are stored in encrypted
-storage backed by the Android Keystore, and if that storage cannot be opened, they are held in
-memory only rather than written unprotected. Device backup and device-to-device transfer of
-the app's data are switched off.
+account cannot read it by asking. The app's own database on your device is encrypted too, with a
+key held in the Android Keystore that cannot be copied off the device — so the calendar, messages,
+expenses and any medical details you enter are not readable by someone holding the phone.
+Authentication tokens are stored in encrypted storage backed by the same Keystore, and if that
+storage cannot be opened, they are held in memory only rather than written unprotected. Device
+backup and device-to-device transfer of the app's data are switched off.
 
 No system is perfect. If we discover a breach affecting your rights, we will notify the
 supervisory authority within 72 hours and tell you where the law requires it.

@@ -250,6 +250,12 @@ dependencies {
     // SQLite database and validate the result against the exported schema JSON.
     androidTestImplementation("androidx.room:room-testing:$roomVersion")
 
+    // SQLCipher — Room's open helper, so the database file is encrypted at rest (SEC-2).
+    // `@aar` is what the library's own instructions specify, and it drops the transitive
+    // dependencies, which is why androidx.sqlite is named here rather than inherited.
+    implementation("net.zetetic:sqlcipher-android:4.6.1@aar")
+    implementation("androidx.sqlite:sqlite:2.4.0")
+
     // Coroutines - Updated to latest stable
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
 
