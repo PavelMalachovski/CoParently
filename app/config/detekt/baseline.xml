@@ -589,7 +589,6 @@
     <ID>ReturnCount:FirestoreFamilySettingsDataSource.kt$FirestoreFamilySettingsDataSource$private fun Map&lt;String, Any?&gt;.toSettings(): FamilySettings?</ID>
     <ID>ReturnCount:FriendMappers.kt$FriendMappers$fun grantFrom(friendUid: String, data: Map&lt;String, Any?&gt;?): CalendarFriendGrant?</ID>
     <ID>ReturnCount:HandoverCalculator.kt$HandoverCalculator$fun nextHandoverFrom( model: CustodyModel, today: LocalDate, overrides: Map&lt;String, DayOverride&gt; = emptyMap() ): HandoverInfo?</ID>
-    <ID>ReturnCount:ParentingPlanViewModel.kt$ParentingPlanViewModel$private fun scopeFor(uid: String?, pairing: PairingState): PlanScope?</ID>
     <ID>ReturnCount:RecurrenceExpander.kt$RecurrenceExpander$private fun firstIndexEndingAtOrAfter( start: LocalDateTime, pattern: String, rangeStart: LocalDateTime, duration: Duration? ): Long</ID>
     <ID>ReturnCount:ReminderWorker.kt$ReminderWorker$override suspend fun doWork(): Result</ID>
     <ID>SpacingAroundCurly:ChildInfoRepositoryImpl.kt$ChildInfoRepositoryImpl$}</ID>

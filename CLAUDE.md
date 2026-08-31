@@ -179,10 +179,13 @@ cd firestore-tests && npm test              # firestore.rules against the local 
   deliberate. **detekt gates again** as of CQ-12 — do not add `continue-on-error` back to turn a
   red build green; fix the finding, or regenerate the baseline through the Regenerate workflow so
   that accepting debt is a visible commit. There is still **no instrumented migration job**
-  (**CQ-1**), and it buys nothing until v34: `app/schemas/` now holds 14 and 33 with the versions
-  between them irrecoverable, so there is no earlier version to migrate *from*.
-  `DatabaseSchemaExportTest` is what stops the gap growing — it fails the build if the database
-  version outruns the newest exported schema.
+  (**CQ-1**), and `app/schemas/` holds 14, 33 and 34 with the versions between the first two
+  irrecoverable — so the first migration a test could prove is 33→34, which MON-5 added.
+  What stops the gap growing is a **step in `ci.yml`**: `git status --porcelain -- app/schemas`
+  after the build, failing when the build produced a schema nobody committed. It is deliberately
+  *not* `DatabaseSchemaExportTest`, which this line used to credit and which cannot do it — kapt
+  writes that directory during the build immediately before the test reads it, so the file it
+  looks for has just been created whether or not it is in the repository.
 
   **A seventh workflow exists and is not part of CI**: `.github/workflows/regenerate.yml` runs
   `detektBaseline` and exports the Room schema, then commits both back to the branch it ran on.

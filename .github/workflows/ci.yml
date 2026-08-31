@@ -131,6 +131,31 @@ jobs:
       - name: Assemble debug and run unit tests
         run: ./gradlew assembleDebug testDebugUnitTest
 
+      # `DatabaseSchemaExportTest` cannot catch what CQ-1 says it catches, and this is the
+      # step that can. kapt writes `app/schemas/<version>.json` during the build above, from
+      # the `room.schemaLocation` argument — so by the time the unit test reads that directory
+      # the file it is looking for has just been created, whether or not anybody committed it.
+      # The test passes on a repository missing the very export it exists to demand.
+      #
+      # What is actually wrong in that case is that the build *dirtied a tracked directory*,
+      # and git can see that directly. A bumped database version with no schema beside it now
+      # fails here, naming the workflow that produces one.
+      #
+      # `git status --porcelain`, not `git diff`: the case that matters is a *new* version's
+      # file, which is untracked, and `git diff` only ever looks at tracked paths — it would
+      # have reported clean for exactly the state this exists to catch.
+      - name: The exported schema must be committed, not merely producible
+        run: |
+          set -euo pipefail
+          dirty=$(git status --porcelain -- app/schemas)
+          if [ -n "$dirty" ]; then
+            echo "$dirty"
+            echo "::error::The build produced a Room schema that is not committed. Run the"
+            echo "::error::Regenerate workflow (.github/workflows/regenerate.yml) on this branch"
+            echo "::error::by touching .github/regenerate-request, then push its commit."
+            exit 1
+          fi
+
       - name: Upload reports
         if: always()
         uses: actions/upload-artifact@v4

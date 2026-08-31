@@ -147,11 +147,17 @@ class ParentingPlanViewModel @Inject constructor(
     private data class PlanScope(val familyId: String, val myUid: String, val partnerUid: String)
 
     private fun scopeFor(uid: String?, pairing: PairingState): PlanScope? {
-        val myUid = uid?.takeIf { it.isNotBlank() } ?: return null
+        val myUid = uid?.takeIf { it.isNotBlank() }
         val partnerUid = (pairing as? PairingState.Paired)?.partner?.id?.takeIf { it.isNotBlank() }
-            ?: return null
-        val familyId = FamilyKey.orNull(myUid, partnerUid) ?: return null
-        return PlanScope(familyId = familyId, myUid = myUid, partnerUid = partnerUid)
+        // One exit rather than three guard clauses: `FamilyKey.orNull` already answers null for
+        // every case the guards would have caught, so the checks here exist only to smart-cast.
+        return if (myUid != null && partnerUid != null) {
+            FamilyKey.orNull(myUid, partnerUid)?.let { familyId ->
+                PlanScope(familyId = familyId, myUid = myUid, partnerUid = partnerUid)
+            }
+        } else {
+            null
+        }
     }
 
     companion object {

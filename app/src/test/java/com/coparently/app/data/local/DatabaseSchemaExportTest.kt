@@ -14,10 +14,18 @@ import kotlin.test.assertTrue
  * it against — and `DatabaseModule` deliberately refuses destructive migration above v4, which
  * makes a broken one a crash on launch for somebody with real data rather than a wipe.
  *
- * This is the check that stops it happening again. It is a plain JVM test rather than a Gradle
- * task on purpose: it runs in the same `testDebugUnitTest` invocation as everything else, so it
- * gates every pull request without a new job, and it needs no Android SDK — which matters,
- * because the sessions that write most of this repository do not have one.
+ * **What this test does and does not catch, corrected.** It reads `app/schemas/` off disk, and
+ * kapt *writes* that directory during the build that precedes it — `room.schemaLocation` points
+ * straight at the tracked path. So in CI the file it is looking for has just been created,
+ * committed or not, and the assertion below passes on a repository missing the very export it
+ * exists to demand. It was believed to be the gate for nineteen versions' worth of gap; it is
+ * not, and the workflow step that *is* one (`.github/workflows/ci.yml`, "The exported schema
+ * must be committed") checks the thing git can actually see: that the build dirtied a tracked
+ * directory.
+ *
+ * What remains genuinely useful here is the second test — a file whose name and contents
+ * disagree is something no build regenerates away — and the first as a developer-facing check
+ * when the schema directory is stale in a local working tree.
  *
  * It reads the source rather than the annotation. `androidx.room.Database` is retained at CLASS
  * level, so it is invisible to reflection, and loading `CoPlanlyDatabase` in a JVM test would

@@ -521,10 +521,15 @@ those files*, so every migration since v14 shipped with no fixture to test it ag
 - **Schema 33 is exported and committed**, by `.github/workflows/regenerate.yml` — the answer to
   why this sat still so long, which was never the decision but the mechanics: exporting needs an
   Android SDK that the sessions writing this repository do not have.
-- **`DatabaseSchemaExportTest` asserts `version == max(schemas)`** and that each file's name
-  matches the version inside it. A plain JVM test rather than a Gradle task, so it gates every
-  pull request in the existing job and needs no SDK. A bumped version with no schema beside it now
-  fails the build with a message saying which workflow to run.
+- **A bumped version with no schema beside it fails the build**, with a message naming the
+  workflow that produces one. That check is a step in `ci.yml` — `git status --porcelain --
+  app/schemas` after the build — and **not** `DatabaseSchemaExportTest`, which this line credited
+  until MON-5 tripped over it. The test reads the schema directory off disk, and kapt *writes*
+  that directory during the build immediately before it, so the file it looks for has just been
+  created whether or not anybody committed it: it passed on a tree missing the export it exists
+  to demand. The test is kept for its second assertion, which no build regenerates away — a file
+  whose name and contents disagree would have `MigrationTestHelper` build a database at the wrong
+  version and validate against it.
 
 **Accepted, deliberately: v15 → v32 are gone.** They were never committed and a build of today's
 code cannot produce them; rebuilding each historical commit was considered and rejected, since old
