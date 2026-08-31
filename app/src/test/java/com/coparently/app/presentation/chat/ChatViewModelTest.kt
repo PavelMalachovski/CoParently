@@ -363,32 +363,40 @@ class ChatViewModelTest {
         }
     }
 
-    // ---- 1g: the unread count follows the conversation's own read mark ------------------
+    // ---- 1g: the unread count is a Room COUNT(*), not a folded thread -------------------
+    //
+    // These two used to stub `observeMessages` and assert the number the ViewModel derived from
+    // the whole thread. It does not derive it any more (CQ-6/CQ-8): the count comes from
+    // `observeUnreadCount`, a `COUNT(*)`, and the *substance* — a co-parent's message counted
+    // against my own read mark — is asserted where it now lives, in
+    // `MessageRepositoryReadStateTest`. What is left for the ViewModel to get right is which
+    // thread it asks about, and that is what these two check.
 
     @Test
-    fun `unread count follows the other parent's messages against my read mark`() = runTest {
+    fun `unread count comes from the thread derived for this pair`() = runTest {
         pairingState.value = PairingState.Paired(partner())
-        conversationInRoom.value = existingThread()
-        every { messageRepository.observeMessages(CONVERSATION) } returns flowOf(listOf(message()))
+        every { messageRepository.observeUnreadCount(CONVERSATION, UID) } returns flowOf(3)
         val viewModel = createViewModel()
 
         viewModel.unreadCount.test {
             advanceUntilIdle()
-            assertEquals(1, expectMostRecentItem())
+            assertEquals(3, expectMostRecentItem())
         }
     }
 
     @Test
-    fun `unread count is zero once my read mark passes the co-parent's message`() = runTest {
-        pairingState.value = PairingState.Paired(partner())
-        conversationInRoom.value = existingThread().copy(lastReadAt = mapOf(UID to AFTER_SENT_AT_MILLIS))
-        every { messageRepository.observeMessages(CONVERSATION) } returns flowOf(listOf(message()))
+    fun `unread count asks nothing at all without a co-parent`() = runTest {
+        // Not merely zero: an unpaired account has no thread, so there is nothing to subscribe
+        // to. The badge holding a subscription open for the life of the process is the defect
+        // this whole change is about.
+        pairingState.value = PairingState.NotPaired()
         val viewModel = createViewModel()
 
         viewModel.unreadCount.test {
             advanceUntilIdle()
             assertEquals(0, expectMostRecentItem())
         }
+        verify(exactly = 0) { messageRepository.observeUnreadCount(any(), any()) }
     }
 
     // ---- the draft belongs to the composer, not to the send's outcome ----

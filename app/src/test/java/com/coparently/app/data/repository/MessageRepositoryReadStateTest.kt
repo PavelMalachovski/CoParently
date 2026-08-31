@@ -25,6 +25,7 @@ import io.mockk.slot
 import io.mockk.unmockkStatic
 import io.mockk.verify
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
@@ -487,6 +488,50 @@ class MessageRepositoryReadStateTest {
         syncedToFirestore = true,
         status = "SENT"
     )
+
+    // ---- the unread count, which is where CQ-6 moved this guarantee to ------------------
+    //
+    // `ChatViewModel` used to fold the whole thread to produce this number, and its tests
+    // asserted the behaviour there. It reads `observeUnreadCount` now — a `COUNT(*)` — so the
+    // substance belongs here: which mark the count is taken against.
+
+    @Test
+    fun `the unread count is taken against this reader's own mark`() = runTest {
+        every { messageDao.observeConversationById(CONVERSATION) } returns
+            flowOf(conversationRow(lastReadAtJson = """{"$UID_A":$SENT_AT_MILLIS}"""))
+        every { messageDao.observeUnreadCount(any(), any(), any()) } returns flowOf(0)
+
+        repository.observeUnreadCount(CONVERSATION, UID_A).first()
+
+        verify { messageDao.observeUnreadCount(CONVERSATION, UID_A, SENT_AT_MILLIS) }
+    }
+
+    @Test
+    fun `a thread this reader has never opened counts every message`() = runTest {
+        // `Long.MIN_VALUE` rather than 0 or "now": any real timestamp is greater, so every
+        // message counts — which is the right answer for a thread nobody has read yet. Zero
+        // would be almost right and wrong for any message predating the epoch; "now" would be
+        // wrong for all of them.
+        every { messageDao.observeConversationById(CONVERSATION) } returns flowOf(conversationRow())
+        every { messageDao.observeUnreadCount(any(), any(), any()) } returns flowOf(0)
+
+        repository.observeUnreadCount(CONVERSATION, UID_A).first()
+
+        verify { messageDao.observeUnreadCount(CONVERSATION, UID_A, Long.MIN_VALUE) }
+    }
+
+    @Test
+    fun `the other parent's mark is not mistaken for mine`() = runTest {
+        // The marks are a map keyed by uid. Reading the wrong entry would show a parent a badge
+        // cleared by somebody else having read the thread.
+        every { messageDao.observeConversationById(CONVERSATION) } returns
+            flowOf(conversationRow(lastReadAtJson = """{"$UID_B":$SENT_AT_MILLIS}"""))
+        every { messageDao.observeUnreadCount(any(), any(), any()) } returns flowOf(0)
+
+        repository.observeUnreadCount(CONVERSATION, UID_A).first()
+
+        verify { messageDao.observeUnreadCount(CONVERSATION, UID_A, Long.MIN_VALUE) }
+    }
 
     private fun conversationRow(
         lastReadAtJson: String = "{}",

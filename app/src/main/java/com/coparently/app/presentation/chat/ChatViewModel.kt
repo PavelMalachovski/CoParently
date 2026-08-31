@@ -341,29 +341,33 @@ class ChatViewModel @Inject constructor(
     /**
      * Number of the co-parent's messages this account has not yet read.
      *
-     * There is exactly one conversation per pair, so this is that thread's own
-     * [ChatReadState.unreadCount] rather than anything summed across a list. Kept as an
-     * independent subscription from [messages] — mirroring `HomeViewModel.unreadCount`'s
-     * Home-tile figure — so a failure in one cannot blank the other.
+     * **A `COUNT(*)` out of Room, and nothing else (CQ-6/CQ-8).** This used to answer the number
+     * by subscribing to `observeMessages` and folding the whole thread through
+     * `ChatReadState.unreadCount` — and `NavGraph.rememberChatUnreadCount()` collects this from an
+     * Activity-scoped instance for the entire process lifetime. So a badge was materialising every
+     * message a pair had ever exchanged, forever, to produce one integer that
+     * `MessageDao.observeUnreadCount` produces with a `COUNT(*)`; and, worse, it was the only
+     * thing holding the Firestore mirrors open, which is why they could never be restarted after
+     * a failure. `ChatMirror` owns them now, from the process rather than from a screen.
      *
-     * The inner `observeMessages` subscription is keyed on the conversation *id*
-     * (`distinctUntilChanged`), not on [conversations] itself: [conversations] re-emits on
-     * every `lastReadAt`/`lastDeliveredAt` write — which, with this task, now includes every
-     * mark this ViewModel writes — and restarting the messages subscription on each of those
-     * would be pure churn, since the id it is keyed on has not actually changed.
+     * The conversation id is **derived** (`ConversationKey.of`) rather than taken from
+     * [conversations], so this does not subscribe to the conversation document either — that
+     * subscription is the other half of what the badge was holding open. It is the same id the
+     * thread itself uses, by construction: the key is a pure function of the two uids.
+     *
+     * Kept as an independent subscription from [messages] — mirroring `HomeViewModel.unreadCount`'s
+     * Home-tile figure — so a failure in one cannot blank the other.
      */
     @OptIn(ExperimentalCoroutinesApi::class)
-    val unreadCount: StateFlow<Int> = combine(
-        loadedConversations.map { it.firstOrNull()?.id }
-            .distinctUntilChanged()
-            .flatMapLatest { conversationId ->
-                if (conversationId == null) flowOf(emptyList()) else messageRepository.observeMessages(conversationId)
-            },
-        loadedConversations,
-        currentUserId
-    ) { rawMessages, convs, myUid ->
-        ChatReadState.unreadCount(rawMessages, myUid, convs.firstOrNull()?.lastReadAt?.get(myUid))
-    }
+    val unreadCount: StateFlow<Int> = combine(currentUserId, coParentLink) { uid, link -> uid to link }
+        .map { (uid, link) ->
+            val partnerId = (link as? CoParentLink.Linked)?.partnerId
+            if (partnerId == null) null else conversationIdOrNull(uid, partnerId)?.let { it to uid }
+        }
+        .distinctUntilChanged()
+        .flatMapLatest { thread ->
+            if (thread == null) flowOf(0) else messageRepository.observeUnreadCount(thread.first, thread.second)
+        }
         .catch { e -> failSoft("observe unread count", e) { emit(0) } }
         .stateIn(
             scope = viewModelScope,
