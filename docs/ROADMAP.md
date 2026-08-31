@@ -80,7 +80,7 @@ invocation is yours.
 | **MON-2** | Verify the market facts — most of them are public pages | P0 | S |
 | **MON-3** | Export to PDF/CSV — the first paid feature (needs MON-4 first) | P1 | M |
 | **MON-4** | The paper is written; three answers are owed by the owner, and MON-3 waits on them | P1 | S |
-| **MON-5** | Digitise the official Rodičovský plán | P1 | M |
+| **MON-5** | The plan ships; swapping in the Ministry's own wording needs the form itself | P1 | S |
 | **MON-6b** | Half-day custody, so contact afternoons can be described | P2 | L |
 | **MON-8** | Bakaláři / EduPage school import — the parsing, once you supply a real export | P2 | L |
 | **MON-11** | Payments (MVP 3) — the entitlement model, after MON-1 decides the price | P2 | L |
@@ -128,13 +128,14 @@ invocation is yours.
 
 In this order, and each is genuinely finishable in the cloud:
 
-1. **MON-5** — digitise the official Rodičovský plán. It is the one artefact a Czech court already
-   recognises, and the app cannot produce it.
-2. **MON-3** — the export, and the first thing anybody would pay for. It is **blocked on three
+1. **MON-3** — the export, and the first thing anybody would pay for. It is **blocked on three
    lines of `docs/DESIGN-court-record.md` §9 that only the owner can write**: an export of a record
    nobody can vouch for is worth nothing to a lawyer. Fill the form in and this is a cloud task.
-3. **CQ-13** — seventeen of twenty-five ViewModels have no tests. `SettingsViewModel` is the one
+   The parenting plan is now one of the things worth exporting.
+2. **CQ-13** — seventeen of twenty-five ViewModels have no tests. `SettingsViewModel` is the one
    to start with: it is named in `CLAUDE.md` as the gap to close when Settings is next touched.
+3. **MON-13** — five of the six countries in the holiday picker still draw no holidays, and the
+   picker says so on the row. Honest, and still a blank calendar for a German or Polish family.
 
 *(Everything that headed this list — **M-6**, **CQ-19**, **CQ-12**, **CQ-1**'s bleeding half,
 **CQ-5**, **CQ-6 + CQ-8**, **SEC-2**, and the three honesty gaps **CQ-20**, **UX-17**, **UX-18** —
@@ -520,10 +521,15 @@ those files*, so every migration since v14 shipped with no fixture to test it ag
 - **Schema 33 is exported and committed**, by `.github/workflows/regenerate.yml` — the answer to
   why this sat still so long, which was never the decision but the mechanics: exporting needs an
   Android SDK that the sessions writing this repository do not have.
-- **`DatabaseSchemaExportTest` asserts `version == max(schemas)`** and that each file's name
-  matches the version inside it. A plain JVM test rather than a Gradle task, so it gates every
-  pull request in the existing job and needs no SDK. A bumped version with no schema beside it now
-  fails the build with a message saying which workflow to run.
+- **A bumped version with no schema beside it fails the build**, with a message naming the
+  workflow that produces one. That check is a step in `ci.yml` — `git status --porcelain --
+  app/schemas` after the build — and **not** `DatabaseSchemaExportTest`, which this line credited
+  until MON-5 tripped over it. The test reads the schema directory off disk, and kapt *writes*
+  that directory during the build immediately before it, so the file it looks for has just been
+  created whether or not anybody committed it: it passed on a tree missing the export it exists
+  to demand. The test is kept for its second assertion, which no build regenerates away — a file
+  whose name and contents disagree would have `MigrationTestHelper` build a database at the wrong
+  version and validate against it.
 
 **Accepted, deliberately: v15 → v32 are gone.** They were never committed and a build of today's
 code cannot produce them; rebuilding each historical commit was considered and rejected, since old
@@ -1026,18 +1032,42 @@ Before selling documentation, decide: which records are append-only, what an edi
 and whose clock orders writes. This is not a nice-to-have once anything is exported for legal use —
 it is what makes the export worth paying for. Audit §7.5.
 
-### MON-5 · P1 · M · Digitise the official Rodičovský plán — the cheapest local moat
+### MON-5 · **BUILT; THE OFFICIAL WORDING IS STILL OWED** · P1 · M · Digitise the official Rodičovský plán
 
-**Where:** ☁️ cloud.
+**Where:** ☁️ the machinery is written; 💻 **one thing only you can supply — see the end.**
 
 The Ministry of Justice publishes an official parenting-plan template
 (`vyzivne.justice.cz/rodicovsky-plan`). In practice each parent fills it in separately and a mediator
 or OSPOD compares the two to surface agreement and disagreement.
 
-Digitising it — two parents, separate answers, a diff, an export — is a feature no global competitor
-has, is hard for a non-Czech team to copy, fits the post-2026 legal emphasis on agreement, and hands
-the mediator channel a concrete reason to recommend the app. Cheaper than the school import and
-lands in the same place. Audit §10.6.
+**What ships.** A parenting-plan screen off Settings: seven sections, fourteen questions, each
+parent answering their own half, the two shown side by side, and a tick that turns two answers into
+an agreement. `parenting_plans/{familyId}` holds both halves in maps keyed by uid, and
+`firestore.rules` lets each parent write **their own key and nothing else** — the security model is
+the feature, because a parent who could edit the other's half could put words in their mouth in a
+document the two of them may hand to a court. Thirteen rules tests pin that, including the two ways
+of getting it wrong that look like it works: writing into the other key, and smuggling your own key
+in beside theirs.
+
+**The one idea worth not undoing.** An agreement records **the wording** the other parent had, not
+a flag on the question. A flag would go stale the moment either answer was edited, and neither
+phone can clear the other's — a parent may only write their own half — so an agreement would keep
+claiming two people had settled text that no longer exists. Comparing the stored text makes it
+lapse by itself, on both devices, with no cross-write and nothing to clean up.
+
+**What is still owed, and it is the half that makes this a moat.** The **official** wording could
+not be obtained: `vyzivne.justice.cz`, `msp.gov.cz` and `edukace.cochem.cz` are all refused by the
+egress policy the cloud sessions run under, and search results paraphrase the form rather than
+reproduce it. So the fourteen questions are *this project's*, covering the areas § 858 of the
+občanský zákoník names as parental responsibility plus the practical headings the Ministry's own
+page lists — and the screen says so to the user, because a document that claims to be the Ministry's
+form and is not would be design rule 8's forbidden promise in the one place it does real damage.
+
+**To finish it:** put the form's text in front of a session — the PDF, or its sections pasted in.
+Replacing the catalogue is a data edit: `ParentingPlanCatalogue` holds ids, the five
+`parenting_plan_strings.xml` hold wording, `PlanStringsTest` fails the build if the two drift, and
+stored answers keyed by an id that survives are untouched. Then, and only then, the disclaimer
+comes out. Audit §10.6.
 
 ### MON-6b · P2 · L · Half-day custody, so contact afternoons can be described
 

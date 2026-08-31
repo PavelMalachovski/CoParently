@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The parenting plan (MON-5).
+
+  The section and question wording is this project's, covering the areas § 858 of the Czech
+  občanský zákoník names as parental responsibility plus the practical headings the Ministry of
+  Justice's own parenting-plan page lists. It is deliberately NOT a copy of that Ministry form —
+  see ParentingPlanCatalogue, and parenting_plan_disclaimer, which says so to the user.
+-->
+<resources>
+    <string name="parenting_plan_title">Родительский план</string>
+    <string name="parenting_plan_settings_description">Заполните каждый отдельно и увидите, где вы уже согласны</string>
+    <string name="parenting_plan_intro">Каждый отвечает сам за себя. Незаконченный ответ никто не видит, и изменить ответ другого нельзя. Вопрос считается согласованным там, где вы оба отметили ответ другого.</string>
+    <string name="parenting_plan_disclaimer">Это не бланк Министерства юстиции. Он охватывает те же области, которые называют закон и этот бланк, но своими словами.</string>
+    <string name="parenting_plan_progress_agreed">Согласовано %1$d из %2$d</string>
+    <string name="parenting_plan_progress_answered">Вы ответили на %1$d из %2$d</string>
+    <string name="parenting_plan_needs_coparent_title">План составляют вдвоём</string>
+    <string name="parenting_plan_needs_coparent_body">Смысл родительского плана в том, что вы отвечаете оба, а потом сравниваете. Свяжитесь со вторым родителем, чтобы начать.</string>
+    <string name="parenting_plan_your_answer">Ваш ответ</string>
+    <string name="parenting_plan_their_answer">Ответ: %1$s</string>
+    <string name="parenting_plan_their_answer_missing">%1$s пока не ответил(а)</string>
+    <string name="parenting_plan_not_answered">Без ответа</string>
+    <string name="parenting_plan_answer_hint">Напишите так, как сказали бы медиатору</string>
+    <string name="parenting_plan_status_unanswered">Не начато</string>
+    <string name="parenting_plan_status_only_yours">Ждём: %1$s</string>
+    <string name="parenting_plan_status_only_theirs">Ваша очередь</string>
+    <string name="parenting_plan_status_open">Пока без согласия</string>
+    <string name="parenting_plan_status_agreed">Согласовано</string>
+    <string name="parenting_plan_agree">Я согласен(на) с этим ответом</string>
+    <string name="parenting_plan_agree_hint">Если кто-то из вас изменит ответ, согласие снимается и нужно отметить снова.</string>
+    <string name="parenting_plan_save">Сохранить</string>
+    <string name="parenting_plan_back">Назад</string>
+    <string name="parenting_plan_close">Закрыть</string>
+    <string name="parenting_plan_section_residence">Где будет жить ребёнок</string>
+    <string name="parenting_plan_section_care">Повседневная забота и передачи</string>
+    <string name="parenting_plan_section_holidays">Каникулы, дни рождения и семейные события</string>
+    <string name="parenting_plan_section_education">Школа и занятия</string>
+    <string name="parenting_plan_section_health">Здоровье</string>
+    <string name="parenting_plan_section_money">Деньги</string>
+    <string name="parenting_plan_section_communication">Общение между собой и разрешение разногласий</string>
+    <string name="parenting_plan_q_residence_home">Где будет жить ребёнок и какой адрес будет указан как место жительства?</string>
+    <string name="parenting_plan_q_residence_change">Как вы решите вопрос, если один из вас захочет переехать, и за какой срок предупредите другого?</string>
+    <string name="parenting_plan_q_care_weekday">Как вы разделите между собой будние дни, выходные и школьные каникулы?</string>
+    <string name="parenting_plan_q_care_handover">Где и когда будет происходить передача ребёнка и кто его привозит?</string>
+    <string name="parenting_plan_q_holidays_school">Как вы будете каждый год делить школьные каникулы?</string>
+    <string name="parenting_plan_q_holidays_special">Как ребёнок будет проводить дни рождения, Рождество и другие семейные события?</string>
+    <string name="parenting_plan_q_education_school">В какую школу или садик будет ходить ребёнок и кто общается со школой?</string>
+    <string name="parenting_plan_q_education_activities">Какими кружками будет заниматься ребёнок, кто их организует и оплачивает?</string>
+    <string name="parenting_plan_q_health_doctor">У каких врачей ребёнок будет наблюдаться и как вы будете сообщать друг другу о здоровье?</string>
+    <string name="parenting_plan_q_health_decisions">Как вы примете решение о лечении, которое можно отложить?</string>
+    <string name="parenting_plan_q_money_maintenance">Какие алименты, кто и какого числа месяца будет платить?</string>
+    <string name="parenting_plan_q_money_extraordinary">Как вы разделите разовые расходы — очки, школьную поездку, ноутбук?</string>
+    <string name="parenting_plan_q_communication_between_parents">Как вы будете передавать друг другу информацию о ребёнке и как быстро ждёте ответа?</string>
+    <string name="parenting_plan_q_communication_disagreement">Что вы сделаете, если не сможете договориться?</string>
+</resources>

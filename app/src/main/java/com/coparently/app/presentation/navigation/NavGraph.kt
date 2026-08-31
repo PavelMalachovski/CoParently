@@ -43,6 +43,7 @@ import com.coparently.app.presentation.event.AddEditEventScreen
 import com.coparently.app.presentation.event.EventListScreen
 import com.coparently.app.presentation.onboarding.OnboardingScreen
 import com.coparently.app.presentation.pairing.PairingScreen
+import com.coparently.app.presentation.parentingplan.ParentingPlanScreen
 import com.coparently.app.presentation.pets.AddEditPetScreen
 import com.coparently.app.presentation.pets.PetsScreen
 import com.coparently.app.presentation.settings.SettingsScreen
@@ -452,6 +453,9 @@ fun NavGraph(
                     onNavigateToCustodySetup = {
                         navController.navigate(Screen.CustodySetup.route)
                     },
+                    onNavigateToParentingPlan = {
+                        navController.navigate(Screen.ParentingPlan.route)
+                    },
                     onNavigateToMyProfile = {
                         navController.navigate(Screen.MyProfile.route)
                     },
@@ -466,6 +470,18 @@ fun NavGraph(
                     },
                     syncViewModel = syncViewModel
                 )
+            }
+
+            // A detail screen off Settings, like Custody Setup: it is a document the two parents
+            // fill in over weeks, not something the bottom bar should carry.
+            composable(
+                route = Screen.ParentingPlan.route,
+                enterTransition = { slideInFromRight() },
+                exitTransition = { slideOutToLeft() },
+                popEnterTransition = { slideInFromLeft() },
+                popExitTransition = { slideOutToRight() }
+            ) {
+                ParentingPlanScreen(onNavigateBack = { navController.popBackStack() })
             }
 
             composable(
@@ -1161,6 +1177,7 @@ sealed class Screen(val route: String) {
     }
     data object Settings : Screen("settings")
     data object ChildInfo : Screen("child_info")
+    data object ParentingPlan : Screen("parenting_plan")
     data object Pets : Screen("pets")
     data object Pairing : Screen("pairing?code={code}") {
         /** Optional invite code carried by a `coplanly://pair` deep link. */

@@ -9,6 +9,7 @@ import com.coparently.app.data.local.dao.CustodyScheduleDao
 import com.coparently.app.data.local.dao.EventDao
 import com.coparently.app.data.local.dao.ExpenseDao
 import com.coparently.app.data.local.dao.MessageDao
+import com.coparently.app.data.local.dao.ParentingPlanDao
 import com.coparently.app.data.local.dao.PetDao
 import com.coparently.app.data.local.dao.UserDao
 import com.coparently.app.data.local.security.EncryptedDatabase
@@ -155,5 +156,13 @@ object DatabaseModule {
     @Provides
     fun provideChangeRequestDao(database: CoPlanlyDatabase): com.coparently.app.data.local.dao.ChangeRequestDao {
         return database.changeRequestDao()
+    }
+
+    /**
+     * Provides ParentingPlanDao.
+     */
+    @Provides
+    fun provideParentingPlanDao(database: CoPlanlyDatabase): ParentingPlanDao {
+        return database.parentingPlanDao()
     }
 }

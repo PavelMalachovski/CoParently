@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The parenting plan (MON-5).
+
+  The section and question wording is this project's, covering the areas § 858 of the Czech
+  občanský zákoník names as parental responsibility plus the practical headings the Ministry of
+  Justice's own parenting-plan page lists. It is deliberately NOT a copy of that Ministry form —
+  see ParentingPlanCatalogue, and parenting_plan_disclaimer, which says so to the user.
+-->
+<resources>
+    <string name="parenting_plan_title">Rodičovský plán</string>
+    <string name="parenting_plan_settings_description">Vyplňte každý zvlášť a uvidíte, kde už se shodnete</string>
+    <string name="parenting_plan_intro">Každý odpovídá sám za sebe. Rozepsanou odpověď nikdo nevidí a jeden druhému ji nemůže upravit. Otázka je dohodnutá tam, kde oba odškrtnete odpověď toho druhého.</string>
+    <string name="parenting_plan_disclaimer">Toto není tiskopis Ministerstva spravedlnosti. Pokrývá stejné oblasti, které jmenuje zákon i onen tiskopis, ale vlastními slovy.</string>
+    <string name="parenting_plan_progress_agreed">Dohodnuto %1$d z %2$d</string>
+    <string name="parenting_plan_progress_answered">Vy jste odpověděli na %1$d z %2$d</string>
+    <string name="parenting_plan_needs_coparent_title">Plán se dělá ve dvou</string>
+    <string name="parenting_plan_needs_coparent_body">Smysl rodičovského plánu je, že odpovíte oba a pak porovnáte. Spojte se s druhým rodičem a můžete začít.</string>
+    <string name="parenting_plan_your_answer">Vaše odpověď</string>
+    <string name="parenting_plan_their_answer">Odpověď: %1$s</string>
+    <string name="parenting_plan_their_answer_missing">%1$s zatím neodpověděl(a)</string>
+    <string name="parenting_plan_not_answered">Bez odpovědi</string>
+    <string name="parenting_plan_answer_hint">Napište to tak, jak byste to řekli mediátorovi</string>
+    <string name="parenting_plan_status_unanswered">Nezačato</string>
+    <string name="parenting_plan_status_only_yours">Čeká na: %1$s</string>
+    <string name="parenting_plan_status_only_theirs">Jste na řadě</string>
+    <string name="parenting_plan_status_open">Zatím bez shody</string>
+    <string name="parenting_plan_status_agreed">Dohodnuto</string>
+    <string name="parenting_plan_agree">S touto odpovědí souhlasím</string>
+    <string name="parenting_plan_agree_hint">Když někdo z vás odpověď upraví, shoda padá a odškrtnete znovu.</string>
+    <string name="parenting_plan_save">Uložit</string>
+    <string name="parenting_plan_back">Zpět</string>
+    <string name="parenting_plan_close">Zavřít</string>
+    <string name="parenting_plan_section_residence">Kde bude dítě bydlet</string>
+    <string name="parenting_plan_section_care">Běžná péče a předávání</string>
+    <string name="parenting_plan_section_holidays">Prázdniny, narozeniny a rodinné události</string>
+    <string name="parenting_plan_section_education">Škola a zájmové aktivity</string>
+    <string name="parenting_plan_section_health">Zdraví</string>
+    <string name="parenting_plan_section_money">Peníze</string>
+    <string name="parenting_plan_section_communication">Vzájemná komunikace a řešení neshod</string>
+    <string name="parenting_plan_q_residence_home">Kde bude dítě bydlet a jaká adresa bude vedena jako jeho bydliště?</string>
+    <string name="parenting_plan_q_residence_change">Jak se domluvíte, když se jeden z vás bude chtít přestěhovat, a s jakým předstihem to oznámí?</string>
+    <string name="parenting_plan_q_care_weekday">Jak si mezi sebou rozdělíte všední dny, víkendy a školní prázdniny?</string>
+    <string name="parenting_plan_q_care_handover">Kde a kdy bude probíhat předávání dítěte a kdo je tam dopraví?</string>
+    <string name="parenting_plan_q_holidays_school">Jak si každý rok rozdělíte školní prázdniny?</string>
+    <string name="parenting_plan_q_holidays_special">Jak bude dítě trávit narozeniny, Vánoce a další rodinné události?</string>
+    <string name="parenting_plan_q_education_school">Kterou školu nebo školku bude dítě navštěvovat a kdo bude jednat se školou?</string>
+    <string name="parenting_plan_q_education_activities">Jaké zájmové aktivity bude dítě mít a kdo je zajistí a uhradí?</string>
+    <string name="parenting_plan_q_health_doctor">U kterých lékařů bude dítě registrováno a jak se budete navzájem informovat?</string>
+    <string name="parenting_plan_q_health_decisions">Jak rozhodnete o zákroku, který snese odklad?</string>
+    <string name="parenting_plan_q_money_maintenance">Jaké výživné, kdo a k jakému dni v měsíci bude platit?</string>
+    <string name="parenting_plan_q_money_extraordinary">Jak se podělíte o jednorázové výdaje — brýle, školní výlet, notebook?</string>
+    <string name="parenting_plan_q_communication_between_parents">Jak si budete předávat informace o dítěti a jak rychlou odpověď od sebe očekáváte?</string>
+    <string name="parenting_plan_q_communication_disagreement">Co uděláte, když se nedokážete shodnout?</string>
+</resources>
