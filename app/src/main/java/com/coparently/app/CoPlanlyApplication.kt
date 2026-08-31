@@ -5,6 +5,7 @@ import android.app.Application
 import android.os.Bundle
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
+import com.coparently.app.data.chat.ChatMirror
 import com.coparently.app.data.session.SessionProfileSynchronizer
 import com.coparently.app.data.sync.SyncWorker
 import com.coparently.app.data.telemetry.TelemetryConsentApplier
@@ -40,6 +41,15 @@ class CoPlanlyApplication : Application(), Configuration.Provider {
     lateinit var telemetryConsentApplier: TelemetryConsentApplier
 
     /**
+     * Keeps the chat's Firestore listeners attached and restarts them when they end (CQ-8).
+     * Field-injected and started here for the same reason as the two above: the mirror belongs
+     * to the process. It used to be held open by a badge on a screen, which is why a listener
+     * that failed once stayed failed until the app was killed.
+     */
+    @Inject
+    lateinit var chatMirror: ChatMirror
+
+    /**
      * Provides WorkManager configuration with HiltWorkerFactory.
      * This enables dependency injection in WorkManager workers.
      */
@@ -68,6 +78,9 @@ class CoPlanlyApplication : Application(), Configuration.Provider {
         // `BuildConfig.ENABLE_CRASHLYTICS`, so the debug flag was overruled on every launch and
         // developer crashes reported into the production project regardless of it.
         telemetryConsentApplier.start()
+
+        // The chat mirror, from here rather than from `NavGraph`'s Activity-scoped ChatViewModel.
+        chatMirror.start()
 
         // Make sure the signed-in user has a profile document carrying their name and
         // email. This has to happen here, not on a screen: the co-parent reads that

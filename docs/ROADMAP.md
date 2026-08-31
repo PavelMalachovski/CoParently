@@ -553,20 +553,41 @@ whole events table plus one to all expenses and filters the current month **in m
 `EventDao.getEventsForParentPaginated` sits written and never called. That is a Room-side cost, not
 a Firestore bill, and it wants its own change. Audit §8.6.
 
-### CQ-6 + CQ-8 · P2 · M · The chat's last unbounded query, and a listener that gives up
+### CQ-6 + CQ-8 · **CQ-8 DONE; CQ-6's last half open** · P2 · M · The chat's last unbounded query, and a listener that gives up
 
-**Where:** ☁️ cloud. One piece of work; doing either alone makes the other harder.
+**Where:** ☁️ cloud.
 
-**Two of CQ-6's three costs are already gone.** The home screen answers the unread badge with a
-Room `COUNT(*)` instead of loading the thread, and the remote listener is bounded to the newest 200
-messages (`limitToLast`, not `limit` — the order is ascending, so `limit` would pin the window to
-the oldest messages and a live thread would stop updating at the bound).
+**CQ-8 is fixed structurally.** `data/chat/ChatMirror` owns both Firestore listeners from the
+process — started in `CoPlanlyApplication.onCreate` beside `SessionProfileSynchronizer` and
+`TelemetryConsentApplier` — and restarts either one when it ends. Both structural answers this item
+named are in it: it **awaits `ensureConversation` before subscribing**, which is the direct fix for
+what was seen in production, and it **drops the Activity-scoped collector's role** as the thing
+keeping the mirrors alive.
 
-**What is left:** `MessageDao.getMessages` is still unbounded, so the chat screen materialises the
-whole thread out of Room. Bounding it needs a "load earlier" affordance — silently showing only the
-tail would be the CQ-7 defect again in a different collection.
+`ChatViewModel.unreadCount` is now `MessageRepository.observeUnreadCount` — a Room `COUNT(*)`,
+with the conversation id *derived* from the two uids rather than read from the conversation
+document, so the badge subscribes to neither listener. That was the other half of CQ-6's cost and
+it is gone: a badge is no longer materialising every message a pair ever exchanged, forever, to
+produce one integer.
 
-**CQ-8 is the reason it cannot be done alone.** Both mirror branches in `MessageRepositoryImpl` now
+**Two layers of recovery, and the item's caution still stands.** `reconnecting()` is unchanged —
+fast, bounded, eight attempts. `ChatMirror` is the slow outer supervisor at five minutes, for an
+outage that outlives the inner retry. The warning against an unbounded retry was about the inner
+one and still holds; the outer loop is bounded in *rate* rather than in count, and its delay is
+injected so the give-up path is testable instead of spinning the virtual clock — which is exactly
+what `ChatMirrorTest` does.
+
+**What is left of CQ-6:** `MessageDao.getMessages` is still unbounded, so the chat *screen* still
+materialises the whole thread out of Room. Bounding it needs a "load earlier" affordance —
+silently showing only the tail would be the CQ-7 defect again in a different collection — and that
+is UI work plus five locales, which is why it is its own change rather than bundled here.
+
+**The background, kept because it explains the shape.** The home screen already answered its badge
+with a Room `COUNT(*)`, and the remote listener was already bounded to the newest 200 messages
+(`limitToLast`, not `limit` — the order is ascending, so `limit` would pin the window to the oldest
+messages and a live thread would stop updating at the bound).
+
+**CQ-8 was the reason CQ-6 could not be done alone.** Both mirror branches in `MessageRepositoryImpl` now
 go through `reconnecting()` (`retryWhen`, exponential backoff, eight attempts, capped at a minute)
 before reaching the `.catch` that ends the mirror — which covers what was seen in production: on
 the first launch after install both listeners were denied ~0.5 s before `ensureConversation`
