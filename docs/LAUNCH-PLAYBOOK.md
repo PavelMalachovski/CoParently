@@ -86,9 +86,15 @@ Three edges in that graph are hard constraints rather than preferences:
   "every second weekend **plus Wednesday afternoon**" — which is most Czech contact orders, not an
   edge case — cannot be entered. The app cannot honestly claim to describe a Czech family's real
   schedule until this exists.
-- **CQ-5 — the sync downloads every event every fifteen minutes**, on both phones, forever. It gets
-  worse with tenure, so it lands on your longest-standing users first. This is a bill as well as a
-  bug.
+- ~~**CQ-5 — the sync downloads every event every fifteen minutes.**~~ **Done.** The download is a
+  change cursor now: 96 full collection reads a day became one sweep and 95 deltas. One thing it
+  leaves you — the composite index (`sharedWith` CONTAINS + `serverUpdatedAt` ASC) has to go out
+  with the rules in §2.0 step 5, or the delta query fails at runtime and the app falls back to
+  behaving as it did before, once a day.
+- **`HomeViewModel` still reads the whole events table** — three subscriptions to it plus one to
+  all expenses, filtered to the current month in memory, while `EventDao.getEventsForParentPaginated`
+  sits written and never called. That is a Room cost rather than a Firestore bill, which is why
+  CQ-5 deliberately did not bundle it.
 
 ---
 
