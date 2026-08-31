@@ -1,6 +1,7 @@
 package com.coparently.app.domain.repository
 
 import com.coparently.app.domain.money.SupportedCurrency
+import com.coparently.app.domain.telemetry.TelemetryConsent
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -50,5 +51,26 @@ interface PreferencesRepository {
      * @param currency Currency to store as the default
      */
     suspend fun setDefaultCurrency(currency: SupportedCurrency)
+
+    /**
+     * The analytics and crash-reporting consent, as a Flow.
+     *
+     * Never emits null: an account that has not been asked emits
+     * [TelemetryConsent.UNANSWERED], which is a real answer to "should the gate be shown" and
+     * not an absence. The start-destination decision reads it, so it must be correct on its
+     * first emission rather than after a round trip.
+     *
+     * @return Flow emitting the current consent
+     */
+    fun getTelemetryConsentFlow(): Flow<TelemetryConsent>
+
+    /**
+     * Records the answer. Applying it to the SDKs is
+     * [com.coparently.app.data.telemetry.TelemetryConsentApplier]'s job, not the caller's — see
+     * its KDoc for why there is exactly one place that calls the setters.
+     *
+     * @param consent What the user chose
+     */
+    suspend fun setTelemetryConsent(consent: TelemetryConsent)
 }
 

@@ -33,6 +33,7 @@ import androidx.compose.material.icons.filled.FamilyRestroom
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.SwapHoriz
@@ -89,6 +90,8 @@ import com.coparently.app.domain.holidays.HolidayCountry
 import com.coparently.app.domain.model.FamilyKind
 import com.coparently.app.domain.money.SupportedCurrency
 import com.coparently.app.presentation.common.ConfirmationDialog
+import com.coparently.app.domain.telemetry.TelemetryConsent
+import com.coparently.app.presentation.consent.TelemetryConsentViewModel
 import com.coparently.app.presentation.common.GroupLabel
 import com.coparently.app.presentation.common.ParentNames
 import com.coparently.app.presentation.common.SectionGroup
@@ -153,9 +156,11 @@ fun SettingsScreen(
     onSignOut: (() -> Unit)? = null,
     syncViewModel: SyncViewModel = hiltViewModel(),
     settingsViewModel: SettingsViewModel = hiltViewModel(),
-    authStateViewModel: com.coparently.app.presentation.sync.AuthStateViewModel = hiltViewModel()
+    authStateViewModel: com.coparently.app.presentation.sync.AuthStateViewModel = hiltViewModel(),
+    telemetryConsentViewModel: TelemetryConsentViewModel = hiltViewModel()
 ) {
     val haptic = LocalHapticFeedback.current
+    val telemetryConsent by telemetryConsentViewModel.consent.collectAsState()
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
 
@@ -643,6 +648,25 @@ fun SettingsScreen(
                         onClick = { showCurrencyPicker = true },
                         trailing = {
                             ValueLabel("${defaultCurrency.code} ${defaultCurrency.symbol}")
+                        }
+                    )
+                    Divider()
+                    // The other half of what makes the first-run question a consent: a decision
+                    // you cannot revisit is not one (REL-5). A switch rather than a row that
+                    // opens the full screen again — the screen exists to *ask*, and re-asking
+                    // somebody who has already answered is how a consent turns into nagging.
+                    SectionRow(
+                        icon = Icons.Default.Lock,
+                        title = stringResource(R.string.settings_telemetry_title),
+                        supporting = stringResource(R.string.settings_telemetry_description),
+                        trailing = {
+                            Switch(
+                                checked = telemetryConsent == TelemetryConsent.GRANTED,
+                                onCheckedChange = { granted ->
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    telemetryConsentViewModel.answer(granted)
+                                }
+                            )
                         }
                     )
                     Divider()

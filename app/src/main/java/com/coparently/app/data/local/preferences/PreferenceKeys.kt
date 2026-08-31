@@ -25,6 +25,18 @@ object PreferenceKeys {
      */
     const val DISMISSED_CUSTODY_CHANGE_AT = "calendar_dismissed_custody_change_at"
 
+    /**
+     * The user's answer to the analytics and crash-reporting question, as a
+     * [com.coparently.app.domain.telemetry.TelemetryConsent] name.
+     *
+     * **Deliberately not exempt from `EncryptedPreferences.clear()`.** Sign-out wipes it, and the
+     * next person to reach this device is asked again — which is the right answer for a consent,
+     * because consent is given by a person and this store cannot tell which person is holding the
+     * phone. The cost of the wipe is one extra screen; the value stored is "unanswered", which
+     * collects nothing, so nothing leaks in the gap.
+     */
+    const val TELEMETRY_CONSENT = "telemetry_consent"
+
     /** Separator for multi-value string preferences. */
     const val LIST_SEPARATOR = "|"
 

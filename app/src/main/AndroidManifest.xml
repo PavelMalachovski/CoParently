@@ -149,7 +149,24 @@
             android:name="com.google.firebase.messaging.default_notification_icon"
             android:resource="@drawable/ic_notification" />
 
-        <!-- Disable automatic initialization of Firebase Analytics (optional) -->
+        <!--
+          REL-5. Both SDKs auto-initialise before any of our code runs, so the consent gate has
+          to start here rather than in Kotlin: without these two entries a release build collects
+          in the window between process start and TelemetryConsentApplier.start(), which is
+          exactly the "collects by default" the gate exists to end.
+
+          `..._collection_enabled=false` is the resumable knob — setAnalyticsCollectionEnabled /
+          setCrashlyticsCollectionEnabled can turn it back on once the user agrees.
+          `..._collection_deactivated` below is a DIFFERENT knob and must stay false: setting it
+          true disables Analytics permanently and no runtime call can re-enable it, so a granted
+          consent would silently do nothing.
+        -->
+        <meta-data
+            android:name="firebase_analytics_collection_enabled"
+            android:value="false" />
+        <meta-data
+            android:name="firebase_crashlytics_collection_enabled"
+            android:value="false" />
         <meta-data
             android:name="firebase_analytics_collection_deactivated"
             android:value="false" />

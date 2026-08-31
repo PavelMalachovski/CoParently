@@ -1,9 +1,11 @@
 package com.coparently.app.data.repository
 
 import com.coparently.app.data.local.preferences.EncryptedPreferences
+import com.coparently.app.data.local.preferences.PreferenceKeys
 import com.coparently.app.domain.money.SupportedCurrency
 import com.coparently.app.domain.money.defaultCurrencyForRegion
 import com.coparently.app.domain.repository.PreferencesRepository
+import com.coparently.app.domain.telemetry.TelemetryConsent
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -22,6 +24,15 @@ class PreferencesRepositoryImpl @Inject constructor(
 
     private val _darkThemeFlow = MutableStateFlow<Boolean?>(null)
     private val _defaultCurrencyFlow = MutableStateFlow(resolveInitialCurrency())
+
+    // Read once, here, rather than on first collection: the navigation graph decides its start
+    // destination from this, and a flow that emitted a placeholder first would flash the consent
+    // screen at somebody who has already answered.
+    private val _telemetryConsentFlow = MutableStateFlow(
+        TelemetryConsent.fromStored(
+            encryptedPreferences.getString(PreferenceKeys.TELEMETRY_CONSENT, null)
+        )
+    )
 
     init {
         // Initialize with current value
@@ -63,6 +74,14 @@ class PreferencesRepositoryImpl @Inject constructor(
     override suspend fun setDefaultCurrency(currency: SupportedCurrency) {
         encryptedPreferences.putDefaultCurrency(currency.code)
         _defaultCurrencyFlow.value = currency
+    }
+
+    override fun getTelemetryConsentFlow(): Flow<TelemetryConsent> =
+        _telemetryConsentFlow.asStateFlow()
+
+    override suspend fun setTelemetryConsent(consent: TelemetryConsent) {
+        encryptedPreferences.putString(PreferenceKeys.TELEMETRY_CONSENT, consent.stored)
+        _telemetryConsentFlow.value = consent
     }
 }
 

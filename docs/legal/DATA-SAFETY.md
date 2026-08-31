@@ -63,10 +63,21 @@ worth saying so in the listing — it is a genuine differentiator in this catego
 **Private events never leave the device.** Events marked private are excluded from every sync
 path. They are not collected in Play's sense.
 
-**Analytics and crash reporting are release-only** as of the August 2026 audit; debug builds
-no longer report. A consent gate is still outstanding (`docs/ROADMAP.md`, **REL-5**) — **update this
-declaration when it ships**, because at that point collection becomes optional rather than
-required.
+**Analytics and crash reporting are optional, and off until asked** (REL-5, shipped). Three
+things now have to be true at once before either SDK collects anything, and this is what the
+declaration should say:
+
+1. Both auto-initialise **switched off**: `firebase_analytics_collection_enabled` and
+   `firebase_crashlytics_collection_enabled` are `false` in the manifest, so nothing is collected
+   in the window between process start and the app applying an answer.
+2. The user has answered **yes** on the first-run screen, which is shown before sign-in and is
+   changeable afterwards in Settings → App. An unanswered or declined state collects nothing.
+3. The build allows it — release only, as of the August 2026 audit; debug builds never report
+   whatever was answered.
+
+**Declare both as optional, not required**, and declare the answer as changeable. The relevant
+Play data types are *Crash logs* and *Diagnostics* / *App interactions* under App activity — all
+"Collected, not shared", "Optional", purpose: Analytics and App functionality.
 
 **No advertising, no ad IDs, no tracking.** The app declares no advertising SDK and does not
 link data to third-party identifiers.

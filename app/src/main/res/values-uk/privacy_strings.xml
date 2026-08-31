@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Analytics and crash-reporting consent (REL-5).
+
+  The wording is load-bearing, not decorative: the body says what is sent, the "never"
+  line says what is not, and the third line says the app is identical either way. A
+  consent screen that leaves a parent guessing what refusing costs them is not one.
+-->
+<resources>
+    <string name="consent_title">Допомогти покращити CoPlanly?</string>
+    <string name="consent_body">CoPlanly може надсилати анонімну статистику використання та звіти про збої. Вони показують, які екрани працюють повільно і які збої справжні, — і більше нічого.</string>
+    <string name="consent_never">Ніколи не надсилається: імена та медичні дані ваших дітей, ваші повідомлення, події, витрати й чеки. Усе це лишається на вашому пристрої та між вами двома.</string>
+    <string name="consent_changeable">Це можна змінити будь-коли в налаштуваннях. Застосунок працює однаково в обох випадках.</string>
+    <string name="consent_accept">Так, надсилати статистику</string>
+    <string name="consent_decline">Ні, нічого не надсилати</string>
+    <string name="settings_telemetry_title">Статистика використання</string>
+    <string name="settings_telemetry_description">Анонімна статистика та звіти про збої. Ніколи — дані вашої родини.</string>
+</resources>
