@@ -60,15 +60,23 @@
 }
 
 # ---- SQLCipher (SEC-2) ---------------------------------------------------
-# The database is opened through `net.zetetic.database.sqlcipher`, whose classes are
-# reached from JNI as well as from Kotlin: the native layer calls back into them by
-# name, so R8 renaming one produces a `NoSuchMethodError` at the first query rather
-# than a build error. `includedescriptorclasses` keeps the types in those signatures
-# too, for the same reason.
+# The database is opened through `net.zetetic.database.sqlcipher`, whose native layer
+# calls back into Java by name: R8 renaming one of those members produces a
+# `NoSuchMethodError` at the first query rather than a build error, in a release
+# build only, before Room's first statement runs — a launch crash, not a degradation.
 #
-# Failing here is not a degradation but a launch crash — the open helper is built
-# before Room's first statement runs — and the release build is the only place it
-# would appear, which is exactly the shape of defect a keep rule exists to prevent.
--keep,includedescriptorclasses class net.zetetic.database.** { *; }
--keep,includedescriptorclasses interface net.zetetic.database.** { *; }
+# This is the first rule of the `proguard.txt` the AAR itself ships, copied verbatim
+# (AGP extracts and applies that file, so this is a duplicate rather than a fix). It is
+# repeated here on purpose: if that extraction ever silently stops happening, the
+# failure is a crash on a shipped build, and the cost of the duplicate is nothing. The
+# two `-keepclassmembers` rules the AAR also carries are left to it — they cover
+# `SQLiteCustomFunction` and `SQLiteDebug$PagerStats`, neither of which this app
+# reaches. Deliberately not a blanket `{ *; }` keep of the package: that would pin
+# megabytes of unreachable code and hide which members actually have to survive.
+-keep class net.zetetic.** {
+    native <methods>;
+    private native <methods>;
+    public <init>(...);
+    long mNativeHandle;
+}
 -dontwarn net.zetetic.database.**

@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.sqlite.db.SupportSQLiteOpenHelper
 import com.coparently.app.data.crashlytics.CrashlyticsManager
 import dagger.hilt.android.qualifiers.ApplicationContext
+import net.zetetic.database.DatabaseErrorHandler
 import net.zetetic.database.sqlcipher.SQLiteDatabase
 import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
 import java.io.File
@@ -41,9 +42,14 @@ import javax.inject.Singleton
  *
  * **Unverified on a device at the time of writing.** The project has no instrumented test job
  * (CQ-1) and the sessions that produced this have no Android SDK, so the pure decision layer is
- * unit-tested and the SQLCipher calls are not exercised at all. The app is not published, so no
- * install but the developer's own is at stake — but the first run on a phone with real data is an
- * acceptance step somebody has to perform, and it belongs in REL-7's list.
+ * unit-tested and the SQLCipher calls are not exercised at all. What *was* checked is that they
+ * exist and mean what they say: every signature here was read off the AAR's own bytecode rather
+ * than from memory, including the two that decide whether this is safe — `SQLiteConnection`
+ * applies a key only when the passphrase array is non-empty (so the empty one below really does
+ * open a plaintext file), and the default `DatabaseErrorHandler` **deletes** the database it is
+ * handed, which is why [KeepOnCorruption] is passed to every open. The app is not published, so
+ * no install but the developer's own is at stake — but the first run on a phone with real data is
+ * an acceptance step somebody has to perform, and it belongs in REL-7's list.
  */
 @Singleton
 class EncryptedDatabase @Inject constructor(
@@ -173,7 +179,14 @@ class EncryptedDatabase @Inject constructor(
      * nothing to migrate.
      */
     private fun exportEncrypted(database: File, export: File, key: String): Int {
-        val source = SQLiteDatabase.openOrCreateDatabase(database.absolutePath, "", NO_FACTORY)
+        // An empty passphrase is not a weak key: `SQLiteConnection` applies one only when the
+        // byte array is non-empty, so this opens the plaintext file as plain SQLite.
+        val source = SQLiteDatabase.openOrCreateDatabase(
+            database.absolutePath,
+            "",
+            NO_FACTORY,
+            KeepOnCorruption
+        )
         try {
             val version = source.version
             source.execSQL("ATTACH DATABASE '${quote(export.absolutePath)}' AS encrypted KEY '$key'")
@@ -197,7 +210,12 @@ class EncryptedDatabase @Inject constructor(
      * not touch the file until the first read.
      */
     private fun verify(export: File, key: String, expectedVersion: Int) {
-        val copy = SQLiteDatabase.openOrCreateDatabase(export.absolutePath, key, NO_FACTORY)
+        val copy = SQLiteDatabase.openOrCreateDatabase(
+            export.absolutePath,
+            key,
+            NO_FACTORY,
+            KeepOnCorruption
+        )
         try {
             val tables = copy.rawQuery("SELECT count(*) FROM sqlite_master", NO_ARGS).use {
                 if (it.moveToFirst()) it.getInt(0) else 0
@@ -241,6 +259,21 @@ class EncryptedDatabase @Inject constructor(
 
     /** Doubles single quotes so a path can go inside a SQL string literal. */
     private fun quote(value: String): String = value.replace("'", "''")
+
+    /**
+     * A corruption handler that does not delete the database it is handed.
+     *
+     * Passed to every open in this class, because the library's default handler **deletes the
+     * file**. On the plaintext original that is the one outcome this whole class is arranged to
+     * prevent: a transient corruption report during the export would take the family's calendar
+     * with it, before any encrypted copy exists. Reporting and letting the exception reach
+     * [fallBackTo] leaves the file where it is and the next launch free to try again.
+     */
+    private object KeepOnCorruption : DatabaseErrorHandler {
+        override fun onCorruption(database: SQLiteDatabase) {
+            Log.e(TAG, "SQLite reported corruption in ${database.path}; leaving the file alone")
+        }
+    }
 
     companion object {
         private const val TAG = "EncryptedDatabase"
