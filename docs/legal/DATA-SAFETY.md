@@ -15,6 +15,7 @@
 | --- | --- | --- |
 | Does your app collect or share any of the required user data types? | **Yes** | |
 | Is all data encrypted in transit? | **Yes** | Firebase SDKs use TLS throughout |
+| Is data encrypted at rest on the device? | **Yes** | Room opens through SQLCipher; the passphrase is wrapped by an Android Keystore key (SEC-2). Play does not ask this question — the row is here because the privacy policy makes the claim and something has to say what backs it |
 | Do you provide a way for users to request that their data is deleted? | **Yes** | Settings → Account → Delete account, backed by the `deleteAccount` callable |
 | Is data collection required, or can users choose? | **Required** for the account and shared content; **optional** for the medical profile, photos, Google Calendar, and — since REL-5 — analytics and crash reporting |
 | Have you committed to Play's Families policy? | {{DECIDE}} — the app is for parents, not children, and offers no child accounts |

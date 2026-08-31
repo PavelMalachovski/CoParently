@@ -518,6 +518,24 @@ Data flow: UI → ViewModel → UseCase → Repository → Room (source of truth
     flows this project has already had to optimise twice for that. `ParentSlotMigrator` cannot
     take its `familyId` scope yet either: a row whose backfill has not run carries null, so
     scoping the re-stamp on it would silently skip exactly the rows that need it.
+20. **The database file is encrypted, and the passphrase is the one piece of state that must never
+    be re-minted** (SEC-2, Aug 2026). Room opens through SQLCipher: `EncryptedDatabase` builds the
+    open helper and converts an existing plaintext file on the way, `DatabaseKey` holds 256 random
+    bits wrapped by `EncryptionManager` under a Keystore key, and `SqlCipherMigration` decides —
+    from the files on disk, never from a flag — where a killed process left off. Four things not to
+    undo. **The passphrase does not go in `EncryptedPreferences`**, whose recovery clears the store
+    and mints a fresh keyset: correct for the OAuth token it was written for, and here it would
+    hand out a different key on the next launch and leave the database unopenable. **It is written
+    with `commit`, not `apply`** — it has to be on disk before anything is encrypted with it.
+    **The plaintext file is deleted only after a verified encrypted copy exists beside it under a
+    different name**, which is the whole safety argument; a failure that leaves it intact falls
+    back to opening it unencrypted and retries next launch, because crashing makes the app unusable
+    and wiping trades data the user has for a property they did not have a moment ago. And
+    **field-level encryption is not the smaller version of this**: `child_info` syncs and the key is
+    device-bound, so an encrypted field arrives at the co-parent's phone as ciphertext their
+    Keystore cannot open — `SensitiveMedicalData` was deleted for saying otherwise. The SQLCipher
+    calls have **never run**: there is no instrumented job (CQ-1) and no Android SDK in the sessions
+    that wrote them, so the first launch on a device holding real data is an acceptance step.
 
 ## Known issues / do not "fix" silently
 

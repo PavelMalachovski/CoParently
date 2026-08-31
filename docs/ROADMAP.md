@@ -67,9 +67,6 @@ invocation is yours.
 | --- | --- | --- | --- |
 | **M-5** | Multi-family cleanup: delete `partnerId`, `User.role`, `Event.sharedWith`, `isPartnerOf` — **after** the ops steps in REL-3 | P2 | M |
 | **M-8** | M-4's leftovers: badges that count across families, `familyId` on pushes, a switcher chip in the top bar | P2 | M |
-| **SEC-2** | Room is not encrypted at rest | P1 | M |
-| **CQ-5** | Sync downloads the entire event collection every 15 minutes | P1 | M |
-| **CQ-6 + CQ-8** | The chat's Room query is unbounded, and a failed listener gives up for the life of the process. One piece of work, not two | P2 | M |
 | **CQ-11** | The declared error model is not the one in use | P3 | S |
 | **CQ-13** | Seventeen of twenty-five ViewModels have no tests | P2 | M |
 | **CQ-14** | User-facing strings produced inside ViewModels and services | P2 | M |
@@ -82,7 +79,7 @@ invocation is yours.
 | **UX-16** | Drag an event to reschedule it (MVP 3) | P3 | S |
 | **MON-2** | Verify the market facts — most of them are public pages | P0 | S |
 | **MON-3** | Export to PDF/CSV — the first paid feature (needs MON-4 first) | P1 | M |
-| **MON-4** | Decide what a court-facing record guarantees | P1 | M |
+| **MON-4** | The paper is written; three answers are owed by the owner, and MON-3 waits on them | P1 | S |
 | **MON-5** | Digitise the official Rodičovský plán | P1 | M |
 | **MON-6b** | Half-day custody, so contact afternoons can be described | P2 | L |
 | **MON-8** | Bakaláři / EduPage school import — the parsing, once you supply a real export | P2 | L |
@@ -131,17 +128,17 @@ invocation is yours.
 
 In this order, and each is genuinely finishable in the cloud:
 
-1. **MON-4 → MON-3** — settle what a court-facing record guarantees, then build the export. In that
-   order: an export of a record nobody can vouch for is worth nothing to a lawyer.
-2. **CQ-5** — the sync downloads every event every fifteen minutes, on both phones. It grows worse
-   with tenure, so it lands on your longest-standing users first. Settle the two design questions
-   in the item before writing any of it.
-3. **CQ-6 + CQ-8** together — the chat's last unbounded query and a listener that gives up for the
-   life of the process. Neither can sensibly be done without the other.
-4. **SEC-2** — Room is not encrypted at rest, and a child's medical profile is in it.
+1. **MON-5** — digitise the official Rodičovský plán. It is the one artefact a Czech court already
+   recognises, and the app cannot produce it.
+2. **MON-3** — the export, and the first thing anybody would pay for. It is **blocked on three
+   lines of `docs/DESIGN-court-record.md` §9 that only the owner can write**: an export of a record
+   nobody can vouch for is worth nothing to a lawyer. Fill the form in and this is a cloud task.
+3. **CQ-13** — seventeen of twenty-five ViewModels have no tests. `SettingsViewModel` is the one
+   to start with: it is named in `CLAUDE.md` as the gap to close when Settings is next touched.
 
-*(Everything that headed this list — **M-6**, **CQ-19**, **CQ-12**, **CQ-1**'s bleeding half, and
-the three honesty gaps **CQ-20**, **UX-17**, **UX-18** — is done.)*
+*(Everything that headed this list — **M-6**, **CQ-19**, **CQ-12**, **CQ-1**'s bleeding half,
+**CQ-5**, **CQ-6 + CQ-8**, **SEC-2**, and the three honesty gaps **CQ-20**, **UX-17**, **UX-18** —
+is done. **SEC-2** carries one caveat that is not a cloud task: see its entry.)*
 
 ---
 
@@ -444,15 +441,57 @@ original.
    and the key are gone (**MON-7**), so this is a precondition rather than a live hole — nothing
    goes to a model again without the proxy in front of it.
 
-### SEC-2 · P1 · M · Room is not encrypted at rest
+### SEC-2 · **DONE, with one step nobody has taken** · P1 · M · Room is not encrypted at rest
 
-**Where:** ☁️ cloud writes it; ⚙️ the migration wants the emulator job from CQ-1 before it can be
-proved.
+**Where:** ☁️ written; 👁 **the first launch on a phone that already holds data is an acceptance
+step, and it has not been run.** See the caveat at the end — it is the honest state of this item.
 
-`EncryptionManager` (AES-256-GCM, Keystore) exists, is correct, and **is not applied to the
-database**. A child's medical profile, the full chat history and every expense sit in plain SQLite.
-SQLCipher plus a migration, or — as a smaller first step — field-level encryption of the medical
-profile alone. Audit §3.3.
+Room opens through SQLCipher. The passphrase is 256 random bits, wrapped by the existing
+`EncryptionManager` under an Android Keystore key and kept in a preferences file of its own; the
+database file, header included, is ciphertext. `allowBackup="false"` and `data_extraction_rules.xml`
+had already closed cloud backup and device transfer, so what this closes is the residual case: a
+rooted or physically held device, where a child's medical profile, the whole chat history and the
+`isPrivate` events that never leave the phone were readable by any SQLite viewer.
+
+**The audit's "smaller first step" was not smaller, it was broken, and the reasoning is worth
+keeping.** Field-level encryption of the medical profile only sounds cheaper until you notice that
+`child_info` syncs and the key is device-bound: the co-parent's phone would receive ciphertext its
+own Keystore cannot open. Making that work means decrypting on every way out and re-encrypting on
+every way in, forever, to cover one table instead of eleven. `SensitiveMedicalData`, the unused
+half-implementation of exactly that idea, is deleted with this change rather than left as an
+invitation.
+
+**Three decisions worth not re-litigating.**
+
+- **The passphrase does not live in `EncryptedPreferences`,** although that class is also
+  Keystore-backed. When it cannot open its store it clears the file and mints a fresh keyset —
+  right for the Google refresh token it was written for, where the cost is one re-authorisation,
+  and catastrophic here: it would hand out a *different* key on the next launch and leave the
+  database unopenable with nothing to say why.
+- **Where a half-finished conversion got to is read from the files, not from a flag.**
+  `SqlCipherMigration.next` is a total function of four booleans and `SqlCipherMigrationTest` walks
+  all sixteen states, because four of them are ones where the wrong answer deletes the only copy of
+  a family's calendar. A flag in preferences can be cleared, restored, or written out of order with
+  the thing it describes; the SQLite header in the file cannot disagree with the file it is in.
+- **The plaintext database is deleted only after a verified encrypted copy exists beside it under
+  a different name.** That ordering is the whole safety argument; nothing may reorder it. A failure
+  that leaves the plaintext file intact falls back to opening it unencrypted and retries next
+  launch — deliberately, because crashing makes the app unusable and wiping trades data the user
+  has for a property they did not have a moment ago.
+
+**The caveat, stated plainly: none of the SQLCipher calls have ever run.** There is no instrumented
+job (**CQ-1**) and the sessions that wrote this have no Android SDK, so the decision layer is unit
+tested and the export, the verification and the swap are not exercised at all. Nothing is published,
+so no install but the developer's own is at stake — but *the first launch on a device that already
+has data is an acceptance step somebody has to perform*, and it belongs in **REL-7**'s list. What to
+watch for: the app opens, the calendar and chat are still there, and
+`adb shell run-as app.coplanly` shows the database file no longer starting with `SQLite format 3`.
+
+**One thing rides on that check.** `docs/legal/PRIVACY-POLICY.md` now tells the user their database
+is encrypted on the device, and `DATA-SAFETY.md` records what backs the claim. Neither document is
+hosted yet (**REL-4**), so nothing false is published — but if the acceptance run fails, the
+sentence comes out of the policy in the same commit as whatever fixes it. A privacy policy is the
+last place to leave a claim the code does not keep.
 
 ### SEC-5 · P3 · S · `androidx.security:security-crypto` is on an alpha
 
