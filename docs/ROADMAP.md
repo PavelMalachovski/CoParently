@@ -16,6 +16,12 @@ Last updated: 2026-08-25, after PR #76 (multi-family, M-1 … M-4). The reasonin
 lives in `docs/AUDIT-2026-08.md` under the § numbers cited; `docs/DESIGN-multi-family.md` is the
 plan of record for the `M-*` items.
 
+> **Companion document:** `docs/LAUNCH-PLAYBOOK.md` takes the release blockers (§3), MVP 3 (§2) and
+> monetisation (§7) and turns them into an order — the Google Play publication runbook, the store
+> listing and professional-channel drafts, the free/paid line, and a 90-day sequence. This document
+> stays the plan of record for *what* is open; that one is *in what order, by whom, and in whose
+> words*.
+
 ## How to read this
 
 **Every item has a stable id** (`REL-3`, `SEC-2`, `CQ-7`, `UX-11`, `MON-5`, `FAM-4`, `M-6`). Use it
@@ -237,12 +243,20 @@ is gitignored, so the plugin is not applied there.
 **Where:** 💻 yours only. The ~20-line `signingConfig` block can be prepared in the cloud; nothing
 else here can.
 
-- [ ] Generate a release keystore.
-- [ ] **Back it up in two places.** Losing it means the app can never be updated again — not
-      re-signed, not recovered, not appealed. The single most irreversible item in this document.
+**A correction to what this item used to say.** It described the keystore as "the single most
+irreversible item in this document", on the reasoning that losing it means the app can never be
+updated again. That is true of the **legacy self-signing** model and not of the one a new app is
+placed in: a new Play app is enrolled in **Play App Signing** and uploads an AAB, so Google holds
+the app signing key and you hold only an *upload* key — which can be reset through Play support if
+lost. Back it up anyway (a reset costs days), but the genuinely irreversible decisions are the
+`applicationId`, the Firestore region, and the first published price tier's currency set. Verify the
+enrolment rule in the console rather than on this sentence; Play's requirements move.
+
+- [ ] Generate an upload keystore, and back it up in two places.
 - [ ] Add a `signingConfig` reading passwords from `~/.gradle/gradle.properties` or the
       environment, never a tracked file — the pattern `GOOGLE_CLIENT_SECRET` already uses.
-- [ ] Decide whether to enrol in Play App Signing.
+- [ ] `./gradlew bundleRelease` — Play takes an AAB, not an APK. Keep each release's mapping file,
+      or Crashlytics stack traces are unreadable.
 
 ### REL-3 · P0 · Deploy the rules, the functions, and the storage rules
 
