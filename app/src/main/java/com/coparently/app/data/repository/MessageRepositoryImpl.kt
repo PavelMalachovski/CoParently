@@ -94,7 +94,7 @@ class MessageRepositoryImpl @Inject constructor(
      * that failure escapes into the caller's `viewModelScope.launch`, where nothing handles
      * it and the process is killed — which is exactly what used to happen on opening Chat.
      */
-    override fun observeMessages(conversationId: String): Flow<List<Message>> {
+    override fun observeMessages(conversationId: String, limit: Int): Flow<List<Message>> {
         val mirror = firestoreMessageDataSource.getMessages(conversationId)
             .onEach { documents -> mirrorMessages(documents) }
             .reconnecting("Messages", conversationId)
@@ -110,7 +110,10 @@ class MessageRepositoryImpl @Inject constructor(
             }
             .mirrorOnly<List<Message>>()
 
-        val local = messageDao.getMessages(conversationId)
+        // Bounded (CQ-6). The remote mirror above keeps its own, larger window — what the device
+        // is willing to receive is a different decision from what one screen renders, and the
+        // mirror's job is to fill Room, not to answer this query.
+        val local = messageDao.getMessages(conversationId, limit)
             .map { entities -> entities.map { it.toDomain() } }
 
         return merge(mirror, local)

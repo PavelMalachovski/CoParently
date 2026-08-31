@@ -94,6 +94,7 @@ fun ChatScreen(
 ) {
     val messages by viewModel.messages.collectAsState()
     val currentUserId by viewModel.currentUserId.collectAsState()
+    val canLoadEarlier by viewModel.canLoadEarlier.collectAsState()
     val conversations = viewModel.conversations.collectAsState().value.valueOrNull.orEmpty()
     val upcomingEvents by viewModel.upcomingEvents.collectAsState()
 
@@ -171,6 +172,8 @@ fun ChatScreen(
             MessagesList(
                 messages = messages,
                 currentUserId = currentUserId,
+                canLoadEarlier = canLoadEarlier,
+                onLoadEarlier = viewModel::loadEarlier,
                 onRefresh = {
                     viewModel.refreshThread()
                 },

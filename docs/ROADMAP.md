@@ -553,7 +553,7 @@ whole events table plus one to all expenses and filters the current month **in m
 `EventDao.getEventsForParentPaginated` sits written and never called. That is a Room-side cost, not
 a Firestore bill, and it wants its own change. Audit §8.6.
 
-### CQ-6 + CQ-8 · **CQ-8 DONE; CQ-6's last half open** · P2 · M · The chat's last unbounded query, and a listener that gives up
+### CQ-6 + CQ-8 · **DONE** · P2 · M · The chat's last unbounded query, and a listener that gives up
 
 **Where:** ☁️ cloud.
 
@@ -577,10 +577,21 @@ one and still holds; the outer loop is bounded in *rate* rather than in count, a
 injected so the give-up path is testable instead of spinning the virtual clock — which is exactly
 what `ChatMirrorTest` does.
 
-**What is left of CQ-6:** `MessageDao.getMessages` is still unbounded, so the chat *screen* still
-materialises the whole thread out of Room. Bounding it needs a "load earlier" affordance —
-silently showing only the tail would be the CQ-7 defect again in a different collection — and that
-is UI work plus five locales, which is why it is its own change rather than bundled here.
+**CQ-6's last half is done too.** `MessageDao.getMessages` takes a limit, and `ChatWindow` decides
+it: 50 on open, +50 per "load earlier". The bound is written as an inner `ORDER BY … DESC LIMIT n`
+flipped back to ascending by the outer query — a plain `ASC LIMIT n` takes the *oldest* n, which is
+the same trap `limitToLast` exists to avoid on the Firestore side of this feature.
+
+The affordance is a button at **index 0 of the list**, not pinned above it. That is what makes it
+need no scroll anchor: a reader has to be at the top to press it, so after the window grows they
+are still at the top and the newly loaded messages appear directly below. Growing rather than
+paging is the other half of that — a window that slid would take the messages they were reading off
+the bottom.
+
+`ChatWindow.hasMore` is `loaded >= limit`, derived from what came back rather than from a second
+count query. It is wrong in exactly one case, deliberately: a thread of exactly 50 messages offers
+the button once and it disappears after a grow that finds nothing. A button that does nothing once
+beats history that is silently unreachable.
 
 **The background, kept because it explains the shape.** The home screen already answered its badge
 with a Room `COUNT(*)`, and the remote listener was already bounded to the newest 200 messages

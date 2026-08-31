@@ -26,6 +26,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
@@ -153,9 +154,12 @@ private fun buildThread(messages: List<Message>): List<ThreadEntry> {
 // (the codebase's own baseline records that); explicit like the other screen composables that
 // carry the same suppression rather than relying on a baseline entry keyed to an exact signature.
 @Suppress("LongMethod")
+@Suppress("LongParameterList") // one callback per action the thread offers
 fun MessagesList(
     messages: List<Message>,
     currentUserId: String,
+    canLoadEarlier: Boolean = false,
+    onLoadEarlier: (() -> Unit)? = null,
     onRefresh: (() -> Unit)? = null,
     onEventLinkClick: ((String) -> Unit)? = null,
     onOpenInbox: (() -> Unit)? = null,
@@ -223,6 +227,20 @@ fun MessagesList(
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
+                // At index 0, above the oldest loaded message, and deliberately inside the list
+                // rather than pinned above it (CQ-6). The reader has to be at the top to see it,
+                // so after it grows the window they are still at the top and the newly loaded
+                // messages appear directly below — no scroll anchor to restore.
+                if (canLoadEarlier && onLoadEarlier != null) {
+                    item(key = "load_earlier") {
+                        TextButton(
+                            onClick = onLoadEarlier,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(stringResource(R.string.chat_load_earlier))
+                        }
+                    }
+                }
                 items(
                     count = entries.size,
                     key = { index ->

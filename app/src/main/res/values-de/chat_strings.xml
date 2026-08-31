@@ -75,4 +75,5 @@
     <string name="chat_template_schedule_change_title">Änderung des Plans</string>
     <string name="chat_template_schedule_change_content">Ich muss den Plan für [Datum] ändern. Könnten wir tauschen? Ich würde [Ersatztermin] übernehmen.</string>
     <string name="chat_failed_to_send_retry">Nicht gesendet – zum Wiederholen tippen</string>
+    <string name="chat_load_earlier">Ältere Nachrichten laden</string>
 </resources>

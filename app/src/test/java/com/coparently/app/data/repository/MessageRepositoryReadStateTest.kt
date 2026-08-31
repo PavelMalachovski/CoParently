@@ -79,7 +79,7 @@ class MessageRepositoryReadStateTest {
         val firebaseUser = mockk<FirebaseUser> { every { uid } returns UID_A }
         every { firebaseAuthService.getCurrentUser() } returns firebaseUser
         coEvery { messageDao.getConversationById(any()) } returns null
-        every { messageDao.getMessages(any()) } returns flowOf(emptyList())
+        every { messageDao.getMessages(any(), any()) } returns flowOf(emptyList())
         every { messageDao.observeConversationById(any()) } returns flowOf(null)
         // A mark is the newest message's timestamp, so every mark test needs a thread.
         coEvery { messageDao.getMessagesOnce(any()) } returns listOf(messageRow(OLDER), messageRow(NEWEST))

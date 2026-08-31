@@ -77,4 +77,5 @@
     <string name="chat_template_schedule_change_title">Зміна розкладу</string>
     <string name="chat_template_schedule_change_content">Мені потрібно змінити розклад на [дата]. Можемо помінятися? Я візьму [інша дата].</string>
     <string name="chat_failed_to_send_retry">Не надіслано — натисніть, щоб повторити</string>
+    <string name="chat_load_earlier">Завантажити давніші повідомлення</string>
 </resources>

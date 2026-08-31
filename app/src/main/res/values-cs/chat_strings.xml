@@ -81,4 +81,5 @@
     <string name="chat_template_schedule_change_title">Změna rozpisu</string>
     <string name="chat_template_schedule_change_content">Potřebuji změnit rozpis na [datum]. Mohli bychom si termíny vyměnit? Nabízím [náhradní datum].</string>
     <string name="chat_failed_to_send_retry">Neodesláno — klepnutím zkusíte znovu</string>
+    <string name="chat_load_earlier">Načíst starší zprávy</string>
 </resources>

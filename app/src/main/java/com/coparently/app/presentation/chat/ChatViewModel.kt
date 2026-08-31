@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.coparently.app.data.local.preferences.EncryptedPreferences
 import com.coparently.app.domain.chat.ChatReadState
+import com.coparently.app.domain.chat.ChatWindow
 import com.coparently.app.domain.chat.ConversationKey
 import com.coparently.app.domain.model.Conversation
 import com.coparently.app.domain.model.Event
@@ -297,16 +298,54 @@ class ChatViewModel @Inject constructor(
      * definition, so a `combine` version would subscribe to `observeMessages("")` once and
      * a thread's messages could never appear at all.
      */
+    /**
+     * How many of the thread's newest messages the screen is asking Room for (CQ-6).
+     *
+     * Reset by [onThreadOpened], so re-entering a thread starts from one screenful again rather
+     * than from however far back a previous visit had scrolled. It is a view state, not a
+     * preference: what a reader wanted to see last week is not what they want on open.
+     */
+    private val _messageWindow = MutableStateFlow(ChatWindow.INITIAL)
+
     @OptIn(ExperimentalCoroutinesApi::class)
-    private val currentThreadMessages: Flow<Pair<String?, List<Message>>> = _currentConversationId
-        .flatMapLatest { conversationId ->
-            val raw = if (conversationId == null) {
-                flowOf(emptyList())
-            } else {
-                messageRepository.observeMessages(conversationId)
+    private val currentThreadMessages: Flow<Pair<String?, List<Message>>> =
+        combine(_currentConversationId, _messageWindow) { id, window -> id to window }
+            .flatMapLatest { (conversationId, window) ->
+                val raw = if (conversationId == null) {
+                    flowOf(emptyList())
+                } else {
+                    messageRepository.observeMessages(conversationId, window)
+                }
+                raw.map { conversationId to it }
             }
-            raw.map { conversationId to it }
-        }
+
+    /**
+     * Whether there may be older messages than the ones on screen.
+     *
+     * Derived from what came back rather than from a second query — see [ChatWindow.hasMore] for
+     * why, and for the one case it gets wrong on purpose.
+     */
+    val canLoadEarlier: StateFlow<Boolean> = combine(
+        currentThreadMessages,
+        _messageWindow
+    ) { (_, loaded), window -> ChatWindow.hasMore(loaded.size, window) }
+        .catch { e -> failSoft("observe thread length", e) { emit(false) } }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(SUBSCRIPTION_TIMEOUT_MS),
+            initialValue = false
+        )
+
+    /**
+     * Widens the window by one screenful.
+     *
+     * The list grows at the top and the button stays at index 0, so the reader — who had to be at
+     * the top to press it — stays where they are and the newly loaded messages appear directly
+     * below it. That is why this does not need to restore a scroll anchor.
+     */
+    fun loadEarlier() {
+        _messageWindow.value = ChatWindow.grow(_messageWindow.value)
+    }
 
     /**
      * Messages of the selected conversation, each carrying the status the UI should render.
@@ -456,6 +495,9 @@ class ChatViewModel @Inject constructor(
      * instead of being lost on a fresh install or right after pairing.
      */
     fun onThreadOpened(conversationId: String) {
+        // Back to one screenful (CQ-6). Carrying a previous visit's window forward would make
+        // the cost of opening a thread depend on how far back somebody once scrolled in it.
+        _messageWindow.value = ChatWindow.INITIAL
         _currentConversationId.value = conversationId
         _openedConversationId.value = conversationId
         // Anything this device wrote and never got onto the server goes out now. Before the

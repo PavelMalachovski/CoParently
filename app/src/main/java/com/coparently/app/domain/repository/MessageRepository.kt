@@ -1,5 +1,6 @@
 package com.coparently.app.domain.repository
 
+import com.coparently.app.domain.chat.ChatWindow
 import com.coparently.app.domain.model.Conversation
 import com.coparently.app.domain.model.Message
 import kotlinx.coroutines.flow.Flow
@@ -33,7 +34,10 @@ interface MessageRepository {
      *
      * @param conversationId The deterministic conversation id.
      */
-    fun observeMessages(conversationId: String): Flow<List<Message>>
+    fun observeMessages(
+        conversationId: String,
+        limit: Int = ChatWindow.INITIAL
+    ): Flow<List<Message>>
 
     /**
      * Observes how many of the co-parent's messages [myUid] has not read, as a live count.

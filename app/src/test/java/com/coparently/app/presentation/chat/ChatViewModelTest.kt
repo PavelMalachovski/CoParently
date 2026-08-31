@@ -68,7 +68,7 @@ class ChatViewModelTest {
 
         messageRepository = mockk(relaxed = true) {
             every { observeConversation(any()) } returns conversationInRoom
-            every { observeMessages(any()) } returns flowOf(emptyList())
+            every { observeMessages(any(), any()) } returns flowOf(emptyList())
             coEvery { ensureConversation(any(), any(), any()) } answers {
                 ConversationKey.of(firstArg(), secondArg())
             }
@@ -169,7 +169,7 @@ class ChatViewModelTest {
 
     @Test
     fun `messages follow the selected conversation id`() = runTest {
-        every { messageRepository.observeMessages(CONVERSATION) } returns flowOf(listOf(message()))
+        every { messageRepository.observeMessages(CONVERSATION, any()) } returns flowOf(listOf(message()))
         val viewModel = createViewModel()
 
         viewModel.messages.test {
@@ -183,8 +183,8 @@ class ChatViewModelTest {
 
     @Test
     fun `switching conversation re-subscribes rather than keeping the first thread`() = runTest {
-        every { messageRepository.observeMessages(CONVERSATION) } returns flowOf(listOf(message()))
-        every { messageRepository.observeMessages(OTHER_CONVERSATION) } returns flowOf(emptyList())
+        every { messageRepository.observeMessages(CONVERSATION, any()) } returns flowOf(listOf(message()))
+        every { messageRepository.observeMessages(OTHER_CONVERSATION, any()) } returns flowOf(emptyList())
         val viewModel = createViewModel()
 
         viewModel.messages.test {
@@ -249,7 +249,7 @@ class ChatViewModelTest {
 
     @Test
     fun `opening the thread calls markRead exactly once`() = runTest {
-        every { messageRepository.observeMessages(CONVERSATION) } returns flowOf(listOf(message()))
+        every { messageRepository.observeMessages(CONVERSATION, any()) } returns flowOf(listOf(message()))
         val viewModel = createViewModel()
 
         viewModel.onThreadOpened(CONVERSATION)
@@ -260,7 +260,7 @@ class ChatViewModelTest {
 
     @Test
     fun `ingesting a message batch calls markDelivered`() = runTest {
-        every { messageRepository.observeMessages(CONVERSATION) } returns flowOf(listOf(message()))
+        every { messageRepository.observeMessages(CONVERSATION, any()) } returns flowOf(listOf(message()))
         val viewModel = createViewModel()
 
         viewModel.onThreadOpened(CONVERSATION)
@@ -272,7 +272,7 @@ class ChatViewModelTest {
     @Test
     fun `a message batch arriving while the thread stays open re-asserts both marks again`() = runTest {
         val incoming = MutableStateFlow(listOf(message()))
-        every { messageRepository.observeMessages(CONVERSATION) } returns incoming
+        every { messageRepository.observeMessages(CONVERSATION, any()) } returns incoming
         val viewModel = createViewModel()
 
         viewModel.onThreadOpened(CONVERSATION)
@@ -302,7 +302,7 @@ class ChatViewModelTest {
         // itself be enough to tell the co-parent "I read this."
         pairingState.value = PairingState.Paired(partner())
         conversationInRoom.value = existingThread()
-        every { messageRepository.observeMessages(CONVERSATION) } returns flowOf(listOf(message()))
+        every { messageRepository.observeMessages(CONVERSATION, any()) } returns flowOf(listOf(message()))
         val viewModel = createViewModel()
 
         viewModel.startConversationWithPartner { }
@@ -319,7 +319,7 @@ class ChatViewModelTest {
         pairingState.value = PairingState.Paired(partner())
         conversationInRoom.value = existingThread().copy(lastReadAt = mapOf(PARTNER to AFTER_SENT_AT_MILLIS))
         val myMessage = message().copy(senderId = UID, status = MessageSendStatus.SENT)
-        every { messageRepository.observeMessages(CONVERSATION) } returns flowOf(listOf(myMessage))
+        every { messageRepository.observeMessages(CONVERSATION, any()) } returns flowOf(listOf(myMessage))
         val viewModel = createViewModel()
 
         viewModel.messages.test {
@@ -336,7 +336,7 @@ class ChatViewModelTest {
         conversationInRoom.value =
             existingThread().copy(lastDeliveredAt = mapOf(PARTNER to AFTER_SENT_AT_MILLIS))
         val myMessage = message().copy(senderId = UID, status = MessageSendStatus.SENT)
-        every { messageRepository.observeMessages(CONVERSATION) } returns flowOf(listOf(myMessage))
+        every { messageRepository.observeMessages(CONVERSATION, any()) } returns flowOf(listOf(myMessage))
         val viewModel = createViewModel()
 
         viewModel.messages.test {
@@ -352,7 +352,7 @@ class ChatViewModelTest {
         pairingState.value = PairingState.Paired(partner())
         conversationInRoom.value = existingThread()
         val myMessage = message().copy(senderId = UID, status = MessageSendStatus.SENT)
-        every { messageRepository.observeMessages(CONVERSATION) } returns flowOf(listOf(myMessage))
+        every { messageRepository.observeMessages(CONVERSATION, any()) } returns flowOf(listOf(myMessage))
         val viewModel = createViewModel()
 
         viewModel.messages.test {
