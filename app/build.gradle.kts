@@ -25,6 +25,50 @@ if (hasGoogleServicesJson) {
     apply(plugin = "com.google.firebase.crashlytics")
 }
 
+/**
+ * A build secret, from `~/.gradle/gradle.properties` or the environment — never from a tracked
+ * file. Same rule the OAuth client secret followed before SEC-1 moved it server-side, and the
+ * reason is the same: anything committed here ships to everyone who clones the repository.
+ *
+ * A blank value counts as absent. CI sets some of these to empty strings rather than leaving them
+ * unset, and a blank password produces a keystore error that reads nothing like "not configured".
+ */
+fun buildSecret(name: String): String? =
+    (findProperty(name) as String?)?.takeIf { it.isNotBlank() }
+        ?: System.getenv(name)?.takeIf { it.isNotBlank() }
+
+// REL-2. The four halves of a release signing key. All of them or none: a config with three of
+// the four fails at signing time with a message about the missing one, which is a worse failure
+// than not signing at all.
+val releaseStoreFile = buildSecret("COPLANLY_RELEASE_STORE_FILE")
+val releaseStorePassword = buildSecret("COPLANLY_RELEASE_STORE_PASSWORD")
+val releaseKeyAlias = buildSecret("COPLANLY_RELEASE_KEY_ALIAS")
+val releaseKeyPassword = buildSecret("COPLANLY_RELEASE_KEY_PASSWORD")
+
+/**
+ * Whether this machine can sign a release build.
+ *
+ * **False must stay a working build, not a failure.** CI runs `assembleRelease` on every pull
+ * request — it is the only place R8 runs, and an R8 rewrite of a Gson model shipped to devices
+ * once already (audit §2.8) — and CI has no keystore and should never have one. So an
+ * unconfigured machine produces an *unsigned* release APK, which still proves the build survives
+ * shrinking, and only a machine holding the key produces an installable one.
+ *
+ * The file existing is part of the answer: a path pointing at nothing is a typo in
+ * `gradle.properties`, and catching it here says so instead of failing inside apksigner.
+ */
+val canSignRelease = run {
+    // Bound to a local first: a top-level `val` in a Gradle script is a property of the generated
+    // script class, and Kotlin does not smart-cast those, so `file(releaseStoreFile)` on the
+    // nullable would not compile.
+    val store = releaseStoreFile
+    store != null &&
+        releaseStorePassword != null &&
+        releaseKeyAlias != null &&
+        releaseKeyPassword != null &&
+        file(store).exists()
+}
+
 android {
     // The Kotlin package, and therefore where `R` and `BuildConfig` are generated. Deliberately
     // *not* the same as `applicationId` below: renaming the package would touch every file in
@@ -58,6 +102,19 @@ android {
         }
     }
 
+    signingConfigs {
+        // Created only when every part is present, so an unconfigured checkout has no `release`
+        // config to resolve rather than a broken one.
+        if (canSignRelease) {
+            create("release") {
+                storeFile = file(releaseStoreFile!!)
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
+    }
+
     buildTypes {
         debug {
             isMinifyEnabled = false
@@ -66,6 +123,9 @@ android {
         }
 
         release {
+            // Null on a machine without the key: the APK comes out unsigned and the build still
+            // succeeds. See `canSignRelease`.
+            signingConfig = if (canSignRelease) signingConfigs.getByName("release") else null
             isMinifyEnabled = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),

@@ -238,7 +238,7 @@ is gitignored, so the plugin is not applied there.
       rather than the applicationId, so they should be unaffected — confirm rather than assume.
 - [ ] Uninstall the old build from any test device first: to Android these are two different apps.
 
-### REL-2 · P0 · Signing configuration and the keystore
+### REL-2 · **PARTLY DONE** · P0 · Signing configuration and the keystore
 
 **Where:** 💻 yours only. The ~20-line `signingConfig` block can be prepared in the cloud; nothing
 else here can.
@@ -252,9 +252,13 @@ lost. Back it up anyway (a reset costs days), but the genuinely irreversible dec
 `applicationId`, the Firestore region, and the first published price tier's currency set. Verify the
 enrolment rule in the console rather than on this sentence; Play's requirements move.
 
-- [ ] Generate an upload keystore, and back it up in two places.
-- [ ] Add a `signingConfig` reading passwords from `~/.gradle/gradle.properties` or the
-      environment, never a tracked file — the pattern `GOOGLE_CLIENT_SECRET` already uses.
+- [x] The `signingConfig` block is written and merged. It reads `COPLANLY_RELEASE_STORE_FILE`,
+      `COPLANLY_RELEASE_STORE_PASSWORD`, `COPLANLY_RELEASE_KEY_ALIAS` and
+      `COPLANLY_RELEASE_KEY_PASSWORD` from `~/.gradle/gradle.properties` or the environment, never
+      from a tracked file. **All four or none**, and with none the release build still succeeds
+      and comes out unsigned — CI runs `assembleRelease` on every pull request and must keep doing
+      so without a key. `docs/LAUNCH-PLAYBOOK.md` §2.3 has the `keytool` line.
+- [ ] Generate the upload keystore, set those four properties, and back it up in two places.
 - [ ] `./gradlew bundleRelease` — Play takes an AAB, not an APK. Keep each release's mapping file,
       or Crashlytics stack traces are unreadable.
 
@@ -311,9 +315,14 @@ template survives that unread.
       identity, address, contact. *(cloud, once you supply the identity)*
 - [ ] Legal review. *(yours)*
 - [ ] Host both at stable URLs. Play requires the privacy-policy URL in the listing. *(yours)*
-- [ ] Publish a **web account-deletion page** — Play requires a deletion route that works without
-      the app installed; the in-app path alone does not satisfy it. *(the page is cloud work; the
-      hosting is yours)*
+- [x] The **web account-deletion page** is written: `web/delete-account/index.html`, one
+      self-contained file in Czech and English, with `web/README.md` covering the placeholders,
+      the hosting, and the two sentences that are the lawyer's to confirm rather than a
+      developer's. Every claim on it mirrors `deleteAccountDataImpl` and the privacy policy's
+      "Deleting your account" section — including the one that surprises people, that records you
+      entered vanish from your co-parent's calendar too.
+- [ ] Host it, and put the URL in **two** places: the Play Console's data-deletion field and
+      `{{WEB_DELETION_URL}}` in the privacy policy. *(yours)*
 - [ ] Link both from Settings once the URLs resolve. Deliberately not wired yet: a row pointing at
       a dead URL is exactly the affordance-promising-nothing that design rule #8 forbids.
 

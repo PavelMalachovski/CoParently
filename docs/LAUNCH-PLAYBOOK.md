@@ -175,9 +175,30 @@ backing up in two places — a reset costs days you will not want to spend — b
 irreversible item the roadmap calls it. *(The genuinely irreversible items are the `applicationId`,
 the Firestore region, and the first published price tier's currency set.)*
 
-- [ ] Generate an upload keystore.
-- [ ] Add a `signingConfig` reading passwords from `~/.gradle/gradle.properties` or the environment,
-      never a tracked file — the pattern `GOOGLE_CLIENT_SECRET` already uses.
+- [x] The `signingConfig` block is in `app/build.gradle.kts`. It reads four properties, from
+      `~/.gradle/gradle.properties` or the environment, and **never** from a tracked file:
+
+      ```properties
+      COPLANLY_RELEASE_STORE_FILE=/absolute/path/to/coplanly-upload.jks
+      COPLANLY_RELEASE_STORE_PASSWORD=…
+      COPLANLY_RELEASE_KEY_ALIAS=upload
+      COPLANLY_RELEASE_KEY_PASSWORD=…
+      ```
+
+      **All four or none.** With any of them missing — which is every CI runner, deliberately —
+      the release build still succeeds and comes out *unsigned*. That matters: `assembleRelease`
+      on every pull request is the only place R8 runs, and it has to keep running on a machine
+      that has no key and should never be given one.
+
+- [ ] Generate the upload keystore and set those four. One command, and the alias is yours to pick:
+
+      ```bash
+      keytool -genkeypair -v -keystore coplanly-upload.jks \
+              -alias upload -keyalg RSA -keysize 4096 -validity 10000
+      ```
+
+- [ ] Back it up in two places (a reset through Play support costs days — see the correction above
+      for why it is not the unrecoverable event the roadmap used to describe).
 - [ ] `./gradlew bundleRelease`, and keep the mapping file for each release: without it Crashlytics
       stack traces are unreadable.
 
@@ -207,7 +228,9 @@ evidence anyone in DACH is installing it.
   product, but must be declared as such.
 - **Account deletion.** Play requires a deletion route that works **without the app installed**.
   In-app deletion ships (PR #68, server-side teardown plus a local wipe) and is not sufficient on
-  its own; a public web page is also required. That page is cloud work, its hosting is not.
+  its own. The public page now exists — `web/delete-account/index.html`, self-contained, Czech and
+  English, with `web/README.md` for the placeholders and the hosting. What is left is hosting it
+  and putting the URL in the Play Console's data-deletion field *and* in the privacy policy.
 - **Content rating** (IARC questionnaire), **target audience and content**, **ads declaration**
   (none), **financial features** (none until MON-11), **health apps declaration** ⚠︎ — the last is
   worth reading carefully, because a shared calendar that stores a child's allergies and medication

@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Smazání účtu CoPlanly / Delete your CoPlanly account</title>
+<meta name="description" content="Jak smazat účet CoPlanly a co se přitom smaže. How to delete your CoPlanly account and what gets deleted.">
+<!--
+  REL-4. Google Play requires a publicly reachable deletion route for any app that offers account
+  creation, and the in-app path alone does not satisfy it: the page has to work for somebody who
+  has already uninstalled the app.
+
+  Deliberately one self-contained file with no external CSS, fonts, scripts or images. It has to
+  be hostable on anything — GitHub Pages, Firebase Hosting, a bucket — and a deletion page that
+  fails because a CDN is down is worse than useless. For the same reason the two languages are
+  stacked rather than behind a toggle: no JavaScript, nothing to fail, and a Play reviewer reading
+  English finds it without interacting.
+
+  Every claim here mirrors `deleteAccountDataImpl` in `functions/index.js` and the "Deleting your
+  account" section of `docs/legal/PRIVACY-POLICY.md`. If any of the three changes, all three do.
+  See `web/README.md` for what still has to be filled in and what the lawyer checks.
+-->
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #ffffff;
+    --fg: #1b1b21;
+    --muted: #55555f;
+    --rule: #e2e2e8;
+    --accent: #4f46b8;
+    --warn-bg: #fdf3f3;
+    --warn-fg: #7a2020;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1b1b21;
+      --fg: #ecebf0;
+      --muted: #a9a8b3;
+      --rule: #33333c;
+      --accent: #c2c1ff;
+      --warn-bg: #3a2224;
+      --warn-fg: #ffb4ab;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 2rem 1.25rem 4rem;
+    background: var(--bg);
+    color: var(--fg);
+    font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  main { max-width: 42rem; margin: 0 auto; }
+  h1 { font-size: 1.6rem; line-height: 1.25; margin: 0 0 .25rem; }
+  h2 { font-size: 1.2rem; margin: 2.5rem 0 .5rem; }
+  h3 { font-size: 1rem; margin: 1.5rem 0 .25rem; }
+  p, ul, ol { margin: .5rem 0; }
+  ul, ol { padding-left: 1.25rem; }
+  li { margin: .3rem 0; }
+  .lede { color: var(--muted); margin-bottom: 2rem; }
+  a { color: var(--accent); }
+  hr { border: 0; border-top: 1px solid var(--rule); margin: 3.5rem 0; }
+  .warn {
+    background: var(--warn-bg);
+    color: var(--warn-fg);
+    border-radius: .5rem;
+    padding: .9rem 1.1rem;
+    margin: 1.25rem 0;
+  }
+  .warn p { margin: 0; }
+  footer { color: var(--muted); font-size: .875rem; margin-top: 3rem; }
+  code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: .9em;
+  }
+</style>
+</head>
+<body>
+<main>
+
+<!-- ─────────────────────────── ČESKY ─────────────────────────── -->
+<section lang="cs">
+  <h1>Smazání účtu CoPlanly</h1>
+  <p class="lede">Účet můžete smazat sami v aplikaci. Pokud už ji nemáte nainstalovanou, napište
+    nám a smažeme ho za vás.</p>
+
+  <h2>1. Přímo v aplikaci</h2>
+  <ol>
+    <li>Otevřete <strong>CoPlanly</strong>.</li>
+    <li>Klepněte na ozubené kolo <strong>Nastavení</strong> (vpravo nahoře na kterékoli hlavní
+      obrazovce).</li>
+    <li>Sjeďte dolů na <strong>Účet</strong>.</li>
+    <li>Zvolte <strong>Smazat účet</strong> a potvrďte.</li>
+  </ol>
+  <p>Smazání proběhne okamžitě a je nevratné.</p>
+
+  <h2>2. Bez aplikace</h2>
+  <p>Napište z e-mailové adresy, kterou u účtu používáte, na
+    <a href="mailto:{{PRIVACY_CONTACT_EMAIL}}">{{PRIVACY_CONTACT_EMAIL}}</a> s předmětem
+    <code>Smazání účtu</code>. Účet smažeme <strong>do 30 dnů</strong>. Píšete-li z jiné adresy,
+    než je ta u účtu, musíme si ověřit, že jde skutečně o vás — jinak by kdokoli mohl nechat smazat
+    cizí účet.</p>
+
+  <h2>Co se smaže</h2>
+  <ul>
+    <li>váš profil a přihlašovací účet;</li>
+    <li>události, které jste vytvořili;</li>
+    <li>výdaje, rozpočty a účtenky, které jste zadali;</li>
+    <li>záznamy o dítěti a o zvířeti, které jste vyplnili — včetně zdravotního profilu
+      a fotografií;</li>
+    <li>rozvrh péče a dohodnutý poměr dělení výdajů;</li>
+    <li>celé vlákno zpráv s druhým rodičem;</li>
+    <li>pozvánky, které jste odeslali, a přístupy, které jste udělili prarodičům či chůvě;</li>
+    <li>čekající oznámení určená vašemu zařízení;</li>
+    <li>místní kopie dat na telefonu, ze kterého mazání spustíte.</li>
+  </ul>
+  <p>Zároveň vás odpojíme od druhého rodiče, takže jeho přístup k vašim datům končí okamžitě,
+    a odstraníme vás z okruhu příjemců u všeho, co vytvořil on.</p>
+
+  <div class="warn">
+    <p><strong>Jeden důsledek, který lidi překvapuje:</strong> záznamy, které vytvořil druhý
+      rodič, zůstávají v jeho účtu — ale záznamy, které jste vytvořili vy, zmizí i jemu. Smazat
+      svá data znamená smazat je všude, tedy i ze sdíleného kalendáře.</p>
+  </div>
+
+  <h2>Co zůstává</h2>
+  <ul>
+    <li><strong>Záznamy druhého rodiče.</strong> Jsou jeho, ne vaše; vaše jméno ani identifikátor
+      v nich už nefigurují.</li>
+    <li><strong>Nic dalšího.</strong> Neuchováváme kopii smazaného účtu pro pozdější obnovení.</li>
+  </ul>
+
+  <p>Podrobnosti o tom, jaká data zpracováváme a proč, najdete v
+    <a href="{{PRIVACY_POLICY_URL}}">zásadách ochrany osobních údajů</a>.</p>
+</section>
+
+<hr>
+
+<!-- ─────────────────────────── ENGLISH ─────────────────────────── -->
+<section lang="en">
+  <h1>Delete your CoPlanly account</h1>
+  <p class="lede">You can delete your account yourself inside the app. If you no longer have it
+    installed, email us and we will delete it for you.</p>
+
+  <h2>1. In the app</h2>
+  <ol>
+    <li>Open <strong>CoPlanly</strong>.</li>
+    <li>Tap the <strong>Settings</strong> gear (top right of any main screen).</li>
+    <li>Scroll to <strong>Account</strong>.</li>
+    <li>Choose <strong>Delete account</strong> and confirm.</li>
+  </ol>
+  <p>Deletion happens immediately and cannot be undone.</p>
+
+  <h2>2. Without the app</h2>
+  <p>Email <a href="mailto:{{PRIVACY_CONTACT_EMAIL}}">{{PRIVACY_CONTACT_EMAIL}}</a> from the
+    address your account uses, with the subject <code>Delete account</code>. We will delete it
+    <strong>within 30 days</strong>. If you write from a different address, we have to verify that
+    the account is yours first — otherwise anyone could have someone else's account deleted.</p>
+
+  <h2>What is deleted</h2>
+  <ul>
+    <li>your profile and your sign-in account;</li>
+    <li>events you created;</li>
+    <li>expenses, budgets and receipts you entered;</li>
+    <li>the records you filled in about your child and your pet — including the medical profile
+      and its photographs;</li>
+    <li>your custody schedule and the agreed expense split;</li>
+    <li>the entire message thread with your co-parent;</li>
+    <li>invitations you sent, and the access you granted to a grandparent or a sitter;</li>
+    <li>notifications queued for your device;</li>
+    <li>the local copy on the phone you delete from.</li>
+  </ul>
+  <p>We also unlink you from your co-parent, so their access to your data ends immediately, and we
+    remove you from the audience of everything they created.</p>
+
+  <div class="warn">
+    <p><strong>One consequence that surprises people:</strong> records your co-parent entered stay
+      in their account — but records you entered disappear from theirs too. Deleting your data
+      means deleting it everywhere, including from the calendar you shared.</p>
+  </div>
+
+  <h2>What is retained</h2>
+  <ul>
+    <li><strong>Your co-parent's own records.</strong> They belong to them, not to you, and your
+      name and identifier are no longer in them.</li>
+    <li><strong>Nothing else.</strong> We keep no copy of a deleted account for later
+      restoration.</li>
+  </ul>
+
+  <p>For what we process and why, see the
+    <a href="{{PRIVACY_POLICY_URL}}">privacy policy</a>.</p>
+</section>
+
+<footer>
+  <p>CoPlanly · {{LEGAL_ENTITY_NAME}} · {{REGISTERED_ADDRESS}}<br>
+    <a href="mailto:{{PRIVACY_CONTACT_EMAIL}}">{{PRIVACY_CONTACT_EMAIL}}</a></p>
+</footer>
+
+</main>
+</body>
+</html>
