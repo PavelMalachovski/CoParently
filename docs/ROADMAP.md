@@ -1099,6 +1099,17 @@ precisely to dissolve that question, but a *school* import is the opposite — i
 so it belongs to a family and must be shared. With two families on one account, "the selected one at
 import time" is a footgun the first time somebody imports while looking at the wrong family.
 
+**Settings already announces it, and that announcement has an expiry.** The Sync group carries an
+inert row — muted, not tappable, captioned "not built yet", badged *Planned* — so that a Czech
+parent opening Settings learns the app means to read their school's system, which is the first
+question this product will be asked. It is not the affordance design rule 8 forbids, because it
+promises nothing it cannot do and says so in words rather than by being greyed out.
+
+**But it is a promise with a clock on it.** Whoever finishes this item turns that row into the real
+import; whoever abandons the item deletes the row and its three strings in all five locales
+(`settings_school_import_*`). A *Planned* badge still sitting in Settings a year from now is rule 8's
+lie arriving slowly instead of at once, and it will be nobody's job unless it is written here.
+
 ### MON-9 · P2 · ongoing · Distribution: the channel is professional, not search
 
 **Where:** 💻 yours — phone calls and meetings. A session can draft the material.

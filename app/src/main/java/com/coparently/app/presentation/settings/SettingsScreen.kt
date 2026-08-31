@@ -43,6 +43,7 @@ import androidx.compose.material.icons.filled.PersonOutline
 import androidx.compose.material.icons.filled.Pets
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.AlertDialog
@@ -95,6 +96,7 @@ import com.coparently.app.domain.telemetry.TelemetryConsent
 import com.coparently.app.presentation.common.ConfirmationDialog
 import com.coparently.app.presentation.common.GroupLabel
 import com.coparently.app.presentation.common.ParentNames
+import com.coparently.app.presentation.common.PillChip
 import com.coparently.app.presentation.common.SectionGroup
 import com.coparently.app.presentation.common.SectionRow
 import com.coparently.app.presentation.common.SignedInAsRow
@@ -641,6 +643,35 @@ fun SettingsScreen(
                             }
                         )
                     }
+                    Divider()
+                    // Inert on purpose, and present on purpose.
+                    //
+                    // Design rule 8 forbids an affordance that *promises* a feature that does
+                    // not exist — one that looks tappable and then does nothing, or does
+                    // something else, the way the chat composer's "attach" button opened
+                    // message templates. This row does not pretend: it cannot be tapped, it is
+                    // drawn in the muted role, and it says in words that the feature is not
+                    // built. What it buys is that a Czech parent opening Settings learns the
+                    // app means to read their school's system, which is the first question
+                    // this product will be asked.
+                    //
+                    // **It must not outlive the feature.** When MON-8 lands this row becomes
+                    // the real import, and if MON-8 is abandoned the row comes out with it. A
+                    // "planned" badge still sitting here in a year is exactly the lie rule 8
+                    // is about, arriving slowly instead of at once.
+                    SectionRow(
+                        icon = Icons.Default.School,
+                        iconTint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        title = stringResource(R.string.settings_school_import_title),
+                        titleColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        supporting = stringResource(R.string.settings_school_import_description),
+                        trailing = {
+                            PillChip(
+                                label = stringResource(R.string.settings_school_import_planned),
+                                contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    )
                 }
             }
 

@@ -75,4 +75,7 @@
     <string name="settings_family_shown">Показана сім\'я</string>
     <string name="settings_family_switch">Перемкнути сім\'ю</string>
     <string name="settings_family_unnamed">Поки без імені</string>
+    <string name="settings_school_import_title">Імпорт із Bakaláři та EduPage</string>
+    <string name="settings_school_import_description">Шкільний розклад дитини одразу в календар. Поки не зроблено.</string>
+    <string name="settings_school_import_planned">У планах</string>
 </resources>

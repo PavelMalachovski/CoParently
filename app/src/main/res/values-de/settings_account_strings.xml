@@ -75,4 +75,7 @@
     <string name="settings_family_shown">Angezeigte Familie</string>
     <string name="settings_family_switch">Familie wechseln</string>
     <string name="settings_family_unnamed">Noch ohne Namen</string>
+    <string name="settings_school_import_title">Import aus Bakaláři und EduPage</string>
+    <string name="settings_school_import_description">Der Stundenplan Ihres Kindes direkt in den Kalender. Diese Funktion gibt es noch nicht.</string>
+    <string name="settings_school_import_planned">Geplant</string>
 </resources>
