@@ -9,3 +9,9 @@
 # exists at that moment, so a job doing it unattended would absolve each new one silently.
 
 requested: 2026-08-25 — CQ-12 (first baseline since CI landed) and CQ-1 (export schema 33)
+requested: 2026-08-31 — CQ-1 (export schema 34, added by MON-5's `parenting_plan_entries`)
+
+  Note for whoever reads this next: this run is wanted for the **schema** only. The job also
+  regenerates the detekt baseline, which accepts whatever violations exist at that moment — so
+  check the baseline half of its commit before merging. If it grew entries under the files the
+  same pull request added, that is a finding being absolved rather than fixed.

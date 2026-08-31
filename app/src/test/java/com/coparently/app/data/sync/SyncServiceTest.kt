@@ -134,6 +134,10 @@ class SyncServiceTest {
             parentSlotMigrator,
             encryptedPreferences,
             petRepository,
+            // Message, change-request, parenting-plan and family-settings repositories. All
+            // relaxed: this file tests the event and child-info passes, and each of the four is
+            // an outbox drain whose own suite covers it.
+            mockk(relaxed = true),
             mockk(relaxed = true),
             mockk(relaxed = true),
             mockk(relaxed = true),

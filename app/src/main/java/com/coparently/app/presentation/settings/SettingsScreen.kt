@@ -19,6 +19,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Assignment
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Balance
@@ -126,6 +127,7 @@ private val syncTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
  *
  * @param onNavigateUp Returns to the screen that opened Settings
  * @param onNavigateToChildInfo Opens child information
+ * @param onNavigateToParentingPlan Opens the parenting plan (MON-5)
  * @param onNavigateToPets Opens the pets list
  * @param onNavigateToPairing Opens co-parent pairing
  * @param onNavigateToFriends Opens the calendar-friend list (item 16)
@@ -146,6 +148,7 @@ private val syncTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 fun SettingsScreen(
     onNavigateUp: (() -> Unit)? = null,
     onNavigateToChildInfo: (() -> Unit)? = null,
+    onNavigateToParentingPlan: (() -> Unit)? = null,
     onNavigateToPets: (() -> Unit)? = null,
     onNavigateToPairing: (() -> Unit)? = null,
     onNavigateToFriends: (() -> Unit)? = null,
@@ -504,6 +507,23 @@ fun SettingsScreen(
                             icon = Icons.Default.DateRange,
                             title = stringResource(R.string.settings_custody_title),
                             supporting = stringResource(R.string.settings_custody_description),
+                            onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                navigate()
+                            },
+                            trailing = { Chevron() }
+                        )
+                        Divider()
+                    }
+                    // Below custody on purpose: the schedule is what a family runs on day to
+                    // day, and the plan is the longer conversation around it.
+                    onNavigateToParentingPlan?.let { navigate ->
+                        SectionRow(
+                            icon = Icons.AutoMirrored.Filled.Assignment,
+                            title = stringResource(R.string.parenting_plan_title),
+                            supporting = stringResource(
+                                R.string.parenting_plan_settings_description
+                            ),
                             onClick = {
                                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                 navigate()

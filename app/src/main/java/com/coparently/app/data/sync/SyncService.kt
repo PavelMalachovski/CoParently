@@ -15,6 +15,7 @@ import com.coparently.app.data.remote.firebase.FirestoreUserDataSource
 import com.coparently.app.data.repository.FamilySettingsRepository
 import com.coparently.app.data.repository.LocalDateJsonAdapter
 import com.coparently.app.data.repository.ParentSlotMigrator
+import com.coparently.app.data.repository.ParentingPlanRepository
 import com.coparently.app.data.session.AccountSwitchGuard
 import com.coparently.app.domain.guests.GuestGrantPolicy
 import com.coparently.app.domain.repository.ChangeRequestRepository
@@ -59,6 +60,7 @@ class SyncService @Inject constructor(
     private val petRepository: PetRepository,
     private val messageRepository: MessageRepository,
     private val changeRequestRepository: ChangeRequestRepository,
+    private val parentingPlanRepository: ParentingPlanRepository,
     private val familySettingsRepository: FamilySettingsRepository,
     private val familyIdBackfill: FamilyIdBackfill,
     private val selectedFamilySource: SelectedFamilySource,
@@ -127,6 +129,11 @@ class SyncService @Inject constructor(
             _syncStatus.value = SyncStatus.Syncing(90, 100)
             messageRepository.flushOutbox()
             changeRequestRepository.flushOutbox()
+            // Same reason again, for the parenting plan (MON-5): its screen uploads on save,
+            // and a save made offline or refused has nothing else retrying it. A parenting plan
+            // is filled in over weeks, so "it will go up next time you open the screen" is not
+            // good enough — the co-parent is waiting to answer beside it.
+            parentingPlanRepository.flushOutbox(currentUser.uid)
             // The same shape, for the one number the wizard collects before there is anybody to
             // agree it with: an unpaired account can only cache the split ratio, and until this
             // ran nothing ever carried it across. A parent who set 70/30 during onboarding paired

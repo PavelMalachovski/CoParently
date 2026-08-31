@@ -736,6 +736,32 @@ object DatabaseMigrations {
     }
 
     /**
+     * Adds `parenting_plan_entries` — the two halves of a family's parenting plan (MON-5).
+     *
+     * A composite primary key of `(familyId, authorUid)`: one row per parent per family, because
+     * a device that has been paired more than once holds a row per family and the signed-in
+     * parent's half must never be confused with the co-parent's mirrored one.
+     *
+     * Nothing to backfill. A pair with no plan has no row, and the screen shows the questions
+     * unanswered — which is what a plan nobody has started *is*.
+     */
+    val MIGRATION_33_34 = object : Migration(33, 34) {
+        override fun migrate(database: SupportSQLiteDatabase) {
+            database.execSQL(
+                "CREATE TABLE IF NOT EXISTS parenting_plan_entries (" +
+                    "familyId TEXT NOT NULL, " +
+                    "authorUid TEXT NOT NULL, " +
+                    "catalogueVersion INTEGER NOT NULL, " +
+                    "answersJson TEXT NOT NULL, " +
+                    "agreedToJson TEXT NOT NULL, " +
+                    "updatedAtMillis INTEGER NOT NULL, " +
+                    "syncedToFirestore INTEGER NOT NULL, " +
+                    "PRIMARY KEY(familyId, authorUid))"
+            )
+        }
+    }
+
+    /**
      * List of all migrations in order.
      */
     val ALL_MIGRATIONS = arrayOf(
@@ -766,6 +792,7 @@ object DatabaseMigrations {
         MIGRATION_29_30,
         MIGRATION_30_31,
         MIGRATION_31_32,
-        MIGRATION_32_33
+        MIGRATION_32_33,
+        MIGRATION_33_34
     )
 }

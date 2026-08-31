@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The parenting plan (MON-5).
+
+  The section and question wording is this project's, covering the areas § 858 of the Czech
+  občanský zákoník names as parental responsibility plus the practical headings the Ministry of
+  Justice's own parenting-plan page lists. It is deliberately NOT a copy of that Ministry form —
+  see ParentingPlanCatalogue, and parenting_plan_disclaimer, which says so to the user.
+-->
+<resources>
+    <string name="parenting_plan_title">Elternplan</string>
+    <string name="parenting_plan_settings_description">Getrennt ausfüllen und sehen, wo Sie sich schon einig sind</string>
+    <string name="parenting_plan_intro">Jede:r antwortet für sich. Niemand sieht eine Antwort beim Schreiben, und keine:r kann die des anderen ändern. Eine Frage gilt als geeinigt, wenn beide die Antwort des anderen abhaken.</string>
+    <string name="parenting_plan_disclaimer">Dies ist nicht das Formular des tschechischen Justizministeriums. Es deckt dieselben Bereiche ab, die Gesetz und Formular nennen, in eigenen Worten.</string>
+    <string name="parenting_plan_progress_agreed">%1$d von %2$d geeinigt</string>
+    <string name="parenting_plan_progress_answered">Sie haben %1$d von %2$d beantwortet</string>
+    <string name="parenting_plan_needs_coparent_title">Ein Plan braucht zwei</string>
+    <string name="parenting_plan_needs_coparent_body">Der Sinn eines Elternplans ist, dass beide antworten und dann vergleichen. Verbinden Sie sich mit dem anderen Elternteil, um zu beginnen.</string>
+    <string name="parenting_plan_your_answer">Ihre Antwort</string>
+    <string name="parenting_plan_their_answer">Antwort von %1$s</string>
+    <string name="parenting_plan_their_answer_missing">%1$s hat hierauf noch nicht geantwortet</string>
+    <string name="parenting_plan_not_answered">Nicht beantwortet</string>
+    <string name="parenting_plan_answer_hint">Schreiben Sie es so, wie Sie es einer Mediatorin sagen würden</string>
+    <string name="parenting_plan_status_unanswered">Nicht begonnen</string>
+    <string name="parenting_plan_status_only_yours">Wartet auf %1$s</string>
+    <string name="parenting_plan_status_only_theirs">Sie sind dran</string>
+    <string name="parenting_plan_status_open">Noch nicht geeinigt</string>
+    <string name="parenting_plan_status_agreed">Geeinigt</string>
+    <string name="parenting_plan_agree">Ich bin mit dieser Antwort einverstanden</string>
+    <string name="parenting_plan_agree_hint">Ändert eine:r von Ihnen eine Antwort, entfällt die Einigung und Sie haken erneut ab.</string>
+    <string name="parenting_plan_save">Speichern</string>
+    <string name="parenting_plan_back">Zurück</string>
+    <string name="parenting_plan_close">Schließen</string>
+    <string name="parenting_plan_section_residence">Wo das Kind wohnt</string>
+    <string name="parenting_plan_section_care">Alltägliche Betreuung und Übergaben</string>
+    <string name="parenting_plan_section_holidays">Ferien, Geburtstage und Familienanlässe</string>
+    <string name="parenting_plan_section_education">Schule und Freizeit</string>
+    <string name="parenting_plan_section_health">Gesundheit</string>
+    <string name="parenting_plan_section_money">Geld</string>
+    <string name="parenting_plan_section_communication">Miteinander reden und Uneinigkeit klären</string>
+    <string name="parenting_plan_q_residence_home">Wo wird das Kind wohnen, und welche Adresse wird als Wohnsitz eingetragen?</string>
+    <string name="parenting_plan_q_residence_change">Wie entscheiden Sie, wenn einer von Ihnen umziehen möchte, und wie viel Vorlauf geben Sie einander?</string>
+    <string name="parenting_plan_q_care_weekday">Wie teilen Sie Wochentage, Wochenenden und Schulferien untereinander auf?</string>
+    <string name="parenting_plan_q_care_handover">Wo und wann finden die Übergaben statt, und wer bringt das Kind hin?</string>
+    <string name="parenting_plan_q_holidays_school">Wie teilen Sie die Schulferien jedes Jahr auf?</string>
+    <string name="parenting_plan_q_holidays_special">Wie werden Geburtstage, Weihnachten und andere Familienanlässe verbracht?</string>
+    <string name="parenting_plan_q_education_school">Welche Schule oder Kita besucht das Kind, und wer spricht mit der Schule?</string>
+    <string name="parenting_plan_q_education_activities">Welche Freizeitaktivitäten macht das Kind, und wer organisiert und bezahlt sie?</string>
+    <string name="parenting_plan_q_health_doctor">Bei welchen Ärzten ist das Kind angemeldet, und wie halten Sie einander auf dem Laufenden?</string>
+    <string name="parenting_plan_q_health_decisions">Wie wird über eine Behandlung entschieden, die Zeit hat?</string>
+    <string name="parenting_plan_q_money_maintenance">Welcher Unterhalt wird gezahlt, von wem, und zu welchem Tag im Monat?</string>
+    <string name="parenting_plan_q_money_extraordinary">Wie teilen Sie einmalige Kosten — Brille, Klassenfahrt, Laptop?</string>
+    <string name="parenting_plan_q_communication_between_parents">Wie geben Sie Informationen über das Kind weiter, und wie schnell erwarten Sie eine Antwort?</string>
+    <string name="parenting_plan_q_communication_disagreement">Was tun Sie, wenn Sie sich nicht einigen können?</string>
+</resources>

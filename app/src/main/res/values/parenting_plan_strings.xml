@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The parenting plan (MON-5).
+
+  The section and question wording is this project's, covering the areas § 858 of the Czech
+  občanský zákoník names as parental responsibility plus the practical headings the Ministry of
+  Justice's own parenting-plan page lists. It is deliberately NOT a copy of that Ministry form —
+  see ParentingPlanCatalogue, and parenting_plan_disclaimer, which says so to the user.
+-->
+<resources>
+    <string name="parenting_plan_title">Parenting plan</string>
+    <string name="parenting_plan_settings_description">Answer separately, then see where you already agree</string>
+    <string name="parenting_plan_intro">Each of you answers on your own. Nobody sees a half being written, and neither of you can edit the other\'s. Where you both tick the other\'s answer, the question counts as agreed.</string>
+    <string name="parenting_plan_disclaimer">This is not the Ministry of Justice form. It covers the same areas the law and that form name, in our own words.</string>
+    <string name="parenting_plan_progress_agreed">%1$d of %2$d agreed</string>
+    <string name="parenting_plan_progress_answered">You have answered %1$d of %2$d</string>
+    <string name="parenting_plan_needs_coparent_title">A plan takes two</string>
+    <string name="parenting_plan_needs_coparent_body">The point of a parenting plan is that both of you answer and then compare. Connect with your co-parent to start one.</string>
+    <string name="parenting_plan_your_answer">Your answer</string>
+    <string name="parenting_plan_their_answer">%1$s’s answer</string>
+    <string name="parenting_plan_their_answer_missing">%1$s has not answered this yet</string>
+    <string name="parenting_plan_not_answered">Not answered</string>
+    <string name="parenting_plan_answer_hint">Write it as you would say it to a mediator</string>
+    <string name="parenting_plan_status_unanswered">Not started</string>
+    <string name="parenting_plan_status_only_yours">Waiting for %1$s</string>
+    <string name="parenting_plan_status_only_theirs">Your turn</string>
+    <string name="parenting_plan_status_open">Not agreed yet</string>
+    <string name="parenting_plan_status_agreed">Agreed</string>
+    <string name="parenting_plan_agree">I agree with this answer</string>
+    <string name="parenting_plan_agree_hint">If either of you edits an answer, the agreement lapses and you tick again.</string>
+    <string name="parenting_plan_save">Save</string>
+    <string name="parenting_plan_back">Back</string>
+    <string name="parenting_plan_close">Close</string>
+    <string name="parenting_plan_section_residence">Where the child lives</string>
+    <string name="parenting_plan_section_care">Everyday care and handovers</string>
+    <string name="parenting_plan_section_holidays">Holidays, birthdays and family occasions</string>
+    <string name="parenting_plan_section_education">School and activities</string>
+    <string name="parenting_plan_section_health">Health</string>
+    <string name="parenting_plan_section_money">Money</string>
+    <string name="parenting_plan_section_communication">Talking to each other and settling disagreements</string>
+    <string name="parenting_plan_q_residence_home">Where will the child live, and which address will be registered as their home?</string>
+    <string name="parenting_plan_q_residence_change">How will you decide if one of you wants to move, and how much notice will you give?</string>
+    <string name="parenting_plan_q_care_weekday">How will you divide weekdays, weekends and school holidays between you?</string>
+    <string name="parenting_plan_q_care_handover">Where and when will handovers happen, and who takes the child there?</string>
+    <string name="parenting_plan_q_holidays_school">How will you divide the school holidays each year?</string>
+    <string name="parenting_plan_q_holidays_special">How will birthdays, Christmas and other family occasions be spent?</string>
+    <string name="parenting_plan_q_education_school">Which school or nursery will the child attend, and who deals with the school?</string>
+    <string name="parenting_plan_q_education_activities">Which activities will the child do, and who arranges and pays for them?</string>
+    <string name="parenting_plan_q_health_doctor">Which doctors will the child be registered with, and how will you keep each other informed?</string>
+    <string name="parenting_plan_q_health_decisions">How will a decision about treatment that can wait be taken?</string>
+    <string name="parenting_plan_q_money_maintenance">What maintenance will be paid, by whom, and on what day of the month?</string>
+    <string name="parenting_plan_q_money_extraordinary">How will one-off costs — glasses, a school trip, a laptop — be shared?</string>
+    <string name="parenting_plan_q_communication_between_parents">How will you pass on information about the child, and how quickly do you expect a reply?</string>
+    <string name="parenting_plan_q_communication_disagreement">What will you do when you cannot agree?</string>
+</resources>

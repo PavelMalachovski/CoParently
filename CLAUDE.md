@@ -536,6 +536,25 @@ Data flow: UI → ViewModel → UseCase → Repository → Room (source of truth
     Keystore cannot open — `SensitiveMedicalData` was deleted for saying otherwise. The SQLCipher
     calls have **never run**: there is no instrumented job (CQ-1) and no Android SDK in the sessions
     that wrote them, so the first launch on a device holding real data is an acceptance step.
+21. **A parenting plan is two halves and a derived agreement, and neither half may write the
+    other** (MON-5, Aug 2026, schema 34). `parenting_plans/{familyId}` holds `answers`,
+    `agreedTo`, `catalogueVersions` and `updatedAt` as maps keyed by uid, and `firestore.rules`
+    lets each parent's write touch **their own key only** — the same nested `hasOnly` shape M-3
+    uses for `caresFor`, and here it is the feature rather than a safeguard: a parent who could
+    edit the other's half could put words in their mouth in a document the two of them may hand
+    to a court. Three things not to invert. **An agreement records the wording, not the
+    question**: `ParentingPlanEntry.agreedTo` maps a question id to *the co-parent's answer text
+    this parent ticked*, so an edit on either side makes the comparison stop matching and the
+    agreement lapse on both phones at once — a boolean flag would need a cross-write to clear,
+    which the rule refuses, and would go on claiming two people had settled text that no longer
+    exists. **An answer under a retired question id is kept, not deleted**, and progress is
+    counted over the catalogue rather than over the stored answers, so rewording the plan never
+    destroys what a parent wrote. And **the wording is not the Ministry of Justice's form**:
+    `ParentingPlanCatalogue` holds ids only, the five `parenting_plan_strings.xml` hold this
+    project's own questions over the areas § 858 OZ names, and `parenting_plan_disclaimer` says
+    so on screen. Replacing it with the official text is a data edit plus a [VERSION] bump;
+    `PlanStringsTest` fails the build if the ids and the wording drift apart. Until that happens
+    the disclaimer stays — see ROADMAP MON-5 for why the form could not be fetched.
 
 ## Known issues / do not "fix" silently
 

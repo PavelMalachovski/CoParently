@@ -78,6 +78,46 @@ service cloud.firestore {
              request.auth.uid in familyId.split('__');
     }
 
+    // The four maps a parenting plan document is made of, and nothing else (MON-5).
+    //
+    // Listed rather than left open so that a future field has to be added here on purpose: an
+    // unlisted key would be a place one parent could write something the per-key checks below
+    // never look at.
+    function planFieldsOnly(after) {
+      return after.keys().hasOnly(
+               ['answers', 'agreedTo', 'catalogueVersions', 'updatedAt']);
+    }
+
+    // On a create: every map carries this parent's key and no other.
+    //
+    // `.get(field, {})` throughout, because a half-written plan legitimately omits a map — a
+    // parent who has answered nothing but ticked nothing writes no `agreedTo` — and reading a
+    // missing key in Rules is an evaluation error, which denies.
+    function planHalfIsMine(after) {
+      return after.get('answers', {}).keys().hasOnly([request.auth.uid]) &&
+             after.get('agreedTo', {}).keys().hasOnly([request.auth.uid]) &&
+             after.get('catalogueVersions', {}).keys().hasOnly([request.auth.uid]) &&
+             after.get('updatedAt', {}).keys().hasOnly([request.auth.uid]);
+    }
+
+    // On an update: each map's diff touches this parent's key and no other.
+    //
+    // The diff rather than the keys, because the co-parent's half is already in the document and
+    // demanding `hasOnly([uid])` on the whole map would deny every write made after the other
+    // parent has written anything at all. Both sides go through `.get(field, {})` for the reason
+    // above — and it also means a write that removes a map outright diffs as both parents'
+    // entries changing, and is refused rather than erroring.
+    function planDiffIsMine(after, before) {
+      return after.get('answers', {}).diff(before.get('answers', {}))
+               .affectedKeys().hasOnly([request.auth.uid]) &&
+             after.get('agreedTo', {}).diff(before.get('agreedTo', {}))
+               .affectedKeys().hasOnly([request.auth.uid]) &&
+             after.get('catalogueVersions', {}).diff(before.get('catalogueVersions', {}))
+               .affectedKeys().hasOnly([request.auth.uid]) &&
+             after.get('updatedAt', {}).diff(before.get('updatedAt', {}))
+               .affectedKeys().hasOnly([request.auth.uid]);
+    }
+
     // Validate string field length (inclusive bounds).
     function isValidLength(str, minLen, maxLen) {
       return str is string && str.size() >= minLen && str.size() <= maxLen;
@@ -928,6 +968,41 @@ service cloud.firestore {
                         .affectedKeys().hasOnly([request.auth.uid]);
 
       allow create, delete: if false;
+    }
+
+    // `parenting_plans/{familyId}` — the two halves of one family's parenting plan (MON-5).
+    //
+    // One document, two halves. Every field is a map keyed by uid, and each parent writes only
+    // their own key: the practice this copies is the paper one, where each parent fills the form
+    // in separately and a mediator lays the two side by side. That makes the rule the whole
+    // security model — a parent who could edit the other's half could put words in their mouth in
+    // a document they may hand to a court.
+    //
+    // Keyed by `FamilyKey.of`, so `isFamilyMember` decides membership from the id itself with no
+    // document read, exactly as `custody_models`' `allow get` does. It also answers correctly for
+    // a document that does not exist yet, which is every pair's first read — the screen subscribes
+    // before either parent has written anything, and `resource` is null there.
+    match /parenting_plans/{planId} {
+      // Split from `list` deliberately: nothing queries this collection, and a rule that keys on
+      // the document id cannot constrain a query, so allowing `list` would be allowing a scan.
+      allow get: if isFamilyMember(planId);
+
+      // Create and update are the same intent expressed twice, because `resource` is null on a
+      // create and reading through it there is an evaluation error, not null — the hazard this
+      // file has already been bitten by more than once. On create the maps must contain nothing
+      // but this parent's key; on update the *diff* of each map must touch nothing but it.
+      allow create: if isFamilyMember(planId) &&
+                      planFieldsOnly(request.resource.data) &&
+                      planHalfIsMine(request.resource.data);
+
+      allow update: if isFamilyMember(planId) &&
+                      planFieldsOnly(request.resource.data) &&
+                      planDiffIsMine(request.resource.data, resource.data);
+
+      // A plan is never deleted from a client. Wiping an account is a server-side teardown, and
+      // an ordinary delete here would take the co-parent's half with it — the asymmetry
+      // `data/sync/Tombstone.kt` exists to prevent, one document up.
+      allow list, delete: if false;
     }
 
     match /custody_models/{modelId} {

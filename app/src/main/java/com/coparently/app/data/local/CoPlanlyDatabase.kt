@@ -11,6 +11,7 @@ import com.coparently.app.data.local.dao.CustodyScheduleDao
 import com.coparently.app.data.local.dao.EventDao
 import com.coparently.app.data.local.dao.ExpenseDao
 import com.coparently.app.data.local.dao.MessageDao
+import com.coparently.app.data.local.dao.ParentingPlanDao
 import com.coparently.app.data.local.dao.PetDao
 import com.coparently.app.data.local.dao.UserDao
 import com.coparently.app.data.local.entity.BudgetEntity
@@ -22,6 +23,7 @@ import com.coparently.app.data.local.entity.CustodyScheduleEntity
 import com.coparently.app.data.local.entity.EventEntity
 import com.coparently.app.data.local.entity.ExpenseEntity
 import com.coparently.app.data.local.entity.MessageEntity
+import com.coparently.app.data.local.entity.ParentingPlanEntryEntity
 import com.coparently.app.data.local.entity.PetEntity
 import com.coparently.app.data.local.entity.UserEntity
 
@@ -43,9 +45,10 @@ import com.coparently.app.data.local.entity.UserEntity
         ConversationEntity::class,
         ExpenseEntity::class,
         BudgetEntity::class,
-        ChangeRequestEntity::class
+        ChangeRequestEntity::class,
+        ParentingPlanEntryEntity::class
     ],
-    version = 33,
+    version = 34,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -99,5 +102,10 @@ abstract class CoPlanlyDatabase : RoomDatabase() {
      * Provides access to ChangeRequestDao.
      */
     abstract fun changeRequestDao(): ChangeRequestDao
+
+    /**
+     * Provides access to ParentingPlanDao.
+     */
+    abstract fun parentingPlanDao(): ParentingPlanDao
 }
 
