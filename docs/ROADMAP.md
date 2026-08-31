@@ -319,17 +319,37 @@ template survives that unread.
 
 This unblocks **CQ-16** too — both want the same domain.
 
-### REL-5 · P0 · M · Analytics consent for the EU
+### REL-5 · **DONE** · Analytics consent for the EU
 
-**Where:** ☁️ cloud, 👁 worth a look on a device.
+**Where:** ☁️ cloud, 👁 still worth a look on a device.
 
-`ENABLE_ANALYTICS` / `ENABLE_CRASHLYTICS` are honoured per build type, but a release build still
-collects by default. An EU launch needs a consent gate, not a build flag.
-
-- [ ] First-run consent screen, defaulting to **off**, persisted, reachable again from Settings.
-- [ ] Wire it to `setAnalyticsCollectionEnabled` / `setCrashlyticsCollectionEnabled` at **runtime**,
+- [x] First-run consent screen, defaulting to **off**, persisted, reachable again from Settings.
+- [x] Wired to `setAnalyticsCollectionEnabled` / `setCrashlyticsCollectionEnabled` at **runtime**,
       not only at injection time.
-- [ ] Update `docs/legal/DATA-SAFETY.md`, which currently records the gate as outstanding.
+- [x] `docs/legal/DATA-SAFETY.md` updated — both are now *optional* and changeable, not required.
+
+Three things this turned up that the item did not anticipate:
+
+**The build flags were already being defeated.** `CoPlanlyApplication.onCreate` called
+`FirebaseCrashlytics.getInstance().setCrashlyticsCollectionEnabled(true)` unconditionally, a
+moment after `FirebaseModule` had applied `BuildConfig.ENABLE_CRASHLYTICS` — so debug builds
+reported into the production project regardless of the flag the August 2026 audit added. That
+line is gone; the setters now have exactly one caller, `TelemetryConsentApplier`.
+
+**The real fix was in the manifest, not in Kotlin.** Both SDKs auto-initialise before any app
+code runs, so a release build collected an `app_open` before anybody could be asked. They now
+carry `firebase_analytics_collection_enabled=false` and
+`firebase_crashlytics_collection_enabled=false`, which are the *resumable* knobs —
+`firebase_analytics_collection_deactivated` is a different one and must stay `false`, because
+setting it true disables Analytics permanently and a granted consent would silently do nothing.
+
+**Consent is a route before sign-in, not a step in the wizard.** The onboarding questionnaire
+belongs to an account; this question is older than the account, and asking it after
+authentication would already have cost a `screen_view`.
+
+Still worth a device pass: the screen has never been rendered, and the decline button is
+deliberately first and quieter — confirm that reads as intended rather than as a disabled
+control.
 
 ### REL-6 · P0 · Play Console
 

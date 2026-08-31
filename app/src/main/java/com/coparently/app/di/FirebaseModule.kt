@@ -1,6 +1,5 @@
 package com.coparently.app.di
 
-import com.coparently.app.BuildConfig
 import com.coparently.app.data.repository.UserRepositoryImpl
 import com.coparently.app.domain.repository.UserRepository
 import com.google.firebase.analytics.FirebaseAnalytics
@@ -79,36 +78,41 @@ object FirebaseModule {
     }
 
     /**
-     * Provides Firebase Analytics, collecting only when the build says it may.
+     * Provides Firebase Analytics, collecting nothing until somebody says it may.
      *
-     * `BuildConfig.ENABLE_ANALYTICS` and `ENABLE_CRASHLYTICS` have existed since the build was
-     * first written — false for debug, true for release — and until this change **nothing in the
-     * app read either of them.** Both SDKs auto-initialise, so every developer's debug install
-     * and every instrumented test run reported into the same production project as real
-     * families, mixing synthetic sessions into the numbers and sending device data from builds
-     * nobody consented on behalf of. Honouring the flags here is a one-line reading of a
-     * decision the project had already made and then never applied.
+     * **A provider closes the gate; it never opens it** (REL-5).
+     * [com.coparently.app.data.telemetry.TelemetryConsentApplier] is the one place that enables
+     * either SDK, because injection happens once and consent changes afterwards. What this line
+     * still buys is the case the applier cannot cover: an injection that happens before
+     * `Application.onCreate` has got as far as starting it, and any build or test that resolves
+     * the SDK without an applier at all.
+     *
+     * The build flags themselves — false for debug, true for release — are now read only by the
+     * applier, and they still mean what they always did: which *project* may receive data. They
+     * are not, and never were, a statement that a user agreed. Before the applier existed
+     * nothing read them at all, so every developer install and every instrumented run reported
+     * into the same production project as real families.
      */
     @Provides
     @Singleton
     fun provideFirebaseAnalytics(): FirebaseAnalytics {
         return Firebase.analytics.apply {
-            setAnalyticsCollectionEnabled(BuildConfig.ENABLE_ANALYTICS)
+            setAnalyticsCollectionEnabled(false)
         }
     }
 
     /**
-     * Provides Firebase Crashlytics, collecting only when the build says it may.
+     * Provides Firebase Crashlytics, collecting nothing until somebody says it may.
      *
-     * See [provideFirebaseAnalytics] — same flag, same reason. A debug crash is already in front
-     * of the developer who caused it; uploading it adds nothing and takes a stack trace off a
-     * machine that may be mid-experiment.
+     * See [provideFirebaseAnalytics]. A debug crash is already in front of the developer who
+     * caused it; uploading it adds nothing and takes a stack trace off a machine that may be
+     * mid-experiment. A release crash is worth having and is still not worth taking unasked.
      */
     @Provides
     @Singleton
     fun provideFirebaseCrashlytics(): FirebaseCrashlytics {
         return FirebaseCrashlytics.getInstance().apply {
-            setCrashlyticsCollectionEnabled(BuildConfig.ENABLE_CRASHLYTICS)
+            setCrashlyticsCollectionEnabled(false)
         }
     }
 

@@ -7,8 +7,8 @@ import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import com.coparently.app.data.session.SessionProfileSynchronizer
 import com.coparently.app.data.sync.SyncWorker
+import com.coparently.app.data.telemetry.TelemetryConsentApplier
 import com.google.firebase.FirebaseApp
-import com.google.firebase.crashlytics.FirebaseCrashlytics
 import dagger.hilt.android.HiltAndroidApp
 import javax.inject.Inject
 
@@ -32,6 +32,14 @@ class CoPlanlyApplication : Application(), Configuration.Provider {
     lateinit var sessionProfileSynchronizer: SessionProfileSynchronizer
 
     /**
+     * Applies the analytics and crash-reporting consent for the life of the process (REL-5).
+     * Field-injected for the same reason as [sessionProfileSynchronizer], and started here
+     * because it belongs to the process rather than to any screen.
+     */
+    @Inject
+    lateinit var telemetryConsentApplier: TelemetryConsentApplier
+
+    /**
      * Provides WorkManager configuration with HiltWorkerFactory.
      * This enables dependency injection in WorkManager workers.
      */
@@ -53,8 +61,13 @@ class CoPlanlyApplication : Application(), Configuration.Provider {
             android.util.Log.e("CoPlanlyApplication", "Firebase initialization failed")
         }
 
-        // Enable Crashlytics collection
-        FirebaseCrashlytics.getInstance().setCrashlyticsCollectionEnabled(true)
+        // Analytics and Crashlytics follow the user's answer from here on, and nothing else
+        // touches their setters (REL-5). This line used to read
+        // `FirebaseCrashlytics.getInstance().setCrashlyticsCollectionEnabled(true)` —
+        // unconditional, and run a moment after `FirebaseModule` had just applied
+        // `BuildConfig.ENABLE_CRASHLYTICS`, so the debug flag was overruled on every launch and
+        // developer crashes reported into the production project regardless of it.
+        telemetryConsentApplier.start()
 
         // Make sure the signed-in user has a profile document carrying their name and
         // email. This has to happen here, not on a screen: the co-parent reads that

@@ -30,12 +30,15 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.navArgument
+import com.coparently.app.domain.telemetry.TelemetryConsent
 import com.coparently.app.presentation.LocalGoogleSignInCallback
 import com.coparently.app.presentation.auth.AuthScreen
 import com.coparently.app.presentation.calendar.CalendarScreen
 import com.coparently.app.presentation.chat.ChatViewModel
 import com.coparently.app.presentation.childinfo.ChildInfoScreen
 import com.coparently.app.presentation.common.animations.*
+import com.coparently.app.presentation.consent.TelemetryConsentScreen
+import com.coparently.app.presentation.consent.TelemetryConsentViewModel
 import com.coparently.app.presentation.event.AddEditEventScreen
 import com.coparently.app.presentation.event.EventListScreen
 import com.coparently.app.presentation.onboarding.OnboardingScreen
@@ -76,6 +79,7 @@ fun NavGraph(
     pendingChatOpen: PendingChatOpen
 ) {
     val authStateViewModel: AuthStateViewModel = hiltViewModel()
+    val telemetryConsentViewModel: TelemetryConsentViewModel = hiltViewModel()
     val isAuthenticated by authStateViewModel.isAuthenticated.collectAsState()
     val isLoading by authStateViewModel.isLoading.collectAsState()
     val needsOnboarding by authStateViewModel.needsOnboarding.collectAsState()
@@ -86,7 +90,18 @@ fun NavGraph(
     // read, so it is unknown for a moment after authentication resolves; while it is unknown
     // this must stay on Loading. Routing an unknown answer to Home would flash the dashboard
     // and then replace it with a questionnaire, which is worse than a moment's spinner.
+    //
+    // The telemetry question comes before everything, sign-in included (REL-5): both SDKs would
+    // otherwise have collected a session — an app_open, a screen_view of the auth screen — before
+    // anybody had been asked. It is also why this is not a step inside the onboarding wizard,
+    // which belongs to an account: this question is older than the account.
+    //
+    // `UNANSWERED` is a real answer here rather than an absence, so there is no third "still
+    // reading" state to park on Loading for; the value is one already-read field.
+    val telemetryConsent by telemetryConsentViewModel.consent.collectAsState()
+
     val startDestination = when {
+        telemetryConsent == TelemetryConsent.UNANSWERED -> Screen.PrivacyConsent.route
         isLoading -> Screen.Loading.route
         isAuthenticated != true -> Screen.Auth.route
         needsOnboarding == null -> Screen.Loading.route
@@ -133,6 +148,25 @@ fun NavGraph(
                 exitTransition = { fadeOut() }
             ) {
                 LoadingScreen()
+            }
+
+            // The telemetry consent, asked once before anything else happens.
+            composable(
+                route = Screen.PrivacyConsent.route,
+                enterTransition = { fadeIn() },
+                exitTransition = { fadeOut() }
+            ) {
+                TelemetryConsentScreen(
+                    // Answering re-runs the start-destination decision above, which now falls
+                    // through to whatever this account's real next screen is. Navigating to a
+                    // named route here would have to duplicate that decision, and the two copies
+                    // would drift.
+                    onAnswered = {
+                        navController.navigate(Screen.Loading.route) {
+                            popUpTo(Screen.PrivacyConsent.route) { inclusive = true }
+                        }
+                    }
+                )
             }
 
             // The first-run questionnaire, for an account that has not been through it.
@@ -1095,6 +1129,15 @@ private fun LoadingScreen() {
  */
 sealed class Screen(val route: String) {
     data object Loading : Screen("loading")
+
+    /**
+     * The analytics and crash-reporting question, asked once before sign-in (REL-5).
+     *
+     * Named for the route rather than for [com.coparently.app.domain.telemetry.TelemetryConsent],
+     * which this file also imports: two things called `TelemetryConsent` in one scope resolve
+     * correctly and read as if they might not.
+     */
+    data object PrivacyConsent : Screen("privacy_consent")
     data object Auth : Screen("auth")
 
     /**

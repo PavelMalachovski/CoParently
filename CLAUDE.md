@@ -309,6 +309,23 @@ cd firestore-tests && npm test              # firestore.rules against the local 
   collapsed. On the wire, `data/sync/EventDocument.kt` is the one place the events format is
   defined in both directions, so `SyncService`'s two event maps convert through it rather than
   repeating the conversion (item 5 above).
+- **Telemetry has exactly one switch, and a provider may only ever close it** (REL-5, Aug 2026).
+  `data/telemetry/TelemetryConsentApplier` is the sole caller of `setAnalyticsCollectionEnabled`
+  and `setCrashlyticsCollectionEnabled`; `FirebaseModule`'s providers pass `false` and nothing
+  else touches either. That is not tidiness — before it, `FirebaseModule` applied
+  `BuildConfig.ENABLE_CRASHLYTICS` and `CoPlanlyApplication.onCreate` then called
+  `setCrashlyticsCollectionEnabled(true)` unconditionally a moment later, so the debug flag was
+  overruled on every launch and nothing failed. **A gate any other line may overrule is not a
+  gate.** Three more things not to undo. Collection needs the build flag **and**
+  `TelemetryConsent.GRANTED` — `telemetryCollectionEnabled` ANDs them, and neither may stand in
+  for the other; a granted consent must not switch a debug build back into the production
+  project. The manifest's `firebase_analytics_collection_enabled=false` and
+  `firebase_crashlytics_collection_enabled=false` are what stop collection *before* any app code
+  runs, and deleting either reopens that window silently — while
+  `firebase_analytics_collection_deactivated` is a **different** knob that must stay `false`,
+  because `true` disables Analytics permanently and no runtime call can undo it. And
+  `UNANSWERED` is a third state on purpose: "said no" and "was never asked" collect the same
+  nothing, but only one of them still owes the user a question.
 - Conventional Commits (`feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`).
 
 ## Architecture map
