@@ -16,7 +16,7 @@
 | Does your app collect or share any of the required user data types? | **Yes** | |
 | Is all data encrypted in transit? | **Yes** | Firebase SDKs use TLS throughout |
 | Do you provide a way for users to request that their data is deleted? | **Yes** | Settings → Account → Delete account, backed by the `deleteAccount` callable |
-| Is data collection required, or can users choose? | **Required** for the account and shared content; **optional** for the medical profile, photos, and Google Calendar |
+| Is data collection required, or can users choose? | **Required** for the account and shared content; **optional** for the medical profile, photos, Google Calendar, and — since REL-5 — analytics and crash reporting |
 | Have you committed to Play's Families policy? | {{DECIDE}} — the app is for parents, not children, and offers no child accounts |
 
 ## Data types
@@ -35,11 +35,11 @@ our processor are declared.
 | Messages (in-app) | Yes | No | No | App functionality |
 | Health info | Yes | No | Yes | App functionality — the child's medical profile |
 | Purchase/financial info | Yes | No | Yes | App functionality — shared expenses and budgets. **Not** payment data: the app processes no payments |
-| App interactions | Yes | No | No | Analytics |
-| Crash logs | Yes | No | No | Diagnostics |
-| Diagnostics | Yes | No | No | Diagnostics |
-| Approximate/precise location | **No** | — | — | The app requests no location permission |
-| Contacts | **No** | — | — | The address book is never read; an emergency contact is typed by hand |
+| App interactions | Yes | No | **Yes** | Analytics — consent-gated since REL-5 |
+| Crash logs | Yes | No | **Yes** | Diagnostics — consent-gated since REL-5 |
+| Diagnostics | Yes | No | **Yes** | Diagnostics — consent-gated since REL-5 |
+| Approximate/precise location | **No** | — | — | Re-checked: the manifest declares only INTERNET, ACCESS_NETWORK_STATE, POST_NOTIFICATIONS and CAMERA, and no location API is called |
+| Contacts | **No** | — | — | Re-checked: `ContactsContract` appears nowhere; an emergency contact is typed by hand |
 | Payment info | **No** | — | — | No billing exists yet — **revisit when it does** |
 
 ## Notes worth writing into the declaration
