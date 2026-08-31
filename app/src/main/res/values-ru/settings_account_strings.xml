@@ -75,4 +75,7 @@
     <string name="settings_family_shown">Показана семья</string>
     <string name="settings_family_switch">Переключить семью</string>
     <string name="settings_family_unnamed">Пока без имени</string>
+    <string name="settings_school_import_title">Импорт из Bakaláři и EduPage</string>
+    <string name="settings_school_import_description">Школьное расписание ребёнка прямо в календарь. Пока не сделано.</string>
+    <string name="settings_school_import_planned">В планах</string>
 </resources>

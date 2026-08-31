@@ -78,4 +78,10 @@
     <string name="settings_family_shown">Family shown</string>
     <string name="settings_family_switch">Switch family</string>
     <string name="settings_family_unnamed">Not named yet</string>
+    <!-- The Bakaláři / EduPage import row (MON-8). Inert until the import exists; see the
+         comment at its call site in SettingsScreen for why an inert row is not the affordance
+         design rule 8 forbids, and for the condition under which it has to come out. -->
+    <string name="settings_school_import_title">Import from Bakaláři and EduPage</string>
+    <string name="settings_school_import_description">Your child’s school timetable, straight into the calendar. Not built yet.</string>
+    <string name="settings_school_import_planned">Planned</string>
 </resources>

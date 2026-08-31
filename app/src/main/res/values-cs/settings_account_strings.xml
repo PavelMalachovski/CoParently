@@ -75,4 +75,7 @@
     <string name="settings_family_shown">Zobrazená rodina</string>
     <string name="settings_family_switch">Přepnout rodinu</string>
     <string name="settings_family_unnamed">Zatím bez jména</string>
+    <string name="settings_school_import_title">Import z Bakalářů a EduPage</string>
+    <string name="settings_school_import_description">Školní rozvrh dítěte rovnou do kalendáře. Zatím není hotovo.</string>
+    <string name="settings_school_import_planned">V plánu</string>
 </resources>
