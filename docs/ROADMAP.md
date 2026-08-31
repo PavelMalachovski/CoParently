@@ -497,9 +497,10 @@ earlier version to migrate *from* — so it becomes worth adding at v34, togethe
 migration test that can use it. The old **CQ-2** id, the untested migrations that shipped in
 `versionCode 2`, is folded in here and dies with the same reasoning.
 
-### CQ-5 · P1 · M · Sync downloads the entire event collection every 15 minutes
+### CQ-5 · **DONE** · P1 · M · Sync downloads the entire event collection every 15 minutes
 
-**Where:** ☁️ cloud — but settle the two design questions below first, in writing.
+**Where:** ☁️ cloud. The two design questions below are settled; the answers are recorded under
+them.
 
 `observeEventsSharedWith` has no date window and no limit. Re-measured on 2026-08-25: a bound
 appears **twice** in all of `app/src/main` — a `limit(1)` on a user lookup and the chat's
@@ -516,9 +517,41 @@ rather than usage, landing first on the users who stayed longest.
 * a date window on `startDateTime` cuts off the master row of a recurring series that began before
   it.
 
-Settle both before writing any of it. Related: `HomeViewModel` holds three subscriptions to the
+**Both are answered by the same decision, and the second dissolves into the first: the bound is a
+change cursor, not a date window.**
+
+**`serverUpdatedAt`**, a `FieldValue.serverTimestamp()`, is written on every create, update and
+tombstone — stamped inside `FirestoreEventDataSource` rather than in the four maps that reach it,
+so no caller can forget. `SyncService` keeps a per-uid high-water mark and asks only for documents
+written after it.
+
+- *A date window cuts off a recurring master.* A change cursor has no such edge: a document is
+  fetched because it **changed**, wherever its dates fall. The question stops existing.
+- *An `updatedAt` delta misses deletions.* A tombstone deliberately does not move `updatedAt`, but
+  it does move `serverUpdatedAt`, because the stamp is on the write and not on the meaning.
+- *Why the server's clock.* Stamping from the device would let a co-parent whose clock runs a few
+  minutes slow write a document below the reader's cursor, which the reader would then never
+  fetch. Same hole SEC-4 closed for the custody schedule, closed the same way.
+
+**A full sweep every 24 hours is what makes the delta safe, not a precaution.** A document written
+before `serverUpdatedAt` existed has no such field, and Firestore excludes a document lacking the
+field from a `whereGreaterThan` outright rather than treating it as zero — the silent exclusion
+that dropped pre-fix `budgets` from their `whereIn`. Without the sweep, a delta would never deliver
+a single event created before this shipped. With it, they arrive within a day and their first edit
+gives them the field for good, so **this needed no backfill and no ops step** — which mattered,
+because the last ops step is still undone. A sweep only ever adds and updates, never reconciles by
+absence, so it cannot delete anything (item 14).
+
+96 full collection reads a day become 1 sweep and 95 deltas that on a quiet day return nothing.
+
+`EventSyncWindow` holds the rule, out of Firestore so it is unit tested; the composite index
+(`sharedWith` CONTAINS + `serverUpdatedAt` ASC) is in `firestore.indexes.json` and **must be
+deployed with the rules** or the delta query fails at runtime.
+
+**Still open, and deliberately not bundled here:** `HomeViewModel` holds three subscriptions to the
 whole events table plus one to all expenses and filters the current month **in memory**, while
-`EventDao.getEventsForParentPaginated` sits written and never called. Audit §8.6.
+`EventDao.getEventsForParentPaginated` sits written and never called. That is a Room-side cost, not
+a Firestore bill, and it wants its own change. Audit §8.6.
 
 ### CQ-6 + CQ-8 · P2 · M · The chat's last unbounded query, and a listener that gives up
 

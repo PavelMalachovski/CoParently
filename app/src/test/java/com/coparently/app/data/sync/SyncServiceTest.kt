@@ -8,6 +8,7 @@ import com.coparently.app.data.local.entity.EventEntity
 import com.coparently.app.data.local.entity.UserEntity
 import com.coparently.app.data.local.preferences.EncryptedPreferences
 import com.coparently.app.data.local.preferences.PreferenceKeys
+import com.coparently.app.data.remote.firebase.EventDownload
 import com.coparently.app.data.remote.firebase.FcmService
 import com.coparently.app.data.remote.firebase.FirebaseAuthService
 import com.coparently.app.data.remote.firebase.FirestoreChildInfoDataSource
@@ -112,8 +113,10 @@ class SyncServiceTest {
         coEvery { firestoreUserDataSource.getUserById(any()) } returns null
         coEvery { eventDao.getUnsyncedEvents() } returns emptyList()
         coEvery { childInfoDao.getUnsyncedChildInfo() } returns emptyList()
-        every { firestoreEventDataSource.observeEventsSharedWith(any()) } returns
-            flowOf(emptyList())
+        // Both prefs read null above, so `EventSyncWindow` asks for a full sweep and the second
+        // argument is null — the path every one of these tests was written against.
+        every { firestoreEventDataSource.observeEventsSharedWith(any(), any()) } returns
+            flowOf(EventDownload(emptyList(), null))
         every { firestoreChildInfoDataSource.getChildInfoForParent(any()) } returns
             flowOf(emptyList())
 
@@ -653,8 +656,8 @@ class SyncServiceTest {
             Result.success(Unit)
         }
         // A live listener re-delivers the document as it stands when the download half runs.
-        every { firestoreEventDataSource.observeEventsSharedWith(ALICE) } returns
-            flow { emit(listOf(document)) }
+        every { firestoreEventDataSource.observeEventsSharedWith(ALICE, any()) } returns
+            flow { emit(EventDownload(listOf(document), null)) }
         coEvery { firestoreUserDataSource.getUserById(ALICE) } returns mapOf("role" to "dad")
         // Read here rather than inside the stub: `syncUserData` swallows everything the migrator
         // throws, so a failure to read the statement would vanish into a confusing assertion.

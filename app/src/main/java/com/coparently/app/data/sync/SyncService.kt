@@ -20,6 +20,7 @@ import com.coparently.app.domain.guests.GuestGrantPolicy
 import com.coparently.app.domain.repository.ChangeRequestRepository
 import com.coparently.app.domain.repository.MessageRepository
 import com.coparently.app.domain.repository.PetRepository
+import com.google.firebase.Timestamp
 import com.google.gson.GsonBuilder
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -29,6 +30,7 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
+import java.util.Date
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -229,11 +231,25 @@ class SyncService @Inject constructor(
             }
         }
 
-        // Download every event shared with this user (own + co-parent's). Unlike the
-        // previous partner-gated block this runs whether or not the account is paired:
-        // the query is authorized by `sharedWith` alone, so there is nothing to gate on.
-        firestoreEventDataSource.observeEventsSharedWith(userId).collect { firestoreEvents ->
-            for (firestoreData in firestoreEvents) {
+        // Download the events shared with this user (own + co-parent's). Unlike the previous
+        // partner-gated block this runs whether or not the account is paired: the query is
+        // authorized by `sharedWith` alone, so there is nothing to gate on.
+        //
+        // **Only what changed since last time (CQ-5)**, except on the periodic sweep — this used
+        // to read the entire collection on every one of the 96 syncs a day, on both phones. See
+        // `EventSyncWindow` for why the sweep is what makes the delta safe rather than a
+        // precaution, and `FirestoreEventDataSource.observeEventsSharedWith` for why the bound is
+        // a change cursor and not a date window.
+        val cursorKey = PreferenceKeys.EVENT_SYNC_CURSOR_PREFIX + userId
+        val sweepKey = PreferenceKeys.EVENT_SYNC_SWEEP_PREFIX + userId
+        val storedCursor = encryptedPreferences.getString(cursorKey)?.toLongOrNull()
+        val lastSweep = encryptedPreferences.getString(sweepKey)?.toLongOrNull()
+        val startedAt = System.currentTimeMillis()
+        val sweeping = EventSyncWindow.needsFullSweep(storedCursor, lastSweep, startedAt)
+        val changedAfter = if (sweeping) null else storedCursor?.let { Timestamp(Date(it)) }
+
+        firestoreEventDataSource.observeEventsSharedWith(userId, changedAfter).collect { download ->
+            for (firestoreData in download.documents) {
                 val remoteId = firestoreData["id"] as? String ?: continue
 
                 // A tombstone is the co-parent telling this device the event is gone. It is
@@ -321,6 +337,20 @@ class SyncService @Inject constructor(
                     // No conflict - just insert/update
                     eventDao.insertEvent(remoteEntity.copy(syncedToFirestore = true))
                 }
+            }
+
+            // Advance the cursor only to what this pass actually saw, and only after the loop
+            // has applied it. Writing it before, or writing `startedAt` instead, would step past
+            // a document written while the query was in flight and skip it for good — the cursor
+            // can only ever be a high-water mark of rows this device has taken in.
+            //
+            // A pass that returned nothing leaves the cursor where it was; there is no new
+            // high-water mark to record, and `startedAt` is not one.
+            download.highestCursor?.let { seen ->
+                encryptedPreferences.putString(cursorKey, seen.toDate().time.toString())
+            }
+            if (sweeping) {
+                encryptedPreferences.putString(sweepKey, startedAt.toString())
             }
         }
     }

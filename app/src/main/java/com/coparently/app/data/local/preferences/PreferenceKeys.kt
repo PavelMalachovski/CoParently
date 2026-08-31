@@ -37,6 +37,31 @@ object PreferenceKeys {
      */
     const val TELEMETRY_CONSENT = "telemetry_consent"
 
+    /**
+     * Prefix for the per-user events change cursor — the actual key is this prefix plus the
+     * Firebase UID, and the value is the highest `serverUpdatedAt` this device has taken in,
+     * as decimal epoch millis (CQ-5).
+     *
+     * Per user for the reason [PARENT_SLOT_MARKER_PREFIX] gives: Room's rows survive sign-out, so
+     * a second account signing in on the same device must not continue the first one's cursor and
+     * skip everything written before it.
+     *
+     * Losing it to `EncryptedPreferences.clear()` costs one full download, which is what the
+     * account got on every sync before this existed — so it needs no exemption. **Truncation to
+     * millis is deliberate and safe in one direction only**: a Firestore `Timestamp` carries
+     * nanoseconds, so the rebuilt cursor is never *later* than the value it came from, and the
+     * boundary document is re-fetched rather than skipped. An upsert of a document this device
+     * already has is a no-op; a skipped one is a bug.
+     */
+    const val EVENT_SYNC_CURSOR_PREFIX = "event_sync_cursor_"
+
+    /**
+     * Prefix for the per-user timestamp of the last **full** events download, decimal epoch
+     * millis. See [EVENT_SYNC_CURSOR_PREFIX] for why it is per user, and
+     * `com.coparently.app.data.sync.EventSyncWindow` for what it decides.
+     */
+    const val EVENT_SYNC_SWEEP_PREFIX = "event_sync_sweep_"
+
     /** Separator for multi-value string preferences. */
     const val LIST_SEPARATOR = "|"
 
