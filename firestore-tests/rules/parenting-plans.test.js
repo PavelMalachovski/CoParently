@@ -148,6 +148,46 @@ describe('parenting plans: each parent writes their own half and nobody else\'s'
     }));
   });
 
+  it('lets a parent withdraw one of their own answers', async () => {
+    // The client writes with `mergeFieldPaths`, which *replaces* the named paths rather than
+    // merging into them — a plain merge never removes a key the new data omits, and a wording
+    // somebody has withdrawn would go on standing on the co-parent's phone. The rule has to
+    // permit the replacement, and the co-parent's map has to survive it.
+    await seed(env, {
+      [PATH]: {
+        answers: {
+          [MOM]: {care_weekday: 'Week about', care_handover: 'At school'},
+          [DAD]: {care_weekday: 'Two and two'},
+        },
+        agreedTo: {[MOM]: {}, [DAD]: {}},
+        catalogueVersions: {[MOM]: 1, [DAD]: 1},
+        updatedAt: {[MOM]: 1, [DAD]: 2},
+      },
+    });
+
+    await assertSucceeds(as(MOM).doc(PATH).set({
+      answers: {[MOM]: {care_weekday: 'Week about'}},
+      agreedTo: {[MOM]: {}},
+      catalogueVersions: {[MOM]: 1},
+      updatedAt: {[MOM]: 3},
+    }, {
+      mergeFields: [
+        `answers.${MOM}`, `agreedTo.${MOM}`,
+        `catalogueVersions.${MOM}`, `updatedAt.${MOM}`,
+      ],
+    }));
+  });
+
+  it('refuses that same shape aimed at the co-parent\'s paths', async () => {
+    // `mergeFields` replaces whatever path it names, so the rule has to hold for this form too —
+    // it is the write above with one uid changed.
+    await seed(env, {[PATH]: half(MOM, {care_weekday: 'Week about'})});
+
+    await assertFails(as(MOM).doc(PATH).set({
+      answers: {[DAD]: {care_weekday: 'Whatever Mom says'}},
+    }, {mergeFields: [`answers.${DAD}`]}));
+  });
+
   it('refuses a field the rule does not know about', async () => {
     // An unlisted key is a place one parent could write something the per-key checks never look
     // at — a "signed" flag, say, on a document meant for a mediator.

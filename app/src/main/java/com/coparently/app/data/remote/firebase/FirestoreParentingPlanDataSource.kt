@@ -2,6 +2,7 @@ package com.coparently.app.data.remote.firebase
 
 import android.util.Log
 import com.coparently.app.domain.parentingplan.ParentingPlanEntry
+import com.google.firebase.firestore.FieldPath
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.channels.awaitClose
@@ -50,10 +51,16 @@ class FirestoreParentingPlanDataSource @Inject constructor(
     /**
      * Writes [entry] as [uid]'s half, leaving the co-parent's untouched.
      *
-     * `set` with a merge rather than `update`: the document does not exist until one of the two
-     * parents writes something, and `update` on a missing document fails. The merge is deep for
-     * nested maps, so naming only this parent's key inside each map adds it beside the other's
-     * rather than replacing the map — which is also the only shape the security rule permits.
+     * `set` rather than `update`, because the document does not exist until one of the two
+     * parents writes something and `update` fails on a missing one.
+     *
+     * **`mergeFieldPaths`, not `merge()`, and the difference is a lost deletion.** A plain merge
+     * recurses into nested maps and never removes a key that the new data omits — so a parent who
+     * cleared an answer would have it disappear from their own screen and stay on the co-parent's
+     * forever, which is the worst shape this feature could fail in: a wording somebody has
+     * withdrawn still standing in a document the two of them may hand to a court. Naming the four
+     * paths replaces each of them wholesale and touches nothing else, so a removal inside this
+     * parent's own map propagates and the co-parent's map is still never written.
      */
     suspend fun uploadHalf(familyId: String, uid: String, entry: ParentingPlanEntry) {
         firestore.collection(COLLECTION).document(familyId).set(
@@ -63,7 +70,14 @@ class FirestoreParentingPlanDataSource @Inject constructor(
                 FIELD_CATALOGUE_VERSIONS to mapOf(uid to entry.catalogueVersion),
                 FIELD_UPDATED_AT to mapOf(uid to entry.updatedAtMillis)
             ),
-            SetOptions.merge()
+            SetOptions.mergeFieldPaths(
+                listOf(
+                    FieldPath.of(FIELD_ANSWERS, uid),
+                    FieldPath.of(FIELD_AGREED_TO, uid),
+                    FieldPath.of(FIELD_CATALOGUE_VERSIONS, uid),
+                    FieldPath.of(FIELD_UPDATED_AT, uid)
+                )
+            )
         ).await()
     }
 
