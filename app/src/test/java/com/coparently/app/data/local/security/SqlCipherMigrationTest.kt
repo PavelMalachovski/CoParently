@@ -159,14 +159,20 @@ class SqlCipherMigrationTest {
         assertFalse(SqlCipherMigration.looksLikePlaintext(truncated))
     }
 
+    /**
+     * Calls [block] once per state, as the low four bits of a counter.
+     *
+     * A counter rather than four nested loops: the nesting is what detekt counts, and a truth
+     * table walked this way reads no worse and cannot silently lose a dimension.
+     */
     private fun forEachState(block: (Boolean, Boolean, Boolean, Boolean) -> Unit) {
-        val bits = listOf(false, true)
-        bits.forEach { database ->
-            bits.forEach { plaintext ->
-                bits.forEach { export ->
-                    bits.forEach { passphrase -> block(database, plaintext, export, passphrase) }
-                }
-            }
+        (0 until 16).forEach { state ->
+            block(
+                state and 1 != 0,
+                state and 2 != 0,
+                state and 4 != 0,
+                state and 8 != 0
+            )
         }
     }
 }
