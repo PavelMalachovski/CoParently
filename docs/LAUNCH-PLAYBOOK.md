@@ -228,7 +228,9 @@ evidence anyone in DACH is installing it.
   product, but must be declared as such.
 - **Account deletion.** Play requires a deletion route that works **without the app installed**.
   In-app deletion ships (PR #68, server-side teardown plus a local wipe) and is not sufficient on
-  its own; a public web page is also required. That page is cloud work, its hosting is not.
+  its own. The public page now exists — `web/delete-account/index.html`, self-contained, Czech and
+  English, with `web/README.md` for the placeholders and the hosting. What is left is hosting it
+  and putting the URL in the Play Console's data-deletion field *and* in the privacy policy.
 - **Content rating** (IARC questionnaire), **target audience and content**, **ads declaration**
   (none), **financial features** (none until MON-11), **health apps declaration** ⚠︎ — the last is
   worth reading carefully, because a shared calendar that stores a child's allergies and medication

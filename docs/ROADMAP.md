@@ -315,9 +315,14 @@ template survives that unread.
       identity, address, contact. *(cloud, once you supply the identity)*
 - [ ] Legal review. *(yours)*
 - [ ] Host both at stable URLs. Play requires the privacy-policy URL in the listing. *(yours)*
-- [ ] Publish a **web account-deletion page** — Play requires a deletion route that works without
-      the app installed; the in-app path alone does not satisfy it. *(the page is cloud work; the
-      hosting is yours)*
+- [x] The **web account-deletion page** is written: `web/delete-account/index.html`, one
+      self-contained file in Czech and English, with `web/README.md` covering the placeholders,
+      the hosting, and the two sentences that are the lawyer's to confirm rather than a
+      developer's. Every claim on it mirrors `deleteAccountDataImpl` and the privacy policy's
+      "Deleting your account" section — including the one that surprises people, that records you
+      entered vanish from your co-parent's calendar too.
+- [ ] Host it, and put the URL in **two** places: the Play Console's data-deletion field and
+      `{{WEB_DELETION_URL}}` in the privacy policy. *(yours)*
 - [ ] Link both from Settings once the URLs resolve. Deliberately not wired yet: a row pointing at
       a dead URL is exactly the affordance-promising-nothing that design rule #8 forbids.
 
