@@ -260,7 +260,17 @@ class SyncServiceTest {
 
         syncService.performFullSync()
 
-        verify(exactly = 0) { encryptedPreferences.putString(any(), any()) }
+        // Keyed on the marker rather than on `any()`. The assertion used to be "this sync writes
+        // no preference at all", which was true by accident and is not what the test is named
+        // after: CQ-5's events cursor now records its sweep here on every sync, paired or not,
+        // and a global matcher turned that into a failure of a test about something else. What
+        // must stay zero is a rewrite of a marker that is already disarmed.
+        verify(exactly = 0) {
+            encryptedPreferences.putString(
+                "${PreferenceKeys.EVENT_AUDIENCE_BACKFILL_PREFIX}$ALICE",
+                any()
+            )
+        }
     }
 
     @Test
