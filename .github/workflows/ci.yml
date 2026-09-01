@@ -253,6 +253,30 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+  invariants:
+    name: Resource and payload invariants
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # No `npm ci`: the script has no dependencies, deliberately. It reads XML and Kotlin as
+      # text, so it needs neither an Android SDK nor a parser, which is what lets it run here
+      # in seconds rather than behind the Android gate.
+      #
+      # It is not redundant with `static`. `MissingTranslation` is *disabled* in
+      # app/build.gradle.kts rather than demoted, and a disabled check reports nothing under
+      # any severity — so an untranslated key reaches a reader's device as English and no job
+      # in this file notices. The push-type half is not something lint could check at all: it
+      # spans PushPayload.kt, firestore.rules, CoPlanlyMessagingService.kt and push_strings.xml,
+      # and a type missing from any one of them is a notification that never appears (SEC-3).
+      - name: Check locale completeness, format arguments and push types
+        run: node tools/check-invariants.js
+
   functions:
     name: Cloud Functions
     runs-on: ubuntu-latest
