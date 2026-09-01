@@ -35,6 +35,25 @@
     <fields>;
 }
 
+# `DayOverride` lives in `domain.custody`, not `domain.model`, so the wildcard above never
+# covered it — and `DayOverrideJson` stores a `Map<String, DayOverride>` as Gson JSON in
+# `custody_models.dayOverridesJson`. Its Firestore form is safe (`FirestoreCustodyDataSource`
+# maps it by hand with string literals, so the shared document is unaffected), which bounds the
+# damage but does not remove it: within one build encode and decode agree, so the swaps survive;
+# across an *update* the obfuscated names differ, the stored JSON no longer parses, and
+# `DayOverrideJson.decode` degrades to "no swaps" by design rather than throwing. The day swaps
+# then vanish from the calendar until the next mirror pass restores them from the document —
+# and until then, on a device that is offline, they are simply gone. Debug never reproduces it.
+#
+# The enum is kept for the same reason one step down: Gson writes a `DayOverrideStatus` as
+# `status.name`, which is the constant's field name.
+-keepclassmembers class com.coparently.app.domain.custody.DayOverride {
+    <fields>;
+}
+-keepclassmembers class com.coparently.app.domain.custody.DayOverrideStatus {
+    <fields>;
+}
+
 # Gson's own requirements for reflective (de)serialization: generic signatures for
 # `Array<T>`/`Map` targets, and the annotations it reads off members.
 -keepattributes Signature

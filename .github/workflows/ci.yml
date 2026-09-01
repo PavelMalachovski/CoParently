@@ -244,12 +244,32 @@ jobs:
       - name: Assemble release (R8)
         run: ./gradlew assembleRelease
 
+      # The comment above says building here is what stops the Gson/R8 defect reaching a device.
+      # Building alone does not: R8 rewriting a kept field raises nothing, emits well-formed
+      # JSON, and cannot happen in debug. This reads R8's own mapping and fails when a field a
+      # `-keepclassmembers ... { <fields>; }` rule names came out renamed. `check-invariants.js`
+      # separately checks that every Gson-reflected type *has* such a rule; this checks the rule
+      # worked, which a typo in a package name would otherwise hide.
+      - name: Verify R8 kept the Gson field names
+        run: node tools/check-r8-mapping.js
+
       - name: Upload reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: android-reports-release
           path: app/build/reports/
+          if-no-files-found: ignore
+          retention-days: 14
+
+      # Kept separately from the reports: this is the file that turns a future obfuscated
+      # Crashlytics stack trace back into source, and the input to the check above.
+      - name: Upload R8 mapping
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: r8-mapping
+          path: app/build/outputs/mapping/release/
           if-no-files-found: ignore
           retention-days: 14
 

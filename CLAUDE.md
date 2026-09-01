@@ -173,10 +173,14 @@ cd firestore-tests && npm test              # firestore.rules against the local 
   August 2026 — this line used to say there was none). Seven jobs: `changes` (a cheap gate,
   below), three Android ones — `build-test` (`assembleDebug` + `testDebugUnitTest` in a
   single invocation), `static` (`lint`, then `detekt`), `release` (`assembleRelease`, where
-  R8 runs) — plus Cloud Functions, the Firestore rules suite against the emulator, and
-  `invariants` (`node tools/check-invariants.js`, no dependencies and no Android SDK: locale
-  completeness, format-argument agreement across the five locales, and the four-way push-type
-  agreement item 15 states). They run **in parallel**; the Android three were one sequential job until the August 2026 CI
+  R8 runs, and where `node tools/check-r8-mapping.js` then reads R8's own `mapping.txt` and
+  fails if a field a keep rule names came out renamed) — plus Cloud Functions, the Firestore
+  rules suite against the emulator, and `invariants` (`node tools/check-invariants.js`, no
+  dependencies and no Android SDK: locale completeness, format-argument agreement across the
+  five locales, the four-way push-type agreement item 15 states, and the rule that every type
+  Gson reflects over is covered by a `-keepclassmembers ... { <fields>; }` rule). The last two
+  are one defect from two sides — the source says a rule exists, the mapping says it worked, and
+  a typo in a package name passes the first and fails the second. They run **in parallel**; the Android three were one sequential job until the August 2026 CI
   pass, which is why a run took 13:22 for about 7 minutes of critical path. Two caveats, both
   deliberate. **detekt gates again** as of CQ-12 — do not add `continue-on-error` back to turn a
   red build green; fix the finding, or regenerate the baseline through the Regenerate workflow so
