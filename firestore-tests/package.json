@@ -8,7 +8,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "test": "firebase emulators:exec --only firestore --project demo-coplanly \"npm run test:only\"",
+    "test": "firebase emulators:exec --only firestore,storage --project demo-coplanly \"npm run test:only\"",
     "test:only": "mocha --timeout 20000 \"rules/**/*.test.js\"",
     "lint": "eslint ."
   },

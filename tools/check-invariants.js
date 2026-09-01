@@ -16,6 +16,12 @@
  *  3. **Push-type agreement (SEC-3, CLAUDE.md item 15).** A type has to be named in four
  *     places; missing from any one of them it is a push that silently never appears, and a
  *     server-only type that leaks into the client allow-list is a forgeable notification.
+ *  4. **Gson models survive R8.** Gson derives JSON keys from Kotlin *field names* by
+ *     reflection, and R8 renames fields it cannot see being read, so a model that no
+ *     `-keepclassmembers ... { <fields>; }` rule covers is written with obfuscated keys in
+ *     release builds only. This shipped once (see `app/proguard-rules.pro`) and was found a
+ *     second time in `DayOverride`, which sits in `domain.custody` rather than under the
+ *     `domain.model.**` wildcard. Debug never reproduces it, because debug does not minify.
  *
  * Exits non-zero listing every problem found, so it can gate a build.
  */
@@ -245,10 +251,120 @@ function checkPushTypes() {
   );
 }
 
+// ---- 4: Gson models are kept from R8 ----------------------------------------
+
+const PROGUARD = 'app/proguard-rules.pro';
+const SOURCE_ROOT = 'app/src/main/java';
+
+/** Every Kotlin file under the source root, recursively. */
+function kotlinFiles(dir = SOURCE_ROOT, out = []) {
+  const abs = path.join(ROOT, dir);
+  for (const entry of fs.readdirSync(abs, { withFileTypes: true })) {
+    const rel = path.join(dir, entry.name);
+    if (entry.isDirectory()) kotlinFiles(rel, out);
+    else if (entry.name.endsWith('.kt')) out.push(rel);
+  }
+  return out;
+}
+
+/**
+ * Simple name -> fully-qualified name, for every type this project declares.
+ *
+ * Used to tell a project model apart from a platform or library type in a Gson call: only the
+ * former can be renamed by R8 into a JSON key nobody reads back.
+ */
+function declaredTypes(files) {
+  const index = new Map();
+  for (const file of files) {
+    const src = fs.readFileSync(path.join(ROOT, file), 'utf8');
+    const pkg = src.match(/^package\s+([\w.]+)/m);
+    if (!pkg) continue;
+    const decl = /^\s*(?:@\w+\s+)*(?:public\s+|internal\s+|private\s+)?(?:data\s+|sealed\s+|value\s+|abstract\s+|open\s+)*(?:class|object|enum\s+class|interface)\s+(\w+)/gm;
+    for (let m; (m = decl.exec(src)); ) {
+      if (!index.has(m[1])) index.set(m[1], `${pkg[1]}.${m[1]}`);
+    }
+  }
+  return index;
+}
+
+/** The `-keepclassmembers class X { <fields>; }` patterns, as matcher functions. */
+function fieldKeepPatterns(proguard) {
+  const patterns = [];
+  const re = /-keepclassmembers\s+class\s+([\w.$*]+)\s*\{([^}]*)\}/g;
+  for (let m; (m = re.exec(proguard)); ) {
+    if (!/<fields>|\*\s*;/.test(m[2])) continue;
+    patterns.push(m[1]);
+  }
+  return patterns;
+}
+
+/** ProGuard glob semantics: `**` crosses package separators, `*` does not. */
+function keepMatches(pattern, fqcn) {
+  const rx = new RegExp(
+    '^' +
+      pattern
+        .replace(/[.$]/g, (c) => '\\' + c)
+        .replace(/\*\*/g, '\u0000')
+        .replace(/\*/g, '[^.]*')
+        .replace(/\u0000/g, '.*') +
+      '$'
+  );
+  return rx.test(fqcn);
+}
+
+function checkGsonKeepRules() {
+  const files = kotlinFiles();
+  const index = declaredTypes(files);
+  const patterns = fieldKeepPatterns(read(PROGUARD));
+  if (!patterns.length) fail(`${PROGUARD} declares no \`-keepclassmembers ... { <fields>; }\` rule at all`);
+
+  // Types named as a Gson target: `X::class.java`, `Array<X>::class.java`, and every type
+  // argument of a `TypeToken<...>`. Anything the project does not declare is a platform or
+  // library type and cannot be renamed into a stored key.
+  const targets = new Map();
+  for (const file of files) {
+    const src = fs.readFileSync(path.join(ROOT, file), 'utf8');
+    if (!/\bgson\b|\bGson\(/i.test(src)) continue;
+
+    // Line-scoped on purpose. An unanchored `TypeToken<...>` or `fromJson(...)` pattern runs
+    // past its own statement and swallows unrelated identifiers further down the file, which
+    // reports repositories and navigation routes as Gson models.
+    const named = [];
+    for (const line of src.split('\n')) {
+      for (const m of line.matchAll(/Array<([\w.]+)>::class\.java/g)) named.push(m[1]);
+      for (const m of line.matchAll(/fromJson\s*\([^)]*?([\w.]+)::class\.java/g)) named.push(m[1]);
+      for (const m of line.matchAll(/TypeToken<([^<>]*(?:<[^<>]*>[^<>]*)*)>/g)) {
+        for (const id of m[1].matchAll(/[\w.]+/g)) named.push(id[0]);
+      }
+    }
+
+    for (const raw of named) {
+      const simple = raw.includes('.') ? raw.slice(raw.lastIndexOf('.') + 1) : raw;
+      const fqcn = raw.includes('.') ? raw : index.get(simple);
+      if (!fqcn || !fqcn.startsWith('com.coparently.')) continue;
+      if (!index.has(simple)) continue;
+      if (!targets.has(fqcn)) targets.set(fqcn, file);
+    }
+  }
+
+  for (const [fqcn, file] of targets) {
+    if (!patterns.some((p) => keepMatches(p, fqcn))) {
+      fail(
+        `${fqcn} is serialised by Gson (${file}) but no \`-keepclassmembers ... { <fields>; }\` rule ` +
+          `in ${PROGUARD} covers it — R8 will rename its fields and the release build writes JSON ` +
+          `keys nobody reads back`
+      );
+    }
+  }
+
+  console.log(`gson models: ${targets.size} project types reflected, ${patterns.length} field-keep rules`);
+}
+
 // ---- run --------------------------------------------------------------------
 
 checkLocales();
 checkPushTypes();
+checkGsonKeepRules();
 
 if (problems.length) {
   console.error(`\n${problems.length} problem(s):`);

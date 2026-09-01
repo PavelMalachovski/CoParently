@@ -158,13 +158,17 @@ crash with "migration from 3 to 9 required but not found".
 
 ```bash
 cd functions && npm test && npm run lint    # Cloud Functions (mocha + eslint)
-cd firestore-tests && npm test              # firestore.rules against the local emulator
+cd firestore-tests && npm test              # firestore.rules + storage.rules on the emulators
 ```
 
 - **Never debug `firestore.rules` by deploying to production and watching a phone.** That
   is how a broken `expenses` delete rule shipped once already. `firestore-tests/` runs the
   rules offline against the Firestore emulator; add a case there first. See its README —
-  it needs a JDK 21+ on `PATH`, not just in `JAVA_HOME`.
+  it needs a JDK 21+ on `PATH`, not just in `JAVA_HOME`. It covers **`storage.rules` too**
+  as of the September 2026 pass (`rules/storage.test.js`, Storage emulator on 9199), which
+  had no coverage at all before — the directory name is older than its contents. Those tests
+  prove the ruleset *in this repository*; only a deploy settles what the live bucket enforces,
+  which is exactly the gap the `pet_photos` entry below describes.
 - Windows dev machine; Gradle wrapper works from Git Bash and PowerShell.
 - `google-services.json` is required for the Google Services plugin, but the build
   degrades gracefully if it is missing (see the conditional apply in `app/build.gradle.kts`).
@@ -173,16 +177,42 @@ cd firestore-tests && npm test              # firestore.rules against the local 
   August 2026 — this line used to say there was none). Seven jobs: `changes` (a cheap gate,
   below), three Android ones — `build-test` (`assembleDebug` + `testDebugUnitTest` in a
   single invocation), `static` (`lint`, then `detekt`), `release` (`assembleRelease`, where
-  R8 runs) — plus Cloud Functions, the Firestore rules suite against the emulator, and
-  `invariants` (`node tools/check-invariants.js`, no dependencies and no Android SDK: locale
-  completeness, format-argument agreement across the five locales, and the four-way push-type
-  agreement item 15 states). They run **in parallel**; the Android three were one sequential job until the August 2026 CI
+  R8 runs, and where `node tools/check-r8-mapping.js` then reads R8's own `mapping.txt` and
+  fails if a field a keep rule names came out renamed) — plus Cloud Functions, the Firestore
+  rules suite against the emulator, and `invariants` (`node tools/check-invariants.js`, no
+  dependencies and no Android SDK: locale completeness, format-argument agreement across the
+  five locales, the four-way push-type agreement item 15 states, and the rule that every type
+  Gson reflects over is covered by a `-keepclassmembers ... { <fields>; }` rule). The last two
+  are one defect from two sides — the source says a rule exists, the mapping says it worked, and
+  a typo in a package name passes the first and fails the second. They run **in parallel**; the Android three were one sequential job until the August 2026 CI
   pass, which is why a run took 13:22 for about 7 minutes of critical path. Two caveats, both
   deliberate. **detekt gates again** as of CQ-12 — do not add `continue-on-error` back to turn a
   red build green; fix the finding, or regenerate the baseline through the Regenerate workflow so
-  that accepting debt is a visible commit. There is still **no instrumented migration job**
-  (**CQ-1**), and `app/schemas/` holds 14, 33 and 34 with the versions between the first two
-  irrecoverable — so the first migration a test could prove is 33→34, which MON-5 added.
+  that accepting debt is a visible commit. The **`instrumented` job** closes **CQ-1** as far as it
+  can be closed, and the shape of "as far as" matters. `reactivecircus/android-emulator-runner`
+  with the KVM udev rule boots API 30 and runs `connectedDebugAndroidTest`; the first attempt
+  failed for two unrelated reasons, both older than the job and neither previously observed.
+  **(1) Firebase.** `AuthScreenTest` and `SettingsScreenTest` start the real `MainActivity`,
+  whose Hilt graph reaches `FirebaseModule.provideFirebaseMessaging` →
+  `FirebaseMessaging.getInstance()`, and CI has no `google-services.json` (it is gitignored), so
+  the process died with "Default FirebaseApp is not initialized" and took the run with it at 15
+  of 34 tests. `HiltTestRunner` substituting `HiltTestApplication` does not help: it stops
+  `CoPlanlyApplication.onCreate` running, not the graph being built. Fixed by
+  `androidTest`'s `FakeFirebaseModule`, a `@TestInstallIn` replacing `FirebaseModule` with
+  relaxed mocks. **Do not "simplify" that by committing a fake `google-services.json`** — the
+  Google Services and Crashlytics plugins apply only when that file is present, so adding one
+  changes what every Android job builds in order to fix something that belongs to the tests.
+  Room is deliberately left real, which is what makes this the first thing anywhere to execute
+  the SEC-2 SQLCipher open path rather than merely compile it.
+  **(2) Missing schemas.** `CoPlanlyDatabaseMigrationTest` holds 14 test methods and only the
+  six covering 11→12, 12→13 and 13→14 can run. The other eight name 14→15 through 24→25 and
+  need `15.json`–`24.json`, which do not exist and cannot be regenerated — `app/schemas/` holds
+  2–14, then 33 and 34. Those eight have **never passed anywhere**; they were written against
+  schemas that were already gone. They carry `@Ignore` naming the versions they want, so the
+  job is green on what can run and the intent survives for whoever restores a schema. Do not
+  read that as ordinary quarantine: an `@Ignore` normally hides a defect, and this one records
+  missing data that no fix to the code can supply. The migrations a test can prove are those
+  six plus 33→34, which MON-5 added.
   What stops the gap growing is a **step in `ci.yml`**: `git status --porcelain -- app/schemas`
   after the build, failing when the build produced a schema nobody committed. It is deliberately
   *not* `DatabaseSchemaExportTest`, which this line used to credit and which cannot do it — kapt
@@ -621,8 +651,14 @@ whatever you were doing; a stale "known issue" costs more than a missing one.
   false; }` and every pet — and, silently, every medical — photo upload is refused. The client
   path is sound and was ruled out end to end. **The fix is an ops action nobody has taken:
   `firebase deploy --only storage`**, which also closes the still-unchecked box at
-  `docs/REVIEW-2026-07-23.md:65`. Nothing catches this: `firebase.json` configures a Firestore
-  emulator only, and Storage rules have no test coverage at all. The upload handlers now write a
+  `docs/REVIEW-2026-07-23.md:65`. Nothing caught this for a long time: `firebase.json` configured a
+  Firestore emulator only, and Storage rules had no test coverage at all. They do now
+  (`firestore-tests/rules/storage.test.js`, September 2026) — and the suite passes, which is
+  the point worth understanding rather than a contradiction. It exercises the ruleset **in
+  this repository**, where `pet_photos/**` is present and correct; the failure is that the
+  bucket enforces an older deploy. A test can prove the file is right and still not tell you
+  it was shipped. Deleting the `pet_photos` block does turn the suite red, so the coverage is
+  real — it just cannot substitute for the deploy. The upload handlers now write a
   `Log.e` line so the next occurrence is at least diagnosable on a device — they reported only
   through Crashlytics before, which writes nothing to logcat.
 
