@@ -170,11 +170,13 @@ cd firestore-tests && npm test              # firestore.rules against the local 
   degrades gracefully if it is missing (see the conditional apply in `app/build.gradle.kts`).
 - **GitHub CI runs on every pull request, and on every push to `main`** — a push to a
   feature branch with no PR open is not built (`.github/workflows/ci.yml`, added
-  August 2026 — this line used to say there was none). Six jobs: `changes` (a cheap gate,
+  August 2026 — this line used to say there was none). Seven jobs: `changes` (a cheap gate,
   below), three Android ones — `build-test` (`assembleDebug` + `testDebugUnitTest` in a
   single invocation), `static` (`lint`, then `detekt`), `release` (`assembleRelease`, where
-  R8 runs) — plus Cloud Functions and the Firestore rules suite against the emulator. They
-  run **in parallel**; the Android three were one sequential job until the August 2026 CI
+  R8 runs) — plus Cloud Functions, the Firestore rules suite against the emulator, and
+  `invariants` (`node tools/check-invariants.js`, no dependencies and no Android SDK: locale
+  completeness, format-argument agreement across the five locales, and the four-way push-type
+  agreement item 15 states). They run **in parallel**; the Android three were one sequential job until the August 2026 CI
   pass, which is why a run took 13:22 for about 7 minutes of critical path. Two caveats, both
   deliberate. **detekt gates again** as of CQ-12 — do not add `continue-on-error` back to turn a
   red build green; fix the finding, or regenerate the baseline through the Regenerate workflow so
@@ -187,7 +189,7 @@ cd firestore-tests && npm test              # firestore.rules against the local 
   writes that directory during the build immediately before the test reads it, so the file it
   looks for has just been created whether or not it is in the repository.
 
-  **A seventh workflow exists and is not part of CI**: `.github/workflows/regenerate.yml` runs
+  **A second workflow file exists and is not part of CI**: `.github/workflows/regenerate.yml` runs
   `detektBaseline` and exports the Room schema, then commits both back to the branch it ran on.
   It exists because those are the two artefacts only a machine with an Android SDK can produce,
   and it is **manual on purpose** — regenerating a baseline accepts every violation that exists
@@ -802,6 +804,9 @@ Ukrainian** (`values-cs/`, `values-de/`, `values-ru/`, `values-uk/`). Rules:
   warning — a disabled check does not run, so it reports nothing under any severity. Verify
   locale completeness by grep instead, e.g. `git grep -c 'name="your_key"' -- app/src/main/res/values*/*.xml`,
   which should return five files and also catches a duplicate the lint check never would.
+  `node tools/check-invariants.js` does that sweep over every key at once — and compares each
+  translation's format arguments, since a dropped `%1$s` throws `IllegalFormatException` only on
+  the device of whoever reads that language. CI runs it as the `invariants` job.
 - In composables use `stringResource(...)`; for text consumed inside non-composable
   lambdas (snackbars, coroutines) capture the string in composable scope first. Language
   endonyms in the picker ("Čeština", "Русский", …) are `translatable="false"`.
