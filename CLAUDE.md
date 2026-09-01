@@ -188,13 +188,26 @@ cd firestore-tests && npm test              # firestore.rules + storage.rules on
   pass, which is why a run took 13:22 for about 7 minutes of critical path. Two caveats, both
   deliberate. **detekt gates again** as of CQ-12 — do not add `continue-on-error` back to turn a
   red build green; fix the finding, or regenerate the baseline through the Regenerate workflow so
-  that accepting debt is a visible commit. The **`instrumented` job** (September 2026) runs
-  `connectedDebugAndroidTest` on an API-30 emulator, which is what **CQ-1** asked for; it is
-  also the first thing anywhere to execute the SEC-2 SQLCipher open path, because
-  `createAndroidComposeRule<MainActivity>()` builds the whole Hilt graph. It does not close the
-  schema gap: `app/schemas/` holds 11 to 14, then 33 and 34, with the versions between
-  irrecoverable — so the migrations a test can build from are the four the suite already covers
-  and 33→34, which MON-5 added, and nothing can reach the rest.
+  that accepting debt is a visible commit. There is still **no instrumented job** (**CQ-1**), and
+  a September 2026 attempt established why it is not merely a missing workflow. The emulator
+  half works — `reactivecircus/android-emulator-runner` with the KVM udev rule boots API 30 and
+  `connectedDebugAndroidTest` runs — but the suite cannot pass, for two unrelated reasons that
+  both predate the attempt and had simply never been observed:
+  **(1)** `CoPlanlyDatabaseMigrationTest` holds 14 test methods, and only the six covering
+  11→12, 12→13 and 13→14 can run. The other eight name 14→15 through 24→25 and need
+  `15.json`–`24.json`, which do not exist and cannot be regenerated — `app/schemas/` holds 2–14,
+  then 33 and 34. Those eight have therefore never passed anywhere; they were written against
+  schemas that were already gone.
+  **(2)** `AuthScreenTest` and `SettingsScreenTest` start the real `MainActivity`, whose Hilt
+  graph reaches `FirebaseModule.provideFirebaseMessaging` → `FirebaseMessaging.getInstance()`,
+  and CI has no `google-services.json` (it is gitignored), so the process dies with
+  "Default FirebaseApp is not initialized" and takes the run down with it — 15 of 34 tests
+  completed. `HiltTestRunner` substituting `HiltTestApplication` does not help: it stops
+  `CoPlanlyApplication.onCreate` running, not the graph being built.
+  Closing CQ-1 therefore means deciding what to do about (2) — a fake `google-services.json` for
+  CI, which would also switch on the Google Services and Crashlytics plugins the build currently
+  skips, or a `@TestInstallIn` module replacing the Firebase providers — and accepting that (1)
+  is permanent. The migrations a test can prove are those six plus 33→34, which MON-5 added.
   What stops the gap growing is a **step in `ci.yml`**: `git status --porcelain -- app/schemas`
   after the build, failing when the build produced a schema nobody committed. It is deliberately
   *not* `DatabaseSchemaExportTest`, which this line used to credit and which cannot do it — kapt
