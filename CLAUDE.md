@@ -158,13 +158,17 @@ crash with "migration from 3 to 9 required but not found".
 
 ```bash
 cd functions && npm test && npm run lint    # Cloud Functions (mocha + eslint)
-cd firestore-tests && npm test              # firestore.rules against the local emulator
+cd firestore-tests && npm test              # firestore.rules + storage.rules on the emulators
 ```
 
 - **Never debug `firestore.rules` by deploying to production and watching a phone.** That
   is how a broken `expenses` delete rule shipped once already. `firestore-tests/` runs the
   rules offline against the Firestore emulator; add a case there first. See its README —
-  it needs a JDK 21+ on `PATH`, not just in `JAVA_HOME`.
+  it needs a JDK 21+ on `PATH`, not just in `JAVA_HOME`. It covers **`storage.rules` too**
+  as of the September 2026 pass (`rules/storage.test.js`, Storage emulator on 9199), which
+  had no coverage at all before — the directory name is older than its contents. Those tests
+  prove the ruleset *in this repository*; only a deploy settles what the live bucket enforces,
+  which is exactly the gap the `pet_photos` entry below describes.
 - Windows dev machine; Gradle wrapper works from Git Bash and PowerShell.
 - `google-services.json` is required for the Google Services plugin, but the build
   degrades gracefully if it is missing (see the conditional apply in `app/build.gradle.kts`).
@@ -625,8 +629,14 @@ whatever you were doing; a stale "known issue" costs more than a missing one.
   false; }` and every pet — and, silently, every medical — photo upload is refused. The client
   path is sound and was ruled out end to end. **The fix is an ops action nobody has taken:
   `firebase deploy --only storage`**, which also closes the still-unchecked box at
-  `docs/REVIEW-2026-07-23.md:65`. Nothing catches this: `firebase.json` configures a Firestore
-  emulator only, and Storage rules have no test coverage at all. The upload handlers now write a
+  `docs/REVIEW-2026-07-23.md:65`. Nothing caught this for a long time: `firebase.json` configured a
+  Firestore emulator only, and Storage rules had no test coverage at all. They do now
+  (`firestore-tests/rules/storage.test.js`, September 2026) — and the suite passes, which is
+  the point worth understanding rather than a contradiction. It exercises the ruleset **in
+  this repository**, where `pet_photos/**` is present and correct; the failure is that the
+  bucket enforces an older deploy. A test can prove the file is right and still not tell you
+  it was shipped. Deleting the `pet_photos` block does turn the suite red, so the coverage is
+  real — it just cannot substitute for the deploy. The upload handlers now write a
   `Log.e` line so the next occurrence is at least diagnosable on a device — they reported only
   through Crashlytics before, which writes nothing to logcat.
 
