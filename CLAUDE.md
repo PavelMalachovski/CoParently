@@ -188,9 +188,13 @@ cd firestore-tests && npm test              # firestore.rules + storage.rules on
   pass, which is why a run took 13:22 for about 7 minutes of critical path. Two caveats, both
   deliberate. **detekt gates again** as of CQ-12 — do not add `continue-on-error` back to turn a
   red build green; fix the finding, or regenerate the baseline through the Regenerate workflow so
-  that accepting debt is a visible commit. There is still **no instrumented migration job**
-  (**CQ-1**), and `app/schemas/` holds 14, 33 and 34 with the versions between the first two
-  irrecoverable — so the first migration a test could prove is 33→34, which MON-5 added.
+  that accepting debt is a visible commit. The **`instrumented` job** (September 2026) runs
+  `connectedDebugAndroidTest` on an API-30 emulator, which is what **CQ-1** asked for; it is
+  also the first thing anywhere to execute the SEC-2 SQLCipher open path, because
+  `createAndroidComposeRule<MainActivity>()` builds the whole Hilt graph. It does not close the
+  schema gap: `app/schemas/` holds 11 to 14, then 33 and 34, with the versions between
+  irrecoverable — so the migrations a test can build from are the four the suite already covers
+  and 33→34, which MON-5 added, and nothing can reach the rest.
   What stops the gap growing is a **step in `ci.yml`**: `git status --porcelain -- app/schemas`
   after the build, failing when the build produced a schema nobody committed. It is deliberately
   *not* `DatabaseSchemaExportTest`, which this line used to credit and which cannot do it — kapt
