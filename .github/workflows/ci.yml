@@ -129,11 +129,7 @@ jobs:
       # `assembleDebug` does, so running them together shares a configuration phase and a
       # Kotlin compile instead of repeating both.
       - name: Assemble debug and run unit tests
-        # TEMPORARY (reverted in the next commit): `--no-build-cache` forces the unit tests
-        # to actually execute. This branch touches no Android input, so Gradle satisfied
-        # `:app:testDebugUnitTest` FROM-CACHE and the green run proved only that the inputs
-        # match an earlier build — not that the tests pass on this checkout.
-        run: ./gradlew assembleDebug testDebugUnitTest --no-build-cache
+        run: ./gradlew assembleDebug testDebugUnitTest
 
       # `DatabaseSchemaExportTest` cannot catch what CQ-1 says it catches, and this is the
       # step that can. kapt writes `app/schemas/<version>.json` during the build above, from
