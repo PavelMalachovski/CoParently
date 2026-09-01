@@ -188,26 +188,31 @@ cd firestore-tests && npm test              # firestore.rules + storage.rules on
   pass, which is why a run took 13:22 for about 7 minutes of critical path. Two caveats, both
   deliberate. **detekt gates again** as of CQ-12 — do not add `continue-on-error` back to turn a
   red build green; fix the finding, or regenerate the baseline through the Regenerate workflow so
-  that accepting debt is a visible commit. There is still **no instrumented job** (**CQ-1**), and
-  a September 2026 attempt established why it is not merely a missing workflow. The emulator
-  half works — `reactivecircus/android-emulator-runner` with the KVM udev rule boots API 30 and
-  `connectedDebugAndroidTest` runs — but the suite cannot pass, for two unrelated reasons that
-  both predate the attempt and had simply never been observed:
-  **(1)** `CoPlanlyDatabaseMigrationTest` holds 14 test methods, and only the six covering
-  11→12, 12→13 and 13→14 can run. The other eight name 14→15 through 24→25 and need
-  `15.json`–`24.json`, which do not exist and cannot be regenerated — `app/schemas/` holds 2–14,
-  then 33 and 34. Those eight have therefore never passed anywhere; they were written against
-  schemas that were already gone.
-  **(2)** `AuthScreenTest` and `SettingsScreenTest` start the real `MainActivity`, whose Hilt
-  graph reaches `FirebaseModule.provideFirebaseMessaging` → `FirebaseMessaging.getInstance()`,
-  and CI has no `google-services.json` (it is gitignored), so the process dies with
-  "Default FirebaseApp is not initialized" and takes the run down with it — 15 of 34 tests
-  completed. `HiltTestRunner` substituting `HiltTestApplication` does not help: it stops
-  `CoPlanlyApplication.onCreate` running, not the graph being built.
-  Closing CQ-1 therefore means deciding what to do about (2) — a fake `google-services.json` for
-  CI, which would also switch on the Google Services and Crashlytics plugins the build currently
-  skips, or a `@TestInstallIn` module replacing the Firebase providers — and accepting that (1)
-  is permanent. The migrations a test can prove are those six plus 33→34, which MON-5 added.
+  that accepting debt is a visible commit. The **`instrumented` job** closes **CQ-1** as far as it
+  can be closed, and the shape of "as far as" matters. `reactivecircus/android-emulator-runner`
+  with the KVM udev rule boots API 30 and runs `connectedDebugAndroidTest`; the first attempt
+  failed for two unrelated reasons, both older than the job and neither previously observed.
+  **(1) Firebase.** `AuthScreenTest` and `SettingsScreenTest` start the real `MainActivity`,
+  whose Hilt graph reaches `FirebaseModule.provideFirebaseMessaging` →
+  `FirebaseMessaging.getInstance()`, and CI has no `google-services.json` (it is gitignored), so
+  the process died with "Default FirebaseApp is not initialized" and took the run with it at 15
+  of 34 tests. `HiltTestRunner` substituting `HiltTestApplication` does not help: it stops
+  `CoPlanlyApplication.onCreate` running, not the graph being built. Fixed by
+  `androidTest`'s `FakeFirebaseModule`, a `@TestInstallIn` replacing `FirebaseModule` with
+  relaxed mocks. **Do not "simplify" that by committing a fake `google-services.json`** — the
+  Google Services and Crashlytics plugins apply only when that file is present, so adding one
+  changes what every Android job builds in order to fix something that belongs to the tests.
+  Room is deliberately left real, which is what makes this the first thing anywhere to execute
+  the SEC-2 SQLCipher open path rather than merely compile it.
+  **(2) Missing schemas.** `CoPlanlyDatabaseMigrationTest` holds 14 test methods and only the
+  six covering 11→12, 12→13 and 13→14 can run. The other eight name 14→15 through 24→25 and
+  need `15.json`–`24.json`, which do not exist and cannot be regenerated — `app/schemas/` holds
+  2–14, then 33 and 34. Those eight have **never passed anywhere**; they were written against
+  schemas that were already gone. They carry `@Ignore` naming the versions they want, so the
+  job is green on what can run and the intent survives for whoever restores a schema. Do not
+  read that as ordinary quarantine: an `@Ignore` normally hides a defect, and this one records
+  missing data that no fix to the code can supply. The migrations a test can prove are those
+  six plus 33→34, which MON-5 added.
   What stops the gap growing is a **step in `ci.yml`**: `git status --porcelain -- app/schemas`
   after the build, failing when the build produced a schema nobody committed. It is deliberately
   *not* `DatabaseSchemaExportTest`, which this line used to credit and which cannot do it — kapt
